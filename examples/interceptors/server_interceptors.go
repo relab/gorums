@@ -6,30 +6,34 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/protobuf/proto"
 )
 
 func LoggingInterceptor(addr string) gorums.Interceptor {
-	return func(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
-		log.Printf("[%s]: LoggingInterceptor(incoming): Method=%s, Message=%s", addr, msg.GetMethod(), msg.GetProtoMessage())
+	return func(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+		req := gorums.AsProto[proto.Message](in)
+		log.Printf("[%s]: LoggingInterceptor(incoming): Method=%s, Message=%s", addr, in.GetMethod(), req)
 		start := time.Now()
-		resp, err := next(ctx, msg)
+		out, err := next(ctx, in)
 
 		duration := time.Since(start)
-		log.Printf("[%s]: LoggingInterceptor(outgoing): Method=%s, Duration=%s, Err=%v, Message=%v, Type=%T", addr, msg.GetMethod(), duration, err, resp.GetProtoMessage(), resp.GetProtoMessage())
-		return resp, err
+		resp := gorums.AsProto[proto.Message](out)
+		log.Printf("[%s]: LoggingInterceptor(outgoing): Method=%s, Duration=%s, Err=%v, Message=%v, Type=%T", addr, in.GetMethod(), duration, err, resp, resp)
+		return out, err
 	}
 }
 
-func LoggingSimpleInterceptor(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
-	log.Printf("LoggingSimpleInterceptor(incoming): Method=%s, Message=%v)", msg.GetMethod(), msg.GetProtoMessage())
-	resp, err := next(ctx, msg)
-	log.Printf("LoggingSimpleInterceptor(outgoing): Method=%s, Err=%v, Message=%v", msg.GetMethod(), err, resp.GetProtoMessage())
-	return resp, err
+func LoggingSimpleInterceptor(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+	req := gorums.AsProto[proto.Message](in)
+	log.Printf("LoggingSimpleInterceptor(incoming): Method=%s, Message=%v)", in.GetMethod(), req)
+	out, err := next(ctx, in)
+	resp := gorums.AsProto[proto.Message](out)
+	log.Printf("LoggingSimpleInterceptor(outgoing): Method=%s, Err=%v, Message=%v", in.GetMethod(), err, resp)
+	return out, err
 }
 
-func DelayedInterceptor(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func DelayedInterceptor(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 	// delay based on sending node address
 	delay := 0 * time.Millisecond
 	peer, ok := peer.FromContext(ctx)
@@ -45,35 +49,35 @@ func DelayedInterceptor(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.H
 
 	time.Sleep(delay)
 	// Call the next handler in the chain
-	resp, err := next(ctx, msg)
+	out, err := next(ctx, in)
 	log.Printf("DelayedInterceptor: Finished processing message after %s", delay)
-	return resp, err
+	return out, err
 }
 
 /** NoFooAllowedInterceptor rejects requests for messages with key "foo". */
-func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
-	if req, ok := msg.GetProtoMessage().(T); ok {
+func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+	if req, ok := gorums.AsProto[proto.Message](in).(T); ok {
 		log.Printf("NoFooAllowedInterceptor: Received request for key '%s'", req.GetKey())
 		if req.GetKey() == "foo" {
 			log.Printf("NoFooAllowedInterceptor: Rejecting request for key 'foo'")
 			return nil, fmt.Errorf("requests for key 'foo' are not allowed")
 		}
 	}
-	return next(ctx, msg)
+	return next(ctx, in)
 }
 
-func MetadataInterceptor(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func MetadataInterceptor(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 	log.Printf("MetadataInterceptor: Adding custom metadata to message(customKey=customValue)")
 	// Add a custom metadata field
-	entry := ordering.MetadataEntry_builder{
+	entry := gorums.MetadataEntry_builder{
 		Key:   "customKey",
 		Value: "customValue",
 	}.Build()
-	msg.GetMetadata().SetEntry([]*ordering.MetadataEntry{
+	in.SetEntry([]*gorums.MetadataEntry{
 		entry,
 	})
 	// Call the next handler in the chain
-	resp, err := next(ctx, msg)
+	out, err := next(ctx, in)
 	log.Printf("MetadataInterceptor: Finished processing message with custom metadata")
-	return resp, err
+	return out, err
 }

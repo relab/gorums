@@ -1,10 +1,10 @@
 package gorums
 
 import (
-	"context"
+	"cmp"
 	"fmt"
 
-	"github.com/relab/gorums/ordering"
+	"github.com/relab/gorums/stream"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -12,134 +12,85 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
-// Message encapsulates a protobuf message and metadata.
-//
-// This struct should be used by generated code only.
+// Message encapsulates the stream.Message and the actual proto.Message.
 type Message struct {
-	metadata *ordering.Metadata
-	message  proto.Message
+	Msg proto.Message
+	*stream.Message
 }
 
-// NewResponseMessage creates a new Gorums Message for the given metadata and response message.
+// MetadataEntry is a type alias for stream.MetadataEntry.
+type MetadataEntry = stream.MetadataEntry
+
+// MetadataEntry_builder is a type alias for stream.MetadataEntry_builder.
+type MetadataEntry_builder = stream.MetadataEntry_builder
+
+// NewResponseMessage creates a new response message based on the provided proto
+// message. The response message includes the message ID and method from the request
+// message to facilitate routing the response back to the caller on the client side.
+// The payload, error status, and metadata entries are left empty; the error status
+// of the response message can be set using [messageWithError], and the payload will
+// be marshaled by [ServerCtx.SendMessage]. This function is safe for concurrent use.
 //
-// This function should be used by generated code only.
-func NewResponseMessage(md *ordering.Metadata, resp proto.Message) *Message {
-	return &Message{metadata: md, message: resp}
+// This function should only be used in generated code.
+func NewResponseMessage(in *Message, resp proto.Message) *Message {
+	if in == nil {
+		return nil
+	}
+	// Create a new stream.Message to avoid race conditions when the sender
+	// goroutine marshals while the handler creates the next response.
+	// This can happen for stream-based quorum calls where the handler can
+	// call SendMessage multiple times before returning.
+	msgBuilder := stream.Message_builder{
+		MessageSeqNo: in.GetMessageSeqNo(), // needed in channel.routeResponse to lookup the response channel
+		Method:       in.GetMethod(),       // needed in unmarshalResponse to look up the response type in the proto registry
+		// Payload is left empty; SendMessage will marshal resp into the payload when sending the message
+		// Status is left empty; it can be set by messageWithError if needed
+	}
+	return &Message{
+		Msg:     resp,
+		Message: msgBuilder.Build(),
+	}
 }
 
-// AsProto returns msg's underlying protobuf message of the specified type T.
-// If msg is nil or the contained message is not of type T, the zero value of T is returned.
+// AsProto extracts the payload from the message.
+// If msg is nil or invalid, the zero value of T is returned.
+//
+// This function should only be used in generated code.
 func AsProto[T proto.Message](msg *Message) T {
 	var zero T
-	if msg == nil || msg.message == nil {
+	if msg == nil || msg.Msg == nil {
 		return zero
 	}
-	if req, ok := msg.message.(T); ok {
+	if req, ok := msg.Msg.(T); ok {
 		return req
 	}
 	return zero
 }
 
-// GetProtoMessage returns the protobuf message contained in the Message.
-func (m *Message) GetProtoMessage() proto.Message {
-	if m == nil {
-		return nil
-	}
-	return m.message
-}
-
-// GetMetadata returns the metadata of the message.
-func (m *Message) GetMetadata() *ordering.Metadata {
-	if m == nil {
-		return nil
-	}
-	return m.metadata
-}
-
-// GetMethod returns the method name from the message metadata.
-func (m *Message) GetMethod() string {
-	if m == nil {
-		return "nil"
-	}
-	return m.metadata.GetMethod()
-}
-
-// GetMessageID returns the message ID from the message metadata.
-func (m *Message) GetMessageID() uint64 {
-	if m == nil {
-		return 0
-	}
-	return m.metadata.GetMessageSeqNo()
-}
-
-func (m *Message) GetStatus() *status.Status {
-	if m == nil {
-		return status.New(codes.Unknown, "nil message")
-	}
-	return status.FromProto(m.metadata.GetStatus())
-}
-
-// setError sets the error status in the message metadata in preparation for sending
-// the response to the client. The provided error may include several wrapped errors.
-// If err is nil, the status is set to OK.
-// This method should be called just prior to sending the response to the client.
-func (m *Message) setError(err error) {
-	errStatus, ok := status.FromError(err)
-	if !ok {
-		errStatus = status.New(codes.Unknown, err.Error())
-	}
-	m.metadata.SetStatus(errStatus.Proto())
-}
-
-// responseWithError ensures a response message exists and sets the error status.
-// If msg is nil, a new response message is created using the provided metadata.
+// messageWithError ensures a response message exists and sets the error status.
+// If out is nil, the in message (request) is reused to return the error status.
 // This is used by the server to send error responses back to the client.
-func responseWithError(msg *Message, md *ordering.Metadata, err error) *Message {
-	if msg == nil {
-		msg = NewResponseMessage(md, nil)
+func messageWithError(in, out *Message, err error) *Message {
+	msg := cmp.Or(out, in)
+	if err != nil {
+		errStatus, ok := status.FromError(err)
+		if !ok {
+			errStatus = status.New(codes.Unknown, err.Error())
+		}
+		msg.SetStatus(errStatus.Proto())
 	}
-	msg.setError(err)
 	return msg
 }
 
-// marshalRequest marshals the request proto message into metadata for type-safe Send.
-// It marshals the proto message into the metadata's message_data field.
+// unmarshalRequest unmarshals the request proto message from the message.
+// It uses the method name in the message to look up the Input type from the proto registry.
 //
-// This function should be used by client-side operations only.
-func marshalRequest(ctx context.Context, msgID uint64, method string, req proto.Message) (*ordering.Metadata, error) {
-	return ordering.NewMetadata(ctx, msgID, method, req)
-}
-
-// marshalResponse marshals the response message into metadata for type-safe Send.
-// It clones the metadata to avoid race conditions with concurrent send operations.
-//
-// This function should be used by server-side operations only.
-func marshalResponse(msg *Message) (*ordering.Metadata, error) {
-	if msg == nil {
-		return nil, nil
-	}
-	// Clone metadata to avoid race with concurrent send operations
-	md := proto.CloneOf(msg.metadata)
-	if msg.message != nil {
-		msgData, err := proto.Marshal(msg.message)
-		if err != nil {
-			return nil, err
-		}
-		md.SetMessageData(msgData)
-	}
-	return md, nil
-}
-
-// unmarshalRequest unmarshals the request proto message from metadata.
-// It uses the method name in metadata to look up the Input type from the proto registry.
-// Returns a *Message suitable for passing to handlers.
-//
-// This function should be used by server-side operations only.
-func unmarshalRequest(md *ordering.Metadata) (*Message, error) {
+// This function should only be used by internal channel operations.
+func unmarshalRequest(in *stream.Message) (proto.Message, error) {
 	// get method descriptor from registry
-	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(md.GetMethod()))
+	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(in.GetMethod()))
 	if err != nil {
-		return nil, fmt.Errorf("gorums: could not find method descriptor for %s", md.GetMethod())
+		return nil, fmt.Errorf("gorums: could not find method descriptor for %s", in.GetMethod())
 	}
 	methodDesc := desc.(protoreflect.MethodDescriptor)
 
@@ -150,25 +101,25 @@ func unmarshalRequest(md *ordering.Metadata) (*Message, error) {
 	}
 	req := msgType.New().Interface()
 
-	// unmarshal message from metadata.message_data
-	msgData := md.GetMessageData()
-	if len(msgData) > 0 {
-		if err := proto.Unmarshal(msgData, req); err != nil {
+	// unmarshal message from the Message.Payload field
+	payload := in.GetPayload()
+	if len(payload) > 0 {
+		if err := proto.Unmarshal(payload, req); err != nil {
 			return nil, fmt.Errorf("gorums: could not unmarshal request: %w", err)
 		}
 	}
-	return &Message{metadata: md, message: req}, nil
+	return req, nil
 }
 
-// unmarshalResponse unmarshals the response proto message from metadata.
-// It uses the method name in metadata to look up the Output type from the proto registry.
+// unmarshalResponse unmarshals the response proto message from the message.
+// It uses the method name in the message to look up the Output type from the proto registry.
 //
-// This function should be used by internal channel operations only.
-func unmarshalResponse(md *ordering.Metadata) (proto.Message, error) {
+// This function should only be used by internal channel operations.
+func unmarshalResponse(out *stream.Message) (proto.Message, error) {
 	// get method descriptor from registry
-	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(md.GetMethod()))
+	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(out.GetMethod()))
 	if err != nil {
-		return nil, fmt.Errorf("gorums: could not find method descriptor for %s", md.GetMethod())
+		return nil, fmt.Errorf("gorums: could not find method descriptor for %s", out.GetMethod())
 	}
 	methodDesc := desc.(protoreflect.MethodDescriptor)
 
@@ -179,10 +130,10 @@ func unmarshalResponse(md *ordering.Metadata) (proto.Message, error) {
 	}
 	resp := msgType.New().Interface()
 
-	// unmarshal message from metadata.message_data
-	msgData := md.GetMessageData()
-	if len(msgData) > 0 {
-		if err := proto.Unmarshal(msgData, resp); err != nil {
+	// unmarshal message from the Message.Payload field
+	payload := out.GetPayload()
+	if len(payload) > 0 {
+		if err := proto.Unmarshal(payload, resp); err != nil {
 			return nil, fmt.Errorf("gorums: could not unmarshal response: %w", err)
 		}
 	}

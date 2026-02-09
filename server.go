@@ -5,8 +5,9 @@ import (
 	"net"
 	"sync"
 
-	"github.com/relab/gorums/ordering"
+	"github.com/relab/gorums/stream"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 type (
@@ -15,18 +16,18 @@ type (
 	// a Handler representing the next element in the chain (either another
 	// Interceptor or the actual server method). It returns a Message and an error.
 	Interceptor func(ServerCtx, *Message, Handler) (*Message, error)
-	// Handler is a function that processes a request message and returns a response message.
+	// Handler is a function that processes a request and returns a response.
 	Handler func(ServerCtx, *Message) (*Message, error)
 )
 
-type orderingServer struct {
+type streamServer struct {
 	handlers map[string]Handler
 	opts     *serverOptions
-	ordering.UnimplementedGorumsServer
+	stream.UnimplementedGorumsServer
 }
 
-func newOrderingServer(opts *serverOptions) *orderingServer {
-	return &orderingServer{
+func newStreamServer(opts *serverOptions) *streamServer {
+	return &streamServer{
 		handlers: make(map[string]Handler),
 		opts:     opts,
 	}
@@ -34,9 +35,9 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 
 // NodeStream handles a connection to a single client. The stream is aborted if there
 // is any error with sending or receiving.
-func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
+func (s *streamServer) NodeStream(srv stream.Gorums_NodeStreamServer) error {
 	var mut sync.Mutex // used to achieve mutex between request handlers
-	finished := make(chan *ordering.Metadata, s.opts.buffer)
+	finished := make(chan *stream.Message, s.opts.buffer)
 	ctx := srv.Context()
 
 	if s.opts.connectCallback != nil {
@@ -48,8 +49,8 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			select {
 			case <-ctx.Done():
 				return
-			case md := <-finished:
-				if err := srv.Send(md); err != nil {
+			case streamOut := <-finished:
+				if err := srv.Send(streamOut); err != nil {
 					return
 				}
 			}
@@ -61,11 +62,11 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	defer mut.Unlock()
 
 	for {
-		md, err := srv.Recv()
+		streamIn, err := srv.Recv()
 		if err != nil {
 			return err
 		}
-		if handler, ok := s.handlers[md.GetMethod()]; ok {
+		if handler, ok := s.handlers[streamIn.GetMethod()]; ok {
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
 			// finished, or when it is safe to start processing the next request.
@@ -73,23 +74,24 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			// This func() is the default interceptor; it is the first and last handler in the chain.
 			// It is responsible for releasing the mutex when the handler chain is done.
 			go func() {
-				srvCtx := newServerCtx(md.AppendToIncomingContext(ctx), &mut, finished)
+				srvCtx := newServerCtx(streamIn.AppendToIncomingContext(ctx), &mut, finished)
 				defer srvCtx.Release()
 
-				req, err := unmarshalRequest(md)
+				msg, err := unmarshalRequest(streamIn)
+				in := &Message{Msg: msg, Message: streamIn}
 				if err != nil {
-					_ = srvCtx.SendMessage(responseWithError(nil, md, err))
+					_ = srvCtx.SendMessage(messageWithError(in, nil, err))
 					return
 				}
 
-				message, err := handler(srvCtx, req)
-				// If there is no message and no error, we do not send anything back to the client.
+				out, err := handler(srvCtx, in)
+				// If there is no response and no error, we do not send anything back to the client.
 				// This corresponds to a unidirectional message from client to server, where clients
 				// are not expected to receive a response.
-				if message == nil && err == nil {
+				if out == nil && err == nil {
 					return
 				}
-				_ = srvCtx.SendMessage(responseWithError(message, md, err))
+				_ = srvCtx.SendMessage(messageWithError(in, out, err))
 				// We ignore the error from SendMessage here; it means that the stream is closed.
 				// The for-loop above will exit on the next Recv call.
 			}()
@@ -158,8 +160,8 @@ func chainInterceptors(final Handler, interceptors ...Interceptor) Handler {
 	for i := len(interceptors) - 1; i >= 0; i-- {
 		curr := interceptors[i]
 		next := handler
-		handler = func(ctx ServerCtx, msg *Message) (*Message, error) {
-			return curr(ctx, msg, next)
+		handler = func(ctx ServerCtx, in *Message) (*Message, error) {
+			return curr(ctx, in, next)
 		}
 	}
 	return handler
@@ -167,7 +169,7 @@ func chainInterceptors(final Handler, interceptors ...Interceptor) Handler {
 
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
-	srv          *orderingServer
+	srv          *streamServer
 	grpcServer   *grpc.Server
 	interceptors []Interceptor
 }
@@ -179,11 +181,11 @@ func NewServer(opts ...ServerOption) *Server {
 		opt(&serverOpts)
 	}
 	s := &Server{
-		srv:          newOrderingServer(&serverOpts),
+		srv:          newStreamServer(&serverOpts),
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
 		interceptors: serverOpts.interceptors,
 	}
-	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
+	stream.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
 }
 
@@ -216,11 +218,11 @@ type ServerCtx struct {
 	context.Context
 	once *sync.Once // must be a pointer to avoid passing ctx by value
 	mut  *sync.Mutex
-	c    chan<- *ordering.Metadata
+	c    chan<- *stream.Message
 }
 
 // newServerCtx creates a new ServerCtx with the given context, mutex and metadata channel.
-func newServerCtx(ctx context.Context, mut *sync.Mutex, c chan<- *ordering.Metadata) ServerCtx {
+func newServerCtx(ctx context.Context, mut *sync.Mutex, c chan<- *stream.Message) ServerCtx {
 	return ServerCtx{
 		Context: ctx,
 		once:    new(sync.Once),
@@ -239,14 +241,19 @@ func (ctx *ServerCtx) Release() {
 // SendMessage attempts to send the given message to the client.
 // This may fail if the stream was closed or the stream context got canceled.
 //
-// This function should be used by generated code only.
-func (ctx *ServerCtx) SendMessage(msg *Message) error {
-	md, err := marshalResponse(msg)
-	if err != nil {
-		return err
+// This function should only be used by generated code.
+func (ctx *ServerCtx) SendMessage(out *Message) error {
+	// If Msg is set, marshal it to payload before sending.
+	if out.Msg != nil && len(out.GetPayload()) == 0 {
+		payload, err := proto.Marshal(out.Msg)
+		if err == nil {
+			out.SetPayload(payload)
+		}
+		// Return an error to the client if marshaling failed on the server side; don't close the stream.
+		out = messageWithError(nil, out, err)
 	}
 	select {
-	case ctx.c <- md:
+	case ctx.c <- out.Message:
 	case <-ctx.Done():
 		return ctx.Err()
 	}

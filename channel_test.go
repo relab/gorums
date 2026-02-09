@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums/internal/testutils/mock"
+	"github.com/relab/gorums/stream"
 	"google.golang.org/grpc"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -48,7 +49,10 @@ func delayServerFn(delay time.Duration) func(_ int) ServerIface {
 			time.Sleep(delay)
 			req := AsProto[*pb.StringValue](in)
 			resp, err := mockSrv.Test(ctx, req)
-			return NewResponseMessage(in.GetMetadata(), resp), err
+			if err != nil {
+				return nil, err
+			}
+			return NewResponseMessage(in, resp), nil
 		})
 		return srv
 	}
@@ -59,11 +63,11 @@ func sendRequest(t testing.TB, node *Node, req request, msgID uint64) NodeRespon
 	if req.ctx == nil {
 		req.ctx = t.Context()
 	}
-	md, err := marshalRequest(req.ctx, msgID, mock.TestMethod, nil)
+	reqMsg, err := stream.NewMessage(req.ctx, msgID, mock.TestMethod, nil)
 	if err != nil {
-		t.Fatalf("marshalRequest failed: %v", err)
+		t.Fatalf("NewMessage failed: %v", err)
 	}
-	req.md = md
+	req.msg = reqMsg
 	replyChan := make(chan NodeResponse[msg], 1)
 	req.responseChan = replyChan
 	node.channel.enqueue(req)
@@ -597,8 +601,8 @@ func TestChannelDeadlock(t *testing.T) {
 	for id := range 10 {
 		go func() {
 			ctx := TestContext(t, 3*time.Second)
-			md, _ := marshalRequest(ctx, uint64(100+id), mock.TestMethod, nil)
-			req := request{ctx: ctx, md: md}
+			reqMsg, _ := stream.NewMessage(ctx, uint64(100+id), mock.TestMethod, nil)
+			req := request{ctx: ctx, msg: reqMsg}
 
 			// try to enqueue
 			select {
@@ -803,8 +807,8 @@ func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
 
 		// Use a fresh context for the benchmark request
 		ctx := TestContext(b, defaultTestTimeout)
-		md, _ := marshalRequest(ctx, 1, mock.TestMethod, nil)
-		req := request{ctx: ctx, md: md}
+		reqMsg, _ := stream.NewMessage(ctx, 1, mock.TestMethod, nil)
+		req := request{ctx: ctx, msg: reqMsg}
 		replyChan := make(chan NodeResponse[msg], 1)
 		req.responseChan = replyChan
 		node.channel.enqueue(req)
@@ -853,8 +857,8 @@ func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
 
 	// Establish initial stream with a fresh context
 	ctx := context.Background()
-	md, _ := marshalRequest(ctx, 0, mock.TestMethod, nil)
-	req := request{ctx: ctx, md: md}
+	reqMsg, _ := stream.NewMessage(ctx, 0, mock.TestMethod, nil)
+	req := request{ctx: ctx, msg: reqMsg}
 	replyChan := make(chan NodeResponse[msg], 1)
 	req.responseChan = replyChan
 	node.channel.enqueue(req)
@@ -879,8 +883,8 @@ func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
 
 		// Now send a request which will trigger ensureStream -> newNodeStream -> signal
 		ctx := context.Background()
-		md, _ := marshalRequest(ctx, uint64(i+1), mock.TestMethod, nil)
-		req := request{ctx: ctx, md: md}
+		reqMsg, _ := stream.NewMessage(ctx, uint64(i+1), mock.TestMethod, nil)
+		req := request{ctx: ctx, msg: reqMsg}
 		replyChan := make(chan NodeResponse[msg], 1)
 		req.responseChan = replyChan
 		node.channel.enqueue(req)

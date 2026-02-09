@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/relab/gorums/ordering"
+	"github.com/relab/gorums/stream"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -44,9 +44,9 @@ var (
 
 type request struct {
 	ctx          context.Context
-	md           *ordering.Metadata
-	waitSendDone bool
+	msg          *stream.Message
 	streaming    bool
+	waitSendDone bool
 	responseChan chan<- NodeResponse[msg]
 	sendTime     time.Time
 }
@@ -68,8 +68,8 @@ type channel struct {
 
 	// Stream lifecycle management for FIFO ordered message delivery
 	// stream is a bidirectional stream for
-	// sending and receiving ordering.Metadata messages.
-	stream       ordering.Gorums_NodeStreamClient
+	// sending and receiving stream.Message messages.
+	stream       stream.Gorums_NodeStreamClient
 	streamMut    sync.Mutex
 	streamCtx    context.Context
 	streamCancel context.CancelFunc
@@ -149,12 +149,12 @@ func (c *channel) ensureConnectedNodeStream() (err error) {
 		return nil
 	}
 	c.streamCtx, c.streamCancel = context.WithCancel(c.connCtx)
-	c.stream, err = ordering.NewGorumsClient(c.conn).NodeStream(c.streamCtx)
+	c.stream, err = stream.NewGorumsClient(c.conn).NodeStream(c.streamCtx)
 	return err
 }
 
 // getStream returns the current stream, or nil if no stream is available.
-func (c *channel) getStream() ordering.Gorums_NodeStreamClient {
+func (c *channel) getStream() stream.Gorums_NodeStreamClient {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
 	return c.stream
@@ -180,7 +180,7 @@ func (c *channel) isConnected() bool {
 func (c *channel) enqueue(req request) {
 	if req.responseChan != nil {
 		req.sendTime = time.Now()
-		msgID := req.md.GetMessageSeqNo()
+		msgID := req.msg.GetMessageSeqNo()
 		c.responseMut.Lock()
 		c.responseRouters[msgID] = req
 		c.responseMut.Unlock()
@@ -190,7 +190,7 @@ func (c *channel) enqueue(req request) {
 	select {
 	case <-c.connCtx.Done():
 		// the node's close() method was called: respond with error instead of enqueueing
-		c.routeResponse(req.md.GetMessageSeqNo(), NodeResponse[msg]{NodeID: c.id, Err: nodeClosedErr})
+		c.routeResponse(req.msg.GetMessageSeqNo(), NodeResponse[msg]{NodeID: c.id, Err: nodeClosedErr})
 		return
 	case c.sendQ <- req:
 		// enqueued successfully
@@ -252,11 +252,11 @@ func (c *channel) sender() {
 			// take next request from sendQ
 		}
 		if err := c.ensureStream(); err != nil {
-			c.routeResponse(req.md.GetMessageSeqNo(), NodeResponse[msg]{NodeID: c.id, Err: err})
+			c.routeResponse(req.msg.GetMessageSeqNo(), NodeResponse[msg]{NodeID: c.id, Err: err})
 			continue
 		}
 		if err := c.sendMsg(req); err != nil {
-			c.routeResponse(req.md.GetMessageSeqNo(), NodeResponse[msg]{NodeID: c.id, Err: err})
+			c.routeResponse(req.msg.GetMessageSeqNo(), NodeResponse[msg]{NodeID: c.id, Err: err})
 		}
 	}
 }
@@ -279,18 +279,18 @@ func (c *channel) receiver() {
 			}
 		}
 
-		md, e := stream.Recv()
+		respMsg, e := stream.Recv()
 		if e != nil {
 			c.setLastErr(e)
 			c.cancelPendingMsgs(e)
 			c.clearStream()
 		} else {
-			err := status.FromProto(md.GetStatus()).Err()
+			err := status.FromProto(respMsg.GetStatus()).Err()
 			var resp msg
 			if err == nil {
-				resp, err = unmarshalResponse(md)
+				resp, err = unmarshalResponse(respMsg)
 			}
-			c.routeResponse(md.GetMessageSeqNo(), NodeResponse[msg]{NodeID: c.id, Value: resp, Err: err})
+			c.routeResponse(respMsg.GetMessageSeqNo(), NodeResponse[msg]{NodeID: c.id, Value: resp, Err: err})
 		}
 
 		select {
@@ -320,7 +320,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		// wait for actual server responses, so waitSendDone is false for them.
 		if req.waitSendDone && err == nil {
 			// Send succeeded: unblock the caller and clean up the responseRouter
-			c.routeResponse(req.md.GetMessageSeqNo(), NodeResponse[msg]{})
+			c.routeResponse(req.msg.GetMessageSeqNo(), NodeResponse[msg]{})
 		}
 	}()
 
@@ -357,7 +357,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		}
 	}()
 
-	if err = stream.Send(req.md); err != nil {
+	if err = stream.Send(req.msg); err != nil {
 		c.setLastErr(err)
 		c.clearStream()
 	}

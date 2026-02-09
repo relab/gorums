@@ -15,7 +15,7 @@ package gorums
 // or iterator method (like Seq) is called, applying any registered request transformations.
 // This lazy sending is necessary to allow interceptors to register transformations prior to dispatch.
 //
-// This function should be used by generated code only.
+// This function should only be used by generated code.
 func QuorumCall[Req, Resp msg](
 	ctx *ConfigContext,
 	req Req,
@@ -31,7 +31,7 @@ func QuorumCall[Req, Resp msg](
 // In streaming mode, the response iterator continues indefinitely until the context
 // is canceled, allowing the server to send multiple responses over time.
 //
-// This function should be used by generated code only.
+// This function should only be used by generated code.
 func QuorumCallStream[Req, Resp msg](
 	ctx *ConfigContext,
 	req Req,
