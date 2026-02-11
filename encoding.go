@@ -51,10 +51,9 @@ func NewResponseMessage(in *Message, resp proto.Message) *Message {
 	}
 }
 
-// AsProto extracts the payload from the message.
-// If msg is nil or invalid, the zero value of T is returned.
-//
-// This function should only be used in generated code.
+// AsProto returns the message's already-decoded proto message as type T.
+// If the message is nil, or the underlying message cannot be asserted to T,
+// the zero value of T is returned.
 func AsProto[T proto.Message](msg *Message) T {
 	var zero T
 	if msg == nil || msg.Msg == nil {
