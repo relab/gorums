@@ -1,6 +1,6 @@
 package gorums
 
-import "github.com/relab/gorums/stream"
+import "github.com/relab/gorums/internal/stream"
 
 // Unicast is a one-way call; no replies are returned to the client.
 //

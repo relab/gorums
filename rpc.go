@@ -1,6 +1,6 @@
 package gorums
 
-import "github.com/relab/gorums/stream"
+import "github.com/relab/gorums/internal/stream"
 
 // RPCCall executes a remote procedure call on the node.
 //

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/relab/gorums/stream"
+	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/protobuf/proto"
 )
 

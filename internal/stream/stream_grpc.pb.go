@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v6.33.4
-// source: stream/stream.proto
+// source: internal/stream/stream.proto
 
 package stream
 
@@ -121,5 +121,5 @@ var Gorums_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "stream/stream.proto",
+	Metadata: "internal/stream/stream.proto",
 }

@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/internal/stream"
 	"github.com/relab/gorums/internal/tests/config"
-	"github.com/relab/gorums/stream"
 	"google.golang.org/protobuf/testing/protocmp"
 )
 

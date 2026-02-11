@@ -8,7 +8,7 @@ static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -no
 proto_path 				:= $(dev_path):third_party:.
 
 plugin_deps				:= gorums.pb.go $(static_file)
-runtime_deps			:= stream/stream.pb.go stream/stream_grpc.pb.go
+runtime_deps			:= internal/stream/stream.pb.go internal/stream/stream_grpc.pb.go
 benchmark_deps			:= benchmark/benchmark.pb.go benchmark/benchmark_gorums.pb.go
 
 .PHONY: all dev tools bootstrapgorums installgorums benchmark test compiletests genproto benchtest bench
