@@ -86,6 +86,9 @@ func RegisterUnresponsiveServer(srv *gorums.Server, impl UnresponsiveServer) {
 	srv.RegisterHandler("unresponsive.Unresponsive.TestUnresponsive", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Empty](in)
 		resp, err := impl.TestUnresponsive(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
 	})
 }

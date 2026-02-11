@@ -86,6 +86,9 @@ func RegisterTLSServer(srv *gorums.Server, impl TLSServer) {
 	srv.RegisterHandler("tls.TLS.TestTLS", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		resp, err := impl.TestTLS(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
 	})
 }

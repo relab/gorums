@@ -8,7 +8,6 @@ package correctable
 
 import (
 	gorums "github.com/relab/gorums"
-	proto "google.golang.org/protobuf/proto"
 )
 
 const (
@@ -118,14 +117,16 @@ func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTestServe
 	srv.RegisterHandler("correctable.CorrectableTest.Correctable", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		resp, err := impl.Correctable(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
 	})
 	srv.RegisterHandler("correctable.CorrectableTest.CorrectableStream", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		err := impl.CorrectableStream(ctx, req, func(resp *Response) error {
-			// create a copy of the metadata, to avoid a data race between NewResponseMessage and SendMsg
-			md := proto.CloneOf(in.GetMetadata())
-			return ctx.SendMessage(gorums.NewResponseMessage(md, resp))
+			out := gorums.NewResponseMessage(in, resp)
+			return ctx.SendMessage(out)
 		})
 		return nil, err
 	})
