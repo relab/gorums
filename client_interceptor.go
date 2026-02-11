@@ -1,7 +1,6 @@
 package gorums
 
 import (
-	"cmp"
 	"context"
 	"slices"
 	"sync"
@@ -180,9 +179,9 @@ func (c *ClientCtx[Req, Resp]) applyInterceptors(interceptors []any) {
 // send dispatches requests to all nodes, applying any registered transformations.
 // It ensures that exactly one response (success or error) is sent per node on replyChan.
 func (c *ClientCtx[Req, Resp]) send() {
-	// Fast path: marshal once when no per-node transforms are registered.
 	var sharedMsg *stream.Message
 	if len(c.reqTransforms) == 0 {
+		// Fast path: marshal once when no per-node transforms are registered.
 		var err error
 		sharedMsg, err = stream.NewMessage(c.Context, c.msgID, c.method, c.request)
 		if err != nil {
@@ -195,7 +194,10 @@ func (c *ClientCtx[Req, Resp]) send() {
 	}
 	for _, n := range c.config {
 		// transform only if there are registered transforms; otherwise reuse the shared message
-		streamMsg := cmp.Or(sharedMsg, c.transformAndMarshal(n))
+		streamMsg := sharedMsg
+		if streamMsg == nil {
+			streamMsg = c.transformAndMarshal(n)
+		}
 		if streamMsg == nil {
 			continue // Skip node: transformAndMarshal already sent ErrSkipNode
 		}
