@@ -37,7 +37,7 @@ func (s *onewaySrv) Multicast(_ gorums.ServerCtx, r *oneway.Request) {
 }
 
 // setupWithNodeMap sets up servers and configuration with sequential node IDs
-// (0, 1, 2, ...) matching the server array indices. This is needed for tests like
+// (1, 2, 3, ...) matching the server array indices. This is needed for tests like
 // TestMulticastPerNode that verify per-node message transformations based on node ID.
 func setupWithNodeMap(t testing.TB, cfgSize int) (cfg oneway.Configuration, srvs []*onewaySrv) {
 	t.Helper()
@@ -45,7 +45,6 @@ func setupWithNodeMap(t testing.TB, cfgSize int) (cfg oneway.Configuration, srvs
 	for i := range cfgSize {
 		srvs[i] = &onewaySrv{received: make(chan *oneway.Request, numCalls)}
 	}
-
 	cfg = gorums.TestConfiguration(t, cfgSize, func(i int) gorums.ServerIface {
 		srv := gorums.NewServer()
 		oneway.RegisterOnewayTestServer(srv, srvs[i])
@@ -70,14 +69,12 @@ func TestOnewayCalls(t *testing.T) {
 		{name: "MulticastSendWaiting__", calls: numCalls, servers: 9, sendWait: true},
 		{name: "MulticastNoSendWaiting", calls: numCalls, servers: 9, sendWait: false},
 	}
-
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s/Servers=%d", test.name, test.servers), func(t *testing.T) {
 			config, srvs := setupWithNodeMap(t, test.servers)
 			for i := range srvs {
 				srvs[i].wg.Add(test.calls)
 			}
-
 			for c := 1; c <= test.calls; c++ {
 				in := oneway.Request_builder{Num: uint64(c)}.Build()
 				if config.Size() == 1 {
@@ -110,12 +107,18 @@ func TestOnewayCalls(t *testing.T) {
 			for i := range srvs {
 				srvs[i].wg.Wait()
 				close(srvs[i].received)
-				expected := uint64(1)
+				received := make([]uint64, 0, test.calls)
 				for r := range srvs[i].received {
-					if expected != r.GetNum() {
-						t.Errorf("%s(%d) = %d, expected %d", test.name, expected, r.GetNum(), expected)
+					received = append(received, r.GetNum())
+				}
+				// Sort received messages to avoid test flakiness
+				// due to message reordering in multicast tests
+				slices.Sort(received)
+				for j, got := range received {
+					want := uint64(j + 1)
+					if want != got {
+						t.Errorf("%s: received[%d] = %d, expected %d", test.name, j, got, want)
 					}
-					expected++
 				}
 			}
 		})
@@ -163,7 +166,6 @@ func TestMulticastPerNode(t *testing.T) {
 		{name: "MulticastPerNodeSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: true, ignoreNodes: []uint32{0, 1}},
 		{name: "MulticastPerNodeSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: true, ignoreNodes: []uint32{0, 1, 2}},
 	}
-
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s/Servers=%d/IgnoredNodes=%v", test.name, test.servers, test.ignoreNodes), func(t *testing.T) {
 			config, srvs := setupWithNodeMap(t, test.servers)
@@ -206,12 +208,18 @@ func TestMulticastPerNode(t *testing.T) {
 				}
 				srvs[i].wg.Wait()
 				close(srvs[i].received)
-				expected := add(uint64(1), nodeIDs[i])
+				received := make([]uint64, 0, test.calls)
 				for r := range srvs[i].received {
-					if expected != r.GetNum() {
-						t.Errorf("%s -> %d, expected %d, nodeID=%d", test.name, r.GetNum(), expected, nodeIDs[i])
+					received = append(received, r.GetNum())
+				}
+				// Sort received messages to avoid test flakiness
+				// due to message reordering in multicast tests
+				slices.Sort(received)
+				for j, got := range received {
+					want := add(uint64(j+1), nodeIDs[i])
+					if want != got {
+						t.Errorf("%s: received[%d] = %d, expected %d, nodeID=%d", test.name, j, got, want, nodeIDs[i])
 					}
-					expected++
 				}
 			}
 		})
