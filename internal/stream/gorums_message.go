@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -47,4 +48,12 @@ func (x *Message) AppendToIncomingContext(ctx context.Context) context.Context {
 		newMD.Append(entry.GetKey(), entry.GetValue())
 	}
 	return metadata.NewIncomingContext(ctx, newMD)
+}
+
+func (x *Message) ErrorStatus() error {
+	s := x.GetStatus()
+	if s == nil {
+		return nil
+	}
+	return status.ErrorProto(s)
 }
