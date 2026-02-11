@@ -29,7 +29,7 @@ var importMap = map[string]protogen.GoImportPath{
 	"backoff":      protogen.GoImportPath("google.golang.org/grpc/backoff"),
 	"proto":        protogen.GoImportPath("google.golang.org/protobuf/proto"),
 	"gorums":       protogen.GoImportPath("github.com/relab/gorums"),
-	"stream":       protogen.GoImportPath("github.com/relab/gorums/stream"),
+	"stream":       protogen.GoImportPath("github.com/relab/gorums/internal/stream"),
 	"protoreflect": protogen.GoImportPath("google.golang.org/protobuf/reflect/protoreflect"),
 }
 

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/relab/gorums/stream"
+	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"

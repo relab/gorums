@@ -5,7 +5,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/relab/gorums/stream"
+	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )

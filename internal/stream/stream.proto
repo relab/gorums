@@ -1,7 +1,7 @@
 edition = "2023";
 
 package stream;
-option go_package = "github.com/relab/gorums/stream";
+option go_package = "github.com/relab/gorums/internal/stream";
 option features.field_presence = IMPLICIT;
 
 import "google/rpc/status.proto";

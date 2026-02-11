@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/relab/gorums/internal/stream"
 	"github.com/relab/gorums/internal/testutils/mock"
-	"github.com/relab/gorums/stream"
 	"google.golang.org/grpc"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )

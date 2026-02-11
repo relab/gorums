@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v6.33.4
-// source: stream/stream.proto
+// source: internal/stream/stream.proto
 
 package stream
 
@@ -36,7 +36,7 @@ type Message struct {
 
 func (x *Message) Reset() {
 	*x = Message{}
-	mi := &file_stream_stream_proto_msgTypes[0]
+	mi := &file_internal_stream_stream_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -48,7 +48,7 @@ func (x *Message) String() string {
 func (*Message) ProtoMessage() {}
 
 func (x *Message) ProtoReflect() protoreflect.Message {
-	mi := &file_stream_stream_proto_msgTypes[0]
+	mi := &file_internal_stream_stream_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -163,7 +163,7 @@ type MetadataEntry struct {
 
 func (x *MetadataEntry) Reset() {
 	*x = MetadataEntry{}
-	mi := &file_stream_stream_proto_msgTypes[1]
+	mi := &file_internal_stream_stream_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -175,7 +175,7 @@ func (x *MetadataEntry) String() string {
 func (*MetadataEntry) ProtoMessage() {}
 
 func (x *MetadataEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_stream_stream_proto_msgTypes[1]
+	mi := &file_internal_stream_stream_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -224,11 +224,11 @@ func (b0 MetadataEntry_builder) Build() *MetadataEntry {
 	return m0
 }
 
-var File_stream_stream_proto protoreflect.FileDescriptor
+var File_internal_stream_stream_proto protoreflect.FileDescriptor
 
-const file_stream_stream_proto_rawDesc = "" +
+const file_internal_stream_stream_proto_rawDesc = "" +
 	"\n" +
-	"\x13stream/stream.proto\x12\x06stream\x1a\x17google/rpc/status.proto\"\xba\x01\n" +
+	"\x1cinternal/stream/stream.proto\x12\x06stream\x1a\x17google/rpc/status.proto\"\xba\x01\n" +
 	"\aMessage\x12$\n" +
 	"\x0emessage_seq_no\x18\x01 \x01(\x04R\fmessageSeqNo\x12\x16\n" +
 	"\x06method\x18\x02 \x01(\tR\x06method\x12*\n" +
@@ -240,15 +240,15 @@ const file_stream_stream_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value2<\n" +
 	"\x06Gorums\x122\n" +
 	"\n" +
-	"NodeStream\x12\x0f.stream.Message\x1a\x0f.stream.Message(\x010\x01B%Z\x1egithub.com/relab/gorums/stream\x92\x03\x02\b\x02b\beditionsp\xe8\a"
+	"NodeStream\x12\x0f.stream.Message\x1a\x0f.stream.Message(\x010\x01B.Z'github.com/relab/gorums/internal/stream\x92\x03\x02\b\x02b\beditionsp\xe8\a"
 
-var file_stream_stream_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_stream_stream_proto_goTypes = []any{
+var file_internal_stream_stream_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_internal_stream_stream_proto_goTypes = []any{
 	(*Message)(nil),       // 0: stream.Message
 	(*MetadataEntry)(nil), // 1: stream.MetadataEntry
 	(*status.Status)(nil), // 2: google.rpc.Status
 }
-var file_stream_stream_proto_depIdxs = []int32{
+var file_internal_stream_stream_proto_depIdxs = []int32{
 	2, // 0: stream.Message.status:type_name -> google.rpc.Status
 	1, // 1: stream.Message.entry:type_name -> stream.MetadataEntry
 	0, // 2: stream.Gorums.NodeStream:input_type -> stream.Message
@@ -260,26 +260,26 @@ var file_stream_stream_proto_depIdxs = []int32{
 	0, // [0:2] is the sub-list for field type_name
 }
 
-func init() { file_stream_stream_proto_init() }
-func file_stream_stream_proto_init() {
-	if File_stream_stream_proto != nil {
+func init() { file_internal_stream_stream_proto_init() }
+func file_internal_stream_stream_proto_init() {
+	if File_internal_stream_stream_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_stream_stream_proto_rawDesc), len(file_stream_stream_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_stream_stream_proto_rawDesc), len(file_internal_stream_stream_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_stream_stream_proto_goTypes,
-		DependencyIndexes: file_stream_stream_proto_depIdxs,
-		MessageInfos:      file_stream_stream_proto_msgTypes,
+		GoTypes:           file_internal_stream_stream_proto_goTypes,
+		DependencyIndexes: file_internal_stream_stream_proto_depIdxs,
+		MessageInfos:      file_internal_stream_stream_proto_msgTypes,
 	}.Build()
-	File_stream_stream_proto = out.File
-	file_stream_stream_proto_goTypes = nil
-	file_stream_stream_proto_depIdxs = nil
+	File_internal_stream_stream_proto = out.File
+	file_internal_stream_stream_proto_goTypes = nil
+	file_internal_stream_stream_proto_depIdxs = nil
 }
