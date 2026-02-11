@@ -93,11 +93,17 @@ func RegisterMetadataTestServer(srv *gorums.Server, impl MetadataTestServer) {
 	srv.RegisterHandler("metadata.MetadataTest.IDFromMD", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*emptypb.Empty](in)
 		resp, err := impl.IDFromMD(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
 	})
 	srv.RegisterHandler("metadata.MetadataTest.WhatIP", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*emptypb.Empty](in)
 		resp, err := impl.WhatIP(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
 	})
 }

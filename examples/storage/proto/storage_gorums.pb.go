@@ -137,22 +137,34 @@ func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
 	srv.RegisterHandler("proto.Storage.ReadRPC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*ReadRequest](in)
 		resp, err := impl.ReadRPC(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
 	})
 	srv.RegisterHandler("proto.Storage.WriteRPC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*WriteRequest](in)
 		resp, err := impl.WriteRPC(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
 	})
 	srv.RegisterHandler("proto.Storage.ReadQC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*ReadRequest](in)
 		resp, err := impl.ReadQC(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
 	})
 	srv.RegisterHandler("proto.Storage.WriteQC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*WriteRequest](in)
 		resp, err := impl.WriteQC(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
 	})
 	srv.RegisterHandler("proto.Storage.WriteMulticast", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*WriteRequest](in)

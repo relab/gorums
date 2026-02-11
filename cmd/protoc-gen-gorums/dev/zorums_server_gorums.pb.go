@@ -8,7 +8,6 @@ package dev
 
 import (
 	gorums "github.com/relab/gorums"
-	proto "google.golang.org/protobuf/proto"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -40,22 +39,34 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsServiceServer) {
 	srv.RegisterHandler("dev.ZorumsService.GRPCCall", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		resp, err := impl.GRPCCall(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
 	})
 	srv.RegisterHandler("dev.ZorumsService.QuorumCall", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		resp, err := impl.QuorumCall(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
 	})
 	srv.RegisterHandler("dev.ZorumsService.QuorumCallEmpty", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*emptypb.Empty](in)
 		resp, err := impl.QuorumCallEmpty(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
 	})
 	srv.RegisterHandler("dev.ZorumsService.QuorumCallEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		resp, err := impl.QuorumCallEmpty2(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
 	})
 	srv.RegisterHandler("dev.ZorumsService.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
@@ -80,27 +91,24 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsServiceServer) {
 	srv.RegisterHandler("dev.ZorumsService.QuorumCallStream", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		err := impl.QuorumCallStream(ctx, req, func(resp *Response) error {
-			// create a copy of the metadata, to avoid a data race between NewResponseMessage and SendMsg
-			md := proto.CloneOf(in.GetMetadata())
-			return ctx.SendMessage(gorums.NewResponseMessage(md, resp))
+			out := gorums.NewResponseMessage(in, resp)
+			return ctx.SendMessage(out)
 		})
 		return nil, err
 	})
 	srv.RegisterHandler("dev.ZorumsService.QuorumCallStreamWithEmpty", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		err := impl.QuorumCallStreamWithEmpty(ctx, req, func(resp *emptypb.Empty) error {
-			// create a copy of the metadata, to avoid a data race between NewResponseMessage and SendMsg
-			md := proto.CloneOf(in.GetMetadata())
-			return ctx.SendMessage(gorums.NewResponseMessage(md, resp))
+			out := gorums.NewResponseMessage(in, resp)
+			return ctx.SendMessage(out)
 		})
 		return nil, err
 	})
 	srv.RegisterHandler("dev.ZorumsService.QuorumCallStreamWithEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*emptypb.Empty](in)
 		err := impl.QuorumCallStreamWithEmpty2(ctx, req, func(resp *Response) error {
-			// create a copy of the metadata, to avoid a data race between NewResponseMessage and SendMsg
-			md := proto.CloneOf(in.GetMetadata())
-			return ctx.SendMessage(gorums.NewResponseMessage(md, resp))
+			out := gorums.NewResponseMessage(in, resp)
+			return ctx.SendMessage(out)
 		})
 		return nil, err
 	})
