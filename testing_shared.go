@@ -53,7 +53,7 @@ func TestQuorumCallError(_ testing.TB, nodeErrors map[uint32]error) QuorumCallEr
 //
 // Optional TestOptions can be provided to customize the manager, server, or configuration.
 //
-// By default, nodes are assigned sequential IDs (0, 1, 2, ...) matching the server
+// By default, nodes are assigned sequential IDs (1, 2, 3, ...) matching the server
 // creation order. This can be overridden by providing a NodeListOption.
 //
 // This is the recommended way to set up tests that need both servers and a configuration.
