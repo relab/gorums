@@ -24,10 +24,9 @@ func makeClientCtx[Req, Resp msg](t *testing.T, numNodes int, responses []NodeRe
 	}
 
 	c := &ClientCtx[Req, Resp]{
-		Context:         t.Context(),
-		config:          config,
-		replyChan:       resultChan,
-		expectedReplies: numNodes,
+		Context:   t.Context(),
+		config:    config,
+		replyChan: resultChan,
 	}
 	// Mark sendOnce as done since test responses are already in the channel
 	c.sendOnce.Do(func() {})

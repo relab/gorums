@@ -1,6 +1,8 @@
 package gorums
 
 import (
+	"errors"
+
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -31,10 +33,10 @@ func Multicast[Req msg](ctx *ConfigContext, req Req, method string, opts ...Call
 	// If waiting for send completion, drain the reply channel and return the first error.
 	if waitSendDone {
 		var errs []nodeError
-		for range clientCtx.expectedReplies {
+		for range clientCtx.Size() {
 			select {
 			case r := <-clientCtx.replyChan:
-				if r.Err != nil {
+				if r.Err != nil && !errors.Is(r.Err, ErrSkipNode) {
 					errs = append(errs, nodeError{cause: r.Err, nodeID: r.NodeID})
 				}
 			case <-ctx.Done():

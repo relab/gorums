@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"errors"
 	"iter"
 
 	"google.golang.org/protobuf/proto"
@@ -192,7 +193,7 @@ func (r *Responses[Resp]) Threshold(threshold int) (resp Resp, err error) {
 		errs  []nodeError
 	)
 	for result := range r.ResponseSeq {
-		if result.Err != nil {
+		if result.Err != nil && !errors.Is(result.Err, ErrSkipNode) {
 			errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
 			continue
 		}

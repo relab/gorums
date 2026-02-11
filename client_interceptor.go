@@ -53,11 +53,6 @@ type ClientCtx[Req, Resp msg] struct {
 	// Interceptors can wrap this iterator to modify responses.
 	responseSeq ResponseSeq[Resp]
 
-	// expectedReplies is the number of responses expected from nodes.
-	// It is set when messages are sent and may be lower than config size
-	// if some nodes are skipped by request transformations.
-	expectedReplies int
-
 	// streaming indicates whether this is a streaming call (for correctable streams).
 	streaming bool
 
@@ -88,11 +83,10 @@ func newClientCtxBuilder[Req, Resp msg](
 ) *clientCtxBuilder[Req, Resp] {
 	return &clientCtxBuilder[Req, Resp]{
 		c: &ClientCtx[Req, Resp]{
-			Context:         ctx,
-			config:          ctx.Configuration(),
-			request:         req,
-			method:          method,
-			expectedReplies: ctx.Configuration().Size(),
+			Context: ctx,
+			config:  ctx.Configuration(),
+			request: req,
+			method:  method,
 		},
 		chanMultiplier: 1,
 	}
@@ -186,11 +180,8 @@ func (c *ClientCtx[Req, Resp]) applyInterceptors(interceptors []any) {
 }
 
 // send dispatches requests to all nodes, applying any registered transformations.
-// It updates expectedReplies based on how many nodes actually receive requests
-// (nodes may be skipped if a transformation returns nil).
+// It ensures that exactly one response (success or error) is sent per node on replyChan.
 func (c *ClientCtx[Req, Resp]) send() {
-	var expected int
-
 	// Fast path: marshal once when no per-node transforms are registered.
 	var sharedMsg *stream.Message
 	if len(c.reqTransforms) == 0 {
@@ -200,9 +191,7 @@ func (c *ClientCtx[Req, Resp]) send() {
 			// Marshaling fails identically for all nodes; report and return.
 			for _, n := range c.config {
 				c.replyChan <- NodeResponse[msg]{NodeID: n.ID(), Err: err}
-				expected++
 			}
-			c.expectedReplies = expected
 			return
 		}
 	}
@@ -210,9 +199,8 @@ func (c *ClientCtx[Req, Resp]) send() {
 		// transform only if there are registered transforms; otherwise reuse the shared message
 		streamMsg := cmp.Or(sharedMsg, c.transformAndMarshal(n))
 		if streamMsg == nil {
-			continue // Skip node
+			continue // Skip node: transformAndMarshal already sent ErrSkipNode
 		}
-		expected++
 		n.channel.enqueue(request{
 			ctx:          c.Context,
 			msg:          streamMsg,
@@ -221,7 +209,6 @@ func (c *ClientCtx[Req, Resp]) send() {
 			responseChan: c.replyChan,
 		})
 	}
-	c.expectedReplies = expected
 }
 
 // transformAndMarshal applies transformations to the request for the given node,
@@ -233,7 +220,8 @@ func (c *ClientCtx[Req, Resp]) transformAndMarshal(n *Node) *stream.Message {
 		result = transform(result, n)
 	}
 	// Check if the result is valid
-	if protoReq, ok := any(result).(proto.Message); !ok || !protoReq.ProtoReflect().IsValid() {
+	if protoReq, ok := any(result).(proto.Message); !ok || protoReq == nil || !protoReq.ProtoReflect().IsValid() {
+		c.replyChan <- NodeResponse[msg]{NodeID: n.ID(), Err: ErrSkipNode}
 		return nil
 	}
 	streamMsg, err := stream.NewMessage(c.Context, c.msgID, c.method, result)
@@ -250,7 +238,7 @@ func (c *ClientCtx[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		// Trigger sending on first iteration
 		c.sendOnce.Do(c.send)
-		for range c.expectedReplies {
+		for range c.Size() {
 			select {
 			case r := <-c.replyChan:
 				res := newNodeResponse[Resp](r)
@@ -293,7 +281,7 @@ func (c *ClientCtx[Req, Resp]) streamingResponseSeq() ResponseSeq[Resp] {
 //
 // The fn receives the original request and a node, and returns the transformed
 // request to send to that node. If the function returns an invalid message or nil,
-// the request to that node is skipped.
+// an ErrSkipNode error is sent for that node, indicating it was skipped.
 func MapRequest[Req, Resp msg](fn func(Req, *Node) Req) QuorumInterceptor[Req, Resp] {
 	return func(ctx *ClientCtx[Req, Resp], next ResponseSeq[Resp]) ResponseSeq[Resp] {
 		if fn != nil {

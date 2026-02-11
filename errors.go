@@ -16,6 +16,10 @@ var ErrSendFailure = errors.New("send failure")
 // ErrTypeMismatch is returned when a response cannot be cast to the expected type.
 var ErrTypeMismatch = errors.New("response type mismatch")
 
+// ErrSkipNode is returned when a node is skipped by request transformations.
+// This allows the response iterator to account for all nodes without blocking.
+var ErrSkipNode = errors.New("skip node")
+
 // QuorumCallError reports on a failed quorum call.
 // It provides detailed information about which nodes failed.
 type QuorumCallError struct {
