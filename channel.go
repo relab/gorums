@@ -285,7 +285,7 @@ func (c *channel) receiver() {
 			c.cancelPendingMsgs(e)
 			c.clearStream()
 		} else {
-			err := status.FromProto(respMsg.GetStatus()).Err()
+			err := respMsg.ErrorStatus()
 			var resp msg
 			if err == nil {
 				resp, err = unmarshalResponse(respMsg)
