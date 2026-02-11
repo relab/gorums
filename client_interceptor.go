@@ -113,8 +113,6 @@ func (b *clientCtxBuilder[Req, Resp]) WithWaitSendDone(waitSendDone bool) *clien
 // It creates the metadata and reply channel, and sets up the appropriate response iterator.
 func (b *clientCtxBuilder[Req, Resp]) Build() *ClientCtx[Req, Resp] {
 	// Assign a unique message ID and create the reply channel at build time.
-	// The stream.Message is created lazily in applyTransforms, where the
-	// request payload is marshaled together with the metadata.
 	b.c.msgID = b.c.config.nextMsgID()
 	b.c.replyChan = make(chan NodeResponse[msg], b.c.config.Size()*b.chanMultiplier)
 
