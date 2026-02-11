@@ -1,7 +1,6 @@
 package gorums
 
 import (
-	"cmp"
 	"fmt"
 
 	"github.com/relab/gorums/internal/stream"
@@ -68,18 +67,21 @@ func AsProto[T proto.Message](msg *Message) T {
 }
 
 // messageWithError ensures a response message exists and sets the error status.
-// If out is nil, the in message (request) is reused to return the error status.
-// This is used by the server to send error responses back to the client.
+// If out is nil, a new response message is created based on the in request message;
+// otherwise, out is modified in place. This is used by the server to send error
+// responses back to the client.
 func messageWithError(in, out *Message, err error) *Message {
-	msg := cmp.Or(out, in)
+	if out == nil {
+		out = NewResponseMessage(in, nil)
+	}
 	if err != nil {
 		errStatus, ok := status.FromError(err)
 		if !ok {
 			errStatus = status.New(codes.Unknown, err.Error())
 		}
-		msg.SetStatus(errStatus.Proto())
+		out.SetStatus(errStatus.Proto())
 	}
-	return msg
+	return out
 }
 
 // unmarshalRequest unmarshals the request proto message from the message.
