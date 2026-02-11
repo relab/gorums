@@ -7,6 +7,7 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/stream"
 	"github.com/relab/gorums/internal/tests/config"
+	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/protobuf/testing/protocmp"
 )
 
@@ -16,11 +17,11 @@ func TestNewResponseMessage(t *testing.T) {
 
 	streamIn := stream.Message_builder{
 		MessageSeqNo: 100,
-		Method:       "/pkg.Svc/Call",
+		Method:       mock.GetValueMethod,
 		Payload:      []byte("request payload"),
 		Entry:        []*stream.MetadataEntry{stream.MetadataEntry_builder{Key: "key1", Value: "val1"}.Build()},
 	}.Build()
-	streamOut := stream.Message_builder{MessageSeqNo: 100, Method: "/pkg.Svc/Call"}.Build()
+	streamOut := stream.Message_builder{MessageSeqNo: 100, Method: mock.GetValueMethod}.Build()
 
 	tests := []struct {
 		name string
