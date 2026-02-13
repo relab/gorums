@@ -77,7 +77,7 @@ func (s *streamServer) NodeStream(srv stream.Gorums_NodeStreamServer) error {
 				srvCtx := newServerCtx(streamIn.AppendToIncomingContext(ctx), &mut, finished)
 				defer srvCtx.Release()
 
-				msg, err := unmarshalRequest(streamIn)
+				msg, err := stream.UnmarshalRequest(streamIn)
 				in := &Message{Msg: msg, Message: streamIn}
 				if err != nil {
 					_ = srvCtx.SendMessage(messageWithError(in, nil, err))

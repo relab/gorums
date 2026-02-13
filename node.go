@@ -10,6 +10,8 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/relab/gorums/internal/stream"
 )
 
 const nilAngleString = "<nil>"
@@ -29,8 +31,8 @@ func (c NodeContext) Node() *Node {
 }
 
 // enqueue enqueues a request to this node's channel.
-func (c NodeContext) enqueue(req request) {
-	c.node.channel.enqueue(req)
+func (c NodeContext) enqueue(req stream.Request) {
+	c.node.channel.Enqueue(req)
 }
 
 // nextMsgID returns the next message ID from this client's manager.
@@ -47,7 +49,7 @@ type Node struct {
 	mgr  *Manager // only used for backward compatibility to allow Configuration.Manager()
 
 	msgIDGen func() uint64
-	channel  *channel
+	channel  *stream.Channel
 }
 
 // Context creates a new NodeContext from the given parent context
@@ -104,14 +106,14 @@ func newNode(addr string, opts nodeOptions) (*Node, error) {
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Create channel and establish gRPC node stream
-	n.channel = newChannel(ctx, conn, n.id, opts.SendBufferSize)
+	n.channel = stream.NewChannel(ctx, conn, n.id, opts.SendBufferSize)
 	return n, nil
 }
 
 // close this node.
 func (n *Node) close() error {
 	if n.channel != nil {
-		return n.channel.close()
+		return n.channel.Close()
 	}
 	return nil
 }
@@ -168,12 +170,12 @@ func (n *Node) FullString() string {
 
 // LastErr returns the last error encountered (if any) for this node.
 func (n *Node) LastErr() error {
-	return n.channel.lastErr()
+	return n.channel.LastErr()
 }
 
 // Latency returns the latency between the client and this node.
 func (n *Node) Latency() time.Duration {
-	return n.channel.channelLatency()
+	return n.channel.Latency()
 }
 
 type lessFunc func(n1, n2 *Node) bool
@@ -251,7 +253,7 @@ var Port = func(n1, n2 *Node) bool {
 // LastNodeError sorts nodes by their LastErr() status in increasing order. A
 // node with LastErr() != nil is larger than a node with LastErr() == nil.
 var LastNodeError = func(n1, n2 *Node) bool {
-	if n1.channel.lastErr() != nil && n2.channel.lastErr() == nil {
+	if n1.channel.LastErr() != nil && n2.channel.LastErr() == nil {
 		return false
 	}
 	return true

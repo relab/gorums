@@ -201,12 +201,12 @@ func (c *ClientCtx[Req, Resp]) send() {
 		if streamMsg == nil {
 			continue // Skip node: transformAndMarshal already sent ErrSkipNode
 		}
-		n.channel.enqueue(request{
-			ctx:          c.Context,
-			msg:          streamMsg,
-			streaming:    c.streaming,
-			waitSendDone: c.waitSendDone,
-			responseChan: c.replyChan,
+		n.channel.Enqueue(stream.Request{
+			Ctx:          c.Context,
+			Msg:          streamMsg,
+			Streaming:    c.streaming,
+			WaitSendDone: c.waitSendDone,
+			ResponseChan: c.replyChan,
 		})
 	}
 }
@@ -241,7 +241,7 @@ func (c *ClientCtx[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 		for range c.Size() {
 			select {
 			case r := <-c.replyChan:
-				res := newNodeResponse[Resp](r)
+				res := mapToCallResponse[Resp](r)
 				if !yield(res) {
 					return // Consumer stopped iteration
 				}
@@ -261,7 +261,7 @@ func (c *ClientCtx[Req, Resp]) streamingResponseSeq() ResponseSeq[Resp] {
 		for {
 			select {
 			case r := <-c.replyChan:
-				res := newNodeResponse[Resp](r)
+				res := mapToCallResponse[Resp](r)
 				if !yield(res) {
 					return // Consumer stopped iteration
 				}

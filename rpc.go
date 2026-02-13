@@ -12,7 +12,7 @@ func RPCCall[Req, Resp msg](ctx *NodeContext, req Req, method string) (Resp, err
 		var zero Resp
 		return zero, err
 	}
-	ctx.enqueue(request{ctx: ctx, msg: reqMsg, responseChan: replyChan})
+	ctx.enqueue(stream.Request{Ctx: ctx, Msg: reqMsg, ResponseChan: replyChan})
 
 	select {
 	case r := <-replyChan:
