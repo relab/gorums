@@ -5,37 +5,39 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/relab/gorums/internal/stream"
 )
 
 func TestNodeSort(t *testing.T) {
 	nodes := []*Node{
 		{
 			id: 100,
-			channel: &channel{
-				lastError: nil,
-				latency:   time.Second,
-			},
+			channel: stream.NewChannelWithState(
+				time.Second,
+				nil,
+			),
 		},
 		{
 			id: 101,
-			channel: &channel{
-				lastError: errors.New("some error"),
-				latency:   250 * time.Millisecond,
-			},
+			channel: stream.NewChannelWithState(
+				250*time.Millisecond,
+				errors.New("some error"),
+			),
 		},
 		{
 			id: 42,
-			channel: &channel{
-				lastError: nil,
-				latency:   300 * time.Millisecond,
-			},
+			channel: stream.NewChannelWithState(
+				300*time.Millisecond,
+				nil,
+			),
 		},
 		{
 			id: 99,
-			channel: &channel{
-				lastError: errors.New("some error"),
-				latency:   500 * time.Millisecond,
-			},
+			channel: stream.NewChannelWithState(
+				500*time.Millisecond,
+				errors.New("some error"),
+			),
 		},
 	}
 
