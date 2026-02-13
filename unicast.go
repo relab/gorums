@@ -23,13 +23,13 @@ func Unicast[Req msg](ctx *NodeContext, req Req, method string, opts ...CallOpti
 	waitSendDone := callOpts.mustWaitSendDone()
 	if !waitSendDone {
 		// Fire-and-forget: enqueue and return immediately
-		ctx.enqueue(request{ctx: ctx, msg: reqMsg})
+		ctx.enqueue(stream.Request{Ctx: ctx, Msg: reqMsg})
 		return nil
 	}
 
 	// Default: block until send completes
 	replyChan := make(chan NodeResponse[msg], 1)
-	ctx.enqueue(request{ctx: ctx, msg: reqMsg, waitSendDone: true, responseChan: replyChan})
+	ctx.enqueue(stream.Request{Ctx: ctx, Msg: reqMsg, WaitSendDone: true, ResponseChan: replyChan})
 
 	// Wait for send confirmation
 	select {
