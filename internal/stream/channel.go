@@ -311,7 +311,11 @@ func (c *Channel) sender() {
 			c.replyError(req, err)
 			continue
 		}
-		if err := c.sendMsg(req); err != nil {
+		// For one-way calls (Unicast/Multicast): notify caller based on send result.
+		// - Always deliver errors so caller knows the send failed
+		// - Only deliver success if WaitSendDone=true (caller wants confirmation)
+		// Two-way calls (RPCCall/QuorumCall) wait for actual server responses instead.
+		if err := c.sendMsg(req); err != nil || req.WaitSendDone {
 			c.routeResponse(req.Msg.GetMessageSeqNo(), response{NodeID: c.id, Err: err})
 		}
 	}
@@ -367,26 +371,6 @@ func (c *Channel) sendMsg(req Request) (err error) {
 		c.responseRouters[msgID] = req
 		c.responseMut.Unlock()
 	}
-	defer func() {
-		// For one-way call types (Unicast/Multicast), the caller can choose between two behaviors:
-		//
-		// 1. Default (mustWaitSendDone=true): Block until send completes
-		//    - If send succeeds (err == nil): Send empty response to unblock caller immediately
-		//    - If send fails (err != nil): sender() goroutine will deliver the error
-		//    - Provides synchronous error handling with immediate feedback
-		//
-		// 2. With the IgnoreErrors option (mustWaitSendDone=false): Return immediately after enqueuing
-		//    - Caller returns as soon as message is queued to sendQ
-		//    - Any errors are delivered asynchronously by sender() goroutine
-		//    - Provides fire-and-forget semantics
-		//
-		// Note: Two-way call types (RPCCall, QuorumCall) do not use this mechanism, they always
-		// wait for actual server responses, so waitSendDone is false for them.
-		if req.WaitSendDone && err == nil {
-			// Send succeeded: unblock the caller and clean up the responseRouter
-			c.routeResponse(req.Msg.GetMessageSeqNo(), response{})
-		}
-	}()
 
 	// don't send if context is already cancelled.
 	if req.Ctx.Err() != nil {
