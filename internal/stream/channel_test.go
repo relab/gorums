@@ -438,7 +438,7 @@ func TestChannelEnsureStream(t *testing.T) {
 					t.Errorf("initial ensureStream failed: %v", err)
 				}
 				first := tc.getStream()
-				tc.clearStream()
+				tc.clearStream(first)
 				if err := tc.ensureStream(); err != nil {
 					t.Errorf("ensureStream after disconnect failed: %v", err)
 				}
@@ -466,7 +466,7 @@ func TestChannelEnsureStreamAfterBroken(t *testing.T) {
 	}
 
 	// Break the stream
-	tc.clearStream()
+	tc.clearStream(tc.getStream())
 
 	// Ensure we can get it back
 	if err := tc.ensureStream(); err != nil {
@@ -499,7 +499,7 @@ func TestChannelConnectionState(t *testing.T) {
 				if !waitForConnection(tc.Channel, streamConnectTimeout) {
 					t.Fatal("node should be connected before clearing stream")
 				}
-				tc.clearStream()
+				tc.clearStream(tc.getStream())
 				return tc
 			},
 			wantConnected: false,
@@ -647,6 +647,67 @@ func TestChannelStreamReadyAfterReconnect(t *testing.T) {
 	}
 }
 
+// TestChannelConcurrentStreamReconnect verifies correct handling of concurrent
+// requests during stream reconnection. The server breaks the stream after echoing
+// the first message, then the test fires multiple concurrent requests without
+// waiting for the channel to detect the disconnect.
+//
+// This validates the channel's stream lifecycle management ensures that:
+// - Requests are only tracked in the response router when sent on the current stream
+// - The clearStream stale-check prevents cancelling a new stream's context
+// - Concurrent requests sent during reconnection succeed without spurious errors
+func TestChannelConcurrentStreamReconnect(t *testing.T) {
+	// firstStream breaks after one echo; all subsequent streams echo normally.
+	var once sync.Once
+	serverFn := func(stream Gorums_NodeStreamServer) error {
+		var breaks bool
+		once.Do(func() { breaks = true })
+		if breaks {
+			msg, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if err := stream.Send(msg); err != nil {
+				return err
+			}
+			return errors.New("intentional stream break")
+		}
+		return echoServer(stream)
+	}
+
+	tc := setupChannel(t, serverFn)
+	if !waitForConnection(tc.Channel, streamConnectTimeout) {
+		t.Fatal("channel should be connected")
+	}
+
+	// Request 1 causes the server to echo and immediately break the stream.
+	resp := sendRequest(t, tc.Channel, Request{}, 1)
+	if resp.Err != nil {
+		t.Fatalf("unexpected error on initial request: %v", resp.Err)
+	}
+
+	// Fire concurrent requests without waiting for the channel to notice the
+	// disconnect. These requests race with the teardown of the broken stream,
+	// validating that the channel correctly routes them to the new stream
+	// without spurious cancellation.
+	const concurrency = 10
+	var wg sync.WaitGroup
+	errs := make([]error, concurrency)
+	for i := range concurrency {
+		wg.Go(func() {
+			resp := sendRequest(t, tc.Channel, Request{}, uint64(i+2))
+			errs[i] = resp.Err
+		})
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("request %d: unexpected error after reconnect: %v", i+2, err)
+		}
+	}
+}
+
 func TestChannelRouterLifecycle(t *testing.T) {
 	tc := setupChannel(t, echoServer)
 
@@ -779,7 +840,7 @@ func TestChannelDeadlock(t *testing.T) {
 	sendRequest(t, tc.Channel, Request{WaitSendDone: true}, 1)
 
 	// Break the stream, forcing a reconnection on next send
-	tc.clearStream()
+	tc.clearStream(tc.getStream())
 	time.Sleep(20 * time.Millisecond)
 
 	// Send multiple messages concurrently when stream is broken with the
@@ -889,7 +950,7 @@ func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
 
 	b.ResetTimer()
 	for i := range b.N {
-		tc.clearStream()
+		tc.clearStream(tc.getStream())
 
 		// Wait a tiny bit for the receiver to notice the stream is gone
 		// and be ready for the signal. This simulates real-world behavior

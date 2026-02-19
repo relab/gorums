@@ -146,13 +146,22 @@ func (c *Channel) getStream() Gorums_NodeStreamClient {
 	return c.stream
 }
 
-// clearStream cancels the current stream context and clears the stream reference.
+// clearStream cancels the stream context for stale and clears the stream reference,
+// but only if stale is still the current stream. This guards against a race where
+// the receiver calls clearStream on a stale stream after ensureStream has already
+// replaced it with a new one, which would otherwise cancel the new stream's context
+// and spuriously cancel requests that belong to the new stream.
 // This triggers reconnection on the next send attempt.
-func (c *Channel) clearStream() {
+func (c *Channel) clearStream(stale Gorums_NodeStreamClient) {
 	c.streamMut.Lock()
+	defer c.streamMut.Unlock()
+	if c.stream != stale {
+		// stale is already gone; a new stream has been established — do not cancel it
+		return
+	}
 	c.streamCancel()
 	c.stream = nil
-	c.streamMut.Unlock()
+	c.requeuePendingMsgs()
 }
 
 // isConnected returns true if the gRPC connection is in Ready state and we have an active stream.
@@ -200,7 +209,7 @@ func (c *Channel) routeResponse(msgID uint64, resp response) {
 }
 
 // cancelPendingMsgs cancels all pending messages by sending an error response to each
-// associated request. This is called when the stream goes down to notify all waiting calls.
+// associated request. This is called during node shutdown to notify all waiting calls.
 func (c *Channel) cancelPendingMsgs(err error) {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
@@ -209,6 +218,32 @@ func (c *Channel) cancelPendingMsgs(err error) {
 		// delete the router if we are only expecting a single reply message
 		if !req.Streaming {
 			delete(c.responseRouters, msgID)
+		}
+	}
+}
+
+// requeuePendingMsgs moves pending non-streaming requests back to sendQ for
+// retry on the next stream. Streaming requests are cancelled with an error
+// since they are bound to a specific stream and cannot be meaningfully retried.
+// If sendQ is full, the request is cancelled instead.
+//
+// The sender goroutine will pick up requeued requests, call ensureStream to
+// create a new stream, and resend them. The natural retry limit is the
+// request's context timeout.
+func (c *Channel) requeuePendingMsgs() {
+	c.responseMut.Lock()
+	defer c.responseMut.Unlock()
+	for msgID, req := range c.responseRouters {
+		delete(c.responseRouters, msgID)
+		if req.Streaming {
+			req.ResponseChan <- response{NodeID: c.id, Err: ErrStreamDown}
+			continue
+		}
+		// Try to requeue for retry; if sendQ is full, cancel the request.
+		select {
+		case c.sendQ <- req:
+		default:
+			c.replyError(req, ErrStreamDown)
 		}
 	}
 }
@@ -264,7 +299,7 @@ func (c *Channel) sender() {
 
 // receiver goroutine receives messages from the stream and routes them to
 // the appropriate response router. If the stream goes down, it clears the
-// stream reference and cancels all pending messages with a stream down error.
+// stream reference and requeues pending requests for retry on a new stream.
 func (c *Channel) receiver() {
 	for {
 		stream := c.getStream()
@@ -283,8 +318,7 @@ func (c *Channel) receiver() {
 		respMsg, e := stream.Recv()
 		if e != nil {
 			c.setLastErr(e)
-			c.cancelPendingMsgs(e)
-			c.clearStream()
+			c.clearStream(stream)
 		} else {
 			err := respMsg.ErrorStatus()
 			var resp proto.Message
@@ -307,7 +341,7 @@ func (c *Channel) sendMsg(req Request) (err error) {
 	// Register the request in the response router now, just before it is sent on the
 	// stream. Registering here (rather than in Enqueue) is the key invariant: the router
 	// only ever holds requests that are genuinely in-flight on the current stream, so
-	// cancelPendingMsgs cannot spuriously cancel requests that are still on the send queue.
+	// requeuePendingMsgs cannot affect requests that are still queued in sendQ.
 	if req.ResponseChan != nil {
 		req.SendTime = time.Now()
 		msgID := req.Msg.GetMessageSeqNo()
@@ -364,14 +398,14 @@ func (c *Channel) sendMsg(req Request) (err error) {
 				// false alarm
 			default:
 				// trigger reconnect
-				c.clearStream()
+				c.clearStream(stream)
 			}
 		}
 	}()
 
 	if err = stream.Send(req.Msg); err != nil {
 		c.setLastErr(err)
-		c.clearStream()
+		c.clearStream(stream)
 	}
 
 	close(done)
