@@ -904,9 +904,7 @@ func TestChannelClearStreamDeadlock(t *testing.T) {
 	srv := grpc.NewServer()
 	RegisterGorumsServer(srv, &mockServer{handler: holdServer})
 	go func() {
-		if serveErr := srv.Serve(lis); serveErr != nil {
-			// Ignore server-closed error on cleanup.
-		}
+		_ = srv.Serve(lis)
 	}()
 	t.Cleanup(srv.Stop)
 
