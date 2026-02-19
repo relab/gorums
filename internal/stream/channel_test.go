@@ -3,7 +3,6 @@ package stream
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -710,15 +709,22 @@ func TestChannelRouterLifecycle(t *testing.T) {
 		waitSendDone bool
 		streaming    bool
 		wantRouter   bool
+		wantPanic    bool
 	}{
-		{name: "WaitSendDone/NonStreamingAutoCleanup", waitSendDone: true, streaming: false, wantRouter: false},
-		{name: "WaitSendDone/StreamingKeepsRouterAlive", waitSendDone: true, streaming: true, wantRouter: true},
-		{name: "NoSendWaiting/NonStreamingAutoCleanup", waitSendDone: false, streaming: false, wantRouter: false},
-		{name: "NoSendWaiting/StreamingKeepsRouterAlive", waitSendDone: false, streaming: true, wantRouter: true},
+		{name: "WaitSendDone/NoStreaming/Cleanup", waitSendDone: true, streaming: false, wantRouter: false},
+		{name: "WaitSendDone/Streaming/Invalid", waitSendDone: true, streaming: true, wantPanic: true},
+		{name: "NoSendWaiting/NoStreaming/Cleanup", waitSendDone: false, streaming: false, wantRouter: false},
+		{name: "NoSendWaiting/Streaming/KeepsRouterAlive", waitSendDone: false, streaming: true, wantRouter: true},
 	}
 	for i, tt := range tests {
-		name := fmt.Sprintf("%s/msgID=%d/streaming=%t", tt.name, i, tt.streaming)
-		t.Run(name, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					if !tt.wantPanic {
+						t.Errorf("unexpected panic: %v", r)
+					}
+				}
+			}()
 			msgID := uint64(i)
 			resp := sendRequest(t, tc.Channel, Request{WaitSendDone: tt.waitSendDone, Streaming: tt.streaming}, msgID)
 			if resp.Err != nil {

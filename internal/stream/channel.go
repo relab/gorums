@@ -171,7 +171,15 @@ func (c *Channel) isConnected() bool {
 
 // Enqueue adds the request to the send queue.
 // If the node is closed, it responds with an error instead.
+//
+// WaitSendDone and Streaming are mutually exclusive: WaitSendDone is for one-way
+// calls that want send-completion confirmation, while Streaming is for
+// correctable calls that keep the router entry alive for multiple server responses.
+// Combining them causes double delivery on the response channel.
 func (c *Channel) Enqueue(req Request) {
+	if req.WaitSendDone && req.Streaming {
+		panic("stream: WaitSendDone and Streaming are mutually exclusive")
+	}
 	// Two-stage select pattern: ensures deterministic cancellation detection.
 	// The outer select with default prevents racing between Done and sendQ when
 	// both are ready (Go's select randomly chooses). This guarantees we always
