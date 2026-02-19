@@ -199,16 +199,21 @@ func (c *Channel) Enqueue(req Request) {
 // If no matching request is found, the response is discarded.
 func (c *Channel) routeResponse(msgID uint64, resp response) {
 	c.responseMut.Lock()
-	defer c.responseMut.Unlock()
-	if req, ok := c.responseRouters[msgID]; ok {
-		if resp.Err == nil {
-			c.updateLatency(time.Since(req.SendTime))
-		}
-		req.ResponseChan <- resp
+	req, ok := c.responseRouters[msgID]
+	if ok {
 		// delete the router if we are only expecting a single reply message
 		if !req.Streaming {
 			delete(c.responseRouters, msgID)
 		}
+	}
+	c.responseMut.Unlock()
+
+	// Send response without holding the lock to avoid blocking other operations
+	if ok {
+		if resp.Err == nil {
+			c.updateLatency(time.Since(req.SendTime))
+		}
+		req.ResponseChan <- resp
 	}
 }
 
@@ -216,13 +221,19 @@ func (c *Channel) routeResponse(msgID uint64, resp response) {
 // associated request. This is called during node shutdown to notify all waiting calls.
 func (c *Channel) cancelPendingMsgs(err error) {
 	c.responseMut.Lock()
-	defer c.responseMut.Unlock()
+	pendingRequests := make([]Request, 0, len(c.responseRouters))
 	for msgID, req := range c.responseRouters {
-		c.replyError(req, err)
+		pendingRequests = append(pendingRequests, req)
 		// delete the router if we are only expecting a single reply message
 		if !req.Streaming {
 			delete(c.responseRouters, msgID)
 		}
+	}
+	c.responseMut.Unlock()
+
+	// Send error responses without holding the lock
+	for _, req := range pendingRequests {
+		c.replyError(req, err)
 	}
 }
 
