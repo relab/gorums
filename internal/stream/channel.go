@@ -296,6 +296,15 @@ func (c *Channel) drainSendQ() {
 
 // sender goroutine takes requests from the sendQ and sends them on the stream.
 // If the stream is down, it tries to re-establish it.
+//
+// Delivery contract:
+//   - Pre-registration exits (stream error, cancelled request context, nil stream): replyError + continue.
+//     The request never enters the router, so no routeResponse lookup is needed.
+//   - Send failure: requeuePendingMsgs handles the registered entry (requeue or cancel).
+//     continue skips routeResponse since the entry is already gone.
+//   - Send success, WaitSendDone=true: routeResponse delivers the confirmation.
+//   - Send success, WaitSendDone=false: the router entry stays alive for receiver()
+//     to deliver the actual server response, so routeResponse is not called here.
 func (c *Channel) sender() {
 	// drain sendQ and return an error for all requests to the caller,
 	// since the node is closed and no more sends are possible
@@ -313,17 +322,41 @@ func (c *Channel) sender() {
 		case req = <-c.sendQ:
 			// take next request from sendQ
 		}
+
 		if err := c.ensureStream(); err != nil {
-			// request has not yet been registered in the router; deliver directly
 			c.replyError(req, err)
 			continue
 		}
-		// For one-way calls (Unicast/Multicast): notify caller based on send result.
-		// - Always deliver errors so caller knows the send failed
-		// - Only deliver success if WaitSendDone=true (caller wants confirmation)
-		// Two-way calls (RPCCall/QuorumCall) wait for actual server responses instead.
-		if err := c.sendMsg(req); err != nil || req.WaitSendDone {
-			c.routeResponse(req.Msg.GetMessageSeqNo(), response{NodeID: c.id, Err: err})
+		if req.Ctx.Err() != nil {
+			c.replyError(req, req.Ctx.Err())
+			continue
+		}
+		stream := c.getStream()
+		if stream == nil {
+			c.replyError(req, ErrStreamDown)
+			continue
+		}
+
+		// Register in the response router only for requests that are genuinely
+		// in-flight on the current stream, after all early-exit checks pass.
+		if req.ResponseChan != nil {
+			req.SendTime = time.Now()
+			msgID := req.Msg.GetMessageSeqNo()
+			c.responseMut.Lock()
+			c.responseRouters[msgID] = req
+			c.responseMut.Unlock()
+		}
+
+		if err := stream.Send(req.Msg); err != nil {
+			c.setLastErr(err)
+			c.clearStream(stream)
+			c.requeuePendingMsgs() // removes and requeues/cancels all router entries
+			continue
+		}
+
+		// For one-way calls (Unicast/Multicast) with WaitSendDone, confirm successful send.
+		if req.WaitSendDone {
+			c.routeResponse(req.Msg.GetMessageSeqNo(), response{NodeID: c.id})
 		}
 	}
 }
@@ -362,40 +395,10 @@ func (c *Channel) receiver() {
 			if err == nil {
 				resp, err = UnmarshalResponse(respMsg)
 			}
+			// Two-way calls (RPCCall/QuorumCall) deliver server response.
 			c.routeResponse(respMsg.GetMessageSeqNo(), response{NodeID: c.id, Value: resp, Err: err})
 		}
 	}
-}
-
-func (c *Channel) sendMsg(req Request) (err error) {
-	// Register the request in the response router now, just before it is sent on the
-	// stream. Registering here (rather than in Enqueue) is the key invariant: the router
-	// only ever holds requests that are genuinely in-flight on the current stream, so
-	// requeuePendingMsgs cannot affect requests that are still queued in sendQ.
-	if req.ResponseChan != nil {
-		req.SendTime = time.Now()
-		msgID := req.Msg.GetMessageSeqNo()
-		c.responseMut.Lock()
-		c.responseRouters[msgID] = req
-		c.responseMut.Unlock()
-	}
-
-	// don't send if context is already cancelled.
-	if req.Ctx.Err() != nil {
-		return req.Ctx.Err()
-	}
-
-	stream := c.getStream()
-	if stream == nil {
-		return ErrStreamDown
-	}
-
-	if err = stream.Send(req.Msg); err != nil {
-		c.setLastErr(err)
-		c.clearStream(stream)
-		c.requeuePendingMsgs()
-	}
-	return err
 }
 
 func (c *Channel) setLastErr(err error) {
