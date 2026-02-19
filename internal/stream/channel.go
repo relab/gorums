@@ -398,35 +398,10 @@ func (c *Channel) sendMsg(req Request) (err error) {
 		return ErrStreamDown
 	}
 
-	done := make(chan struct{})
-
-	// This goroutine waits for either 'done' to be closed, or the request context to be cancelled.
-	// If the request context was cancelled, we have two possibilities:
-	// The stream could be blocked, or the caller could be impatient.
-	// We cannot know which is the case, but it seems wiser to cancel the stream as a precaution,
-	// because reconnection is quite fast and cheap.
-	go func() {
-		select {
-		case <-done:
-			// all is good
-		case <-req.Ctx.Done():
-			// Both channels could be ready at the same time, so we must check 'done' again.
-			select {
-			case <-done:
-				// false alarm
-			default:
-				// trigger reconnect
-				c.clearStream(stream)
-			}
-		}
-	}()
-
 	if err = stream.Send(req.Msg); err != nil {
 		c.setLastErr(err)
 		c.clearStream(stream)
 	}
-
-	close(done)
 	return err
 }
 
