@@ -60,6 +60,7 @@ These files are generated from templates. Instead:
 - **Run tests after every change**
 - Tests verify the correctness and stability of generated code
 - ALL test failures must be addressed before considering work complete
+- However, if a test failure requires significant changes, stop and ask for guidance
 - Never delete failing tests - fix the underlying issue
 - If suitable, tests should be table-driven
 - If suitable, tests should be organized as subtests
