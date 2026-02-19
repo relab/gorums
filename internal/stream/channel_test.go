@@ -64,7 +64,7 @@ func breakStreamServer(stream Gorums_NodeStreamServer) error {
 	if err != nil {
 		return err
 	}
-	stream.Send(msg)
+	_ = stream.Send(msg)
 	return errors.New("stream broken")
 }
 
@@ -90,7 +90,11 @@ func setupChannel(t testing.TB, serverFn func(Gorums_NodeStreamServer) error, op
 		t.Fatal("setupChannel: serverFn must be provided; use echoServer for default behavior")
 	}
 	RegisterGorumsServer(srv, &mockServer{handler: serverFn})
-	go srv.Serve(lis)
+	go func() {
+		if err := srv.Serve(lis); err != nil {
+			t.Errorf("failed to serve: %v", err)
+		}
+	}()
 
 	// Create channel
 	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -106,9 +110,11 @@ func setupChannel(t testing.TB, serverFn func(Gorums_NodeStreamServer) error, op
 	}
 
 	t.Cleanup(func() {
-		c.Close()
+		if err := c.Close(); err != nil {
+			t.Errorf("failed to close channel: %v", err)
+		}
 		srv.Stop()
-		lis.Close()
+		_ = conn.Close()
 	})
 	return tc
 }
@@ -134,7 +140,9 @@ func setupChannelWithoutServer(t testing.TB) *testChannel {
 	c := NewChannel(ctx, conn, 1, 10)
 	t.Cleanup(func() {
 		cancel()
-		c.Close()
+		if err := c.Close(); err != nil {
+			t.Errorf("failed to close channel: %v", err)
+		}
 	})
 	return &testChannel{
 		Channel: c,
