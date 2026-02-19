@@ -531,8 +531,8 @@ func TestChannelContext(t *testing.T) {
 		return ctx, cancel
 	}
 	expireBeforeSend := func(ctx context.Context) (context.Context, context.CancelFunc) {
-		// Very short timeout to cancel during SendMsg operation
-		// Note: SendMsg itself is fast, but we're testing the cancellation path
+		// Very short timeout to cancel during SendMsg operation.
+		// Note: SendMsg itself is fast, but we're testing the cancellation path.
 		ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
 		// Let context expire before we send
 		time.Sleep(5 * time.Millisecond)
@@ -541,35 +541,35 @@ func TestChannelContext(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		serverDelay  time.Duration
+		serverFn     func(Gorums_NodeStreamServer) error
 		contextSetup func(context.Context) (context.Context, context.CancelFunc)
 		waitSendDone bool
 		wantErr      error
 	}{
 		{
 			name:         "CancelBeforeSend/WaitSending",
-			serverDelay:  0,
+			serverFn:     echoServer,
 			contextSetup: cancelledContext,
 			waitSendDone: true,
 			wantErr:      context.Canceled,
 		},
 		{
 			name:         "CancelBeforeSend/NoSendWaiting",
-			serverDelay:  0,
+			serverFn:     echoServer,
 			contextSetup: cancelledContext,
 			waitSendDone: false,
 			wantErr:      context.Canceled,
 		},
 		{
 			name:         "CancelDuringSend/WaitSending",
-			serverDelay:  3 * time.Second,
+			serverFn:     holdServer,
 			contextSetup: expireBeforeSend,
 			waitSendDone: true,
 			wantErr:      context.DeadlineExceeded,
 		},
 		{
 			name:         "CancelDuringSend/NoSendWaiting",
-			serverDelay:  3 * time.Second,
+			serverFn:     holdServer,
 			contextSetup: expireBeforeSend,
 			waitSendDone: false,
 			wantErr:      context.DeadlineExceeded,
@@ -581,7 +581,7 @@ func TestChannelContext(t *testing.T) {
 			ctx, cancel := tt.contextSetup(t.Context())
 			t.Cleanup(cancel)
 
-			tc := setupChannel(t, delayServer(tt.serverDelay))
+			tc := setupChannel(t, tt.serverFn)
 			resp := sendRequest(t, tc.Channel, Request{Ctx: ctx, WaitSendDone: tt.waitSendDone}, uint64(i))
 			if !errors.Is(resp.Err, tt.wantErr) {
 				t.Errorf("expected %v, got: %v", tt.wantErr, resp.Err)
