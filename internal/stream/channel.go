@@ -334,6 +334,11 @@ func (c *Channel) receiver() {
 		if e != nil {
 			c.setLastErr(e)
 			c.clearStream(stream)
+			// Check for shutdown before attempting reconnection
+			if c.connCtx.Err() != nil {
+				// the node's close() method was called: exit receiver goroutine
+				return
+			}
 		} else {
 			err := respMsg.ErrorStatus()
 			var resp proto.Message
@@ -341,13 +346,6 @@ func (c *Channel) receiver() {
 				resp, err = UnmarshalResponse(respMsg)
 			}
 			c.routeResponse(respMsg.GetMessageSeqNo(), response{NodeID: c.id, Value: resp, Err: err})
-		}
-
-		select {
-		case <-c.connCtx.Done():
-			// the node's close() method was called: exit receiver goroutine
-			return
-		default:
 		}
 	}
 }
