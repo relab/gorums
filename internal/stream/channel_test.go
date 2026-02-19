@@ -657,25 +657,7 @@ func TestChannelStreamReadyAfterReconnect(t *testing.T) {
 // - The clearStream stale-check prevents cancelling a new stream's context
 // - Concurrent requests sent during reconnection succeed without spurious errors
 func TestChannelConcurrentStreamReconnect(t *testing.T) {
-	// firstStream breaks after one echo; all subsequent streams echo normally.
-	var once sync.Once
-	serverFn := func(stream Gorums_NodeStreamServer) error {
-		var breaks bool
-		once.Do(func() { breaks = true })
-		if breaks {
-			msg, err := stream.Recv()
-			if err != nil {
-				return err
-			}
-			if err := stream.Send(msg); err != nil {
-				return err
-			}
-			return errors.New("intentional stream break")
-		}
-		return echoServer(stream)
-	}
-
-	tc := setupChannel(t, serverFn)
+	tc := setupChannel(t, breakStreamServer)
 	if !waitForConnection(tc.Channel, streamConnectTimeout) {
 		t.Fatal("channel should be connected")
 	}
