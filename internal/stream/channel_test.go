@@ -836,7 +836,7 @@ func TestChannelDeadlock(t *testing.T) {
 			req := Request{Ctx: ctx, Msg: reqMsg}
 
 			select {
-			case tc.Channel.sendQ <- req:
+			case tc.sendQ <- req:
 				doneChan <- true
 			case <-ctx.Done():
 				doneChan <- false
@@ -948,11 +948,9 @@ func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
 		tc.Enqueue(req)
 
 		select {
-		case resp := <-replyChan:
-			if resp.Err != nil {
-				// Stream down error is expected sometimes due to race; just continue
-				// b.Logf("request %d error: %v", i, resp.Err)
-			}
+		case <-replyChan:
+			// stream down errors are sometimes expected here due to a race between
+			// clearStream and ensureStream; we ignore errors in benchmarks.
 		case <-time.After(500 * time.Millisecond):
 			b.Fatalf("timeout on request %d", i)
 		}
