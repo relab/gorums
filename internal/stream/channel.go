@@ -161,28 +161,21 @@ func (c *Channel) isConnected() bool {
 	return c.conn.GetState() == connectivity.Ready && c.getStream() != nil
 }
 
-// Enqueue adds the request to the send queue and sets up response routing if needed.
+// Enqueue adds the request to the send queue.
 // If the node is closed, it responds with an error instead.
 func (c *Channel) Enqueue(req Request) {
-	if req.ResponseChan != nil {
-		req.SendTime = time.Now()
-		msgID := req.Msg.GetMessageSeqNo()
-		c.responseMut.Lock()
-		c.responseRouters[msgID] = req
-		c.responseMut.Unlock()
-	}
 	// either enqueue the request on the sendQ or respond
 	// with error if the node is closed
 	select {
 	case <-c.connCtx.Done():
-		c.routeResponse(req.Msg.GetMessageSeqNo(), response{NodeID: c.id, Err: ErrNodeClosed})
+		c.replyError(req, ErrNodeClosed)
 		return
 	default:
 	}
 	select {
 	case <-c.connCtx.Done():
 		// the node's close() method was called: respond with error instead of enqueueing
-		c.routeResponse(req.Msg.GetMessageSeqNo(), response{NodeID: c.id, Err: ErrNodeClosed})
+		c.replyError(req, ErrNodeClosed)
 		return
 	case c.sendQ <- req:
 		// enqueued successfully
@@ -220,15 +213,25 @@ func (c *Channel) cancelPendingMsgs(err error) {
 	}
 }
 
+// replyError sends err to the request's response channel if one is set.
+// This is used for requests that have not yet been registered in responseRouters
+// and therefore cannot be reached via routeResponse or cancelPendingMsgs.
+func (c *Channel) replyError(req Request, err error) {
+	if req.ResponseChan != nil {
+		req.ResponseChan <- response{NodeID: c.id, Err: err}
+	}
+}
+
 // sender goroutine takes requests from the sendQ and sends them on the stream.
 // If the stream is down, it tries to re-establish it.
 func (c *Channel) sender() {
 	defer func() {
-		// drain sendQ and error all requests
+		// drain sendQ and return an error for all requests to the caller,
+		// since the node is closed and no more sends are possible
 		for {
 			select {
 			case req := <-c.sendQ:
-				c.routeResponse(req.Msg.GetMessageSeqNo(), response{NodeID: c.id, Err: ErrNodeClosed})
+				c.replyError(req, ErrNodeClosed)
 			default:
 				// sendQ is empty
 				return
@@ -249,7 +252,8 @@ func (c *Channel) sender() {
 			// take next request from sendQ
 		}
 		if err := c.ensureStream(); err != nil {
-			c.routeResponse(req.Msg.GetMessageSeqNo(), response{NodeID: c.id, Err: err})
+			// request has not yet been registered in the router; deliver directly
+			c.replyError(req, err)
 			continue
 		}
 		if err := c.sendMsg(req); err != nil {
@@ -300,6 +304,17 @@ func (c *Channel) receiver() {
 }
 
 func (c *Channel) sendMsg(req Request) (err error) {
+	// Register the request in the response router now, just before it is sent on the
+	// stream. Registering here (rather than in Enqueue) is the key invariant: the router
+	// only ever holds requests that are genuinely in-flight on the current stream, so
+	// cancelPendingMsgs cannot spuriously cancel requests that are still on the send queue.
+	if req.ResponseChan != nil {
+		req.SendTime = time.Now()
+		msgID := req.Msg.GetMessageSeqNo()
+		c.responseMut.Lock()
+		c.responseRouters[msgID] = req
+		c.responseMut.Unlock()
+	}
 	defer func() {
 		// For one-way call types (Unicast/Multicast), the caller can choose between two behaviors:
 		//

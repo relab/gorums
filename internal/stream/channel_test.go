@@ -154,6 +154,19 @@ func waitForConnection(c *Channel, timeout time.Duration) bool {
 	return c.isConnected()
 }
 
+// waitForDisconnection polls until the channel is disconnected (stream is nil) or timeout expires.
+// Returns true if disconnected, false if timeout expired.
+func waitForDisconnection(c *Channel, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if !c.isConnected() {
+			return true
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return !c.isConnected()
+}
+
 func sendRequest(t testing.TB, c *Channel, req Request, msgID uint64) response {
 	t.Helper()
 	if req.Ctx == nil {
@@ -609,31 +622,28 @@ func TestChannelStreamReadySignaling(t *testing.T) {
 
 // TestChannelStreamReadyAfterReconnect verifies that the receiver is properly notified
 // when a stream is re-established after being cleared (simulating reconnection).
+// The server drops the stream after the first message, forcing the channel to reconnect.
+// The second request must succeed, proving the full reconnect path works end-to-end.
 func TestChannelStreamReadyAfterReconnect(t *testing.T) {
-	tc := setupChannel(t, echoServer)
+	tc := setupChannel(t, breakStreamServer)
 
-	// Wait for initial connection
-	if !waitForConnection(tc.Channel, streamConnectTimeout) {
-		t.Fatal("channel should be connected")
+	// First request succeeds; the server then drops the stream.
+	resp := sendRequest(t, tc.Channel, Request{}, 1)
+	if resp.Err != nil {
+		t.Fatalf("unexpected error on initial request: %v", resp.Err)
 	}
 
-	// Consume initial signal
-	select {
-	case <-tc.streamReady:
-	case <-time.After(time.Second):
-		t.Fatal("timeout waiting for initial streamReady")
+	// Wait for the receiver to detect the server-side disconnect so the channel
+	// is in a clean disconnected state before the next request triggers reconnection.
+	if !waitForDisconnection(tc.Channel, streamConnectTimeout) {
+		t.Fatal("channel should be disconnected after server drop")
 	}
 
-	// Force reconnect
-	tc.clearStream()
-	// Trigger ensureStream via send (or manual)
-	tc.ensureStream()
-
-	// Should get a new signal
-	select {
-	case <-tc.streamReady:
-	case <-time.After(time.Second):
-		t.Fatal("timeout waiting for streamReady after reconnect")
+	// Second request: the sender re-establishes the stream and the receiver
+	// picks up the streamReady signal to route the response.
+	resp = sendRequest(t, tc.Channel, Request{}, 2)
+	if resp.Err != nil {
+		t.Fatalf("unexpected error after reconnect: %v", resp.Err)
 	}
 }
 
