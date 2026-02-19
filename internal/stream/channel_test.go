@@ -342,7 +342,7 @@ func TestChannelErrors(t *testing.T) {
 // TestChannelEnsureStream verifies that ensureStream correctly manages stream lifecycle.
 func TestChannelEnsureStream(t *testing.T) {
 	// Helper to prepare a fresh node with no stream
-	newChannelWithoutStream := func(t *testing.T) *testChannel {
+	newChannelWithoutStream := func(t testing.TB) *testChannel {
 		tc := setupChannel(t, echoServer)
 		// ensure sender and receiver goroutines are stopped
 		tc.connCancel()
@@ -371,13 +371,17 @@ func TestChannelEnsureStream(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		setup    func(t *testing.T) *testChannel
+		setup    func(t testing.TB) *testChannel
 		action   func(tc *testChannel) (first, second grpc.ClientStream)
 		wantSame bool
 	}{
 		{
+			// Use setupChannelWithoutServer so the gRPC connection never reaches
+			// connectivity.Ready, making ensureStream fail as expected.
+			// newChannelWithoutStream reuses an already-Ready conn (from setupChannel),
+			// so ensureStream would succeed there, which is wrong for this sub-case.
 			name:  "UnconnectedNodeHasNoStream",
-			setup: func(t *testing.T) *testChannel { return newChannelWithoutStream(t) },
+			setup: setupChannelWithoutServer,
 			action: func(tc *testChannel) (grpc.ClientStream, grpc.ClientStream) {
 				if err := tc.ensureStream(); err == nil {
 					t.Error("ensureStream succeeded unexpectedly")
