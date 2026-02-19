@@ -872,6 +872,101 @@ func TestChannelDeadlock(t *testing.T) {
 	}
 }
 
+// TestChannelClearStreamDeadlock verifies that clearStream followed by requeuePendingMsgs
+// does not deadlock when sendQ is full and responseRouters contains pending non-streaming requests.
+//
+// Deadlock scenario (original code, where clearStream called requeuePendingMsgs internally):
+//  1. clearStream acquires streamMut and calls requeuePendingMsgs.
+//  2. requeuePendingMsgs enqueues the first pending request; sender dequeues it and
+//     immediately blocks in ensureStream waiting for streamMut.
+//  3. requeuePendingMsgs fills sendQ to capacity with the remaining requests.
+//  4. requeuePendingMsgs blocks in Enqueue on one final request (sendQ is full).
+//  5. Neither goroutine can proceed: receiver holds streamMut while blocked in Enqueue,
+//     and sender waits for streamMut in ensureStream — deadlock.
+//
+// The fix moves requeuePendingMsgs out of clearStream so streamMut is never held
+// across the Enqueue calls.
+func TestChannelClearStreamDeadlock(t *testing.T) {
+	// Use a very small sendQ (capacity 2) so the deadlock is triggered with only
+	// sendBufSize+2 = 4 injected pending requests.
+	const sendBufSize = 2
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	srv := grpc.NewServer()
+	RegisterGorumsServer(srv, &mockServer{handler: holdServer})
+	go func() {
+		if serveErr := srv.Serve(lis); serveErr != nil {
+			// Ignore server-closed error on cleanup.
+		}
+	}()
+	t.Cleanup(srv.Stop)
+
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	c := NewChannel(t.Context(), conn, 1, sendBufSize)
+	t.Cleanup(func() {
+		if closeErr := c.Close(); closeErr != nil {
+			t.Errorf("failed to close channel: %v", closeErr)
+		}
+		_ = conn.Close()
+	})
+
+	if !waitForConnection(c, streamConnectTimeout) {
+		t.Fatal("channel should be connected")
+	}
+	staleStream := c.getStream()
+
+	// Inject sendBufSize+2 non-streaming requests directly into responseRouters,
+	// bypassing the normal sendMsg path. requeuePendingMsgs will attempt to
+	// re-enqueue all of them. With sendBufSize=2:
+	//  - request 1 is enqueued; sender dequeues it and blocks in ensureStream.
+	//  - requests 2-3 fill sendQ to capacity.
+	//  - request 4's Enqueue call blocks on a full sendQ while clearStream
+	//    still holds streamMut — deadlock.
+	const numPending = sendBufSize + 2
+	replyChannels := make([]chan response, numPending)
+	c.responseMut.Lock()
+	for i := range numPending {
+		replyChannels[i] = make(chan response, 1)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		t.Cleanup(cancel)
+		msg, msgErr := NewMessage(ctx, uint64(1000+i), mock.TestMethod, nil)
+		if msgErr != nil {
+			c.responseMut.Unlock()
+			t.Fatalf("NewMessage failed: %v", msgErr)
+		}
+		c.responseRouters[uint64(1000+i)] = Request{
+			Ctx:          ctx,
+			Msg:          msg,
+			Streaming:    false,
+			WaitSendDone: false,
+			ResponseChan: replyChannels[i],
+		}
+	}
+	c.responseMut.Unlock()
+
+	// clearStream + requeuePendingMsgs (as the real call sites do) should complete
+	// without deadlocking.
+	done := make(chan struct{})
+	go func() {
+		c.clearStream(staleStream)
+		c.requeuePendingMsgs()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// No deadlock.
+	case <-time.After(2 * time.Second):
+		t.Fatal("DEADLOCK: clearStream+requeuePendingMsgs did not return within 2s")
+	}
+}
+
 // BenchmarkChannelStreamReadyFirstRequest measures the latency of the first request,
 // which includes stream creation and the stream-ready signaling.
 //

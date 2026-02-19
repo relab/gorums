@@ -161,7 +161,6 @@ func (c *Channel) clearStream(stale Gorums_NodeStreamClient) {
 	}
 	c.streamCancel()
 	c.stream = nil
-	c.requeuePendingMsgs()
 }
 
 // isConnected returns true if the gRPC connection is in Ready state and we have an active stream.
@@ -343,6 +342,7 @@ func (c *Channel) receiver() {
 		if e != nil {
 			c.setLastErr(e)
 			c.clearStream(stream)
+			c.requeuePendingMsgs()
 			// Check for shutdown before attempting reconnection
 			if c.connCtx.Err() != nil {
 				// the node's close() method was called: exit receiver goroutine
@@ -385,6 +385,7 @@ func (c *Channel) sendMsg(req Request) (err error) {
 	if err = stream.Send(req.Msg); err != nil {
 		c.setLastErr(err)
 		c.clearStream(stream)
+		c.requeuePendingMsgs()
 	}
 	return err
 }
