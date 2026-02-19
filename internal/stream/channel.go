@@ -272,22 +272,27 @@ func (c *Channel) replyError(req Request, err error) {
 	}
 }
 
+// drainSendQ drains the sendQ and replies with err for each request.
+// This is called when the sender() goroutine is exiting due to node shutdown,
+// to ensure all pending requests receive an error response instead of being left hanging.
+func (c *Channel) drainSendQ() {
+	for {
+		select {
+		case req := <-c.sendQ:
+			c.replyError(req, ErrNodeClosed)
+		default:
+			// sendQ is empty
+			return
+		}
+	}
+}
+
 // sender goroutine takes requests from the sendQ and sends them on the stream.
 // If the stream is down, it tries to re-establish it.
 func (c *Channel) sender() {
-	defer func() {
-		// drain sendQ and return an error for all requests to the caller,
-		// since the node is closed and no more sends are possible
-		for {
-			select {
-			case req := <-c.sendQ:
-				c.replyError(req, ErrNodeClosed)
-			default:
-				// sendQ is empty
-				return
-			}
-		}
-	}()
+	// drain sendQ and return an error for all requests to the caller,
+	// since the node is closed and no more sends are possible
+	defer c.drainSendQ()
 
 	// eager connect; ignored if stream is down (will be retried on send)
 	_ = c.ensureStream()
