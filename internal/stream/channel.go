@@ -173,21 +173,25 @@ func (c *Channel) isConnected() bool {
 // Enqueue adds the request to the send queue.
 // If the node is closed, it responds with an error instead.
 func (c *Channel) Enqueue(req Request) {
-	// either enqueue the request on the sendQ or respond
-	// with error if the node is closed
-	select {
-	case <-c.connCtx.Done():
-		c.replyError(req, ErrNodeClosed)
-		return
-	default:
-	}
+	// Two-stage select pattern: ensures deterministic cancellation detection.
+	// The outer select with default prevents racing between Done and sendQ when
+	// both are ready (Go's select randomly chooses). This guarantees we always
+	// detect cancellation before attempting to send, avoiding enqueuing after
+	// the sender goroutine has exited.
 	select {
 	case <-c.connCtx.Done():
 		// the node's close() method was called: respond with error instead of enqueueing
 		c.replyError(req, ErrNodeClosed)
 		return
-	case c.sendQ <- req:
-		// enqueued successfully
+	default:
+		select {
+		case <-c.connCtx.Done():
+			// the node's close() method was called: respond with error instead of enqueueing
+			c.replyError(req, ErrNodeClosed)
+			return
+		case c.sendQ <- req:
+			// enqueued successfully
+		}
 	}
 }
 
