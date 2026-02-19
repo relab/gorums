@@ -218,7 +218,7 @@ func (c *Channel) cancelPendingMsgs(err error) {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	for msgID, req := range c.responseRouters {
-		req.ResponseChan <- response{NodeID: c.id, Err: err}
+		c.replyError(req, err)
 		// delete the router if we are only expecting a single reply message
 		if !req.Streaming {
 			delete(c.responseRouters, msgID)
@@ -229,32 +229,32 @@ func (c *Channel) cancelPendingMsgs(err error) {
 // requeuePendingMsgs moves pending non-streaming requests back to sendQ for
 // retry on the next stream. Streaming requests are cancelled with an error
 // since they are bound to a specific stream and cannot be meaningfully retried.
-// If sendQ is full, the request is cancelled instead.
 //
 // The sender goroutine will pick up requeued requests, call ensureStream to
 // create a new stream, and resend them. The natural retry limit is the
 // request's context timeout.
 func (c *Channel) requeuePendingMsgs() {
 	c.responseMut.Lock()
-	defer c.responseMut.Unlock()
+	toRequeue := make([]Request, 0, len(c.responseRouters))
 	for msgID, req := range c.responseRouters {
 		delete(c.responseRouters, msgID)
 		if req.Streaming {
-			req.ResponseChan <- response{NodeID: c.id, Err: ErrStreamDown}
+			c.replyError(req, ErrStreamDown)
 			continue
 		}
-		// Try to requeue for retry; if sendQ is full, cancel the request.
-		select {
-		case c.sendQ <- req:
-		default:
-			c.replyError(req, ErrStreamDown)
-		}
+		toRequeue = append(toRequeue, req)
+	}
+	c.responseMut.Unlock()
+
+	// requeue non-streaming requests for retry on the new stream without holding the responseMut lock
+	for _, req := range toRequeue {
+		c.Enqueue(req)
 	}
 }
 
 // replyError sends err to the request's response channel if one is set.
 // This is used for requests that have not yet been registered in responseRouters
-// and therefore cannot be reached via routeResponse or cancelPendingMsgs.
+// and therefore cannot be reached via routeResponse.
 func (c *Channel) replyError(req Request, err error) {
 	if req.ResponseChan != nil {
 		req.ResponseChan <- response{NodeID: c.id, Err: err}
