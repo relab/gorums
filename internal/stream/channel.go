@@ -175,7 +175,7 @@ func (c *Channel) isConnected() bool {
 // WaitSendDone and Streaming are mutually exclusive: WaitSendDone is for one-way
 // calls that want send-completion confirmation, while Streaming is for
 // correctable calls that keep the router entry alive for multiple server responses.
-// Combining them causes double delivery on the response channel.
+// Combining them would cause double delivery on the response channel.
 func (c *Channel) Enqueue(req Request) {
 	if req.WaitSendDone && req.Streaming {
 		panic("stream: WaitSendDone and Streaming are mutually exclusive")
@@ -242,8 +242,12 @@ func (c *Channel) cancelPendingMsgs(err error) {
 }
 
 // requeuePendingMsgs moves pending non-streaming requests back to sendQ for
-// retry on the next stream. Streaming requests are cancelled with an error
-// since they are bound to a specific stream and cannot be meaningfully retried.
+// retry on the next stream. Streaming requests (correctable calls) are instead
+// cancelled with ErrStreamDown because they cannot be safely retried: the caller
+// may have already received partial responses on the response channel, and a silent
+// re-send would start a fresh server-side computation and deliver a second,
+// independent result sequence on the same channel, violating the correctable call
+// contract. The caller receives the error and can decide whether to issue a new call.
 //
 // The sender goroutine will pick up requeued requests, call ensureStream to
 // create a new stream, and resend them. The natural retry limit is the
@@ -251,19 +255,24 @@ func (c *Channel) cancelPendingMsgs(err error) {
 func (c *Channel) requeuePendingMsgs() {
 	c.responseMut.Lock()
 	toRequeue := make([]Request, 0, len(c.responseRouters))
+	toCancel := make([]Request, 0, len(c.responseRouters))
 	for msgID, req := range c.responseRouters {
 		delete(c.responseRouters, msgID)
 		if req.Streaming {
-			c.replyError(req, ErrStreamDown)
+			toCancel = append(toCancel, req)
 			continue
 		}
 		toRequeue = append(toRequeue, req)
 	}
 	c.responseMut.Unlock()
 
-	// requeue non-streaming requests for retry on the new stream without holding the responseMut lock
+	// requeue non-streaming requests for retry on the new stream without holding the lock
 	for _, req := range toRequeue {
 		c.Enqueue(req)
+	}
+	// cancel streaming requests with error without holding the lock
+	for _, req := range toCancel {
+		c.replyError(req, ErrStreamDown)
 	}
 }
 
