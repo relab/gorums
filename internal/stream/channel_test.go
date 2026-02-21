@@ -101,7 +101,7 @@ func setupChannel(t testing.TB, serverFn func(Gorums_NodeStreamServer) error, op
 		t.Fatalf("failed to dial: %v", err)
 	}
 
-	c := NewChannel(t.Context(), conn, 1, 10)
+	c := NewOutboundChannel(t.Context(), 1, 10, conn)
 	tc := &testChannel{
 		Channel: c,
 		srv:     srv,
@@ -145,7 +145,7 @@ func setupChannelWithoutServer(t testing.TB) *testChannel {
 		t.Fatalf("failed to dial: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	c := NewChannel(ctx, conn, 1, 10)
+	c := NewOutboundChannel(ctx, 1, 10, conn)
 	t.Cleanup(func() {
 		cancel()
 		if err := c.Close(); err != nil {
@@ -258,7 +258,7 @@ func TestChannelShutdown(t *testing.T) {
 	resp := sendRequest(t, tc.Channel, Request{}, 999)
 	if resp.Err == nil {
 		t.Error("expected error when sending to closed channel")
-	} else if !strings.Contains(resp.Err.Error(), "node closed") {
+	} else if !errors.Is(resp.Err, ErrNodeClosed) {
 		t.Errorf("expected 'node closed' error, got: %v", resp.Err)
 	}
 
@@ -378,12 +378,12 @@ func TestChannelEnsureStream(t *testing.T) {
 		// Extract grpc.ClientConn from existing channel
 		conn := tc.conn
 		// Create new channel with test context without metadata (real implementation captures metadata)
-		tc.Channel = NewChannel(t.Context(), conn, tc.id, 10)
+		tc.Channel = NewOutboundChannel(t.Context(), tc.id, 10, conn)
 		return tc
 	}
 
 	// Helper to verify stream expectations
-	cmpStream := func(t *testing.T, first, second grpc.ClientStream, wantSame bool) {
+	cmpStream := func(t *testing.T, first, second BidiStream, wantSame bool) {
 		t.Helper()
 		// If second is nil, skip equality check (covered by UnconnectedNodeHasNoStream action)
 		if second == nil {
@@ -401,7 +401,7 @@ func TestChannelEnsureStream(t *testing.T) {
 	tests := []struct {
 		name     string
 		setup    func(t testing.TB) *testChannel
-		action   func(tc *testChannel) (first, second grpc.ClientStream)
+		action   func(tc *testChannel) (first, second BidiStream)
 		wantSame bool
 	}{
 		{
@@ -411,7 +411,7 @@ func TestChannelEnsureStream(t *testing.T) {
 			// so ensureStream would succeed there, which is wrong for this sub-case.
 			name:  "UnconnectedNodeHasNoStream",
 			setup: setupChannelWithoutServer,
-			action: func(tc *testChannel) (grpc.ClientStream, grpc.ClientStream) {
+			action: func(tc *testChannel) (BidiStream, BidiStream) {
 				if err := tc.ensureStream(); err == nil {
 					t.Error("ensureStream succeeded unexpectedly")
 				}
@@ -424,7 +424,7 @@ func TestChannelEnsureStream(t *testing.T) {
 		{
 			name:  "CreatesStreamWhenConnected",
 			setup: newChannelWithoutStream,
-			action: func(tc *testChannel) (grpc.ClientStream, grpc.ClientStream) {
+			action: func(tc *testChannel) (BidiStream, BidiStream) {
 				if err := tc.ensureStream(); err != nil {
 					t.Errorf("ensureStream failed: %v", err)
 				}
@@ -434,7 +434,7 @@ func TestChannelEnsureStream(t *testing.T) {
 		{
 			name:  "RepeatedCallsReturnSameStream",
 			setup: newChannelWithoutStream,
-			action: func(tc *testChannel) (grpc.ClientStream, grpc.ClientStream) {
+			action: func(tc *testChannel) (BidiStream, BidiStream) {
 				if err := tc.ensureStream(); err != nil {
 					t.Errorf("first ensureStream failed: %v", err)
 				}
@@ -449,7 +449,7 @@ func TestChannelEnsureStream(t *testing.T) {
 		{
 			name:  "StreamDisconnectionCreatesNewStream",
 			setup: newChannelWithoutStream,
-			action: func(tc *testChannel) (grpc.ClientStream, grpc.ClientStream) {
+			action: func(tc *testChannel) (BidiStream, BidiStream) {
 				if err := tc.ensureStream(); err != nil {
 					t.Errorf("initial ensureStream failed: %v", err)
 				}
@@ -926,7 +926,7 @@ func TestChannelClearStreamDeadlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
-	c := NewChannel(t.Context(), conn, 1, sendBufSize)
+	c := NewOutboundChannel(t.Context(), 1, sendBufSize, conn)
 	t.Cleanup(func() {
 		if closeErr := c.Close(); closeErr != nil {
 			t.Errorf("failed to close channel: %v", closeErr)
@@ -982,6 +982,165 @@ func TestChannelClearStreamDeadlock(t *testing.T) {
 		// No deadlock.
 	case <-time.After(2 * time.Second):
 		t.Fatal("DEADLOCK: clearStream+requeuePendingMsgs did not return within 2s")
+	}
+}
+
+// mockBidiStream is a bidirectional stream for testing inbound channels.
+// Send echoes messages back via Recv (echo behavior).
+// Call close() to simulate the stream being torn down.
+type mockBidiStream struct {
+	msgQ   chan *Message
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+func newMockBidiStream() *mockBidiStream {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &mockBidiStream{
+		msgQ:   make(chan *Message, 16),
+		ctx:    ctx,
+		cancel: cancel,
+	}
+}
+
+// close simulates the stream being torn down, causing Recv to return an error.
+func (m *mockBidiStream) close() {
+	m.cancel()
+}
+
+func (m *mockBidiStream) Send(msg *Message) error {
+	select {
+	case m.msgQ <- msg:
+		return nil
+	case <-m.ctx.Done():
+		return m.ctx.Err()
+	}
+}
+
+func (m *mockBidiStream) Recv() (*Message, error) {
+	select {
+	case msg := <-m.msgQ:
+		return msg, nil
+	case <-m.ctx.Done():
+		return nil, m.ctx.Err()
+	}
+}
+
+// TestIsInbound verifies IsInbound() for both channel types.
+func TestIsInbound(t *testing.T) {
+	tests := []struct {
+		name     string
+		chanFunc func(t *testing.T) *Channel
+		want     bool
+	}{
+		{
+			name:     "OutboundWithoutServer",
+			chanFunc: func(t *testing.T) *Channel { return setupChannelWithoutServer(t).Channel },
+			want:     false,
+		},
+		{
+			name:     "OutboundWithServer",
+			chanFunc: func(t *testing.T) *Channel { return setupChannel(t, echoServer).Channel },
+			want:     false,
+		},
+		{
+			name: "Inbound",
+			chanFunc: func(t *testing.T) *Channel {
+				stream := newMockBidiStream()
+				c := NewInboundChannel(t.Context(), 1, 10, stream)
+				t.Cleanup(func() { _ = c.Close() })
+				return c
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := tt.chanFunc(t)
+			if got := c.IsInbound(); got != tt.want {
+				t.Errorf("IsInbound() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestInboundChannel verifies that an inbound channel can send and receive messages.
+func TestInboundChannel(t *testing.T) {
+	stream := newMockBidiStream()
+	c := NewInboundChannel(t.Context(), 1, 10, stream)
+	t.Cleanup(func() {
+		_ = c.Close()
+	})
+
+	// Send a message and verify we get a response back via the echo mock stream.
+	resp := sendRequest(t, c, Request{WaitSendDone: false}, 1)
+	if resp.Err != nil {
+		t.Errorf("unexpected error: %v", resp.Err)
+	}
+	if resp.NodeID != 1 {
+		t.Errorf("NodeID = %d, want 1", resp.NodeID)
+	}
+}
+
+// TestInboundChannelClose verifies that close does not close the underlying
+// server connection (conn is nil for inbound channels).
+func TestInboundChannelClose(t *testing.T) {
+	stream := newMockBidiStream()
+	c := NewInboundChannel(t.Context(), 1, 10, stream)
+
+	// Close the channel; should succeed without touching any grpc.ClientConn.
+	if err := c.Close(); err != nil {
+		t.Errorf("Close() error: %v", err)
+	}
+
+	// Subsequent sends should fail with ErrNodeClosed.
+	resp := sendRequest(t, c, Request{WaitSendDone: true}, 2)
+	if resp.Err == nil {
+		t.Error("expected error after close, got nil")
+	} else if !errors.Is(resp.Err, ErrNodeClosed) {
+		t.Errorf("expected 'node closed' error, got: %v", resp.Err)
+	}
+
+	// Channel should not be connected after close.
+	if c.isConnected() {
+		t.Error("isConnected() = true after close, want false")
+	}
+}
+
+// TestInboundChannelStreamDown verifies that an inbound channel does not
+// reconnect when the stream goes down; it returns ErrStreamDown instead.
+func TestInboundChannelStreamDown(t *testing.T) {
+	stream := newMockBidiStream()
+	c := NewInboundChannel(t.Context(), 1, 10, stream)
+	t.Cleanup(func() {
+		_ = c.Close()
+	})
+
+	// Verify initial send works.
+	resp := sendRequest(t, c, Request{WaitSendDone: false}, 1)
+	if resp.Err != nil {
+		t.Fatalf("initial send failed: %v", resp.Err)
+	}
+
+	// Simulate the stream going down.
+	stream.close()
+
+	// Wait for the channel to detect the stream is down.
+	if !waitForDisconnection(c, streamConnectTimeout) {
+		t.Fatal("channel should be disconnected after stream close")
+	}
+
+	// Next send should fail with ErrStreamDown, not trigger reconnection.
+	resp = sendRequest(t, c, Request{WaitSendDone: true}, 2)
+	if resp.Err == nil {
+		t.Error("expected error after stream down, got nil")
+	} else if !errors.Is(resp.Err, ErrStreamDown) {
+		t.Errorf("expected 'stream is down' error, got: %v", resp.Err)
+	}
+
+	// Verify channel remains disconnected (did not reconnect).
+	if c.isConnected() {
+		t.Error("inbound channel reconnected, but it should not")
 	}
 }
 

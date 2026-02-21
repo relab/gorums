@@ -105,8 +105,8 @@ func newNode(addr string, opts nodeOptions) (*Node, error) {
 	}
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
-	// Create channel and establish gRPC node stream
-	n.channel = stream.NewChannel(ctx, conn, n.id, opts.SendBufferSize)
+	// Create new outbound channel and establish gRPC node stream
+	n.channel = stream.NewOutboundChannel(ctx, n.id, opts.SendBufferSize, conn)
 	return n, nil
 }
 
