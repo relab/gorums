@@ -1,23 +1,22 @@
-# Agent Instructions for Gorums Project
+# Agent Instructions for Gorums
 
 Gorums is a framework for building fault-tolerant distributed systems using quorum-based abstractions.
 This document provides context and rules for AI coding assistants.
 
 ## Project Overview
 
-Gorums is a Go-based framework that provides:
+Gorums provides:
 
 - Flexible quorum call abstractions for distributed systems
 - Code generation via `protoc-gen-gorums` compiler plugin
 - gRPC-based RPC communication
-- Support for various quorum patterns (multicast, unicast, quorumcall, correctable)
+- Supported communication styles: unicast, multicast, quorumcall, async and correctable quorum calls
 
 **Key Technologies:**
 
 - Language: Go 1.25+
 - Build: Make
 - Protocol: Protocol Buffers (protobuf)
-- RPC: gRPC
 - Testing: Go testing framework
 - Code Generation: Custom protoc plugin
 
@@ -36,6 +35,15 @@ gorums/
 ```
 
 ## Development Rules
+
+### General Guidelines
+
+- For larger features and refactors, prepare a plan before coding
+- STOP and ASK if unsure about design decisions
+- ALWAYS write tests for new features and bug fixes
+- Large changes must be broken into small, manageable units to be committed separately
+- NEVER make unrelated changes in the same commit (e.g., code + documentation + formatting)
+- Instead, if you discover a bug or issue while working, document the issue in a separate file `doc/issue-*.md`
 
 ### Code Generation Workflow
 
@@ -57,24 +65,25 @@ These files are generated from templates. Instead:
 
 ### Testing Requirements
 
-- **Run tests after every change**
-- Tests verify the correctness and stability of generated code
-- ALL test failures must be addressed before considering work complete
-- However, if a test failure requires significant changes, stop and ask for guidance
-- Never delete failing tests - fix the underlying issue
-- If suitable, tests should be table-driven
-- If suitable, tests should be organized as subtests
+- Use testing utilities in `testing_shared.go` for common test setup
+- Always write table-driven tests when same logic needs to be tested with multiple inputs
+- Organize related tests using subtests
 - Test names should be capitalized, like TestFileNameFeatureName, e.g., TestQuorumCallFeatureName, for some feature in `quorumcall_test.go`
+- Run relevant tests after each change
+- NEVER delete failing tests - fix the underlying issue - unless the test is no longer relevant
+- NEVER skip tests or ignore failures
+- If addressing a test failure requires significant changes, stop and ask for guidance
+- Test coverage should be comprehensive
+- ALL tests must pass before considering work complete
 
-#### Testing Modes
+### Testing Strategy
 
-Gorums has two testing modes:
-
-- **Default (bufconn):** Uses in-memory connections for faster tests during development.
-- **Integration:** Uses real TCP connections with `-tags=integration`, for end-to-end validation.
-
-For most development work, use the default bufconn mode.
-Use integration mode for performance benchmarking and network-specific validation.
+- Follow Test Driven Development (TDD) when adding features or fixing bugs:
+  1. Write failing test
+  2. Confirm test fails
+  3. Write minimal code to pass test
+  4. Confirm test passes
+  5. Refactor if needed
 
 ### Code Style and Conventions
 
@@ -150,18 +159,15 @@ go test ./... -count=1
 go test -tags=integration ./...
 ```
 
-### Testing Strategy
+#### Testing Modes
 
-- Always write table-driven tests when same logic needs to be tested with multiple inputs
-- Follow Test Driven Development (TDD) when adding features:
-  1. Write failing test
-  2. Confirm test fails
-  3. Write minimal code to pass test
-  4. Confirm test passes
-  5. Refactor if needed
-- Test coverage should be comprehensive
-- Never mock behavior in end-to-end tests
-- Test output must be clean - no unexpected errors or warnings
+Gorums has two testing modes:
+
+- **Default (bufconn):** Uses in-memory connections for faster tests during development.
+- **Integration:** Uses real TCP connections with `-tags=integration`, for end-to-end validation.
+
+For most development work, use the default bufconn mode.
+Use integration mode for performance benchmarking and network-specific validation.
 
 ## Working with Protocol Buffers
 
