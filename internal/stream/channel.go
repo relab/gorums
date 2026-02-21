@@ -231,10 +231,7 @@ func (c *Channel) cancelPendingMsgs(err error) {
 	pendingRequests := make([]Request, 0, len(c.responseRouters))
 	for msgID, req := range c.responseRouters {
 		pendingRequests = append(pendingRequests, req)
-		// delete the router if we are only expecting a single reply message
-		if !req.Streaming {
-			delete(c.responseRouters, msgID)
-		}
+		delete(c.responseRouters, msgID)
 	}
 	c.responseMut.Unlock()
 
