@@ -17,6 +17,14 @@ var (
 	ErrStreamDown = status.Error(codes.Unavailable, "stream is down")
 )
 
+// BidiStream abstracts both client-side and server-side bidirectional streams.
+// Both grpc.BidiStreamingClient[Message, Message] and
+// grpc.BidiStreamingServer[Message, Message] satisfy this interface.
+type BidiStream interface {
+	Send(*Message) error
+	Recv() (*Message, error)
+}
+
 type Request struct {
 	Ctx          context.Context
 	Msg          *Message
@@ -44,7 +52,7 @@ type Channel struct {
 	// Stream lifecycle management for FIFO ordered message delivery
 	// stream is a bidirectional stream for
 	// sending and receiving stream.Message messages.
-	stream       Gorums_NodeStreamClient
+	stream       BidiStream
 	streamMut    sync.Mutex
 	streamCtx    context.Context
 	streamCancel context.CancelFunc
@@ -58,20 +66,37 @@ type Channel struct {
 	closeOnceFunc   func() error
 }
 
-// NewChannel creates a new channel for the given node and starts the sender
-// and receiver goroutines.
+// NewOutboundChannel creates a new channel for the given node and starts
+// the sender and receiver goroutines.
 //
 // Note that we start both goroutines even though the connection and stream
 // have not yet been established. This is to prevent deadlock when invoking
 // a call type. The sender blocks on the sendQ and the receiver waits for
 // the stream to become available.
-func NewChannel(parentCtx context.Context, conn *grpc.ClientConn, id uint32, sendBufferSize uint) *Channel {
-	ctx, connCancel := context.WithCancel(parentCtx)
+func NewOutboundChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn *grpc.ClientConn) *Channel {
+	return newChannel(parentCtx, id, sendBufferSize, conn, nil)
+}
+
+// NewInboundChannel creates a channel from an existing server-side stream.
+// Unlike outbound channels, inbound channels:
+//   - Have no grpc.ClientConn (stream accepted by the gRPC server; not dialed by us)
+//   - Cannot reconnect (the client controls stream creation)
+//   - Close only cancels context; it does not close the underlying connection
+func NewInboundChannel(parentCtx context.Context, id uint32, sendBufferSize uint, stream BidiStream) *Channel {
+	return newChannel(parentCtx, id, sendBufferSize, nil, stream)
+}
+
+// newChannel is the shared constructor for outbound and inbound channels.
+// Pass a non-nil conn for outbound channels (conn.Close() is called on Close()).
+// Pass a non-nil stream for inbound channels (stream is immediately ready; no reconnection).
+func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn *grpc.ClientConn, stream BidiStream) *Channel {
+	connCtx, connCancel := context.WithCancel(parentCtx)
 	c := &Channel{
 		sendQ:           make(chan Request, sendBufferSize),
 		id:              id,
 		conn:            conn,
-		connCtx:         ctx,
+		stream:          stream,
+		connCtx:         connCtx,
 		connCancel:      connCancel,
 		latency:         -1 * time.Second,
 		responseRouters: make(map[uint64]Request),
@@ -79,17 +104,27 @@ func NewChannel(parentCtx context.Context, conn *grpc.ClientConn, id uint32, sen
 	}
 	c.closeOnceFunc = sync.OnceValue(func() error {
 		// important to cancel first to stop goroutines
-		c.connCancel()
+		connCancel()
 		// unblocks any pending senders/receivers
 		c.cancelPendingMsgs(ErrNodeClosed)
-		if c.conn != nil {
-			return c.conn.Close()
+		if conn != nil {
+			return conn.Close()
 		}
 		return nil
 	})
+	if stream != nil {
+		// Signal that stream is immediately ready (inbound channel).
+		c.streamReady <- struct{}{}
+	}
 	go c.sender()
 	go c.receiver()
 	return c
+}
+
+// IsInbound returns true if this channel was created from a server-side stream
+// rather than an outbound client connection.
+func (c *Channel) IsInbound() bool {
+	return c.conn == nil
 }
 
 // NewChannelWithState creates a new Channel with a specific state for testing.
@@ -111,6 +146,13 @@ func (c *Channel) Close() error {
 // gRPC automatically handles TCP connection state when creating the stream.
 // This method is safe for concurrent use.
 func (c *Channel) ensureStream() error {
+	if c.IsInbound() {
+		// Inbound channels cannot reconnect; just check if stream exists.
+		if c.getStream() == nil {
+			return ErrStreamDown
+		}
+		return nil
+	}
 	if err := c.ensureConnectedNodeStream(); err != nil {
 		return err
 	}
@@ -140,7 +182,7 @@ func (c *Channel) ensureConnectedNodeStream() (err error) {
 }
 
 // getStream returns the current stream, or nil if no stream is available.
-func (c *Channel) getStream() Gorums_NodeStreamClient {
+func (c *Channel) getStream() BidiStream {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
 	return c.stream
@@ -152,20 +194,26 @@ func (c *Channel) getStream() Gorums_NodeStreamClient {
 // replaced it with a new one, which would otherwise cancel the new stream's context
 // and spuriously cancel requests that belong to the new stream.
 // This triggers reconnection on the next send attempt.
-func (c *Channel) clearStream(stale Gorums_NodeStreamClient) {
+func (c *Channel) clearStream(stale BidiStream) {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
 	if c.stream != stale {
 		// stale is already gone; a new stream has been established — do not cancel it
 		return
 	}
-	c.streamCancel()
+	if c.streamCancel != nil {
+		c.streamCancel()
+	}
 	c.stream = nil
 }
 
-// isConnected returns true if the gRPC connection is in Ready state and we have an active stream.
+// isConnected returns true if the channel has an active stream.
+// For outbound channels, also requires the gRPC connection to be in Ready state.
 // This method is safe for concurrent use.
 func (c *Channel) isConnected() bool {
+	if c.IsInbound() {
+		return c.connCtx.Err() == nil && c.getStream() != nil
+	}
 	return c.conn.GetState() == connectivity.Ready && c.getStream() != nil
 }
 
