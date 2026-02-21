@@ -180,22 +180,24 @@ func (c *Channel) Enqueue(req Request) {
 	if req.WaitSendDone && req.Streaming {
 		panic("stream: WaitSendDone and Streaming are mutually exclusive")
 	}
-	// Two-stage select pattern: ensures deterministic cancellation detection.
-	// The outer select with default prevents racing between Done and sendQ when
-	// both are ready (Go's select randomly chooses). This guarantees we always
-	// detect cancellation before attempting to send, avoiding enqueuing after
-	// the sender goroutine has exited.
+	// Two-stage select: the outer non-blocking check catches the already-closed
+	// case deterministically. Go's select only falls through to default when no
+	// other case is ready, so if connCtx.Done() is already closed it always
+	// wins — unlike a plain single select, where Go randomly picks between a
+	// ready Done channel and a buffered sendQ.
+	// The inner select handles the case where the node closes concurrently
+	// while we are waiting for sendQ space; there a narrow race remains, but
+	// drainSendQ (deferred in sender) will drain and replyError any entry that
+	// slips through after sender exits.
 	select {
 	case <-c.connCtx.Done():
 		// the node's close() method was called: respond with error instead of enqueueing
 		c.replyError(req, ErrNodeClosed)
-		return
 	default:
 		select {
 		case <-c.connCtx.Done():
 			// the node's close() method was called: respond with error instead of enqueueing
 			c.replyError(req, ErrNodeClosed)
-			return
 		case c.sendQ <- req:
 			// enqueued successfully
 		}
@@ -285,9 +287,12 @@ func (c *Channel) replyError(req Request, err error) {
 	}
 }
 
-// drainSendQ drains the sendQ and replies with err for each request.
-// This is called when the sender() goroutine is exiting due to node shutdown,
-// to ensure all pending requests receive an error response instead of being left hanging.
+// drainSendQ is deferred in sender() and drains any remaining requests from
+// sendQ when the sender goroutine exits, replying to each with ErrNodeClosed.
+// This handles both requests already in the queue and any that slip through
+// the narrow race window in Enqueue after connCtx is cancelled.
+// sendQ must never be closed: closing it could panic a concurrent Enqueue
+// that passes the outer connCtx check and then sends on a closed channel.
 func (c *Channel) drainSendQ() {
 	for {
 		select {
@@ -312,8 +317,6 @@ func (c *Channel) drainSendQ() {
 //   - Send success, WaitSendDone=false: the router entry stays alive for receiver()
 //     to deliver the actual server response, so routeResponse is not called here.
 func (c *Channel) sender() {
-	// drain sendQ and return an error for all requests to the caller,
-	// since the node is closed and no more sends are possible
 	defer c.drainSendQ()
 
 	// eager connect; ignored if stream is down (will be retried on send)
