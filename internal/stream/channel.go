@@ -353,12 +353,22 @@ func (c *Channel) sender() {
 			c.responseMut.Unlock()
 		}
 
+		// Watch for per-request cancellation while Send is in-flight.
+		// If req.Ctx is done before Send returns, clearStream unblocks
+		// the blocked Send by cancelling the stream context.
+		// stop() disarms the watcher after Send returns, preventing a
+		// spurious clearStream on a still-valid stream.
+		stop := context.AfterFunc(req.Ctx, func() {
+			c.clearStream(stream)
+		})
 		if err := stream.Send(req.Msg); err != nil {
+			stop()
 			c.setLastErr(err)
 			c.clearStream(stream)
 			c.requeuePendingMsgs() // removes and requeues/cancels all router entries
 			continue
 		}
+		stop()
 
 		// For one-way calls (Unicast/Multicast) with WaitSendDone, confirm successful send.
 		if req.WaitSendDone {
