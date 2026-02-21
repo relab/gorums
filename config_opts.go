@@ -13,6 +13,14 @@ type NodeListOption interface {
 	newConfig(*Manager) (Configuration, error)
 }
 
+// InboundNodeOption configures which peers an InboundManager will accept.
+// Only WithNodes satisfies this interface; WithNodeList does not, since
+// inbound peer tracking requires pre-assigned IDs.
+type InboundNodeOption interface {
+	Option
+	newServerConfig(im *InboundManager) error
+}
+
 // NodeAddress must be implemented by types that can be used as node addresses.
 type NodeAddress interface {
 	Addr() string
@@ -52,6 +60,32 @@ func (nm nodeMap[T]) newConfig(mgr *Manager) (Configuration, error) {
 		}
 	}
 	return builder.configuration(), nil
+}
+
+// newServerConfig implements InboundNodeOption.
+// It validates all IDs and addresses, then populates im.peerAddrs.
+// Duplicate IDs are impossible (map keys are unique); duplicate addresses are
+// rejected explicitly.
+func (nm nodeMap[T]) newServerConfig(im *InboundManager) error {
+	if len(nm) == 0 {
+		return fmt.Errorf("config: missing required node map")
+	}
+	addrToID := make(map[string]uint32, len(nm))
+	for _, id := range slices.Sorted(maps.Keys(nm)) {
+		if id == 0 {
+			return fmt.Errorf("config: node 0 is reserved for external clients")
+		}
+		addr, err := normalizeAddr(nm[id].Addr())
+		if err != nil {
+			return fmt.Errorf("config: invalid address %q: %w", nm[id].Addr(), err)
+		}
+		if existingID, exists := addrToID[addr]; exists {
+			return fmt.Errorf("config: address %q already in use by node %d", addr, existingID)
+		}
+		addrToID[addr] = id
+		im.peerAddrs[id] = addr
+	}
+	return nil
 }
 
 // WithNodeList returns a NodeListOption for the provided list of node addresses.
