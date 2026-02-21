@@ -90,7 +90,7 @@ func setupChannel(t testing.TB, serverFn func(Gorums_NodeStreamServer) error, op
 	}
 	RegisterGorumsServer(srv, &mockServer{handler: serverFn})
 	go func() {
-		if err := srv.Serve(lis); err != nil {
+		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			t.Errorf("failed to serve: %v", err)
 		}
 	}()
@@ -130,8 +130,17 @@ func (s *mockServer) NodeStream(srv Gorums_NodeStreamServer) error {
 // setupChannelWithoutServer creates a channel that tries to connect to a non-existent server.
 func setupChannelWithoutServer(t testing.TB) *testChannel {
 	t.Helper()
-	// Pick a random port (hopefully unused) or loopback without listener
-	conn, err := grpc.NewClient("127.0.0.1:54321", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Reserve an unused local port, then close the listener to ensure no server is running.
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to reserve local port: %v", err)
+	}
+	addr := lis.Addr().String()
+	if err := lis.Close(); err != nil {
+		t.Fatalf("failed to release reserved port: %v", err)
+	}
+	// Dial the now-unused address to simulate a missing server.
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -991,7 +1000,6 @@ func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
 
 		// Use a fresh context for the benchmark request
 		ctx, cancel := context.WithTimeout(b.Context(), defaultTestTimeout)
-		defer cancel()
 		reqMsg, _ := NewMessage(ctx, 1, mock.TestMethod, nil)
 		req := Request{Ctx: ctx, Msg: reqMsg}
 		replyChan := make(chan response, 1)
@@ -1008,6 +1016,7 @@ func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
 		}
 
 		// Close the node before stopping the server to ensure clean shutdown
+		cancel()
 		_ = tc.Close()
 		tc.srv.Stop()
 	}
@@ -1117,8 +1126,8 @@ func BenchmarkChannelSendParallel(b *testing.B) {
 			payload := make([]byte, tt.size)
 			b.ResetTimer()
 			b.RunParallel(func(pb *testing.PB) {
-				replyChan := make(chan response, 1)
 				for pb.Next() {
+					replyChan := make(chan response, 1)
 					id := msgID.Add(1)
 					msg := Message_builder{
 						MessageSeqNo: id,
