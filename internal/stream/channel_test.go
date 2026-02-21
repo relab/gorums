@@ -727,8 +727,10 @@ func TestChannelRouterLifecycle(t *testing.T) {
 	}
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			panicRecovered := false
 			defer func() {
 				if r := recover(); r != nil {
+					panicRecovered = true
 					if !tt.wantPanic {
 						t.Errorf("unexpected panic: %v", r)
 					}
@@ -741,6 +743,9 @@ func TestChannelRouterLifecycle(t *testing.T) {
 			}
 			if exists := routerExists(tc.Channel, msgID); exists != tt.wantRouter {
 				t.Errorf("router exists = %v, want %v", exists, tt.wantRouter)
+			}
+			if tt.wantPanic && !panicRecovered {
+				t.Errorf("expected panic but none occurred")
 			}
 			deleteRouter(tc.Channel, msgID)
 		})
