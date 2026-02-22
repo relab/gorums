@@ -82,3 +82,16 @@ func WithPerNodeMetadata(f func(uint32) metadata.MD) ManagerOption {
 		o.perNodeMD = f
 	}
 }
+
+// InboundManagerOption provides a way to configure a new InboundManager.
+type InboundManagerOption func(*InboundManager)
+
+// WithInboundSendBufferSize sets the size of the per-node send buffer for
+// channels created when inbound peers connect. A larger buffer may increase
+// throughput for asynchronous call types at the cost of latency.
+// The default is 0 (unbuffered).
+func WithInboundSendBufferSize(size uint) InboundManagerOption {
+	return func(im *InboundManager) {
+		im.sendBufferSize = size
+	}
+}

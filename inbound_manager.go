@@ -6,7 +6,9 @@ import (
 	"slices"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
+	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -34,26 +36,41 @@ func nodeID(ctx context.Context) uint32 {
 }
 
 // InboundManager manages server-side awareness of connected peers.
-// It is configured once at construction time with a fixed set of known peers
-// and will be extended in later phases to track live connections and provide
-// an auto-updated Configuration for server-initiated calls.
+// It is configured at construction time with a fixed set of known peers,
+// registers them as they connect, and maintains an auto-updated Configuration
+// that can be used for server-initiated quorum calls, multicast, and other
+// call types.
 //
 // InboundManager is safe for concurrent use.
 type InboundManager struct {
-	mu        sync.RWMutex
-	peerAddrs map[uint32]string // known peer ID → normalized listening address
+	mu             sync.RWMutex
+	myID           uint32              // this server's own NodeID; always present in inboundCfg
+	nodes          map[uint32]*Node    // pre-created for all known peers; channel is nil until connected
+	inboundCfg     Configuration       // auto-updated slice, sorted by ID
+	nextMsgID      atomic.Uint64       // counter for server-initiated message IDs
+	sendBufferSize uint                // send buffer size for inbound channels
+	onConfigChange func(Configuration) // optional; called after each config change
 }
 
-// NewInboundManager creates an InboundManager from the given option.
-// Only WithNodes satisfies InboundNodeOption; passing WithNodeList is a
-// compile-time error.
-func NewInboundManager(opt InboundNodeOption) (*InboundManager, error) {
+// NewInboundManager creates an InboundManager for this server whose NodeID is myID,
+// configured with the given NodeListOption and optional InboundManagerOptions.
+// If myID is present in the NodeListOption it is immediately included in the
+// InboundConfig as the self-node, so that quorum thresholds account for the local
+// replica from the moment of construction. The optional InboundManagerOptions
+// (e.g. WithInboundSendBufferSize) are applied before nodes are created, so they
+// take effect for all pre-created nodes.
+func NewInboundManager(myID uint32, opt NodeListOption, opts ...InboundManagerOption) (*InboundManager, error) {
 	im := &InboundManager{
-		peerAddrs: make(map[uint32]string),
+		myID:  myID,
+		nodes: make(map[uint32]*Node),
+	}
+	for _, o := range opts {
+		o(im)
 	}
 	if err := opt.newServerConfig(im); err != nil {
 		return nil, err
 	}
+	im.rebuildConfig()
 	return im, nil
 }
 
@@ -61,13 +78,92 @@ func NewInboundManager(opt InboundNodeOption) (*InboundManager, error) {
 func (im *InboundManager) KnownIDs() []uint32 {
 	im.mu.RLock()
 	defer im.mu.RUnlock()
-	return slices.Sorted(maps.Keys(im.peerAddrs))
+	return slices.Sorted(maps.Keys(im.nodes))
+}
+
+// InboundConfig returns a Configuration of all currently connected peers.
+// The returned slice is replaced atomically on each connect/disconnect;
+// retaining a reference to an old value is safe.
+func (im *InboundManager) InboundConfig() Configuration {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+	return im.inboundCfg
+}
+
+// getMsgID returns the next unique message ID for server-initiated calls.
+func (im *InboundManager) getMsgID() uint64 {
+	return im.nextMsgID.Add(1)
+}
+
+// newNode creates a peer node for the given id and normalized addr and
+// registers it in the manager's node map. This must be called during
+// construction before any peers connect, so no locking is needed.
+func (im *InboundManager) newNode(id uint32, addr string) {
+	im.nodes[id] = newPeerNode(id, addr, im.getMsgID)
 }
 
 // isKnown reports whether the given NodeID is in the configured peer set.
 func (im *InboundManager) isKnown(id uint32) bool {
 	im.mu.RLock()
 	defer im.mu.RUnlock()
-	_, ok := im.peerAddrs[id]
+	_, ok := im.nodes[id]
 	return ok
+}
+
+// AcceptPeer identifies a connecting peer by its NodeID metadata, registers
+// it if recognized, and returns a cleanup function to be deferred by the
+// caller. Returns nil, nil for external (non-replica) clients or unknown peers.
+// The error return is reserved for future use (e.g., credential validation);
+// it is currently always nil.
+func (im *InboundManager) AcceptPeer(ctx context.Context, inboundStream stream.BidiStream) (func(), error) {
+	id := nodeID(ctx)
+	if id == 0 {
+		return nil, nil // External client (non-replica).
+	}
+	if !im.isKnown(id) {
+		return nil, nil // Unknown peer.
+	}
+	return im.registerPeer(id, inboundStream, ctx), nil
+}
+
+// registerPeer attaches an inbound channel to the pre-created Node for the
+// given peer, updates the live configuration, and returns a cleanup function
+// that detaches the channel when the stream ends. The cleanup function is
+// idempotent: only the first call takes effect, preventing a stale cleanup
+// from disconnecting a peer that has since reconnected under the same ID.
+func (im *InboundManager) registerPeer(id uint32, stream stream.BidiStream, streamCtx context.Context) func() {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+
+	node := im.nodes[id]
+	node.attachStream(stream, streamCtx, im.sendBufferSize)
+	im.rebuildConfig()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			im.mu.Lock()
+			defer im.mu.Unlock()
+			node.detachStream()
+			im.rebuildConfig()
+		})
+	}
+}
+
+// rebuildConfig rebuilds inbound configuration from the current nodes map.
+// A node is included if it has an active channel (peer connected) or if it
+// is the self-node (myID), which is always present so that quorum thresholds
+// account for the local replica. Callers must hold the lock.
+func (im *InboundManager) rebuildConfig() {
+	cfg := make(Configuration, 0, len(im.nodes))
+	for _, node := range im.nodes {
+		if node.id == im.myID || node.channel.Load() != nil {
+			cfg = append(cfg, node)
+		}
+	}
+	OrderedBy(ID).Sort(cfg)
+	im.inboundCfg = cfg
+	if im.onConfigChange != nil {
+		im.onConfigChange(cfg)
+	}
 }
