@@ -7,18 +7,12 @@ import (
 	"slices"
 )
 
-// NodeListOption must be implemented by node providers.
+// NodeListOption must be implemented by node providers. It is used by both the
+// Manager (outbound) via newConfig and by InboundManager (inbound) via newServerConfig.
 type NodeListOption interface {
 	Option
 	newConfig(*Manager) (Configuration, error)
-}
-
-// InboundNodeOption configures which peers an InboundManager will accept.
-// Only WithNodes satisfies this interface; WithNodeList does not, since
-// inbound peer tracking requires pre-assigned IDs.
-type InboundNodeOption interface {
-	Option
-	newServerConfig(im *InboundManager) error
+	newServerConfig(*InboundManager) error
 }
 
 // NodeAddress must be implemented by types that can be used as node addresses.
@@ -62,8 +56,10 @@ func (nm nodeMap[T]) newConfig(mgr *Manager) (Configuration, error) {
 	return builder.configuration(), nil
 }
 
-// newServerConfig implements InboundNodeOption.
-// It validates all IDs and addresses, then populates im.peerAddrs.
+// newServerConfig implements NodeListOption.
+// It validates all IDs and addresses, then pre-creates a Node for each peer
+// in im.nodes. The nodes start without an active channel; channels are
+// attached by InboundManager.registerPeer when peers connect.
 // Duplicate IDs are impossible (map keys are unique); duplicate addresses are
 // rejected explicitly.
 func (nm nodeMap[T]) newServerConfig(im *InboundManager) error {
@@ -83,13 +79,15 @@ func (nm nodeMap[T]) newServerConfig(im *InboundManager) error {
 			return fmt.Errorf("config: address %q already in use by node %d", addr, existingID)
 		}
 		addrToID[addr] = id
-		im.peerAddrs[id] = addr
+		im.newNode(id, addr)
 	}
 	return nil
 }
 
 // WithNodeList returns a NodeListOption for the provided list of node addresses.
-// Unique Node IDs are generated preventing conflicts with existing nodes.
+// When used with a Manager, unique Node IDs are generated preventing conflicts
+// with existing nodes. When used with NewInboundManager, IDs are assigned
+// sequentially starting at 1.
 func WithNodeList(addrsList []string) NodeListOption {
 	return nodeList(addrsList)
 }
@@ -111,6 +109,29 @@ func (nl nodeList) newConfig(mgr *Manager) (Configuration, error) {
 		}
 	}
 	return builder.configuration(), nil
+}
+
+// newServerConfig implements NodeListOption for a plain address list.
+// IDs are assigned sequentially starting at 1; the first address gets ID 1,
+// the second ID 2, and so on.
+func (nl nodeList) newServerConfig(im *InboundManager) error {
+	if len(nl) == 0 {
+		return fmt.Errorf("config: missing required node addresses")
+	}
+	addrToID := make(map[string]uint32, len(nl))
+	for i, addr := range nl {
+		id := uint32(i + 1)
+		normalized, err := normalizeAddr(addr)
+		if err != nil {
+			return fmt.Errorf("config: invalid address %q: %w", addr, err)
+		}
+		if existingID, exists := addrToID[normalized]; exists {
+			return fmt.Errorf("config: address %q already in use by node %d", normalized, existingID)
+		}
+		addrToID[normalized] = id
+		im.newNode(id, normalized)
+	}
+	return nil
 }
 
 // nodeBuilder helps construct a Configuration while tracking addresses to prevent duplicates.
