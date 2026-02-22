@@ -1,5 +1,6 @@
 Ansible
 benchgraph
+benchmem
 benchtest
 benchtime
 bootstrapgorums
@@ -111,6 +112,7 @@ unmarshal
 unmarshaled
 unmarshaling
 unmarshals
+unregistrations
 userguide
 wrapperspb
 Xeon
