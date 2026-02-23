@@ -95,3 +95,14 @@ func WithInboundSendBufferSize(size uint) InboundManagerOption {
 		im.sendBufferSize = size
 	}
 }
+
+// WithOnConfigChange registers a callback that is called after each change to
+// the InboundManager's live Configuration (peer connect or disconnect).
+// The callback is invoked with the new Configuration while the manager's lock
+// is held, so it must not call InboundConfig or KnownIDs (deadlock).
+// Use it only to signal or copy; do not perform long work inside the callback.
+func WithOnConfigChange(f func(Configuration)) InboundManagerOption {
+	return func(im *InboundManager) {
+		im.onConfigChange = f
+	}
+}

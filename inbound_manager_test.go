@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc/metadata"
@@ -21,8 +22,10 @@ type inboundTestNode struct {
 func (n inboundTestNode) Addr() string { return n.addr }
 
 // Compile-time assertions: both node providers satisfy NodeListOption.
-var _ NodeListOption = nodeMap[inboundTestNode](nil)
-var _ NodeListOption = nodeList(nil)
+var (
+	_ NodeListOption = nodeMap[inboundTestNode](nil)
+	_ NodeListOption = nodeList(nil)
+)
 
 // mockBidiStream is a minimal stream.BidiStream for testing InboundManager.
 // Recv blocks until a message is sent or the stream is closed.
@@ -45,9 +48,7 @@ func (m *mockBidiStream) Recv() (*stream.Message, error) {
 	return msg, nil
 }
 
-// newTestInboundManager creates an InboundManager with myID and three known
-// peers (IDs 1–3). It uses the public WithNodes API to mirror what an external
-// user would write.
+// newTestInboundManager creates an InboundManager with myID and three known peers.
 func newTestInboundManager(t *testing.T, myID uint32) *InboundManager {
 	t.Helper()
 	im, err := NewInboundManager(myID, WithNodes(map[uint32]inboundTestNode{
@@ -112,7 +113,7 @@ func TestNewInboundManager(t *testing.T) {
 			name:       "WithNodeListAssignsIDs",
 			opt:        WithNodeList([]string{"127.0.0.1:9081", "127.0.0.1:9082", "127.0.0.1:9083"}),
 			wantIDs:    []uint32{1, 2, 3},
-			wantCfgIDs: []uint32{1}, // only self-node (myID=1) until peers connect
+			wantCfgIDs: []uint32{1}, // only self-node until peers connect
 		},
 		{
 			name:    "WithNodeListEmptyRejected",
@@ -145,11 +146,7 @@ func TestNewInboundManager(t *testing.T) {
 	}
 }
 
-
-
 // inboundCtx returns a context carrying nodeID metadata, rooted at parent.
-// Using t.Context() as parent ensures channel goroutines are cleaned up when
-// the test ends.
 func inboundCtx(parent context.Context, id uint32) context.Context {
 	md := metadata.Pairs(gorumsNodeIDKey, strconv.FormatUint(uint64(id), 10))
 	return metadata.NewIncomingContext(parent, md)
@@ -198,15 +195,14 @@ func checkIDs(t *testing.T, cfg Configuration, wantIDs []uint32, label string) {
 // TestInboundManagerRegisterUnregister checks that the Configuration is
 // correctly updated through sequences of peer registrations and unregistrations,
 // including out-of-order registration (sorted config), stream breakage followed
-// by reconnect, and idempotent / stale unregister calls.
+// by reconnect, and idempotent unregister calls.
 //
-// The self-node (myID=1) is always present from construction; it is included in
-// every wantIDs slice.
+// The self-node (myID=1) is always present after construction,
+// and is included in every wantIDs slice.
 func TestInboundManagerRegisterUnregister(t *testing.T) {
 	type configStep struct {
 		op      string   // "register" or "unregister"
-		id      uint32   // peer ID for "register"; ignored for "unregister"
-		slot    string   // key to store/retrieve the unregister func
+		id      uint32   // peer ID
 		wantIDs []uint32 // expected config IDs after this step
 	}
 
@@ -217,59 +213,47 @@ func TestInboundManagerRegisterUnregister(t *testing.T) {
 		{
 			name: "RegisterAndUnregister",
 			steps: []configStep{
-				{op: "register", id: 2, slot: "2a", wantIDs: []uint32{1, 2}},
-				{op: "unregister", slot: "2a", wantIDs: []uint32{1}},
+				{op: "register", id: 2, wantIDs: []uint32{1, 2}},
+				{op: "unregister", id: 2, wantIDs: []uint32{1}},
 			},
 		},
 		{
 			name: "RegisterAllPeers",
 			steps: []configStep{
-				{op: "register", id: 2, slot: "2a", wantIDs: []uint32{1, 2}},
-				{op: "register", id: 3, slot: "3a", wantIDs: []uint32{1, 2, 3}},
-				{op: "unregister", slot: "2a", wantIDs: []uint32{1, 3}},
-				{op: "unregister", slot: "3a", wantIDs: []uint32{1}},
+				{op: "register", id: 2, wantIDs: []uint32{1, 2}},
+				{op: "register", id: 3, wantIDs: []uint32{1, 2, 3}},
+				{op: "unregister", id: 2, wantIDs: []uint32{1, 3}},
+				{op: "unregister", id: 3, wantIDs: []uint32{1}},
 			},
 		},
 		{
 			// Peers connect in reverse order; config must always be sorted.
 			name: "RegisterOutOfOrderSorted",
 			steps: []configStep{
-				{op: "register", id: 3, slot: "3a", wantIDs: []uint32{1, 3}},
-				{op: "register", id: 2, slot: "2a", wantIDs: []uint32{1, 2, 3}},
-				{op: "unregister", slot: "2a", wantIDs: []uint32{1, 3}},
-				{op: "unregister", slot: "3a", wantIDs: []uint32{1}},
+				{op: "register", id: 3, wantIDs: []uint32{1, 3}},
+				{op: "register", id: 2, wantIDs: []uint32{1, 2, 3}},
+				{op: "unregister", id: 2, wantIDs: []uint32{1, 3}},
+				{op: "unregister", id: 3, wantIDs: []uint32{1}},
 			},
 		},
 		{
 			// Simulates a stream breaking and the peer reconnecting.
 			name: "StreamBreakageAndReconnect",
 			steps: []configStep{
-				{op: "register", id: 2, slot: "2a", wantIDs: []uint32{1, 2}},
-				{op: "unregister", slot: "2a", wantIDs: []uint32{1}},         // stream broken
-				{op: "register", id: 2, slot: "2b", wantIDs: []uint32{1, 2}}, // peer reconnects
-				{op: "unregister", slot: "2b", wantIDs: []uint32{1}},
+				{op: "register", id: 2, wantIDs: []uint32{1, 2}},
+				{op: "unregister", id: 2, wantIDs: []uint32{1}},  // stream broken
+				{op: "register", id: 2, wantIDs: []uint32{1, 2}}, // peer reconnects
+				{op: "unregister", id: 2, wantIDs: []uint32{1}},
 			},
 		},
 		{
-			// A stale cleanup from a previous registration must not evict a peer
-			// that has since reconnected. sync.Once in registerPeer prevents this.
-			name: "StaleUnregisterAfterReconnect",
-			steps: []configStep{
-				{op: "register", id: 2, slot: "2a", wantIDs: []uint32{1, 2}},
-				{op: "unregister", slot: "2a", wantIDs: []uint32{1}},         // first call: removes peer
-				{op: "register", id: 2, slot: "2b", wantIDs: []uint32{1, 2}}, // peer reconnects
-				{op: "unregister", slot: "2a", wantIDs: []uint32{1, 2}},      // stale: must be no-op
-				{op: "unregister", slot: "2b", wantIDs: []uint32{1}},
-			},
-		},
-		{
-			// Calling the same unregister function multiple times must be a no-op
-			// after the first invocation.
+			// Calling UnregisterPeer multiple times must be a no-op
+			// after the first invocation (detachStream is idempotent).
 			name: "IdempotentUnregister",
 			steps: []configStep{
-				{op: "register", id: 3, slot: "3a", wantIDs: []uint32{1, 3}},
-				{op: "unregister", slot: "3a", wantIDs: []uint32{1}},
-				{op: "unregister", slot: "3a", wantIDs: []uint32{1}}, // second call: no-op
+				{op: "register", id: 3, wantIDs: []uint32{1, 3}},
+				{op: "unregister", id: 3, wantIDs: []uint32{1}},
+				{op: "unregister", id: 3, wantIDs: []uint32{1}}, // second call: no-op
 			},
 		},
 	}
@@ -278,19 +262,18 @@ func TestInboundManagerRegisterUnregister(t *testing.T) {
 			im := newTestInboundManager(t, 1)
 			checkIDs(t, im.InboundConfig(), []uint32{1}, "initial")
 
-			unregisters := make(map[string]func())
 			for i, s := range tc.steps {
 				switch s.op {
 				case "register":
 					inStream := newMockBidiStream()
 					t.Cleanup(inStream.close)
-					unregisters[s.slot] = im.registerPeer(s.id, inStream, t.Context())
+					im.registerPeer(s.id, inStream, t.Context())
 				case "unregister":
-					unregisters[s.slot]()
+					im.UnregisterPeer(s.id)
 				default:
 					t.Fatalf("unknown op %q in step %d", s.op, i)
 				}
-				checkIDs(t, im.InboundConfig(), s.wantIDs, fmt.Sprintf("step %d (%s slot=%s)", i, s.op, s.slot))
+				checkIDs(t, im.InboundConfig(), s.wantIDs, fmt.Sprintf("step %d (%s id=%d)", i, s.op, s.id))
 			}
 		})
 	}
@@ -300,62 +283,171 @@ func TestAcceptPeer(t *testing.T) {
 	im := newTestInboundManager(t, 1)
 
 	tests := []struct {
-		name        string
-		ctx         context.Context
-		wantCleanup bool
+		name     string
+		ctx      context.Context
+		wantNode bool
 	}{
 		{
-			name:        "ExternalClientNoMetadata",
-			ctx:         t.Context(), // no gorums-node-id metadata
-			wantCleanup: false,
+			name:     "ExternalClientNoMetadata",
+			ctx:      t.Context(), // no gorums-node-id metadata
+			wantNode: false,
 		},
 		{
-			name:        "UnknownPeerID",
-			ctx:         inboundCtx(t.Context(), 99), // not in configured set
-			wantCleanup: false,
+			name:     "UnknownPeerID",
+			ctx:      inboundCtx(t.Context(), 99), // not in configured set
+			wantNode: false,
 		},
 		{
-			name:        "KnownPeer",
-			ctx:         inboundCtx(t.Context(), 2),
-			wantCleanup: true,
+			name:     "KnownPeer",
+			ctx:      inboundCtx(t.Context(), 2),
+			wantNode: true,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			inStream := newMockBidiStream()
 			defer inStream.close()
-			cleanup, err := im.AcceptPeer(tc.ctx, inStream)
+			node, err := im.AcceptPeer(tc.ctx, inStream)
 			if err != nil {
 				t.Fatalf("AcceptPeer() unexpected error: %v", err)
 			}
-			if (cleanup != nil) != tc.wantCleanup {
-				t.Errorf("AcceptPeer() cleanup non-nil = %v; want %v", cleanup != nil, tc.wantCleanup)
+			if (node != nil) != tc.wantNode {
+				t.Errorf("AcceptPeer() node non-nil = %v; want %v", node != nil, tc.wantNode)
 			}
-			if cleanup != nil {
-				cleanup()
+			if node != nil {
+				im.UnregisterPeer(node.ID())
 			}
 		})
 	}
 }
 
-func TestAcceptPeerReturnsCleanup(t *testing.T) {
+func TestAcceptPeerReturnsNode(t *testing.T) {
 	im := newTestInboundManager(t, 1)
 	inStream := newMockBidiStream()
 	defer inStream.close()
 
-	cleanup, err := im.AcceptPeer(inboundCtx(t.Context(), 3), inStream)
+	node, err := im.AcceptPeer(inboundCtx(t.Context(), 3), inStream)
 	if err != nil {
 		t.Fatalf("AcceptPeer() unexpected error: %v", err)
 	}
-	if cleanup == nil {
-		t.Fatal("AcceptPeer() cleanup = nil; want non-nil for known peer")
+	if node == nil {
+		t.Fatal("AcceptPeer() node = nil; want non-nil for known peer")
 	}
 	checkIDs(t, im.InboundConfig(), []uint32{1, 3}, "after AcceptPeer")
 
-	cleanup()
-	checkIDs(t, im.InboundConfig(), []uint32{1}, "after cleanup")
+	im.UnregisterPeer(node.ID())
+	checkIDs(t, im.InboundConfig(), []uint32{1}, "after UnregisterPeer")
 
-	// Calling cleanup again must be a no-op (idempotent).
-	cleanup()
-	checkIDs(t, im.InboundConfig(), []uint32{1}, "after second cleanup")
+	// Calling UnregisterPeer again must be a no-op (idempotent detachStream).
+	im.UnregisterPeer(node.ID())
+	checkIDs(t, im.InboundConfig(), []uint32{1}, "after second UnregisterPeer")
+}
+
+// waitForConfig polls im.InboundConfig until its NodeIDs equal wantIDs or the
+// timeout elapses. It reports an error (not fatal) on timeout so the caller can
+// inspect the final state.
+func waitForConfig(t *testing.T, im *InboundManager, wantIDs []uint32) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if slices.Equal(im.InboundConfig().NodeIDs(), wantIDs) {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Errorf("timeout waiting for config %v; got %v", wantIDs, im.InboundConfig().NodeIDs())
+}
+
+// connectAsPeer creates a Manager that identifies itself as peerID by sending
+// gorumsNodeIDKey metadata, connects to addrs, and returns the manager.
+// Manager cleanup is registered via t.Cleanup; callers may also close it
+// explicitly (e.g., to test disconnect) — Close is idempotent.
+func connectAsPeer(t *testing.T, peerID uint32, addrs []string) *Manager {
+	t.Helper()
+	peerMD := metadata.Pairs(gorumsNodeIDKey, strconv.FormatUint(uint64(peerID), 10))
+	mgr := TestManager(t, WithMetadata(peerMD))
+	_, err := NewConfiguration(mgr, WithNodeList(addrs))
+	if err != nil {
+		t.Fatalf("NewConfiguration() error: %v", err)
+	}
+	return mgr
+}
+
+// TestInboundManagerPeerConnects verifies the end-to-end path:
+// a client that sends gorums-node-id metadata connects to a gorums Server
+// with WithInboundManager; NodeStream calls AcceptPeer; the peer appears in
+// InboundConfig alongside the self-node.
+func TestInboundManagerPeerConnects(t *testing.T) {
+	im, err := NewInboundManager(1, WithNodes(map[uint32]inboundTestNode{
+		1: {addr: "127.0.0.1:9001"},
+		2: {addr: "127.0.0.1:9002"},
+	}))
+	if err != nil {
+		t.Fatalf("NewInboundManager() error: %v", err)
+	}
+	addrs := TestServers(t, 1, func(_ int) ServerIface {
+		return NewServer(WithInboundManager(im))
+	})
+
+	checkIDs(t, im.InboundConfig(), []uint32{1}, "before connect")
+
+	connectAsPeer(t, 2, addrs)
+
+	waitForConfig(t, im, []uint32{1, 2})
+	checkIDs(t, im.InboundConfig(), []uint32{1, 2}, "after connect")
+}
+
+// TestInboundManagerPeerDisconnects verifies that when a peer closes its
+// connection the cleanup deferred in NodeStream fires and removes the peer
+// from InboundConfig.
+func TestInboundManagerPeerDisconnects(t *testing.T) {
+	im, err := NewInboundManager(1, WithNodes(map[uint32]inboundTestNode{
+		1: {addr: "127.0.0.1:9001"},
+		2: {addr: "127.0.0.1:9002"},
+	}))
+	if err != nil {
+		t.Fatalf("NewInboundManager() error: %v", err)
+	}
+	addrs := TestServers(t, 1, func(_ int) ServerIface {
+		return NewServer(WithInboundManager(im))
+	})
+
+	mgr := connectAsPeer(t, 2, addrs)
+	waitForConfig(t, im, []uint32{1, 2})
+
+	// Close the peer manager to trigger disconnect; Close is idempotent so
+	// t.Cleanup (registered by connectAsPeer via TestManager) is harmless.
+	if err := mgr.Close(); err != nil {
+		t.Fatalf("mgr.Close() error: %v", err)
+	}
+	waitForConfig(t, im, []uint32{1})
+	checkIDs(t, im.InboundConfig(), []uint32{1}, "after disconnect")
+}
+
+// TestInboundManagerUnknownPeerIgnored verifies that a client sending an
+// unknown or zero node ID does not affect InboundConfig.
+func TestInboundManagerUnknownPeerIgnored(t *testing.T) {
+	im, err := NewInboundManager(1, WithNodes(map[uint32]inboundTestNode{
+		1: {addr: "127.0.0.1:9001"},
+		2: {addr: "127.0.0.1:9002"},
+	}))
+	if err != nil {
+		t.Fatalf("NewInboundManager() error: %v", err)
+	}
+	addrs := TestServers(t, 1, func(_ int) ServerIface {
+		return NewServer(WithInboundManager(im))
+	})
+
+	// Connect without metadata (external client) and with an unknown ID.
+	external := TestManager(t)
+	_, err = NewConfiguration(external, WithNodeList(addrs))
+	if err != nil {
+		t.Fatalf("NewConfiguration() error: %v", err)
+	}
+
+	connectAsPeer(t, 99, addrs) // ID 99 not in known set
+
+	// Give the server time to process both connections.
+	time.Sleep(50 * time.Millisecond)
+	checkIDs(t, im.InboundConfig(), []uint32{1}, "external and unknown peers must not appear")
 }

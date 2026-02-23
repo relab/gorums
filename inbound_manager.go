@@ -111,11 +111,12 @@ func (im *InboundManager) isKnown(id uint32) bool {
 }
 
 // AcceptPeer identifies a connecting peer by its NodeID metadata, registers
-// it if recognized, and returns a cleanup function to be deferred by the
-// caller. Returns nil, nil for external (non-replica) clients or unknown peers.
+// it if recognized, and returns the peer's Node. Returns nil, nil for external
+// (non-replica) clients or unknown peers. The caller must defer
+// [InboundManager.UnregisterPeer] for recognized peers.
 // The error return is reserved for future use (e.g., credential validation);
 // it is currently always nil.
-func (im *InboundManager) AcceptPeer(ctx context.Context, inboundStream stream.BidiStream) (func(), error) {
+func (im *InboundManager) AcceptPeer(ctx context.Context, inboundStream stream.BidiStream) (*Node, error) {
 	id := nodeID(ctx)
 	if id == 0 {
 		return nil, nil // External client (non-replica).
@@ -123,31 +124,32 @@ func (im *InboundManager) AcceptPeer(ctx context.Context, inboundStream stream.B
 	if !im.isKnown(id) {
 		return nil, nil // Unknown peer.
 	}
-	return im.registerPeer(id, inboundStream, ctx), nil
+	im.registerPeer(id, inboundStream, ctx)
+	return im.nodes[id], nil
 }
 
 // registerPeer attaches an inbound channel to the pre-created Node for the
-// given peer, updates the live configuration, and returns a cleanup function
-// that detaches the channel when the stream ends. The cleanup function is
-// idempotent: only the first call takes effect, preventing a stale cleanup
-// from disconnecting a peer that has since reconnected under the same ID.
-func (im *InboundManager) registerPeer(id uint32, stream stream.BidiStream, streamCtx context.Context) func() {
+// given peer and updates the live configuration.
+func (im *InboundManager) registerPeer(id uint32, inboundStream stream.BidiStream, streamCtx context.Context) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
-
 	node := im.nodes[id]
-	node.attachStream(stream, streamCtx, im.sendBufferSize)
+	node.attachStream(inboundStream, streamCtx, im.sendBufferSize)
 	im.rebuildConfig()
+}
 
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			im.mu.Lock()
-			defer im.mu.Unlock()
-			node.detachStream()
-			im.rebuildConfig()
-		})
+// UnregisterPeer detaches the inbound channel for the given peer and updates
+// the live configuration. It is safe to call for unknown or already-detached
+// peers (the call is a no-op in those cases).
+func (im *InboundManager) UnregisterPeer(id uint32) {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	node, ok := im.nodes[id]
+	if !ok {
+		return
 	}
+	node.detachStream()
+	im.rebuildConfig()
 }
 
 // rebuildConfig rebuilds inbound configuration from the current nodes map.
