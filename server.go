@@ -40,6 +40,18 @@ func (s *streamServer) NodeStream(srv stream.Gorums_NodeStreamServer) error {
 	finished := make(chan *stream.Message, s.opts.buffer)
 	ctx := srv.Context()
 
+	var inboundNode *Node
+	if s.opts.inboundMgr != nil {
+		node, err := s.opts.inboundMgr.AcceptPeer(ctx, srv)
+		if err != nil {
+			return err
+		}
+		if node != nil {
+			inboundNode = node
+			defer s.opts.inboundMgr.UnregisterPeer(node.ID())
+		}
+	}
+
 	if s.opts.connectCallback != nil {
 		s.opts.connectCallback(ctx)
 	}
@@ -50,7 +62,10 @@ func (s *streamServer) NodeStream(srv stream.Gorums_NodeStreamServer) error {
 			case <-ctx.Done():
 				return
 			case streamOut := <-finished:
-				if err := srv.Send(streamOut); err != nil {
+				if inboundNode != nil {
+					// Route through Channel.sender() — sole writer on inbound stream.
+					inboundNode.enqueue(stream.Request{Ctx: ctx, Msg: streamOut})
+				} else if err := srv.Send(streamOut); err != nil {
 					return
 				}
 			}
@@ -106,6 +121,7 @@ type serverOptions struct {
 	grpcOpts        []grpc.ServerOption
 	connectCallback func(context.Context)
 	interceptors    []Interceptor
+	inboundMgr      *InboundManager
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -133,6 +149,15 @@ func WithGRPCServerOptions(opts ...grpc.ServerOption) ServerOption {
 func WithConnectCallback(callback func(context.Context)) ServerOption {
 	return func(so *serverOptions) {
 		so.connectCallback = callback
+	}
+}
+
+// WithInboundManager attaches an InboundManager to the server.
+// When set, NodeStream calls AcceptPeer for every incoming stream,
+// registering known peers and deferring their cleanup when the stream ends.
+func WithInboundManager(im *InboundManager) ServerOption {
+	return func(o *serverOptions) {
+		o.inboundMgr = im
 	}
 }
 

@@ -78,7 +78,16 @@ func NewOutboundChannel(parentCtx context.Context, id uint32, sendBufferSize uin
 }
 
 // NewInboundChannel creates a channel from an existing server-side stream.
+// Only the sender goroutine is started; no receiver goroutine is launched.
+//
+// Receiving from the stream is intentionally left to the caller's goroutine
+// (e.g. NodeStream's Recv loop), which is the sole authoritative reader.
+// Starting a second receiver goroutine would race with that loop and would
+// intercept response messages that NodeStream must route after demultiplexing
+// them from new incoming requests.
+//
 // Unlike outbound channels, inbound channels:
+//   - Have no receiver goroutine (NodeStream's Recv loop is the sole reader)
 //   - Have no grpc.ClientConn (stream accepted by the gRPC server; not dialed by us)
 //   - Cannot reconnect (the client controls stream creation)
 //   - Close only cancels context; it does not close the underlying connection
@@ -89,6 +98,8 @@ func NewInboundChannel(parentCtx context.Context, id uint32, sendBufferSize uint
 // newChannel is the shared constructor for outbound and inbound channels.
 // Pass a non-nil conn for outbound channels (conn.Close() is called on Close()).
 // Pass a non-nil stream for inbound channels (stream is immediately ready; no reconnection).
+// The receiver goroutine is started only for outbound channels; inbound callers own
+// the stream's read side themselves (see NewInboundChannel for the full rationale).
 func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn *grpc.ClientConn, stream BidiStream) *Channel {
 	connCtx, connCancel := context.WithCancel(parentCtx)
 	c := &Channel{
@@ -117,7 +128,13 @@ func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn 
 		c.streamReady <- struct{}{}
 	}
 	go c.sender()
-	go c.receiver()
+	if conn != nil {
+		// Outbound channels need a receiver goroutine to route call responses
+		// back to waiting callers. Inbound channels must not start a receiver
+		// goroutine: the gRPC server's NodeStream Recv loop is the sole reader
+		// of the stream.
+		go c.receiver()
+	}
 	return c
 }
 

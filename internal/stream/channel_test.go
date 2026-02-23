@@ -1064,7 +1064,10 @@ func TestIsInbound(t *testing.T) {
 	}
 }
 
-// TestInboundChannel verifies that an inbound channel can send and receive messages.
+// TestInboundChannel verifies that an inbound channel can send messages.
+// No receiver goroutine is started for inbound channels; the caller's NodeStream
+// Recv loop is the sole reader. WaitSendDone confirms successful delivery to the
+// stream without requiring a routed response.
 func TestInboundChannel(t *testing.T) {
 	stream := newMockBidiStream()
 	c := NewInboundChannel(t.Context(), 1, 10, stream)
@@ -1072,8 +1075,8 @@ func TestInboundChannel(t *testing.T) {
 		_ = c.Close()
 	})
 
-	// Send a message and verify we get a response back via the echo mock stream.
-	resp := sendRequest(t, c, Request{WaitSendDone: false}, 1)
+	// Send a message and verify it is delivered to the stream.
+	resp := sendRequest(t, c, Request{WaitSendDone: true}, 1)
 	if resp.Err != nil {
 		t.Errorf("unexpected error: %v", resp.Err)
 	}
@@ -1108,34 +1111,33 @@ func TestInboundChannelClose(t *testing.T) {
 }
 
 // TestInboundChannelStreamDown verifies that an inbound channel does not
-// reconnect when the stream goes down; it returns ErrStreamDown instead.
+// reconnect when the stream goes down. In production, when NodeStream.Recv()
+// returns an error, the deferred UnregisterPeer calls detachStream() → channel.Close().
+// This test mirrors that path: close the channel to simulate stream-down, then
+// verify sends return ErrNodeClosed rather than silently retrying on a new stream.
 func TestInboundChannelStreamDown(t *testing.T) {
 	stream := newMockBidiStream()
 	c := NewInboundChannel(t.Context(), 1, 10, stream)
-	t.Cleanup(func() {
-		_ = c.Close()
-	})
 
 	// Verify initial send works.
-	resp := sendRequest(t, c, Request{WaitSendDone: false}, 1)
+	resp := sendRequest(t, c, Request{WaitSendDone: true}, 1)
 	if resp.Err != nil {
 		t.Fatalf("initial send failed: %v", resp.Err)
 	}
 
-	// Simulate the stream going down.
+	// Simulate NodeStream detecting stream-down: NodeStream.Recv() returns an
+	// error → deferred UnregisterPeer() runs → detachStream() → channel.Close().
 	stream.close()
-
-	// Wait for the channel to detect the stream is down.
-	if !waitForDisconnection(c, streamConnectTimeout) {
-		t.Fatal("channel should be disconnected after stream close")
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close() error: %v", err)
 	}
 
-	// Next send should fail with ErrStreamDown, not trigger reconnection.
+	// Sends after close must fail with ErrNodeClosed, not silently reconnect.
 	resp = sendRequest(t, c, Request{WaitSendDone: true}, 2)
 	if resp.Err == nil {
 		t.Error("expected error after stream down, got nil")
-	} else if !errors.Is(resp.Err, ErrStreamDown) {
-		t.Errorf("expected 'stream is down' error, got: %v", resp.Err)
+	} else if !errors.Is(resp.Err, ErrNodeClosed) {
+		t.Errorf("expected 'node closed' error, got: %v", resp.Err)
 	}
 
 	// Verify channel remains disconnected (did not reconnect).
