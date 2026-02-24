@@ -59,6 +59,7 @@ type Node struct {
 	mgr  *Manager // only used for backward compatibility to allow Configuration.Manager()
 
 	msgIDGen func() uint64
+	router   *stream.MessageRouter
 	channel  atomic.Pointer[stream.Channel]
 }
 
@@ -100,6 +101,7 @@ func newNode(addr string, opts nodeOptions) (*Node, error) {
 		addr:     tcpAddr.String(),
 		mgr:      opts.Manager,
 		msgIDGen: opts.MsgIDGen,
+		router:   stream.NewMessageRouter(),
 	}
 
 	// Create gRPC connection to the node without connecting (lazy dial).
@@ -116,7 +118,7 @@ func newNode(addr string, opts nodeOptions) (*Node, error) {
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Create new outbound channel and establish gRPC node stream
-	n.channel.Store(stream.NewOutboundChannel(ctx, n.id, opts.SendBufferSize, conn))
+	n.channel.Store(stream.NewOutboundChannel(ctx, n.id, opts.SendBufferSize, conn, n.router))
 	return n, nil
 }
 
@@ -128,6 +130,7 @@ func newPeerNode(id uint32, addr string, msgIDGen func() uint64) *Node {
 		id:       id,
 		addr:     addr,
 		msgIDGen: msgIDGen,
+		router:   stream.NewMessageRouter(),
 	}
 }
 
@@ -135,7 +138,7 @@ func newPeerNode(id uint32, addr string, msgIDGen func() uint64) *Node {
 // If the node already has an active channel (e.g., a stale stream from a previous
 // connection), it is atomically replaced and the old channel is closed.
 func (n *Node) attachStream(inboundStream stream.BidiStream, streamCtx context.Context, sendBufferSize uint) {
-	newCh := stream.NewInboundChannel(streamCtx, n.id, sendBufferSize, inboundStream)
+	newCh := stream.NewInboundChannel(streamCtx, n.id, sendBufferSize, inboundStream, n.router)
 	if old := n.channel.Swap(newCh); old != nil {
 		old.Close()
 	}
@@ -216,10 +219,7 @@ func (n *Node) LastErr() error {
 
 // Latency returns the latency between the client and this node.
 func (n *Node) Latency() time.Duration {
-	if ch := n.channel.Load(); ch != nil {
-		return ch.Latency()
-	}
-	return 0
+	return n.router.Latency()
 }
 
 type lessFunc func(n1, n2 *Node) bool

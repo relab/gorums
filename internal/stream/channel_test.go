@@ -101,7 +101,7 @@ func setupChannel(t testing.TB, serverFn func(Gorums_NodeStreamServer) error, op
 		t.Fatalf("failed to dial: %v", err)
 	}
 
-	c := NewOutboundChannel(t.Context(), 1, 10, conn)
+	c := NewOutboundChannel(t.Context(), 1, 10, conn, NewMessageRouter())
 	tc := &testChannel{
 		Channel: c,
 		srv:     srv,
@@ -145,7 +145,7 @@ func setupChannelWithoutServer(t testing.TB) *testChannel {
 		t.Fatalf("failed to dial: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	c := NewOutboundChannel(ctx, 1, 10, conn)
+	c := NewOutboundChannel(ctx, 1, 10, conn, NewMessageRouter())
 	t.Cleanup(func() {
 		cancel()
 		if err := c.Close(); err != nil {
@@ -272,7 +272,7 @@ func TestChannelLatency(t *testing.T) {
 	tc := setupChannel(t, delayServer(minDelay))
 
 	// Initial latency should be -1
-	if latency := tc.Latency(); latency != -1*time.Second {
+	if latency := tc.router.Latency(); latency != -1*time.Second {
 		t.Errorf("Initial latency = %v, expected -1s", latency)
 	}
 
@@ -281,7 +281,7 @@ func TestChannelLatency(t *testing.T) {
 		sendRequest(t, tc.Channel, Request{WaitSendDone: false}, uint64(i))
 	}
 
-	latency := tc.Latency()
+	latency := tc.router.Latency()
 	if latency <= 0 {
 		t.Errorf("Latency = %v, expected > 0", latency)
 	}
@@ -378,7 +378,7 @@ func TestChannelEnsureStream(t *testing.T) {
 		// Extract grpc.ClientConn from existing channel
 		conn := tc.conn
 		// Create new channel with test context without metadata (real implementation captures metadata)
-		tc.Channel = NewOutboundChannel(t.Context(), tc.id, 10, conn)
+		tc.Channel = NewOutboundChannel(t.Context(), tc.id, 10, conn, NewMessageRouter())
 		return tc
 	}
 
@@ -747,7 +747,6 @@ func TestChannelRouterLifecycle(t *testing.T) {
 			if tt.wantPanic && !panicRecovered {
 				t.Errorf("expected panic but none occurred")
 			}
-			deleteRouter(tc.Channel, msgID)
 		})
 	}
 }
@@ -755,16 +754,10 @@ func TestChannelRouterLifecycle(t *testing.T) {
 // Helper functions for testing channel response routing and router lifecycle
 
 func routerExists(c *Channel, msgID uint64) bool {
-	c.responseMut.Lock()
-	defer c.responseMut.Unlock()
-	_, exists := c.responseRouters[msgID]
+	c.router.mu.Lock()
+	defer c.router.mu.Unlock()
+	_, exists := c.router.pending[msgID]
 	return exists
-}
-
-func deleteRouter(c *Channel, msgID uint64) {
-	c.responseMut.Lock()
-	defer c.responseMut.Unlock()
-	delete(c.responseRouters, msgID)
 }
 
 func TestChannelResponseRouting(t *testing.T) {
@@ -926,7 +919,7 @@ func TestChannelClearStreamDeadlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
-	c := NewOutboundChannel(t.Context(), 1, sendBufSize, conn)
+	c := NewOutboundChannel(t.Context(), 1, sendBufSize, conn, NewMessageRouter())
 	t.Cleanup(func() {
 		if closeErr := c.Close(); closeErr != nil {
 			t.Errorf("failed to close channel: %v", closeErr)
@@ -939,34 +932,31 @@ func TestChannelClearStreamDeadlock(t *testing.T) {
 	}
 	staleStream := c.getStream()
 
-	// Inject sendBufSize+2 non-streaming requests directly into responseRouters,
-	// bypassing the normal sendMsg path. requeuePendingMsgs will attempt to
-	// re-enqueue all of them. With sendBufSize=2:
+	// Inject sendBufSize+2 non-streaming requests directly into the router's
+	// pending map, bypassing the normal sendMsg path. requeuePendingMsgs will
+	// attempt to re-enqueue all of them. With sendBufSize=2:
 	//  - request 1 is enqueued; sender dequeues it and blocks in ensureStream.
 	//  - requests 2-3 fill sendQ to capacity.
 	//  - request 4's Enqueue call blocks on a full sendQ while clearStream
 	//    still holds streamMut — deadlock.
 	const numPending = sendBufSize + 2
 	replyChannels := make([]chan response, numPending)
-	c.responseMut.Lock()
 	for i := range numPending {
 		replyChannels[i] = make(chan response, 1)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		t.Cleanup(cancel)
 		msg, msgErr := NewMessage(ctx, uint64(1000+i), mock.TestMethod, nil)
 		if msgErr != nil {
-			c.responseMut.Unlock()
 			t.Fatalf("NewMessage failed: %v", msgErr)
 		}
-		c.responseRouters[uint64(1000+i)] = Request{
+		c.router.Register(uint64(1000+i), Request{
 			Ctx:          ctx,
 			Msg:          msg,
 			Streaming:    false,
 			WaitSendDone: false,
 			ResponseChan: replyChannels[i],
-		}
+		})
 	}
-	c.responseMut.Unlock()
 
 	// clearStream + requeuePendingMsgs (as the real call sites do) should complete
 	// without deadlocking.
@@ -1047,7 +1037,7 @@ func TestIsInbound(t *testing.T) {
 			name: "Inbound",
 			chanFunc: func(t *testing.T) *Channel {
 				stream := newMockBidiStream()
-				c := NewInboundChannel(t.Context(), 1, 10, stream)
+				c := NewInboundChannel(t.Context(), 1, 10, stream, NewMessageRouter())
 				t.Cleanup(func() { _ = c.Close() })
 				return c
 			},
@@ -1070,7 +1060,7 @@ func TestIsInbound(t *testing.T) {
 // stream without requiring a routed response.
 func TestInboundChannel(t *testing.T) {
 	stream := newMockBidiStream()
-	c := NewInboundChannel(t.Context(), 1, 10, stream)
+	c := NewInboundChannel(t.Context(), 1, 10, stream, NewMessageRouter())
 	t.Cleanup(func() {
 		_ = c.Close()
 	})
@@ -1089,7 +1079,7 @@ func TestInboundChannel(t *testing.T) {
 // server connection (conn is nil for inbound channels).
 func TestInboundChannelClose(t *testing.T) {
 	stream := newMockBidiStream()
-	c := NewInboundChannel(t.Context(), 1, 10, stream)
+	c := NewInboundChannel(t.Context(), 1, 10, stream, NewMessageRouter())
 
 	// Close the channel; should succeed without touching any grpc.ClientConn.
 	if err := c.Close(); err != nil {
@@ -1117,7 +1107,7 @@ func TestInboundChannelClose(t *testing.T) {
 // verify sends return ErrNodeClosed rather than silently retrying on a new stream.
 func TestInboundChannelStreamDown(t *testing.T) {
 	stream := newMockBidiStream()
-	c := NewInboundChannel(t.Context(), 1, 10, stream)
+	c := NewInboundChannel(t.Context(), 1, 10, stream, NewMessageRouter())
 
 	// Verify initial send works.
 	resp := sendRequest(t, c, Request{WaitSendDone: true}, 1)
