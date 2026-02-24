@@ -11,6 +11,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/relab/gorums/internal/stream"
 )
@@ -149,6 +150,22 @@ func (n *Node) detachStream() {
 	if ch := n.channel.Swap(nil); ch != nil {
 		ch.Close()
 	}
+}
+
+// RouteResponse routes an incoming message as a response to a pending
+// server-initiated call. Returns true if the message matched a pending
+// call and was handled; false if it should be dispatched as a new request.
+func (n *Node) RouteResponse(msg *stream.Message) bool {
+	err := msg.ErrorStatus()
+	var resp proto.Message
+	if err == nil {
+		resp, err = stream.UnmarshalResponse(msg)
+	}
+	return n.router.RouteResponse(msg.GetMessageSeqNo(), stream.NodeResponse[proto.Message]{
+		NodeID: n.id,
+		Value:  resp,
+		Err:    err,
+	})
 }
 
 // close this node.

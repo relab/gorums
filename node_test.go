@@ -55,6 +55,49 @@ func printNodes(t *testing.T, nodes []*Node) {
 	}
 }
 
+// TestNodeRouteResponse verifies that Node.RouteResponse correctly routes
+// an incoming response message to a pending server-initiated call.
+func TestNodeRouteResponse(t *testing.T) {
+	n := newPeerNode(42, "127.0.0.1:9000", func() uint64 { return 0 })
+	replyChan := make(chan NodeResponse[msg], 1)
+
+	// Register a pending call with msgID=7 on the node's router.
+	n.router.Register(7, stream.Request{
+		Ctx:          context.Background(),
+		Msg:          &stream.Message{},
+		ResponseChan: replyChan,
+	})
+
+	// Build a response message with matching msgID.
+	respMsg := stream.Message_builder{MessageSeqNo: 7}.Build()
+
+	// RouteResponse should find and deliver the pending call.
+	if !n.RouteResponse(respMsg) {
+		t.Fatal("RouteResponse should return true for a pending msgID")
+	}
+
+	// Verify the response was delivered.
+	select {
+	case got := <-replyChan:
+		if got.NodeID != 42 {
+			t.Errorf("NodeID = %d, want 42", got.NodeID)
+		}
+	default:
+		t.Fatal("expected response on channel")
+	}
+
+	// Routing the same msgID again should return false (already consumed).
+	if n.RouteResponse(respMsg) {
+		t.Error("RouteResponse should return false for consumed msgID")
+	}
+
+	// Unknown msgID should return false.
+	unknownMsg := stream.Message_builder{MessageSeqNo: 999}.Build()
+	if n.RouteResponse(unknownMsg) {
+		t.Error("RouteResponse should return false for unknown msgID")
+	}
+}
+
 // BenchmarkNodeEnqueue measures the overhead that Node.enqueue adds per
 // request dispatch: an atomic.Pointer.Load() and a nil guard.
 // The cost is ~1-2 ns, which is negligible compared to a full
