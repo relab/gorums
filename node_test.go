@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/relab/gorums/internal/stream"
 	"github.com/relab/gorums/internal/testutils/mock"
@@ -15,16 +14,16 @@ import (
 )
 
 func TestNodeSort(t *testing.T) {
-	makeNode := func(id uint32, latency time.Duration, err error) *Node {
-		n := &Node{id: id}
-		n.channel.Store(stream.NewChannelWithState(latency, err))
+	makeNode := func(id uint32, err error) *Node {
+		n := &Node{id: id, router: stream.NewMessageRouter()}
+		n.channel.Store(stream.NewChannelWithState(err))
 		return n
 	}
 	nodes := []*Node{
-		makeNode(100, time.Second, nil),
-		makeNode(101, 250*time.Millisecond, errors.New("some error")),
-		makeNode(42, 300*time.Millisecond, nil),
-		makeNode(99, 500*time.Millisecond, errors.New("some error")),
+		makeNode(100, nil),
+		makeNode(101, errors.New("some error")),
+		makeNode(42, nil),
+		makeNode(99, errors.New("some error")),
 	}
 
 	n := len(nodes)
@@ -79,7 +78,7 @@ func BenchmarkNodeEnqueue(b *testing.B) {
 		// Stub channel attached; measures atomic.Pointer.Load() + non-nil branch
 		// without going through Channel.Enqueue (which requires a running goroutine).
 		n := newPeerNode(1, "127.0.0.1:9081", func() uint64 { return 0 })
-		n.channel.Store(stream.NewChannelWithState(0, nil))
+		n.channel.Store(stream.NewChannelWithState(nil))
 		b.ResetTimer()
 		for range b.N {
 			_ = n.channel.Load()
@@ -119,9 +118,9 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 
 	// Wrap the outbound channel in a Node, adding the one atomic.Pointer.Load
 	// that Node.enqueue performs on every dispatch.
-	ch := stream.NewOutboundChannel(context.Background(), 1, 10, conn)
-	b.Cleanup(func() { _ = ch.Close() })
 	n := newPeerNode(1, lis.Addr().String(), func() uint64 { return 0 })
+	ch := stream.NewOutboundChannel(context.Background(), 1, 10, conn, n.router)
+	b.Cleanup(func() { _ = ch.Close() })
 	n.channel.Store(ch)
 
 	tests := []struct {

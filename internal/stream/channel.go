@@ -44,10 +44,9 @@ type Channel struct {
 	connCtx    context.Context
 	connCancel context.CancelFunc
 
-	// Error and latency tracking
+	// Error tracking
 	mu        sync.Mutex
 	lastError error
-	latency   time.Duration
 
 	// Stream lifecycle management for FIFO ordered message delivery
 	// stream is a bidirectional stream for
@@ -58,12 +57,10 @@ type Channel struct {
 	streamCancel context.CancelFunc
 	streamReady  chan struct{} // signals receiver when stream becomes available
 
-	// Response routing; the map holds pending requests waiting for responses.
-	// The request contains the responseChan on which to send the response
-	// to the caller.
-	responseRouters map[uint64]Request
-	responseMut     sync.Mutex
-	closeOnceFunc   func() error
+	// Router handles response routing for pending calls. It is owned by the
+	// Node and injected into the Channel, so it survives channel replacement.
+	router        *MessageRouter
+	closeOnceFunc func() error
 }
 
 // NewOutboundChannel creates a new channel for the given node and starts
@@ -73,8 +70,8 @@ type Channel struct {
 // have not yet been established. This is to prevent deadlock when invoking
 // a call type. The sender blocks on the sendQ and the receiver waits for
 // the stream to become available.
-func NewOutboundChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn *grpc.ClientConn) *Channel {
-	return newChannel(parentCtx, id, sendBufferSize, conn, nil)
+func NewOutboundChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn *grpc.ClientConn, router *MessageRouter) *Channel {
+	return newChannel(parentCtx, id, sendBufferSize, conn, nil, router)
 }
 
 // NewInboundChannel creates a channel from an existing server-side stream.
@@ -91,8 +88,8 @@ func NewOutboundChannel(parentCtx context.Context, id uint32, sendBufferSize uin
 //   - Have no grpc.ClientConn (stream accepted by the gRPC server; not dialed by us)
 //   - Cannot reconnect (the client controls stream creation)
 //   - Close only cancels context; it does not close the underlying connection
-func NewInboundChannel(parentCtx context.Context, id uint32, sendBufferSize uint, stream BidiStream) *Channel {
-	return newChannel(parentCtx, id, sendBufferSize, nil, stream)
+func NewInboundChannel(parentCtx context.Context, id uint32, sendBufferSize uint, stream BidiStream, router *MessageRouter) *Channel {
+	return newChannel(parentCtx, id, sendBufferSize, nil, stream, router)
 }
 
 // newChannel is the shared constructor for outbound and inbound channels.
@@ -100,18 +97,17 @@ func NewInboundChannel(parentCtx context.Context, id uint32, sendBufferSize uint
 // Pass a non-nil stream for inbound channels (stream is immediately ready; no reconnection).
 // The receiver goroutine is started only for outbound channels; inbound callers own
 // the stream's read side themselves (see NewInboundChannel for the full rationale).
-func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn *grpc.ClientConn, stream BidiStream) *Channel {
+func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn *grpc.ClientConn, stream BidiStream, router *MessageRouter) *Channel {
 	connCtx, connCancel := context.WithCancel(parentCtx)
 	c := &Channel{
-		sendQ:           make(chan Request, sendBufferSize),
-		id:              id,
-		conn:            conn,
-		stream:          stream,
-		connCtx:         connCtx,
-		connCancel:      connCancel,
-		latency:         -1 * time.Second,
-		responseRouters: make(map[uint64]Request),
-		streamReady:     make(chan struct{}, 1),
+		sendQ:       make(chan Request, sendBufferSize),
+		id:          id,
+		conn:        conn,
+		stream:      stream,
+		connCtx:     connCtx,
+		connCancel:  connCancel,
+		router:      router,
+		streamReady: make(chan struct{}, 1),
 	}
 	c.closeOnceFunc = sync.OnceValue(func() error {
 		// important to cancel first to stop goroutines
@@ -146,9 +142,8 @@ func (c *Channel) IsInbound() bool {
 
 // NewChannelWithState creates a new Channel with a specific state for testing.
 // This function should only be used in tests.
-func NewChannelWithState(latency time.Duration, lastErr error) *Channel {
+func NewChannelWithState(lastErr error) *Channel {
 	return &Channel{
-		latency:   latency,
 		lastError: lastErr,
 	}
 }
@@ -269,76 +264,23 @@ func (c *Channel) Enqueue(req Request) {
 	}
 }
 
-// routeResponse routes the response to the appropriate response channel based on msgID.
-// If no matching request is found, the response is discarded.
-func (c *Channel) routeResponse(msgID uint64, resp response) {
-	c.responseMut.Lock()
-	req, ok := c.responseRouters[msgID]
-	if ok {
-		// delete the router if we are only expecting a single reply message
-		if !req.Streaming {
-			delete(c.responseRouters, msgID)
-		}
-	}
-	c.responseMut.Unlock()
-
-	// Send response without holding the lock to avoid blocking other operations
-	if ok {
-		if resp.Err == nil {
-			c.updateLatency(time.Since(req.SendTime))
-		}
-		req.ResponseChan <- resp
-	}
-}
-
-// cancelPendingMsgs cancels all pending messages by sending an error response to each
-// associated request. This is called during node shutdown to notify all waiting calls.
+// cancelPendingMsgs cancels all pending messages by sending an error response to each.
+// This is called during node shutdown to notify all waiting calls.
 func (c *Channel) cancelPendingMsgs(err error) {
-	c.responseMut.Lock()
-	pendingRequests := make([]Request, 0, len(c.responseRouters))
-	for msgID, req := range c.responseRouters {
-		pendingRequests = append(pendingRequests, req)
-		delete(c.responseRouters, msgID)
-	}
-	c.responseMut.Unlock()
-
-	// Send error responses without holding the lock
-	for _, req := range pendingRequests {
+	for _, req := range c.router.CancelPending() {
 		c.replyError(req, err)
 	}
 }
 
 // requeuePendingMsgs moves pending non-streaming requests back to sendQ for
-// retry on the next stream. Streaming requests (correctable calls) are instead
-// cancelled with ErrStreamDown because they cannot be safely retried: the caller
-// may have already received partial responses on the response channel, and a silent
-// re-send would start a fresh server-side computation and deliver a second,
-// independent result sequence on the same channel, violating the correctable call
-// contract. The caller receives the error and can decide whether to issue a new call.
-//
-// The sender goroutine will pick up requeued requests, call ensureStream to
-// create a new stream, and resend them. The natural retry limit is the
-// request's context timeout.
+// retry on the next stream. Streaming requests (correctable calls) are cancelled
+// with ErrStreamDown because they cannot be safely retried.
 func (c *Channel) requeuePendingMsgs() {
-	c.responseMut.Lock()
-	toRequeue := make([]Request, 0, len(c.responseRouters))
-	toCancel := make([]Request, 0, len(c.responseRouters))
-	for msgID, req := range c.responseRouters {
-		delete(c.responseRouters, msgID)
-		if req.Streaming {
-			toCancel = append(toCancel, req)
-			continue
-		}
-		toRequeue = append(toRequeue, req)
-	}
-	c.responseMut.Unlock()
-
-	// requeue non-streaming requests for retry on the new stream without holding the lock
-	for _, req := range toRequeue {
+	requeue, cancel := c.router.RequeuePending()
+	for _, req := range requeue {
 		c.Enqueue(req)
 	}
-	// cancel streaming requests with error without holding the lock
-	for _, req := range toCancel {
+	for _, req := range cancel {
 		c.replyError(req, ErrStreamDown)
 	}
 }
@@ -411,14 +353,10 @@ func (c *Channel) sender() {
 			continue
 		}
 
-		// Register in the response router only for requests that are genuinely
+		// Register call in the response router only for calls that are genuinely
 		// in-flight on the current stream, after all early-exit checks pass.
 		if req.ResponseChan != nil {
-			req.SendTime = time.Now()
-			msgID := req.Msg.GetMessageSeqNo()
-			c.responseMut.Lock()
-			c.responseRouters[msgID] = req
-			c.responseMut.Unlock()
+			c.router.Register(req.Msg.GetMessageSeqNo(), req)
 		}
 
 		// Watch for per-request cancellation while Send is in-flight.
@@ -440,7 +378,7 @@ func (c *Channel) sender() {
 
 		// For one-way calls (Unicast/Multicast) with WaitSendDone, confirm successful send.
 		if req.WaitSendDone {
-			c.routeResponse(req.Msg.GetMessageSeqNo(), response{NodeID: c.id})
+			c.router.RouteResponse(req.Msg.GetMessageSeqNo(), response{NodeID: c.id})
 		}
 	}
 }
@@ -480,7 +418,7 @@ func (c *Channel) receiver() {
 				resp, err = UnmarshalResponse(respMsg)
 			}
 			// Two-way calls (RPCCall/QuorumCall) deliver server response.
-			c.routeResponse(respMsg.GetMessageSeqNo(), response{NodeID: c.id, Value: resp, Err: err})
+			c.router.RouteResponse(respMsg.GetMessageSeqNo(), response{NodeID: c.id, Value: resp, Err: err})
 		}
 	}
 }
@@ -496,24 +434,4 @@ func (c *Channel) LastErr() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.lastError
-}
-
-// Latency returns the latency between the client and the server associated with this channel.
-func (c *Channel) Latency() time.Duration {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.latency
-}
-
-// updateLatency updates the latency between the client and the server associated with this channel.
-// It uses a simple moving average to calculate the latency.
-func (c *Channel) updateLatency(rtt time.Duration) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.latency < 0 {
-		c.latency = rtt
-	} else {
-		// Use simple moving average (alpha=0.2)
-		c.latency = time.Duration(0.8*float64(c.latency) + 0.2*float64(rtt))
-	}
 }
