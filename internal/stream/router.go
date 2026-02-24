@@ -12,10 +12,15 @@ import (
 // The router maintains a map of pending calls keyed by message sequence number.
 // When a response arrives, RouteResponse looks up the matching request and
 // delivers the response on its response channel.
+//
+// The router also provides handler lookup via a shared handler map. All routers
+// for the same role (server-side or client-side) share the same handler map by
+// reference, so handlers registered once are visible to all routers.
 type MessageRouter struct {
-	mu      sync.Mutex
-	pending map[uint64]Request
-	latency time.Duration
+	mu       sync.Mutex
+	pending  map[uint64]Request
+	latency  time.Duration
+	handlers map[string]Handler // shared by reference; may be nil
 }
 
 // NewMessageRouter creates a new MessageRouter.
@@ -24,6 +29,23 @@ func NewMessageRouter() *MessageRouter {
 		pending: make(map[uint64]Request),
 		latency: -1 * time.Second,
 	}
+}
+
+// SetHandlers sets the shared handler map for this router.
+// All routers that share the same map will see the same handlers.
+// This must be called before the router is used for handler lookup.
+func (r *MessageRouter) SetHandlers(handlers map[string]Handler) {
+	r.handlers = handlers
+}
+
+// HandleRequest looks up a handler by method name.
+// Returns the handler and true if found, or nil and false otherwise.
+func (r *MessageRouter) HandleRequest(method string) (Handler, bool) {
+	if r.handlers == nil {
+		return nil, false
+	}
+	h, ok := r.handlers[method]
+	return h, ok
 }
 
 // Register registers a pending call awaiting a response.

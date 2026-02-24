@@ -147,3 +147,50 @@ func TestRouterRequeuePending(t *testing.T) {
 		t.Error("pending map should be empty after RequeuePending")
 	}
 }
+
+func TestRouterHandleRequest(t *testing.T) {
+	r := NewMessageRouter()
+
+	// No handlers set: lookup should return false.
+	if _, ok := r.HandleRequest("some.Method"); ok {
+		t.Error("HandleRequest should return false when no handlers are set")
+	}
+
+	// Set a shared handler map with one entry.
+	called := false
+	handlers := map[string]Handler{
+		mock.TestMethod: func(_ ServerCtx, _ *Envelope) (*Envelope, error) {
+			called = true
+			return nil, nil
+		},
+	}
+	r.SetHandlers(handlers)
+
+	// Lookup registered method.
+	h, ok := r.HandleRequest(mock.TestMethod)
+	if !ok {
+		t.Fatal("HandleRequest should return true for registered method")
+	}
+	if h == nil {
+		t.Fatal("HandleRequest returned nil handler")
+	}
+
+	// Lookup unknown method.
+	if _, ok := r.HandleRequest("unknown.Method"); ok {
+		t.Error("HandleRequest should return false for unknown method")
+	}
+
+	// Shared map: adding a handler to the map is visible to the router.
+	handlers["new.Method"] = func(_ ServerCtx, _ *Envelope) (*Envelope, error) {
+		return nil, nil
+	}
+	if _, ok := r.HandleRequest("new.Method"); !ok {
+		t.Error("HandleRequest should see handlers added to the shared map")
+	}
+
+	// Verify the handler is callable.
+	_, _ = h(ServerCtx{}, nil)
+	if !called {
+		t.Error("handler was not called")
+	}
+}
