@@ -16,6 +16,7 @@ type PeerAcceptor interface {
 type PeerNode interface {
 	RouteResponse(msg *Message) bool
 	Enqueue(req Request)
+	SetHandlers(handlers map[string]Handler)
 }
 
 // Server handles NodeStream connections.
@@ -57,6 +58,7 @@ func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 		}
 		if node != nil {
 			peerNode = node
+			peerNode.SetHandlers(s.handlers)
 			defer cleanup()
 		}
 	}
