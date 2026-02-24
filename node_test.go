@@ -113,7 +113,7 @@ func BenchmarkNodeEnqueue(b *testing.B) {
 		n := newPeerNode(1, "127.0.0.1:9081", func() uint64 { return 0 })
 		b.ResetTimer()
 		for range b.N {
-			n.enqueue(req)
+			n.Enqueue(req)
 		}
 	})
 
@@ -186,7 +186,7 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 					Method:       mock.TestMethod,
 					Payload:      payload,
 				}.Build()
-				n.enqueue(stream.Request{
+				n.Enqueue(stream.Request{
 					Ctx:          context.Background(),
 					Msg:          reqMsg,
 					WaitSendDone: true,
