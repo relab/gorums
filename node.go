@@ -35,12 +35,13 @@ func (c NodeContext) Node() *Node {
 // enqueue enqueues a request to this node's channel. If the channel is nil,
 // e.g., for the self-node, the request is silently dropped.
 func (c NodeContext) enqueue(req stream.Request) {
-	c.node.enqueue(req)
+	c.node.Enqueue(req)
 }
 
-// enqueue enqueues a request to this node's channel. If the channel is nil,
+// Enqueue enqueues a request to this node's channel. If the channel is nil,
 // e.g., for the self-node, the request is silently dropped.
-func (n *Node) enqueue(req stream.Request) {
+// This implements the [stream.PeerNode] interface.
+func (n *Node) Enqueue(req stream.Request) {
 	if ch := n.channel.Load(); ch != nil {
 		ch.Enqueue(req)
 	}

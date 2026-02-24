@@ -3,125 +3,28 @@ package gorums
 import (
 	"context"
 	"net"
-	"sync"
 
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/proto"
 )
 
+// Type aliases for handler types that now live in internal/stream.
+// These preserve backward compatibility for all existing code.
 type (
 	// Interceptor is a function that can intercept and modify incoming requests
 	// and outgoing responses. It receives a ServerCtx, the incoming Message, and
 	// a Handler representing the next element in the chain (either another
 	// Interceptor or the actual server method). It returns a Message and an error.
-	Interceptor func(ServerCtx, *Message, Handler) (*Message, error)
+	Interceptor = stream.Interceptor
 	// Handler is a function that processes a request and returns a response.
-	Handler func(ServerCtx, *Message) (*Message, error)
+	Handler = stream.Handler
+	// ServerCtx is a context that is passed from the Gorums server to the handler.
+	// It allows the handler to release its lock on the server, allowing the next
+	// request to be processed. This happens automatically when the handler returns.
+	ServerCtx = stream.ServerCtx
+	// Message encapsulates the stream.Message and the actual proto.Message.
+	Message = stream.Envelope
 )
-
-type streamServer struct {
-	handlers map[string]Handler
-	opts     *serverOptions
-	stream.UnimplementedGorumsServer
-}
-
-func newStreamServer(opts *serverOptions) *streamServer {
-	return &streamServer{
-		handlers: make(map[string]Handler),
-		opts:     opts,
-	}
-}
-
-// NodeStream handles a connection to a single client. The stream is aborted if there
-// is any error with sending or receiving.
-func (s *streamServer) NodeStream(srv stream.Gorums_NodeStreamServer) error {
-	var mut sync.Mutex // used to achieve mutex between request handlers
-	finished := make(chan *stream.Message, s.opts.buffer)
-	ctx := srv.Context()
-
-	var inboundNode *Node
-	if s.opts.inboundMgr != nil {
-		node, err := s.opts.inboundMgr.AcceptPeer(ctx, srv)
-		if err != nil {
-			return err
-		}
-		if node != nil {
-			inboundNode = node
-			defer s.opts.inboundMgr.UnregisterPeer(node.ID())
-		}
-	}
-
-	if s.opts.connectCallback != nil {
-		s.opts.connectCallback(ctx)
-	}
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case streamOut := <-finished:
-				if inboundNode != nil {
-					// Route through Channel.sender() — sole writer on inbound stream.
-					inboundNode.enqueue(stream.Request{Ctx: ctx, Msg: streamOut})
-				} else if err := srv.Send(streamOut); err != nil {
-					return
-				}
-			}
-		}
-	}()
-
-	// Start with a locked mutex
-	mut.Lock()
-	defer mut.Unlock()
-
-	for {
-		streamIn, err := srv.Recv()
-		if err != nil {
-			return err
-		}
-		// Route response to a pending server-initiated call.
-		// This must be checked before handler dispatch: a message with a
-		// matching msgID in the router's pending map is a response, not
-		// a new request, even if it has a method field set.
-		if inboundNode != nil && inboundNode.RouteResponse(streamIn) {
-			continue
-		}
-		if handler, ok := s.handlers[streamIn.GetMethod()]; ok {
-			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
-			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
-			// finished, or when it is safe to start processing the next request.
-			//
-			// This func() is the default interceptor; it is the first and last handler in the chain.
-			// It is responsible for releasing the mutex when the handler chain is done.
-			go func() {
-				srvCtx := newServerCtx(streamIn.AppendToIncomingContext(ctx), &mut, finished)
-				defer srvCtx.Release()
-
-				msg, err := stream.UnmarshalRequest(streamIn)
-				in := &Message{Msg: msg, Message: streamIn}
-				if err != nil {
-					_ = srvCtx.SendMessage(messageWithError(in, nil, err))
-					return
-				}
-
-				out, err := handler(srvCtx, in)
-				// If there is no response and no error, we do not send anything back to the client.
-				// This corresponds to a unidirectional message from client to server, where clients
-				// are not expected to receive a response.
-				if out == nil && err == nil {
-					return
-				}
-				_ = srvCtx.SendMessage(messageWithError(in, out, err))
-				// We ignore the error from SendMessage here; it means that the stream is closed.
-				// The for-loop above will exit on the next Recv call.
-			}()
-			// Wait until the handler releases the mutex.
-			mut.Lock()
-		}
-	}
-}
 
 type serverOptions struct {
 	buffer          uint
@@ -180,28 +83,9 @@ func WithInterceptors(i ...Interceptor) ServerOption {
 	}
 }
 
-// chainInterceptors composes the provided interceptors around the final Handler and
-// returns a Handler that executes the chain. The execution order is the same as the
-// order of the interceptors in the slice: the first element is executed first, and
-// the last element calls the final handler (the server method).
-func chainInterceptors(final Handler, interceptors ...Interceptor) Handler {
-	if len(interceptors) == 0 {
-		return final
-	}
-	handler := final
-	for i := len(interceptors) - 1; i >= 0; i-- {
-		curr := interceptors[i]
-		next := handler
-		handler = func(ctx ServerCtx, in *Message) (*Message, error) {
-			return curr(ctx, in, next)
-		}
-	}
-	return handler
-}
-
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
-	srv          *streamServer
+	srv          *stream.Server
 	grpcServer   *grpc.Server
 	interceptors []Interceptor
 }
@@ -212,8 +96,12 @@ func NewServer(opts ...ServerOption) *Server {
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
+	var acceptor stream.PeerAcceptor
+	if serverOpts.inboundMgr != nil {
+		acceptor = serverOpts.inboundMgr
+	}
 	s := &Server{
-		srv:          newStreamServer(&serverOpts),
+		srv:          stream.NewServer(serverOpts.buffer, acceptor, serverOpts.connectCallback),
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
 		interceptors: serverOpts.interceptors,
 	}
@@ -225,7 +113,7 @@ func NewServer(opts ...ServerOption) *Server {
 //
 // This function should only be used by generated code.
 func (s *Server) RegisterHandler(method string, handler Handler) {
-	s.srv.handlers[method] = chainInterceptors(handler, s.interceptors...)
+	s.srv.RegisterHandler(method, stream.ChainInterceptors(handler, s.interceptors...))
 }
 
 // Serve starts serving on the listener.
@@ -241,53 +129,4 @@ func (s *Server) GracefulStop() {
 // Stop stops the server immediately.
 func (s *Server) Stop() {
 	s.grpcServer.Stop()
-}
-
-// ServerCtx is a context that is passed from the Gorums server to the handler.
-// It allows the handler to release its lock on the server, allowing the next request to be processed.
-// This happens automatically when the handler returns.
-type ServerCtx struct {
-	context.Context
-	once *sync.Once // must be a pointer to avoid passing ctx by value
-	mut  *sync.Mutex
-	c    chan<- *stream.Message
-}
-
-// newServerCtx creates a new ServerCtx with the given context, mutex and metadata channel.
-func newServerCtx(ctx context.Context, mut *sync.Mutex, c chan<- *stream.Message) ServerCtx {
-	return ServerCtx{
-		Context: ctx,
-		once:    new(sync.Once),
-		mut:     mut,
-		c:       c,
-	}
-}
-
-// Release releases this handler's lock on the server, which allows the next request
-// to be processed concurrently. Use Release only when the handler no longer needs
-// exclusive access to the server's state. It is safe to call Release multiple times.
-func (ctx *ServerCtx) Release() {
-	ctx.once.Do(ctx.mut.Unlock)
-}
-
-// SendMessage attempts to send the given message to the client.
-// This may fail if the stream was closed or the stream context got canceled.
-//
-// This function should only be used by generated code.
-func (ctx *ServerCtx) SendMessage(out *Message) error {
-	// If Msg is set, marshal it to payload before sending.
-	if out.Msg != nil && len(out.GetPayload()) == 0 {
-		payload, err := proto.Marshal(out.Msg)
-		if err == nil {
-			out.SetPayload(payload)
-		}
-		// Return an error to the client if marshaling failed on the server side; don't close the stream.
-		out = messageWithError(nil, out, err)
-	}
-	select {
-	case ctx.c <- out.Message:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	return nil
 }

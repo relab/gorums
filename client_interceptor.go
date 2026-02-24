@@ -201,7 +201,7 @@ func (c *ClientCtx[Req, Resp]) send() {
 		if streamMsg == nil {
 			continue // Skip node: transformAndMarshal already sent ErrSkipNode
 		}
-		n.enqueue(stream.Request{
+		n.Enqueue(stream.Request{
 			Ctx:          c.Context,
 			Msg:          streamMsg,
 			Streaming:    c.streaming,

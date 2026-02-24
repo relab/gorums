@@ -269,7 +269,7 @@ func TestInboundManagerRegisterUnregister(t *testing.T) {
 					t.Cleanup(inStream.close)
 					im.registerPeer(s.id, inStream, t.Context())
 				case "unregister":
-					im.UnregisterPeer(s.id)
+					im.unregisterPeer(s.id)
 				default:
 					t.Fatalf("unknown op %q in step %d", s.op, i)
 				}
@@ -307,7 +307,7 @@ func TestAcceptPeer(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			inStream := newMockBidiStream()
 			defer inStream.close()
-			node, err := im.AcceptPeer(tc.ctx, inStream)
+			node, cleanup, err := im.AcceptPeer(tc.ctx, inStream)
 			if err != nil {
 				t.Fatalf("AcceptPeer() unexpected error: %v", err)
 			}
@@ -315,7 +315,7 @@ func TestAcceptPeer(t *testing.T) {
 				t.Errorf("AcceptPeer() node non-nil = %v; want %v", node != nil, tc.wantNode)
 			}
 			if node != nil {
-				im.UnregisterPeer(node.ID())
+				cleanup()
 			}
 		})
 	}
@@ -326,7 +326,7 @@ func TestAcceptPeerReturnsNode(t *testing.T) {
 	inStream := newMockBidiStream()
 	defer inStream.close()
 
-	node, err := im.AcceptPeer(inboundCtx(t.Context(), 3), inStream)
+	node, cleanup, err := im.AcceptPeer(inboundCtx(t.Context(), 3), inStream)
 	if err != nil {
 		t.Fatalf("AcceptPeer() unexpected error: %v", err)
 	}
@@ -335,12 +335,12 @@ func TestAcceptPeerReturnsNode(t *testing.T) {
 	}
 	checkIDs(t, im.InboundConfig(), []uint32{1, 3}, "after AcceptPeer")
 
-	im.UnregisterPeer(node.ID())
-	checkIDs(t, im.InboundConfig(), []uint32{1}, "after UnregisterPeer")
+	cleanup()
+	checkIDs(t, im.InboundConfig(), []uint32{1}, "after cleanup")
 
-	// Calling UnregisterPeer again must be a no-op (idempotent detachStream).
-	im.UnregisterPeer(node.ID())
-	checkIDs(t, im.InboundConfig(), []uint32{1}, "after second UnregisterPeer")
+	// Calling cleanup again must be a no-op (idempotent detachStream).
+	cleanup()
+	checkIDs(t, im.InboundConfig(), []uint32{1}, "after second cleanup")
 }
 
 // TestRegisterPeerReplacesExisting verifies that calling registerPeer for a
