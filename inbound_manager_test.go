@@ -343,6 +343,31 @@ func TestAcceptPeerReturnsNode(t *testing.T) {
 	checkIDs(t, im.InboundConfig(), []uint32{1}, "after second UnregisterPeer")
 }
 
+// TestRegisterPeerReplacesExisting verifies that calling registerPeer for a
+// peer that already has an active channel atomically replaces the old channel
+// with the new one. This is the correct behavior for reconnects: the old
+// (potentially broken) stream is closed and the new one takes over.
+func TestRegisterPeerReplacesExisting(t *testing.T) {
+	im := newTestInboundManager(t, 1)
+
+	// First registration for peer 3.
+	first := newMockBidiStream()
+	t.Cleanup(first.close)
+	im.registerPeer(3, first, t.Context())
+	checkIDs(t, im.InboundConfig(), []uint32{1, 3}, "after first register")
+
+	// Peer 3 reconnects — second registerPeer must replace the first.
+	second := newMockBidiStream()
+	t.Cleanup(second.close)
+	im.registerPeer(3, second, t.Context())
+
+	checkIDs(t, im.InboundConfig(), []uint32{1, 3}, "after replacement")
+	node := im.nodes[3]
+	if ch := node.channel.Load(); ch == nil {
+		t.Fatal("channel should not be nil after replacement")
+	}
+}
+
 // waitForConfig polls im.InboundConfig until its NodeIDs equal wantIDs or the
 // timeout elapses. It reports an error (not fatal) on timeout so the caller can
 // inspect the final state.

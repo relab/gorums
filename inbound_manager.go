@@ -129,7 +129,9 @@ func (im *InboundManager) AcceptPeer(ctx context.Context, inboundStream stream.B
 }
 
 // registerPeer attaches an inbound channel to the pre-created Node for the
-// given peer and updates the live configuration.
+// given peer and updates the live configuration. If the node already has an
+// active channel (e.g., a stale stream from a previous connection), attachStream
+// atomically replaces it.
 func (im *InboundManager) registerPeer(id uint32, inboundStream stream.BidiStream, streamCtx context.Context) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
