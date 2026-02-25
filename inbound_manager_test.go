@@ -202,14 +202,14 @@ func checkIDs(t *testing.T, cfg Configuration, wantIDs []uint32, label string) {
 	}
 }
 
-// TestInboundManagerRegisterUnregister checks that the Configuration is
-// correctly updated through sequences of peer registrations and unregistrations,
-// including out-of-order registration (sorted config), stream breakage followed
-// by reconnect, and idempotent unregister calls.
+// TestAcceptPeerUpdatesConfig checks that the Configuration is correctly
+// updated through sequences of peer connections and disconnections
+// (via AcceptPeer and its returned cleanup function), including out-of-order
+// connection, stream breakage followed by reconnect, and idempotent cleanups.
 //
 // The self-node (myID=1) is always present after construction,
 // and is included in every wantIDs slice.
-func TestInboundManagerRegisterUnregister(t *testing.T) {
+func TestAcceptPeerUpdatesConfig(t *testing.T) {
 	type configStep struct {
 		op      string   // "register" or "unregister"
 		id      uint32   // peer ID
@@ -335,42 +335,20 @@ func TestAcceptPeer(t *testing.T) {
 	}
 }
 
-func TestAcceptPeerReturnsNode(t *testing.T) {
-	im := newTestInboundManager(t, 1)
-	inStream := newMockBidiStream()
-	defer inStream.close()
-
-	node, cleanup, err := im.AcceptPeer(inboundCtx(t.Context(), 3), inStream, nil)
-	if err != nil {
-		t.Fatalf("AcceptPeer() unexpected error: %v", err)
-	}
-	if node == nil {
-		t.Fatal("AcceptPeer() node = nil; want non-nil for known peer")
-	}
-	checkIDs(t, im.InboundConfig(), []uint32{1, 3}, "after AcceptPeer")
-
-	cleanup()
-	checkIDs(t, im.InboundConfig(), []uint32{1}, "after cleanup")
-
-	// Calling cleanup again must be a no-op (idempotent detachStream).
-	cleanup()
-	checkIDs(t, im.InboundConfig(), []uint32{1}, "after second cleanup")
-}
-
-// TestRegisterPeerReplacesExisting verifies that calling AcceptPeer for a
+// TestAcceptPeerReplacesExistingStream verifies that calling AcceptPeer for a
 // peer that already has an active channel atomically replaces the old channel
 // with the new one. This is the correct behavior for reconnects: the old
-// (potentially broken) stream is closed and the new one takes over.
-func TestRegisterPeerReplacesExisting(t *testing.T) {
+// (potentially broken) stream may be lingering when the new one connects and takes over.
+func TestAcceptPeerReplacesExistingStream(t *testing.T) {
 	im := newTestInboundManager(t, 1)
 
-	// First registration for peer 3.
+	// First connection for peer 3.
 	first := newMockBidiStream()
 	t.Cleanup(first.close)
 	im.AcceptPeer(inboundCtx(t.Context(), 3), first, nil)
-	checkIDs(t, im.InboundConfig(), []uint32{1, 3}, "after first register")
+	checkIDs(t, im.InboundConfig(), []uint32{1, 3}, "after first connect")
 
-	// Peer 3 reconnects — second AcceptPeer must replace the first.
+	// Peer 3 reconnects — second AcceptPeer must replace the first channel.
 	second := newMockBidiStream()
 	t.Cleanup(second.close)
 	im.AcceptPeer(inboundCtx(t.Context(), 3), second, nil)
@@ -437,11 +415,11 @@ func connectAsPeer(t *testing.T, peerID uint32, addrs []string) *Manager {
 	return mgr
 }
 
-// TestInboundManagerPeerConnects verifies the end-to-end path:
+// TestKnownPeerConnects verifies the end-to-end path:
 // a client that sends gorums-node-id metadata connects to a gorums Server
 // with WithPeers; NodeStream calls AcceptPeer; the peer appears in
 // InboundConfig alongside the self-node.
-func TestInboundManagerPeerConnects(t *testing.T) {
+func TestKnownPeerConnects(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
 	checkIDs(t, srv.InboundConfig(), []uint32{1}, "before connect")
@@ -452,10 +430,10 @@ func TestInboundManagerPeerConnects(t *testing.T) {
 	checkIDs(t, srv.InboundConfig(), []uint32{1, 2}, "after connect")
 }
 
-// TestInboundManagerPeerDisconnects verifies that when a peer closes its
+// TestKnownPeerDisconnects verifies that when a peer closes its
 // connection the cleanup deferred in NodeStream fires and removes the peer
 // from InboundConfig.
-func TestInboundManagerPeerDisconnects(t *testing.T) {
+func TestKnownPeerDisconnects(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
 	mgr := connectAsPeer(t, 2, addrs)
@@ -470,9 +448,9 @@ func TestInboundManagerPeerDisconnects(t *testing.T) {
 	checkIDs(t, srv.InboundConfig(), []uint32{1}, "after disconnect")
 }
 
-// TestInboundManagerUnknownPeerIgnored verifies that a client sending an
+// TestUnknownPeerIgnored verifies that a client sending an
 // unknown or zero node ID does not affect InboundConfig.
-func TestInboundManagerUnknownPeerIgnored(t *testing.T) {
+func TestUnknownPeerIgnored(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
 	// Connect without metadata (external client) and with an unknown ID.
@@ -489,11 +467,11 @@ func TestInboundManagerUnknownPeerIgnored(t *testing.T) {
 	checkIDs(t, srv.InboundConfig(), []uint32{1}, "external and unknown peers must not appear")
 }
 
-// TestServerCallsClient verifies the full symmetric communication path:
+// TestKnownPeerServerCallsClient verifies the full symmetric communication path:
 // server sends a request to a connected client via an inbound channel,
 // the client's Channel.receiver dispatches to a registered handler,
 // the handler responds, and the server receives the response via RouteResponse.
-func TestServerCallsClient(t *testing.T) {
+func TestKnownPeerServerCallsClient(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
 	// Client connects as peer 2 and registers a handler on its outbound nodes.
