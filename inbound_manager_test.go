@@ -51,17 +51,30 @@ func (m *mockBidiStream) Recv() (*stream.Message, error) {
 	return msg, nil
 }
 
+// shouldPanic asserts that fn panics with a message containing wantSubstr.
+func shouldPanic(t *testing.T, wantSubstr string, fn func()) {
+	t.Helper()
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatalf("expected panic containing %q; got no panic", wantSubstr)
+		}
+		msg := fmt.Sprint(r)
+		if !strings.Contains(msg, wantSubstr) {
+			t.Fatalf("panic = %q; want it to contain %q", msg, wantSubstr)
+		}
+	}()
+	fn()
+}
+
 // newTestInboundManager creates an InboundManager with myID and three known peers.
 func newTestInboundManager(t *testing.T, myID uint32) *InboundManager {
 	t.Helper()
-	im, err := NewInboundManager(myID, WithNodes(map[uint32]inboundTestNode{
+	im := newInboundManager(myID, WithNodes(map[uint32]inboundTestNode{
 		1: {addr: "127.0.0.1:9081"},
 		2: {addr: "127.0.0.1:9082"},
 		3: {addr: "127.0.0.1:9083"},
-	}))
-	if err != nil {
-		t.Fatalf("NewInboundManager() unexpected error: %v", err)
-	}
+	}), 0, nil)
 	return im
 }
 
@@ -71,7 +84,7 @@ func TestNewInboundManager(t *testing.T) {
 		opt        NodeListOption
 		wantIDs    []uint32
 		wantCfgIDs []uint32 // expected InboundConfig IDs after construction
-		wantErr    string
+		wantPanic  string   // if non-empty, expect panic containing this substring
 	}{
 		{
 			name: "ValidNodes",
@@ -84,9 +97,9 @@ func TestNewInboundManager(t *testing.T) {
 			wantCfgIDs: []uint32{1}, // only self-node until peers connect
 		},
 		{
-			name:    "EmptyMapRejected",
-			opt:     WithNodes(map[uint32]inboundTestNode{}),
-			wantErr: "missing required node map",
+			name:      "EmptyMapRejected",
+			opt:       WithNodes(map[uint32]inboundTestNode{}),
+			wantPanic: "missing required node map",
 		},
 		{
 			name: "NodeZeroRejected",
@@ -94,7 +107,7 @@ func TestNewInboundManager(t *testing.T) {
 				0: {addr: "127.0.0.1:9080"},
 				1: {addr: "127.0.0.1:9081"},
 			}),
-			wantErr: "node 0 is reserved",
+			wantPanic: "node 0 is reserved",
 		},
 		{
 			name: "DuplicateAddressRejected",
@@ -102,14 +115,14 @@ func TestNewInboundManager(t *testing.T) {
 				1: {addr: "127.0.0.1:9081"},
 				2: {addr: "127.0.0.1:9081"}, // same address as ID 1
 			}),
-			wantErr: "already in use by node",
+			wantPanic: "already in use by node",
 		},
 		{
 			name: "InvalidAddressRejected",
 			opt: WithNodes(map[uint32]inboundTestNode{
 				1: {addr: "not-an-address"},
 			}),
-			wantErr: "invalid address",
+			wantPanic: "invalid address",
 		},
 		{
 			// WithNodeList assigns IDs starting at 1.
@@ -119,26 +132,20 @@ func TestNewInboundManager(t *testing.T) {
 			wantCfgIDs: []uint32{1}, // only self-node until peers connect
 		},
 		{
-			name:    "WithNodeListEmptyRejected",
-			opt:     WithNodeList([]string{}),
-			wantErr: "missing required node addresses",
+			name:      "WithNodeListEmptyRejected",
+			opt:       WithNodeList([]string{}),
+			wantPanic: "missing required node addresses",
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			im, err := NewInboundManager(1, tc.opt)
-			if tc.wantErr != "" {
-				if err == nil {
-					t.Fatalf("NewInboundManager() error = nil; want error containing %q", tc.wantErr)
-				}
-				if !strings.Contains(err.Error(), tc.wantErr) {
-					t.Fatalf("NewInboundManager() error = %q; want it to contain %q", err.Error(), tc.wantErr)
-				}
+			if tc.wantPanic != "" {
+				shouldPanic(t, tc.wantPanic, func() {
+					newInboundManager(1, tc.opt, 0, nil)
+				})
 				return
 			}
-			if err != nil {
-				t.Fatalf("NewInboundManager() unexpected error: %v", err)
-			}
+			im := newInboundManager(1, tc.opt, 0, nil)
 			if got := im.KnownIDs(); !slices.Equal(got, tc.wantIDs) {
 				t.Errorf("KnownIDs() = %v; want %v", got, tc.wantIDs)
 			}
@@ -310,7 +317,7 @@ func TestAcceptPeer(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			inStream := newMockBidiStream()
 			defer inStream.close()
-			node, cleanup, err := im.AcceptPeer(tc.ctx, inStream)
+			node, cleanup, err := im.AcceptPeer(tc.ctx, inStream, nil)
 			if err != nil {
 				t.Fatalf("AcceptPeer() unexpected error: %v", err)
 			}
@@ -329,7 +336,7 @@ func TestAcceptPeerReturnsNode(t *testing.T) {
 	inStream := newMockBidiStream()
 	defer inStream.close()
 
-	node, cleanup, err := im.AcceptPeer(inboundCtx(t.Context(), 3), inStream)
+	node, cleanup, err := im.AcceptPeer(inboundCtx(t.Context(), 3), inStream, nil)
 	if err != nil {
 		t.Fatalf("AcceptPeer() unexpected error: %v", err)
 	}
@@ -371,19 +378,38 @@ func TestRegisterPeerReplacesExisting(t *testing.T) {
 	}
 }
 
-// waitForConfig polls im.InboundConfig until its NodeIDs equal wantIDs or the
-// timeout elapses. It reports an error (not fatal) on timeout so the caller can
-// inspect the final state.
-func waitForConfig(t *testing.T, im *InboundManager, wantIDs []uint32) {
+// testPeerServer creates a Server with WithPeers(1, peerNodes()), starts it
+// via TestServers, and returns the server and its addresses.
+func testPeerServer(t *testing.T) (*Server, []string) {
+	t.Helper()
+	var srv *Server
+	addrs := TestServers(t, 1, func(_ int) ServerIface {
+		srv = NewServer(WithPeers(1, peerNodes()))
+		return srv
+	})
+	return srv, addrs
+}
+
+// waitForServerConfig polls srv.InboundConfig until its NodeIDs equal wantIDs
+// or the timeout elapses.
+func waitForServerConfig(t *testing.T, srv *Server, wantIDs []uint32) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if slices.Equal(im.InboundConfig().NodeIDs(), wantIDs) {
+		if slices.Equal(srv.InboundConfig().NodeIDs(), wantIDs) {
 			return
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	t.Errorf("timeout waiting for config %v; got %v", wantIDs, im.InboundConfig().NodeIDs())
+	t.Errorf("timeout waiting for config %v; got %v", wantIDs, srv.InboundConfig().NodeIDs())
+}
+
+// peerNodes creates the peer NodeListOption used by the E2E tests.
+func peerNodes() NodeListOption {
+	return WithNodes(map[uint32]inboundTestNode{
+		1: {addr: "127.0.0.1:9001"},
+		2: {addr: "127.0.0.1:9002"},
+	})
 }
 
 // connectAsPeer creates a Manager that identifies itself as peerID by sending
@@ -403,72 +429,45 @@ func connectAsPeer(t *testing.T, peerID uint32, addrs []string) *Manager {
 
 // TestInboundManagerPeerConnects verifies the end-to-end path:
 // a client that sends gorums-node-id metadata connects to a gorums Server
-// with WithInboundManager; NodeStream calls AcceptPeer; the peer appears in
+// with WithPeers; NodeStream calls AcceptPeer; the peer appears in
 // InboundConfig alongside the self-node.
 func TestInboundManagerPeerConnects(t *testing.T) {
-	im, err := NewInboundManager(1, WithNodes(map[uint32]inboundTestNode{
-		1: {addr: "127.0.0.1:9001"},
-		2: {addr: "127.0.0.1:9002"},
-	}))
-	if err != nil {
-		t.Fatalf("NewInboundManager() error: %v", err)
-	}
-	addrs := TestServers(t, 1, func(_ int) ServerIface {
-		return NewServer(WithInboundManager(im))
-	})
+	srv, addrs := testPeerServer(t)
 
-	checkIDs(t, im.InboundConfig(), []uint32{1}, "before connect")
+	checkIDs(t, srv.InboundConfig(), []uint32{1}, "before connect")
 
 	connectAsPeer(t, 2, addrs)
 
-	waitForConfig(t, im, []uint32{1, 2})
-	checkIDs(t, im.InboundConfig(), []uint32{1, 2}, "after connect")
+	waitForServerConfig(t, srv, []uint32{1, 2})
+	checkIDs(t, srv.InboundConfig(), []uint32{1, 2}, "after connect")
 }
 
 // TestInboundManagerPeerDisconnects verifies that when a peer closes its
 // connection the cleanup deferred in NodeStream fires and removes the peer
 // from InboundConfig.
 func TestInboundManagerPeerDisconnects(t *testing.T) {
-	im, err := NewInboundManager(1, WithNodes(map[uint32]inboundTestNode{
-		1: {addr: "127.0.0.1:9001"},
-		2: {addr: "127.0.0.1:9002"},
-	}))
-	if err != nil {
-		t.Fatalf("NewInboundManager() error: %v", err)
-	}
-	addrs := TestServers(t, 1, func(_ int) ServerIface {
-		return NewServer(WithInboundManager(im))
-	})
+	srv, addrs := testPeerServer(t)
 
 	mgr := connectAsPeer(t, 2, addrs)
-	waitForConfig(t, im, []uint32{1, 2})
+	waitForServerConfig(t, srv, []uint32{1, 2})
 
 	// Close the peer manager to trigger disconnect; Close is idempotent so
 	// t.Cleanup (registered by connectAsPeer via TestManager) is harmless.
 	if err := mgr.Close(); err != nil {
 		t.Fatalf("mgr.Close() error: %v", err)
 	}
-	waitForConfig(t, im, []uint32{1})
-	checkIDs(t, im.InboundConfig(), []uint32{1}, "after disconnect")
+	waitForServerConfig(t, srv, []uint32{1})
+	checkIDs(t, srv.InboundConfig(), []uint32{1}, "after disconnect")
 }
 
 // TestInboundManagerUnknownPeerIgnored verifies that a client sending an
 // unknown or zero node ID does not affect InboundConfig.
 func TestInboundManagerUnknownPeerIgnored(t *testing.T) {
-	im, err := NewInboundManager(1, WithNodes(map[uint32]inboundTestNode{
-		1: {addr: "127.0.0.1:9001"},
-		2: {addr: "127.0.0.1:9002"},
-	}))
-	if err != nil {
-		t.Fatalf("NewInboundManager() error: %v", err)
-	}
-	addrs := TestServers(t, 1, func(_ int) ServerIface {
-		return NewServer(WithInboundManager(im))
-	})
+	srv, addrs := testPeerServer(t)
 
 	// Connect without metadata (external client) and with an unknown ID.
 	external := TestManager(t)
-	_, err = NewConfiguration(external, WithNodeList(addrs))
+	_, err := NewConfiguration(external, WithNodeList(addrs))
 	if err != nil {
 		t.Fatalf("NewConfiguration() error: %v", err)
 	}
@@ -477,7 +476,7 @@ func TestInboundManagerUnknownPeerIgnored(t *testing.T) {
 
 	// Give the server time to process both connections.
 	time.Sleep(50 * time.Millisecond)
-	checkIDs(t, im.InboundConfig(), []uint32{1}, "external and unknown peers must not appear")
+	checkIDs(t, srv.InboundConfig(), []uint32{1}, "external and unknown peers must not appear")
 }
 
 // TestServerCallsClient verifies the full symmetric communication path:
@@ -485,16 +484,7 @@ func TestInboundManagerUnknownPeerIgnored(t *testing.T) {
 // the client's Channel.receiver dispatches to a registered handler,
 // the handler responds, and the server receives the response via RouteResponse.
 func TestServerCallsClient(t *testing.T) {
-	im, err := NewInboundManager(1, WithNodes(map[uint32]inboundTestNode{
-		1: {addr: "127.0.0.1:9001"},
-		2: {addr: "127.0.0.1:9002"},
-	}))
-	if err != nil {
-		t.Fatalf("NewInboundManager() error: %v", err)
-	}
-	addrs := TestServers(t, 1, func(_ int) ServerIface {
-		return NewServer(WithInboundManager(im))
-	})
+	srv, addrs := testPeerServer(t)
 
 	// Client connects as peer 2 and registers a handler on its outbound nodes.
 	clientHandlers := map[string]stream.Handler{
@@ -511,14 +501,14 @@ func TestServerCallsClient(t *testing.T) {
 	}
 	// Set client-side handlers on all outbound nodes.
 	for _, node := range cfg.Nodes() {
-		node.SetHandlers(clientHandlers)
+		node.setHandlers(clientHandlers)
 	}
 
 	// Wait for the peer to appear in the inbound config.
-	waitForConfig(t, im, []uint32{1, 2})
+	waitForServerConfig(t, srv, []uint32{1, 2})
 
 	// Server sends a request to the client via the inbound node.
-	inboundCfg := im.InboundConfig()
+	inboundCfg := srv.InboundConfig()
 	var peerNode *Node
 	for _, n := range inboundCfg.Nodes() {
 		if n.ID() == 2 {
@@ -532,7 +522,7 @@ func TestServerCallsClient(t *testing.T) {
 
 	// Create request message and register it for response routing.
 	ctx := TestContext(t, 5*time.Second)
-	reqMsg, err := stream.NewMessage(ctx, im.getMsgID(), mock.TestMethod, pb.String("hello"))
+	reqMsg, err := stream.NewMessage(ctx, srv.inboundMgr.getMsgID(), mock.TestMethod, pb.String("hello"))
 	if err != nil {
 		t.Fatalf("NewMessage() error: %v", err)
 	}

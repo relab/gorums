@@ -8,7 +8,7 @@ import (
 // PeerAcceptor identifies and registers incoming peers on a stream.
 // It is implemented by InboundManager in the gorums package.
 type PeerAcceptor interface {
-	AcceptPeer(ctx context.Context, stream BidiStream) (PeerNode, func(), error)
+	AcceptPeer(ctx context.Context, stream BidiStream, handlers map[string]Handler) (PeerNode, func(), error)
 }
 
 // PeerNode represents a peer from the perspective of stream dispatch.
@@ -16,7 +16,6 @@ type PeerAcceptor interface {
 type PeerNode interface {
 	RouteResponse(msg *Message) bool
 	Enqueue(req Request)
-	SetHandlers(handlers map[string]Handler)
 }
 
 // Server handles NodeStream connections.
@@ -50,18 +49,11 @@ func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 	finished := make(chan *Message, s.buffer)
 	ctx := srv.Context()
 
-	var peerNode PeerNode
-	if s.acceptor != nil {
-		node, cleanup, err := s.acceptor.AcceptPeer(ctx, srv)
-		if err != nil {
-			return err
-		}
-		if node != nil {
-			peerNode = node
-			peerNode.SetHandlers(s.handlers)
-			defer cleanup()
-		}
+	peerNode, cleanup, err := s.acceptor.AcceptPeer(ctx, srv, s.handlers)
+	if err != nil {
+		return err
 	}
+	defer cleanup()
 
 	if s.onConnect != nil {
 		s.onConnect(ctx)
