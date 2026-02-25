@@ -272,14 +272,18 @@ func TestInboundManagerRegisterUnregister(t *testing.T) {
 			im := newTestInboundManager(t, 1)
 			checkIDs(t, im.InboundConfig(), []uint32{1}, "initial")
 
+			cleanups := make(map[uint32]func())
 			for i, s := range tc.steps {
 				switch s.op {
 				case "register":
 					inStream := newMockBidiStream()
 					t.Cleanup(inStream.close)
-					im.registerPeer(s.id, inStream, t.Context())
+					_, cleanup, _ := im.AcceptPeer(inboundCtx(t.Context(), s.id), inStream, nil)
+					cleanups[s.id] = cleanup
 				case "unregister":
-					im.unregisterPeer(s.id)
+					if cleanup, ok := cleanups[s.id]; ok {
+						cleanup()
+					}
 				default:
 					t.Fatalf("unknown op %q in step %d", s.op, i)
 				}
@@ -353,7 +357,7 @@ func TestAcceptPeerReturnsNode(t *testing.T) {
 	checkIDs(t, im.InboundConfig(), []uint32{1}, "after second cleanup")
 }
 
-// TestRegisterPeerReplacesExisting verifies that calling registerPeer for a
+// TestRegisterPeerReplacesExisting verifies that calling AcceptPeer for a
 // peer that already has an active channel atomically replaces the old channel
 // with the new one. This is the correct behavior for reconnects: the old
 // (potentially broken) stream is closed and the new one takes over.
@@ -363,13 +367,13 @@ func TestRegisterPeerReplacesExisting(t *testing.T) {
 	// First registration for peer 3.
 	first := newMockBidiStream()
 	t.Cleanup(first.close)
-	im.registerPeer(3, first, t.Context())
+	im.AcceptPeer(inboundCtx(t.Context(), 3), first, nil)
 	checkIDs(t, im.InboundConfig(), []uint32{1, 3}, "after first register")
 
-	// Peer 3 reconnects — second registerPeer must replace the first.
+	// Peer 3 reconnects — second AcceptPeer must replace the first.
 	second := newMockBidiStream()
 	t.Cleanup(second.close)
-	im.registerPeer(3, second, t.Context())
+	im.AcceptPeer(inboundCtx(t.Context(), 3), second, nil)
 
 	checkIDs(t, im.InboundConfig(), []uint32{1, 3}, "after replacement")
 	node := im.nodes[3]
