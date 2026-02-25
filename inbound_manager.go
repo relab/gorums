@@ -134,9 +134,8 @@ func (im *InboundManager) isKnown(id uint32) bool {
 // The handlers map is propagated to the peer's router so that it can dispatch
 // server-initiated requests.
 //
-// For known peers, the pre-created Node is returned.
-// For unknown peers when dynamicPeers is enabled, a new Node is created with
-// an auto-assigned ID.
+// For known peers, the pre-created Node is returned. For unknown peers when
+// dynamicPeers is enabled, a new Node is created with an auto-assigned ID.
 // For a nil receiver, external (non-replica) clients when dynamic mode is
 // disabled, it returns (nil, noop, nil) where noop is a no-op cleanup function.
 // The error return is reserved for future use (e.g., credential validation);
