@@ -141,7 +141,7 @@ func NewServer(opts ...ServerOption) *Server {
 	}
 	var acceptor *InboundManager
 	if serverOpts.peerOpt != nil || serverOpts.dynamicPeers {
-		acceptor = newInboundManager(serverOpts.myID, serverOpts.peerOpt, serverOpts.peerSendBuffer, serverOpts.onConfigChange)
+		acceptor = newInboundManager(serverOpts.myID, serverOpts.peerOpt, serverOpts.peerSendBuffer, serverOpts.onConfigChange, serverOpts.dynamicPeers)
 	}
 	s := &Server{
 		srv:          stream.NewServer(serverOpts.buffer, acceptor, serverOpts.connectCallback),

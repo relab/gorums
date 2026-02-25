@@ -74,7 +74,7 @@ func newTestInboundManager(t *testing.T, myID uint32) *InboundManager {
 		1: {addr: "127.0.0.1:9081"},
 		2: {addr: "127.0.0.1:9082"},
 		3: {addr: "127.0.0.1:9083"},
-	}), 0, nil)
+	}), 0, nil, false)
 	return im
 }
 
@@ -141,11 +141,11 @@ func TestNewInboundManager(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.wantPanic != "" {
 				shouldPanic(t, tc.wantPanic, func() {
-					newInboundManager(1, tc.opt, 0, nil)
+					newInboundManager(1, tc.opt, 0, nil, false)
 				})
 				return
 			}
-			im := newInboundManager(1, tc.opt, 0, nil)
+			im := newInboundManager(1, tc.opt, 0, nil, false)
 			if got := im.KnownIDs(); !slices.Equal(got, tc.wantIDs) {
 				t.Errorf("KnownIDs() = %v; want %v", got, tc.wantIDs)
 			}
@@ -547,6 +547,210 @@ func TestServerCallsClient(t *testing.T) {
 			t.Fatalf("response type = %T; want *pb.StringValue", resp.Value)
 		}
 		if got, want := sv.GetValue(), "echo: hello"; got != want {
+			t.Errorf("response = %q; want %q", got, want)
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for response")
+	}
+}
+
+// testDynamicServer creates a Server with WithDynamicPeers() only, starts it
+// via TestServers, and returns the server and its addresses.
+func testDynamicServer(t *testing.T) (*Server, []string) {
+	t.Helper()
+	var srv *Server
+	addrs := TestServers(t, 1, func(_ int) ServerIface {
+		srv = NewServer(WithDynamicPeers())
+		return srv
+	})
+	return srv, addrs
+}
+
+// testMixedServer creates a Server with both WithPeers and WithDynamicPeers,
+// starts it via TestServers, and returns the server and its addresses.
+func testMixedServer(t *testing.T) (*Server, []string) {
+	t.Helper()
+	var srv *Server
+	addrs := TestServers(t, 1, func(_ int) ServerIface {
+		srv = NewServer(WithPeers(1, peerNodes()), WithDynamicPeers())
+		return srv
+	})
+	return srv, addrs
+}
+
+// connectAsExternal creates a Manager without NodeID metadata (an unknown
+// client), connects to addrs, and returns the manager.
+func connectAsExternal(t *testing.T, addrs []string) *Manager {
+	t.Helper()
+	mgr := TestManager(t)
+	_, err := NewConfiguration(mgr, WithNodeList(addrs))
+	if err != nil {
+		t.Fatalf("NewConfiguration() error: %v", err)
+	}
+	return mgr
+}
+
+// TestDynamicPeerConnects verifies that a server with WithDynamicPeers()
+// accepts an unknown client and includes it in InboundConfig.
+func TestDynamicPeerConnects(t *testing.T) {
+	srv, addrs := testDynamicServer(t)
+
+	// Initially no peers (no self-node since myID == 0)
+	checkIDs(t, srv.InboundConfig(), []uint32{}, "before connect")
+
+	connectAsExternal(t, addrs)
+
+	// Dynamic peer should appear with auto-assigned ID >= dynamicIDStart.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(srv.InboundConfig()) > 0 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	cfg := srv.InboundConfig()
+	if len(cfg) != 1 {
+		t.Fatalf("InboundConfig has %d nodes; want 1", len(cfg))
+	}
+	if cfg[0].ID() < dynamicIDStart {
+		t.Errorf("dynamic peer ID = %d; want >= %d", cfg[0].ID(), dynamicIDStart)
+	}
+}
+
+// TestDynamicPeerDisconnects verifies that dynamic peers are removed from
+// InboundConfig and the nodes map when they disconnect.
+func TestDynamicPeerDisconnects(t *testing.T) {
+	srv, addrs := testDynamicServer(t)
+
+	mgr := connectAsExternal(t, addrs)
+
+	// Wait for the dynamic peer to appear.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(srv.InboundConfig()) > 0 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if len(srv.InboundConfig()) != 1 {
+		t.Fatalf("InboundConfig has %d nodes; want 1", len(srv.InboundConfig()))
+	}
+
+	// Disconnect the dynamic peer.
+	if err := mgr.Close(); err != nil {
+		t.Fatalf("mgr.Close() error: %v", err)
+	}
+
+	// Wait for config to become empty.
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(srv.InboundConfig()) == 0 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	checkIDs(t, srv.InboundConfig(), []uint32{}, "after disconnect")
+}
+
+// TestDynamicPeerMixedMode verifies that a server with both WithPeers and
+// WithDynamicPeers accepts known peers by ID and unknown clients dynamically.
+func TestDynamicPeerMixedMode(t *testing.T) {
+	srv, addrs := testMixedServer(t)
+
+	// Self-node (ID 1) is present initially.
+	checkIDs(t, srv.InboundConfig(), []uint32{1}, "before connect")
+
+	// Connect known peer (ID 2).
+	connectAsPeer(t, 2, addrs)
+	waitForServerConfig(t, srv, []uint32{1, 2})
+
+	// Connect unknown client (dynamic peer).
+	connectAsExternal(t, addrs)
+
+	// Wait for 3 nodes.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(srv.InboundConfig()) == 3 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	cfg := srv.InboundConfig()
+	if len(cfg) != 3 {
+		t.Fatalf("InboundConfig has %d nodes; want 3", len(cfg))
+	}
+	// Known peer IDs 1 and 2 should be present; dynamic peer ID >= dynamicIDStart.
+	ids := cfg.NodeIDs()
+	if ids[0] != 1 || ids[1] != 2 {
+		t.Errorf("first two IDs = %v; want [1, 2]", ids[:2])
+	}
+	if ids[2] < dynamicIDStart {
+		t.Errorf("dynamic peer ID = %d; want >= %d", ids[2], dynamicIDStart)
+	}
+}
+
+// TestDynamicPeerServerCallsClient verifies that a server can send a request
+// to a dynamically connected client and receive a response.
+func TestDynamicPeerServerCallsClient(t *testing.T) {
+	srv, addrs := testDynamicServer(t)
+
+	// Client connects and registers a handler.
+	clientHandlers := map[string]stream.Handler{
+		mock.TestMethod: func(_ ServerCtx, in *Message) (*Message, error) {
+			req := AsProto[*pb.StringValue](in)
+			return NewResponseMessage(in, pb.String("dynamic: "+req.GetValue())), nil
+		},
+	}
+	mgr := TestManager(t)
+	cfg, err := NewConfiguration(mgr, WithNodeList(addrs))
+	if err != nil {
+		t.Fatalf("NewConfiguration() error: %v", err)
+	}
+	for _, node := range cfg.Nodes() {
+		node.setHandlers(clientHandlers)
+	}
+
+	// Wait for the dynamic peer to appear.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(srv.InboundConfig()) > 0 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	inboundCfg := srv.InboundConfig()
+	if len(inboundCfg) != 1 {
+		t.Fatalf("InboundConfig has %d nodes; want 1", len(inboundCfg))
+	}
+	peerNode := inboundCfg[0]
+
+	// Create request and register for response routing.
+	ctx := TestContext(t, 5*time.Second)
+	reqMsg, err := stream.NewMessage(ctx, srv.inboundMgr.getMsgID(), mock.TestMethod, pb.String("hello"))
+	if err != nil {
+		t.Fatalf("NewMessage() error: %v", err)
+	}
+	replyChan := make(chan stream.NodeResponse[proto.Message], 1)
+	peerNode.router.Register(reqMsg.GetMessageSeqNo(), stream.Request{
+		Ctx:          ctx,
+		Msg:          reqMsg,
+		ResponseChan: replyChan,
+	})
+
+	// Send the request through the inbound channel.
+	peerNode.Enqueue(stream.Request{Ctx: ctx, Msg: reqMsg})
+
+	// Wait for the response.
+	select {
+	case resp := <-replyChan:
+		if resp.Err != nil {
+			t.Fatalf("response error: %v", resp.Err)
+		}
+		sv, ok := resp.Value.(*pb.StringValue)
+		if !ok {
+			t.Fatalf("response type = %T; want *pb.StringValue", resp.Value)
+		}
+		if got, want := sv.GetValue(), "dynamic: hello"; got != want {
 			t.Errorf("response = %q; want %q", got, want)
 		}
 	case <-ctx.Done():
