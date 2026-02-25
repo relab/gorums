@@ -8,8 +8,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// Type aliases for handler types that now live in internal/stream.
-// These preserve backward compatibility for all existing code.
 type (
 	// Interceptor is a function that can intercept and modify incoming requests
 	// and outgoing responses. It receives a ServerCtx, the incoming Message, and
@@ -81,9 +79,9 @@ func WithInterceptors(i ...Interceptor) ServerOption {
 
 // WithPeers configures the server to track known peers identified by their
 // NodeID metadata. When a client connects and sends a recognized NodeID, the
-// server registers it and includes it in the live InboundConfig.
+// server registers it and includes it in the live Config.
 // The myID parameter is this server's own NodeID; it is always present in the
-// InboundConfig so that quorum thresholds account for the local replica.
+// Config so that quorum thresholds account for the local replica.
 func WithPeers(myID uint32, opt NodeListOption) ServerOption {
 	return func(o *serverOptions) {
 		o.myID = myID
@@ -93,7 +91,7 @@ func WithPeers(myID uint32, opt NodeListOption) ServerOption {
 
 // WithDynamicPeers enables the server to accept unknown clients (those without
 // a recognized NodeID). Each unknown client is assigned a sequential auto-generated
-// ID and included in InboundConfig. Dynamic nodes are removed when they disconnect.
+// ID and included in DynamicConfig. Dynamic nodes are removed when they disconnect.
 // Can be combined with WithPeers for mixed mode.
 func WithDynamicPeers() ServerOption {
 	return func(o *serverOptions) {
@@ -111,9 +109,9 @@ func WithPeerSendBufferSize(size uint) ServerOption {
 }
 
 // WithOnConfigChange registers a callback that is called after each change to
-// the server's live InboundConfig (peer connect or disconnect).
+// the server's live Config (peer connect or disconnect).
 // The callback is invoked with the new Configuration while the manager's lock
-// is held, so it must not call InboundConfig or other blocking methods.
+// is held, so it must not call Config or other blocking methods.
 // Use it only to signal or copy; do not perform long work inside the callback.
 func WithOnConfigChange(f func(Configuration)) ServerOption {
 	return func(o *serverOptions) {
@@ -153,13 +151,22 @@ func NewServer(opts ...ServerOption) *Server {
 	return s
 }
 
-// InboundConfig returns the Configuration of all currently connected peers.
-// Returns nil if no peer tracking is configured (no WithPeers/WithDynamicPeers).
-func (s *Server) InboundConfig() Configuration {
+// Config returns the Configuration of all currently connected known peers.
+// Returns nil if no peer tracking is configured.
+func (s *Server) Config() Configuration {
 	if s.inboundMgr == nil {
 		return nil
 	}
-	return s.inboundMgr.InboundConfig()
+	return s.inboundMgr.Config()
+}
+
+// DynamicConfig returns the Configuration of all currently connected dynamic peers.
+// Returns nil if no peer tracking is configured.
+func (s *Server) DynamicConfig() Configuration {
+	if s.inboundMgr == nil {
+		return nil
+	}
+	return s.inboundMgr.DynamicConfig()
 }
 
 // RegisterHandler registers a request handler for the specified method name.

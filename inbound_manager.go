@@ -50,7 +50,8 @@ type InboundManager struct {
 	mu             sync.RWMutex
 	myID           uint32              // this server's own NodeID; always present in inboundCfg
 	nodes          map[uint32]*Node    // pre-created for known peers; dynamic peers added on connect
-	inboundCfg     Configuration       // auto-updated slice, sorted by ID
+	config         Configuration       // auto-updated slice of known peers, sorted by ID
+	dynamicConfig  Configuration       // auto-updated slice of dynamic peers, sorted by ID
 	nextMsgID      atomic.Uint64       // counter for server-initiated message IDs
 	sendBufferSize uint                // send buffer size for inbound channels
 	onConfigChange func(Configuration) // optional; called after each config change
@@ -65,11 +66,10 @@ const dynamicIDStart = 1 << 20
 // newInboundManager creates an InboundManager for this server whose NodeID is myID.
 // If opt is non-nil, the InboundManager is configured with the given NodeListOption
 // defining the set of known peers. If myID is present in the NodeListOption it is
-// immediately included in the InboundConfig as the self-node, so that quorum
-// thresholds account for the local replica from the moment of construction.
-// If dynamicPeers is true, unknown clients are accepted with auto-assigned IDs.
-// Panics on configuration errors (invalid addresses, duplicate nodes, etc.)
-// since these are programmer errors detectable at startup.
+// immediately included in the Config as the self-node, so that quorum thresholds
+// account for the local replica from the moment of construction. If dynamicPeers is
+// true, unknown clients are accepted with auto-assigned IDs. Panics on configuration
+// errors (invalid addresses, duplicate nodes, etc.)
 func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfigChange func(Configuration), dynamicPeers bool) *InboundManager {
 	im := &InboundManager{
 		myID:           myID,
@@ -95,13 +95,22 @@ func (im *InboundManager) KnownIDs() []uint32 {
 	return slices.Sorted(maps.Keys(im.nodes))
 }
 
-// InboundConfig returns a Configuration of all currently connected peers.
+// Config returns a Configuration of all connected known peers, plus this node.
 // The returned slice is replaced atomically on each connect/disconnect;
-// retaining a reference to an old value is safe.
-func (im *InboundManager) InboundConfig() Configuration {
+// retaining a reference to an old configuration is safe.
+func (im *InboundManager) Config() Configuration {
 	im.mu.RLock()
 	defer im.mu.RUnlock()
-	return im.inboundCfg
+	return im.config
+}
+
+// DynamicConfig returns a Configuration of all connected dynamic peers.
+// The returned slice is replaced atomically on each connect/disconnect;
+// retaining a reference to an old value is safe.
+func (im *InboundManager) DynamicConfig() Configuration {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+	return im.dynamicConfig
 }
 
 // getMsgID returns the next unique message ID for server-initiated calls.
@@ -210,21 +219,30 @@ func (im *InboundManager) acceptDynamic(inboundStream stream.BidiStream, streamC
 	}, nil
 }
 
-// rebuildConfig rebuilds inbound configuration from the current nodes map.
-// A node is included if it has an active channel (peer connected) or if it
-// is the self-node (myID), which is always present so that quorum thresholds
-// account for the local replica. Callers must hold the lock.
+// rebuildConfig rebuilds inbound and dynamic configurations from the current nodes map.
+// A node is included in the known Config if it has an active channel (peer connected)
+// or if it is myID. A node is included in DynamicConfig if it is a connected dynamic peer.
+// Callers must hold the lock.
 func (im *InboundManager) rebuildConfig() {
 	cfg := make(Configuration, 0, len(im.nodes))
-	for _, node := range im.nodes {
-		if node.id == im.myID || node.channel.Load() != nil {
-			cfg = append(cfg, node)
+	dynamicCfg := make(Configuration, 0)
+	for id, node := range im.nodes {
+		if id >= dynamicIDStart {
+			if node.channel.Load() != nil {
+				dynamicCfg = append(dynamicCfg, node)
+			}
+		} else {
+			if id == im.myID || node.channel.Load() != nil {
+				cfg = append(cfg, node)
+			}
 		}
 	}
 	OrderedBy(ID).Sort(cfg)
-	im.inboundCfg = cfg
+	OrderedBy(ID).Sort(dynamicCfg)
+	im.config = cfg
+	im.dynamicConfig = dynamicCfg
 	if im.onConfigChange != nil {
-		im.onConfigChange(cfg)
+		im.onConfigChange(cfg) // Note: only calling onConfigChange for known peers currently
 	}
 }
 
