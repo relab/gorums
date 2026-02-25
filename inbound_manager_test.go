@@ -390,18 +390,24 @@ func testPeerServer(t *testing.T) (*Server, []string) {
 	return srv, addrs
 }
 
-// waitForServerConfig polls srv.InboundConfig until its NodeIDs equal wantIDs
+// waitForServerConfig polls srv.InboundConfig until the condition cond returns true
 // or the timeout elapses.
-func waitForServerConfig(t *testing.T, srv *Server, wantIDs []uint32) {
+func waitForServerConfig(t *testing.T, srv *Server, cond func(Configuration) bool) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if slices.Equal(srv.InboundConfig().NodeIDs(), wantIDs) {
+		if cond(srv.InboundConfig()) {
 			return
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	t.Errorf("timeout waiting for config %v; got %v", wantIDs, srv.InboundConfig().NodeIDs())
+	t.Errorf("timeout waiting for config; got %v", srv.InboundConfig().NodeIDs())
+}
+
+func equalNodeIDs(ids []uint32) func(Configuration) bool {
+	return func(cfg Configuration) bool {
+		return slices.Equal(cfg.NodeIDs(), ids)
+	}
 }
 
 // peerNodes creates the peer NodeListOption used by the E2E tests.
@@ -438,7 +444,7 @@ func TestInboundManagerPeerConnects(t *testing.T) {
 
 	connectAsPeer(t, 2, addrs)
 
-	waitForServerConfig(t, srv, []uint32{1, 2})
+	waitForServerConfig(t, srv, equalNodeIDs([]uint32{1, 2}))
 	checkIDs(t, srv.InboundConfig(), []uint32{1, 2}, "after connect")
 }
 
@@ -449,14 +455,14 @@ func TestInboundManagerPeerDisconnects(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
 	mgr := connectAsPeer(t, 2, addrs)
-	waitForServerConfig(t, srv, []uint32{1, 2})
+	waitForServerConfig(t, srv, equalNodeIDs([]uint32{1, 2}))
 
 	// Close the peer manager to trigger disconnect; Close is idempotent so
 	// t.Cleanup (registered by connectAsPeer via TestManager) is harmless.
 	if err := mgr.Close(); err != nil {
 		t.Fatalf("mgr.Close() error: %v", err)
 	}
-	waitForServerConfig(t, srv, []uint32{1})
+	waitForServerConfig(t, srv, equalNodeIDs([]uint32{1}))
 	checkIDs(t, srv.InboundConfig(), []uint32{1}, "after disconnect")
 }
 
@@ -505,7 +511,7 @@ func TestServerCallsClient(t *testing.T) {
 	}
 
 	// Wait for the peer to appear in the inbound config.
-	waitForServerConfig(t, srv, []uint32{1, 2})
+	waitForServerConfig(t, srv, equalNodeIDs([]uint32{1, 2}))
 
 	// Server sends a request to the client via the inbound node.
 	inboundCfg := srv.InboundConfig()
@@ -601,13 +607,7 @@ func TestDynamicPeerConnects(t *testing.T) {
 	connectAsExternal(t, addrs)
 
 	// Dynamic peer should appear with auto-assigned ID >= dynamicIDStart.
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if len(srv.InboundConfig()) > 0 {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	waitForServerConfig(t, srv, func(cfg Configuration) bool { return len(cfg) > 0 })
 	cfg := srv.InboundConfig()
 	if len(cfg) != 1 {
 		t.Fatalf("InboundConfig has %d nodes; want 1", len(cfg))
@@ -625,13 +625,7 @@ func TestDynamicPeerDisconnects(t *testing.T) {
 	mgr := connectAsExternal(t, addrs)
 
 	// Wait for the dynamic peer to appear.
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if len(srv.InboundConfig()) > 0 {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	waitForServerConfig(t, srv, func(cfg Configuration) bool { return len(cfg) > 0 })
 	if len(srv.InboundConfig()) != 1 {
 		t.Fatalf("InboundConfig has %d nodes; want 1", len(srv.InboundConfig()))
 	}
@@ -642,13 +636,7 @@ func TestDynamicPeerDisconnects(t *testing.T) {
 	}
 
 	// Wait for config to become empty.
-	deadline = time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if len(srv.InboundConfig()) == 0 {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	waitForServerConfig(t, srv, func(cfg Configuration) bool { return len(cfg) == 0 })
 	checkIDs(t, srv.InboundConfig(), []uint32{}, "after disconnect")
 }
 
@@ -662,19 +650,13 @@ func TestDynamicPeerMixedMode(t *testing.T) {
 
 	// Connect known peer (ID 2).
 	connectAsPeer(t, 2, addrs)
-	waitForServerConfig(t, srv, []uint32{1, 2})
+	waitForServerConfig(t, srv, equalNodeIDs([]uint32{1, 2}))
 
 	// Connect unknown client (dynamic peer).
 	connectAsExternal(t, addrs)
 
 	// Wait for 3 nodes.
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if len(srv.InboundConfig()) == 3 {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	waitForServerConfig(t, srv, func(cfg Configuration) bool { return len(cfg) == 3 })
 	cfg := srv.InboundConfig()
 	if len(cfg) != 3 {
 		t.Fatalf("InboundConfig has %d nodes; want 3", len(cfg))
@@ -711,13 +693,7 @@ func TestDynamicPeerServerCallsClient(t *testing.T) {
 	}
 
 	// Wait for the dynamic peer to appear.
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if len(srv.InboundConfig()) > 0 {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	waitForServerConfig(t, srv, func(cfg Configuration) bool { return len(cfg) > 0 })
 	inboundCfg := srv.InboundConfig()
 	if len(inboundCfg) != 1 {
 		t.Fatalf("InboundConfig has %d nodes; want 1", len(inboundCfg))
