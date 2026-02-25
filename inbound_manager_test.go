@@ -11,7 +11,10 @@ import (
 	"time"
 
 	"github.com/relab/gorums/internal/stream"
+	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
+	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // inboundTestNode is a minimal NodeAddress for use in InboundManager tests.
@@ -475,4 +478,88 @@ func TestInboundManagerUnknownPeerIgnored(t *testing.T) {
 	// Give the server time to process both connections.
 	time.Sleep(50 * time.Millisecond)
 	checkIDs(t, im.InboundConfig(), []uint32{1}, "external and unknown peers must not appear")
+}
+
+// TestServerCallsClient verifies the full symmetric communication path:
+// server sends a request to a connected client via an inbound channel,
+// the client's Channel.receiver dispatches to a registered handler,
+// the handler responds, and the server receives the response via RouteResponse.
+func TestServerCallsClient(t *testing.T) {
+	im, err := NewInboundManager(1, WithNodes(map[uint32]inboundTestNode{
+		1: {addr: "127.0.0.1:9001"},
+		2: {addr: "127.0.0.1:9002"},
+	}))
+	if err != nil {
+		t.Fatalf("NewInboundManager() error: %v", err)
+	}
+	addrs := TestServers(t, 1, func(_ int) ServerIface {
+		return NewServer(WithInboundManager(im))
+	})
+
+	// Client connects as peer 2 and registers a handler on its outbound nodes.
+	clientHandlers := map[string]stream.Handler{
+		mock.TestMethod: func(_ ServerCtx, in *Message) (*Message, error) {
+			req := AsProto[*pb.StringValue](in)
+			return NewResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
+		},
+	}
+	peerMD := metadata.Pairs(gorumsNodeIDKey, "2")
+	mgr := TestManager(t, WithMetadata(peerMD))
+	cfg, err := NewConfiguration(mgr, WithNodeList(addrs))
+	if err != nil {
+		t.Fatalf("NewConfiguration() error: %v", err)
+	}
+	// Set client-side handlers on all outbound nodes.
+	for _, node := range cfg.Nodes() {
+		node.SetHandlers(clientHandlers)
+	}
+
+	// Wait for the peer to appear in the inbound config.
+	waitForConfig(t, im, []uint32{1, 2})
+
+	// Server sends a request to the client via the inbound node.
+	inboundCfg := im.InboundConfig()
+	var peerNode *Node
+	for _, n := range inboundCfg.Nodes() {
+		if n.ID() == 2 {
+			peerNode = n
+			break
+		}
+	}
+	if peerNode == nil {
+		t.Fatal("peer node 2 not found in inbound config")
+	}
+
+	// Create request message and register it for response routing.
+	ctx := TestContext(t, 5*time.Second)
+	reqMsg, err := stream.NewMessage(ctx, im.getMsgID(), mock.TestMethod, pb.String("hello"))
+	if err != nil {
+		t.Fatalf("NewMessage() error: %v", err)
+	}
+	replyChan := make(chan stream.NodeResponse[proto.Message], 1)
+	peerNode.router.Register(reqMsg.GetMessageSeqNo(), stream.Request{
+		Ctx:          ctx,
+		Msg:          reqMsg,
+		ResponseChan: replyChan,
+	})
+
+	// Send the request through the inbound channel.
+	peerNode.Enqueue(stream.Request{Ctx: ctx, Msg: reqMsg})
+
+	// Wait for the response from the client handler.
+	select {
+	case resp := <-replyChan:
+		if resp.Err != nil {
+			t.Fatalf("response error: %v", resp.Err)
+		}
+		sv, ok := resp.Value.(*pb.StringValue)
+		if !ok {
+			t.Fatalf("response type = %T; want *pb.StringValue", resp.Value)
+		}
+		if got, want := sv.GetValue(), "echo: hello"; got != want {
+			t.Errorf("response = %q; want %q", got, want)
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for response")
+	}
 }
