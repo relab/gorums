@@ -38,21 +38,6 @@ func (c NodeContext) enqueue(req stream.Request) {
 	c.node.Enqueue(req)
 }
 
-// Enqueue enqueues a request to this node's channel. If the channel is nil,
-// e.g., for the self-node, the request is silently dropped.
-// This implements the [stream.PeerNode] interface.
-func (n *Node) Enqueue(req stream.Request) {
-	if ch := n.channel.Load(); ch != nil {
-		ch.Enqueue(req)
-	}
-}
-
-// SetHandlers sets the shared handler map on this node's router.
-// This implements the [stream.PeerNode] interface.
-func (n *Node) SetHandlers(handlers map[string]stream.Handler) {
-	n.router.SetHandlers(handlers)
-}
-
 // nextMsgID returns the next message ID from this client's manager.
 func (c NodeContext) nextMsgID() uint64 {
 	return c.node.msgIDGen()
@@ -162,6 +147,7 @@ func (n *Node) detachStream() {
 // RouteResponse routes an incoming message as a response to a pending
 // server-initiated call. Returns true if the message matched a pending
 // call and was handled; false if it should be dispatched as a new request.
+// This implements the [stream.PeerNode] interface.
 func (n *Node) RouteResponse(msg *stream.Message) bool {
 	err := msg.ErrorStatus()
 	var resp proto.Message
@@ -174,6 +160,24 @@ func (n *Node) RouteResponse(msg *stream.Message) bool {
 		Err:    err,
 	})
 }
+
+// Enqueue enqueues a request to this node's channel. If the channel is nil,
+// e.g., for the self-node, the request is silently dropped.
+// This implements the [stream.PeerNode] interface.
+func (n *Node) Enqueue(req stream.Request) {
+	if ch := n.channel.Load(); ch != nil {
+		ch.Enqueue(req)
+	}
+}
+
+// SetHandlers sets the shared handler map on this node's router.
+// This implements the [stream.PeerNode] interface.
+func (n *Node) SetHandlers(handlers map[string]stream.Handler) {
+	n.router.SetHandlers(handlers)
+}
+
+// compile-time assertion that Node implements the PeerNode interface.
+var _ stream.PeerNode = (*Node)(nil)
 
 // close this node.
 func (n *Node) close() error {
