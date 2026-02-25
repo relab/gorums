@@ -31,6 +31,18 @@ func (s *System) Addr() string {
 	return s.lis.Addr().String()
 }
 
+// Config returns the Configuration of all currently connected known peers.
+// Returns nil if no peer tracking is configured.
+func (s *System) Config() Configuration {
+	return s.srv.Config()
+}
+
+// DynamicConfig returns the Configuration of all currently connected dynamic peers.
+// Returns nil if no peer tracking is configured.
+func (s *System) DynamicConfig() Configuration {
+	return s.srv.DynamicConfig()
+}
+
 // RegisterService registers the service with the server using the provided register function.
 // The closer is added to the list of closers to be closed when the system is stopped.
 //
