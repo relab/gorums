@@ -171,3 +171,6 @@ func (im *InboundManager) rebuildConfig() {
 		im.onConfigChange(cfg)
 	}
 }
+
+// compile-time assertion that InboundManager implements the PeerAcceptor interface.
+var _ stream.PeerAcceptor = (*InboundManager)(nil)
