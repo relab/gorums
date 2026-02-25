@@ -401,7 +401,7 @@ func (c *Channel) receiver() {
 			}
 		}
 
-		respMsg, e := stream.Recv()
+		msg, e := stream.Recv()
 		if e != nil {
 			c.setLastErr(e)
 			c.clearStream(stream)
@@ -412,15 +412,53 @@ func (c *Channel) receiver() {
 				return
 			}
 		} else {
-			err := respMsg.ErrorStatus()
+			err := msg.ErrorStatus()
 			var resp proto.Message
 			if err == nil {
-				resp, err = UnmarshalResponse(respMsg)
+				resp, err = UnmarshalResponse(msg)
 			}
 			// Two-way calls (RPCCall/QuorumCall) deliver server response.
-			c.router.RouteResponse(respMsg.GetMessageSeqNo(), response{NodeID: c.id, Value: resp, Err: err})
+			if c.router.RouteResponse(msg.GetMessageSeqNo(), response{NodeID: c.id, Value: resp, Err: err}) {
+				continue
+			}
+			// Server-initiated request — dispatch via registered handler.
+			if handler, ok := c.router.HandleRequest(msg.GetMethod()); ok {
+				go c.dispatchRequest(handler, msg)
+			}
 		}
 	}
+}
+
+// dispatchRequest handles a server-initiated request on the client side.
+// It unmarshals the request, calls the handler, and enqueues the response
+// back through this channel.
+func (c *Channel) dispatchRequest(handler Handler, reqMsg *Message) {
+	msg, err := UnmarshalRequest(reqMsg)
+	in := &Envelope{Msg: msg, Message: reqMsg}
+	if err != nil {
+		out := MessageWithError(in, nil, err)
+		c.Enqueue(Request{Ctx: c.connCtx, Msg: out.Message})
+		return
+	}
+
+	// Call the handler. We pass an empty ServerCtx since there is no
+	// server-side mutex or response channel on the client side; the
+	// response is sent back through the channel's send queue.
+	out, err := handler(ServerCtx{Context: c.connCtx}, in)
+	if out == nil && err == nil {
+		return // unidirectional; no response expected
+	}
+	out = MessageWithError(in, out, err)
+	// Marshal payload before enqueuing.
+	if out.Msg != nil && len(out.GetPayload()) == 0 {
+		payload, err := proto.Marshal(out.Msg)
+		if err == nil {
+			out.SetPayload(payload)
+		} else {
+			out = MessageWithError(in, out, err)
+		}
+	}
+	c.Enqueue(Request{Ctx: c.connCtx, Msg: out.Message})
 }
 
 func (c *Channel) setLastErr(err error) {
