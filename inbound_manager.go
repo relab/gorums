@@ -116,16 +116,15 @@ func (im *InboundManager) newNode(id uint32, addr string) {
 	im.nodes[id] = newPeerNode(id, addr, im.getMsgID)
 }
 
-// isKnown reports whether the given NodeID is a valid, recognized peer.
-// Returns false for id == 0 (external clients) or unknown IDs.
-func (im *InboundManager) isKnown(id uint32) bool {
+// getNode returns the pre-created Node for the given NodeID, if it is a
+// recognized peer. Returns nil for id == 0 (external clients) or unknown IDs.
+func (im *InboundManager) getNode(id uint32) *Node {
 	if id == 0 {
-		return false
+		return nil
 	}
 	im.mu.RLock()
 	defer im.mu.RUnlock()
-	_, ok := im.nodes[id]
-	return ok
+	return im.nodes[id]
 }
 
 // AcceptPeer identifies a connecting peer by its NodeID metadata, registers
@@ -147,11 +146,11 @@ func (im *InboundManager) AcceptPeer(ctx context.Context, inboundStream stream.B
 		return nil, noop, nil
 	}
 	id := nodeID(ctx)
-	if im.isKnown(id) {
+	if node := im.getNode(id); node != nil {
 		// Known peer — register on pre-created node.
-		im.nodes[id].setHandlers(handlers)
+		node.setHandlers(handlers)
 		im.registerPeer(id, inboundStream, ctx)
-		return im.nodes[id], func() { im.unregisterPeer(id) }, nil
+		return node, func() { im.unregisterPeer(id) }, nil
 	}
 	if !im.dynamicPeers {
 		return nil, noop, nil // External client or unknown peer.
