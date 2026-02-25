@@ -170,9 +170,8 @@ func (n *Node) Enqueue(req stream.Request) {
 	}
 }
 
-// SetHandlers sets the shared handler map on this node's router.
-// This implements the [stream.PeerNode] interface.
-func (n *Node) SetHandlers(handlers map[string]stream.Handler) {
+// setHandlers sets the shared handler map on this node's router.
+func (n *Node) setHandlers(handlers map[string]stream.Handler) {
 	n.router.SetHandlers(handlers)
 }
 

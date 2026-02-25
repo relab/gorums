@@ -52,26 +52,27 @@ type InboundManager struct {
 	onConfigChange func(Configuration) // optional; called after each config change
 }
 
-// NewInboundManager creates an InboundManager for this server whose NodeID is myID,
-// configured with the given NodeListOption and optional InboundManagerOptions.
-// If myID is present in the NodeListOption it is immediately included in the
-// InboundConfig as the self-node, so that quorum thresholds account for the local
-// replica from the moment of construction. The optional InboundManagerOptions
-// (e.g. WithInboundSendBufferSize) are applied before nodes are created, so they
-// take effect for all pre-created nodes.
-func NewInboundManager(myID uint32, opt NodeListOption, opts ...InboundManagerOption) (*InboundManager, error) {
+// newInboundManager creates an InboundManager for this server whose NodeID is myID.
+// If opt is non-nil, the InboundManager is configured with the given NodeListOption
+// defining the set of known peers. If myID is present in the NodeListOption it is
+// immediately included in the InboundConfig as the self-node, so that quorum
+// thresholds account for the local replica from the moment of construction.
+// Panics on configuration errors (invalid addresses, duplicate nodes, etc.)
+// since these are programmer errors detectable at startup.
+func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfigChange func(Configuration)) *InboundManager {
 	im := &InboundManager{
-		myID:  myID,
-		nodes: make(map[uint32]*Node),
+		myID:           myID,
+		nodes:          make(map[uint32]*Node),
+		sendBufferSize: sendBuffer,
+		onConfigChange: onConfigChange,
 	}
-	for _, o := range opts {
-		o(im)
-	}
-	if err := opt.newServerConfig(im); err != nil {
-		return nil, err
+	if opt != nil {
+		if err := opt.newServerConfig(im); err != nil {
+			panic("gorums: invalid peer configuration: " + err.Error())
+		}
 	}
 	im.rebuildConfig()
-	return im, nil
+	return im
 }
 
 // KnownIDs returns the sorted list of NodeIDs the manager was configured with.
@@ -102,8 +103,12 @@ func (im *InboundManager) newNode(id uint32, addr string) {
 	im.nodes[id] = newPeerNode(id, addr, im.getMsgID)
 }
 
-// isKnown reports whether the given NodeID is in the configured peer set.
+// isKnown reports whether the given NodeID is a valid, recognized peer.
+// Returns false for id == 0 (external clients) or unknown IDs.
 func (im *InboundManager) isKnown(id uint32) bool {
+	if id == 0 {
+		return false
+	}
 	im.mu.RLock()
 	defer im.mu.RUnlock()
 	_, ok := im.nodes[id]
@@ -113,17 +118,22 @@ func (im *InboundManager) isKnown(id uint32) bool {
 // AcceptPeer identifies a connecting peer by its NodeID metadata, registers
 // it if recognized, and returns the peer's Node along with a cleanup function
 // that should be deferred to unregister the peer when the stream ends.
-// Returns (nil, nil, nil) for external (non-replica) clients or unknown peers.
+// The handlers map is propagated to the peer's router so that it can dispatch
+// server-initiated requests.
+// For a nil receiver, external (non-replica) clients, or unknown peers,
+// it returns (nil, noop, nil) where noop is a no-op cleanup function.
 // The error return is reserved for future use (e.g., credential validation);
 // it is currently always nil.
-func (im *InboundManager) AcceptPeer(ctx context.Context, inboundStream stream.BidiStream) (stream.PeerNode, func(), error) {
+func (im *InboundManager) AcceptPeer(ctx context.Context, inboundStream stream.BidiStream, handlers map[string]stream.Handler) (stream.PeerNode, func(), error) {
+	noop := func() {}
+	if im == nil {
+		return nil, noop, nil
+	}
 	id := nodeID(ctx)
-	if id == 0 {
-		return nil, nil, nil // External client (non-replica).
-	}
 	if !im.isKnown(id) {
-		return nil, nil, nil // Unknown peer.
+		return nil, noop, nil // External client or unknown peer.
 	}
+	im.nodes[id].setHandlers(handlers)
 	im.registerPeer(id, inboundStream, ctx)
 	return im.nodes[id], func() { im.unregisterPeer(id) }, nil
 }

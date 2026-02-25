@@ -31,7 +31,12 @@ type serverOptions struct {
 	grpcOpts        []grpc.ServerOption
 	connectCallback func(context.Context)
 	interceptors    []Interceptor
-	inboundMgr      *InboundManager
+	// Peer management options (create InboundManager internally)
+	myID           uint32
+	peerOpt        NodeListOption
+	dynamicPeers   bool
+	peerSendBuffer uint
+	onConfigChange func(Configuration)
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -62,15 +67,6 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 	}
 }
 
-// WithInboundManager attaches an InboundManager to the server.
-// When set, NodeStream calls AcceptPeer for every incoming stream,
-// registering known peers and deferring their cleanup when the stream ends.
-func WithInboundManager(im *InboundManager) ServerOption {
-	return func(o *serverOptions) {
-		o.inboundMgr = im
-	}
-}
-
 // WithInterceptors registers server-side interceptors to run for every incoming request.
 // Interceptors are executed for each registered handler. Interceptors may modify both
 // the request and/or response messages, or perform additional actions before or after
@@ -83,30 +79,87 @@ func WithInterceptors(i ...Interceptor) ServerOption {
 	}
 }
 
+// WithPeers configures the server to track known peers identified by their
+// NodeID metadata. When a client connects and sends a recognized NodeID, the
+// server registers it and includes it in the live InboundConfig.
+// The myID parameter is this server's own NodeID; it is always present in the
+// InboundConfig so that quorum thresholds account for the local replica.
+func WithPeers(myID uint32, opt NodeListOption) ServerOption {
+	return func(o *serverOptions) {
+		o.myID = myID
+		o.peerOpt = opt
+	}
+}
+
+// WithDynamicPeers enables the server to accept unknown clients (those without
+// a recognized NodeID). Each unknown client is assigned a sequential auto-generated
+// ID and included in InboundConfig. Dynamic nodes are removed when they disconnect.
+// Can be combined with WithPeers for mixed mode.
+func WithDynamicPeers() ServerOption {
+	return func(o *serverOptions) {
+		o.dynamicPeers = true
+	}
+}
+
+// WithPeerSendBufferSize sets the size of the per-node send buffer for channels
+// created when inbound peers connect. A larger buffer may increase throughput
+// for asynchronous call types at the cost of latency. The default is 0 (unbuffered).
+func WithPeerSendBufferSize(size uint) ServerOption {
+	return func(o *serverOptions) {
+		o.peerSendBuffer = size
+	}
+}
+
+// WithOnConfigChange registers a callback that is called after each change to
+// the server's live InboundConfig (peer connect or disconnect).
+// The callback is invoked with the new Configuration while the manager's lock
+// is held, so it must not call InboundConfig or other blocking methods.
+// Use it only to signal or copy; do not perform long work inside the callback.
+func WithOnConfigChange(f func(Configuration)) ServerOption {
+	return func(o *serverOptions) {
+		o.onConfigChange = f
+	}
+}
+
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
 	srv          *stream.Server
 	grpcServer   *grpc.Server
 	interceptors []Interceptor
+	inboundMgr   *InboundManager // nil if no peers configured
 }
 
 // NewServer returns a new instance of [gorums.Server].
+// If WithPeers or WithDynamicPeers options are provided, an InboundManager is
+// created internally to track connected peers.
+// Panics on configuration errors (invalid addresses, duplicate nodes, etc.)
+// since these are programmer errors detectable at startup.
 func NewServer(opts ...ServerOption) *Server {
 	var serverOpts serverOptions
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
-	var acceptor stream.PeerAcceptor
-	if serverOpts.inboundMgr != nil {
-		acceptor = serverOpts.inboundMgr
+	var acceptor *InboundManager
+	if serverOpts.peerOpt != nil || serverOpts.dynamicPeers {
+		acceptor = newInboundManager(serverOpts.myID, serverOpts.peerOpt, serverOpts.peerSendBuffer, serverOpts.onConfigChange)
 	}
 	s := &Server{
 		srv:          stream.NewServer(serverOpts.buffer, acceptor, serverOpts.connectCallback),
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
 		interceptors: serverOpts.interceptors,
+		inboundMgr:   acceptor,
 	}
 	stream.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
+}
+
+// InboundConfig returns the Configuration of all currently connected peers.
+// Returns nil if no peer tracking is configured (no WithPeers/WithDynamicPeers).
+func (s *Server) InboundConfig() Configuration {
+	if s.inboundMgr == nil {
+		return nil
+	}
+	return s.inboundMgr.InboundConfig()
 }
 
 // RegisterHandler registers a request handler for the specified method name.
