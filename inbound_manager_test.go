@@ -41,7 +41,7 @@ func newMockBidiStream() *mockBidiStream {
 
 func (m *mockBidiStream) close() { close(m.ch) }
 
-func (m *mockBidiStream) Send(*stream.Message) error { return nil }
+func (*mockBidiStream) Send(*stream.Message) error { return nil }
 func (m *mockBidiStream) Recv() (*stream.Message, error) {
 	msg, ok := <-m.ch
 	if !ok {
