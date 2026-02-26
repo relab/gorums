@@ -143,7 +143,7 @@ func BenchmarkNodeEnqueue(b *testing.B) {
 // To run this benchmark together with BenchmarkChannelSend, use:
 //
 //	go test -run=^$ -bench='BenchmarkChannelSend$|BenchmarkNodeEnqueueSend' -benchmem -count=10 ./internal/stream .
-func BenchmarkNodeEnqueueSend(b *testing.B) {
+func BenchmarkNodeEnqueueSend(b *testing.B) { // skipcq: GO-S0902
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		b.Fatalf("failed to listen: %v", err)
