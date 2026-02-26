@@ -17,8 +17,7 @@ func TestRouterRegisterAndRoute(t *testing.T) {
 	})
 
 	resp := response{NodeID: 1, Value: nil}
-	ok := r.RouteResponse(42, resp)
-	if !ok {
+	if !r.RouteResponse(42, resp) {
 		t.Fatal("RouteResponse should return true for registered msgID")
 	}
 
@@ -33,8 +32,7 @@ func TestRouterRegisterAndRoute(t *testing.T) {
 	}
 
 	// After routing a non-streaming request, it should be removed.
-	ok = r.RouteResponse(42, resp)
-	if ok {
+	if r.RouteResponse(42, resp) {
 		t.Error("RouteResponse should return false for already-consumed msgID")
 	}
 }
@@ -42,8 +40,7 @@ func TestRouterRegisterAndRoute(t *testing.T) {
 func TestRouterRouteUnknown(t *testing.T) {
 	r := NewMessageRouter()
 
-	ok := r.RouteResponse(999, response{NodeID: 1})
-	if ok {
+	if r.RouteResponse(999, response{NodeID: 1}) {
 		t.Error("RouteResponse should return false for unknown msgID")
 	}
 }
@@ -60,19 +57,19 @@ func TestRouterStreamingKeepsEntry(t *testing.T) {
 
 	// First route should succeed and keep the entry.
 	resp := response{NodeID: 1}
-	if ok := r.RouteResponse(10, resp); !ok {
+	if !r.RouteResponse(10, resp) {
 		t.Fatal("first RouteResponse should succeed")
 	}
 	<-replyChan // drain
 
 	// Second route should also succeed (streaming keeps entry alive).
-	if ok := r.RouteResponse(10, resp); !ok {
+	if !r.RouteResponse(10, resp) {
 		t.Fatal("second RouteResponse should succeed for streaming entry")
 	}
 	<-replyChan // drain
 
 	// Third route should also succeed.
-	if ok := r.RouteResponse(10, resp); !ok {
+	if !r.RouteResponse(10, resp) {
 		t.Fatal("third RouteResponse should succeed for streaming entry")
 	}
 	<-replyChan // drain
@@ -94,7 +91,7 @@ func TestRouterCancelPending(t *testing.T) {
 	}
 
 	// Map should be empty now.
-	if ok := r.RouteResponse(0, response{}); ok {
+	if r.RouteResponse(0, response{}) {
 		t.Error("pending map should be empty after CancelPending")
 	}
 }
@@ -143,7 +140,7 @@ func TestRouterRequeuePending(t *testing.T) {
 	}
 
 	// Map should be empty.
-	if ok := r.RouteResponse(0, response{}); ok {
+	if r.RouteResponse(0, response{}) {
 		t.Error("pending map should be empty after RequeuePending")
 	}
 }
@@ -152,7 +149,7 @@ type mockRequestHandler struct {
 	called bool
 }
 
-func (m *mockRequestHandler) HandleRequest(ctx context.Context, msg *Message, release func(), send func(*Message)) {
+func (m *mockRequestHandler) HandleRequest(_ context.Context, _ *Message, release func(), _ func(*Message)) {
 	m.called = true
 	release()
 }

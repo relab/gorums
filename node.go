@@ -129,7 +129,7 @@ func newPeerNode(id uint32, addr string, msgIDGen func() uint64) *Node {
 // attachStream attaches a new inbound channel to the node when a peer connects.
 // If the node already has an active channel (e.g., a stale stream from a previous
 // connection), it is atomically replaced and the old channel is closed.
-func (n *Node) attachStream(inboundStream stream.BidiStream, streamCtx context.Context, sendBufferSize uint) {
+func (n *Node) attachStream(streamCtx context.Context, inboundStream stream.BidiStream, sendBufferSize uint) {
 	newCh := stream.NewInboundChannel(streamCtx, n.id, sendBufferSize, inboundStream, n.router)
 	if old := n.channel.Swap(newCh); old != nil {
 		old.Close()
