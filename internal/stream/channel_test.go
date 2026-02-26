@@ -908,7 +908,7 @@ func TestChannelClearStreamDeadlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
-	srv := grpc.NewServer()
+	srv := grpc.NewServer() // skipcq: GO-S0902
 	RegisterGorumsServer(srv, &mockServer{handler: holdServer})
 	go func() {
 		_ = srv.Serve(lis)
