@@ -43,7 +43,7 @@ type ClientCtx[Req, Resp msg] struct {
 	request   Req
 	method    string
 	msgID     uint64
-	replyChan chan NodeResponse[msg]
+	replyChan chan NodeResponse[*stream.Message]
 
 	// reqTransforms holds request transformation functions registered by interceptors.
 	reqTransforms []func(Req, *Node) Req
@@ -113,7 +113,7 @@ func (b *clientCtxBuilder[Req, Resp]) WithWaitSendDone(waitSendDone bool) *clien
 func (b *clientCtxBuilder[Req, Resp]) Build() *ClientCtx[Req, Resp] {
 	// Assign a unique message ID and create the reply channel at build time.
 	b.c.msgID = b.c.config.nextMsgID()
-	b.c.replyChan = make(chan NodeResponse[msg], b.c.config.Size()*b.chanMultiplier)
+	b.c.replyChan = make(chan NodeResponse[*stream.Message], b.c.config.Size()*b.chanMultiplier)
 
 	if b.c.streaming {
 		b.c.responseSeq = b.c.streamingResponseSeq()
@@ -187,7 +187,7 @@ func (c *ClientCtx[Req, Resp]) send() {
 		if err != nil {
 			// Marshaling fails identically for all nodes; report and return.
 			for _, n := range c.config {
-				c.replyChan <- NodeResponse[msg]{NodeID: n.ID(), Err: err}
+				c.replyChan <- NodeResponse[*stream.Message]{NodeID: n.ID(), Err: err}
 			}
 			return
 		}
@@ -221,12 +221,12 @@ func (c *ClientCtx[Req, Resp]) transformAndMarshal(n *Node) *stream.Message {
 	}
 	// Check if the result is valid
 	if protoReq, ok := any(result).(proto.Message); !ok || protoReq == nil || !protoReq.ProtoReflect().IsValid() {
-		c.replyChan <- NodeResponse[msg]{NodeID: n.ID(), Err: ErrSkipNode}
+		c.replyChan <- NodeResponse[*stream.Message]{NodeID: n.ID(), Err: ErrSkipNode}
 		return nil
 	}
 	streamMsg, err := stream.NewMessage(c.Context, c.msgID, c.method, result)
 	if err != nil {
-		c.replyChan <- NodeResponse[msg]{NodeID: n.ID(), Err: err}
+		c.replyChan <- NodeResponse[*stream.Message]{NodeID: n.ID(), Err: err}
 		return nil
 	}
 	return streamMsg

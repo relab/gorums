@@ -59,7 +59,7 @@ func printNodes(t *testing.T, nodes []*Node) {
 // an incoming response message to a pending server-initiated call.
 func TestNodeRouteResponse(t *testing.T) {
 	n := newPeerNode(42, "127.0.0.1:9000", func() uint64 { return 0 })
-	replyChan := make(chan NodeResponse[msg], 1)
+	replyChan := make(chan NodeResponse[*stream.Message], 1)
 
 	// Register a pending call with msgID=7 on the node's router.
 	n.router.Register(7, stream.Request{
@@ -180,7 +180,7 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 			payload := make([]byte, tt.size)
 			b.ResetTimer()
 			for i := range b.N {
-				replyChan := make(chan NodeResponse[msg], 1)
+				replyChan := make(chan NodeResponse[*stream.Message], 1)
 				reqMsg := stream.Message_builder{
 					MessageSeqNo: uint64(i),
 					Method:       mock.TestMethod,

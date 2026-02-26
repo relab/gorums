@@ -13,7 +13,6 @@ import (
 	"github.com/relab/gorums/internal/stream"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -278,7 +277,7 @@ func TestAcceptPeerUpdatesConfig(t *testing.T) {
 				case "register":
 					inStream := newMockBidiStream()
 					t.Cleanup(inStream.close)
-					_, cleanup, _ := im.AcceptPeer(inboundCtx(t.Context(), s.id), inStream, nil)
+					_, cleanup, _ := im.AcceptPeer(inboundCtx(t.Context(), s.id), inStream)
 					cleanups[s.id] = cleanup
 				case "unregister":
 					if cleanup, ok := cleanups[s.id]; ok {
@@ -321,7 +320,7 @@ func TestAcceptPeer(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			inStream := newMockBidiStream()
 			defer inStream.close()
-			node, cleanup, err := im.AcceptPeer(tc.ctx, inStream, nil)
+			node, cleanup, err := im.AcceptPeer(tc.ctx, inStream)
 			if err != nil {
 				t.Fatalf("AcceptPeer() unexpected error: %v", err)
 			}
@@ -345,13 +344,13 @@ func TestAcceptPeerReplacesExistingStream(t *testing.T) {
 	// First connection for peer 3.
 	first := newMockBidiStream()
 	t.Cleanup(first.close)
-	im.AcceptPeer(inboundCtx(t.Context(), 3), first, nil)
+	im.AcceptPeer(inboundCtx(t.Context(), 3), first)
 	checkIDs(t, im.Config(), []uint32{1, 3}, "after first connect")
 
 	// Peer 3 reconnects — second AcceptPeer must replace the first channel.
 	second := newMockBidiStream()
 	t.Cleanup(second.close)
-	im.AcceptPeer(inboundCtx(t.Context(), 3), second, nil)
+	im.AcceptPeer(inboundCtx(t.Context(), 3), second)
 
 	checkIDs(t, im.Config(), []uint32{1, 3}, "after replacement")
 	node := im.nodes[3]
@@ -467,6 +466,30 @@ func TestUnknownPeerIgnored(t *testing.T) {
 	checkIDs(t, srv.Config(), []uint32{1}, "external and unknown peers must not appear")
 }
 
+type mockRequestHandler struct {
+	handlers map[string]Handler
+}
+
+func (m mockRequestHandler) HandleRequest(ctx context.Context, msg *stream.Message, release func(), send func(*stream.Message)) {
+	srvCtx := ServerCtx{Context: ctx, release: release, send: send}
+	handler, ok := m.handlers[msg.GetMethod()]
+	if !ok {
+		release()
+		return
+	}
+	defer release()
+	inMsg, err := unmarshalRequest(msg)
+	in := &Message{Msg: inMsg, Message: msg}
+	if err != nil {
+		_ = srvCtx.SendMessage(MessageWithError(in, nil, err))
+		return
+	}
+	out, err := handler(srvCtx, in)
+	if out != nil || err != nil {
+		_ = srvCtx.SendMessage(MessageWithError(in, out, err))
+	}
+}
+
 // TestKnownPeerServerCallsClient verifies the full symmetric communication path:
 // server sends a request to a connected client via an inbound channel,
 // the client's Channel.receiver dispatches to a registered handler,
@@ -475,7 +498,7 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
 	// Client connects as peer 2 and registers a handler on its outbound nodes.
-	clientHandlers := map[string]stream.Handler{
+	clientHandlers := map[string]Handler{
 		mock.TestMethod: func(_ ServerCtx, in *Message) (*Message, error) {
 			req := AsProto[*pb.StringValue](in)
 			return NewResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
@@ -489,7 +512,7 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 	}
 	// Set client-side handlers on all outbound nodes.
 	for _, node := range cfg.Nodes() {
-		node.setHandlers(clientHandlers)
+		node.setRequestHandler(mockRequestHandler{handlers: clientHandlers})
 	}
 
 	// Wait for the peer to appear in the inbound config.
@@ -514,7 +537,7 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMessage() error: %v", err)
 	}
-	replyChan := make(chan stream.NodeResponse[proto.Message], 1)
+	replyChan := make(chan NodeResponse[*stream.Message], 1)
 	peerNode.router.Register(reqMsg.GetMessageSeqNo(), stream.Request{
 		Ctx:          ctx,
 		Msg:          reqMsg,
@@ -530,9 +553,13 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 		if resp.Err != nil {
 			t.Fatalf("response error: %v", resp.Err)
 		}
-		sv, ok := resp.Value.(*pb.StringValue)
+		respMsg, err := unmarshalResponse(resp.Value)
+		if err != nil {
+			t.Fatalf("failed to unmarshal response: %v", err)
+		}
+		sv, ok := respMsg.(*pb.StringValue)
 		if !ok {
-			t.Fatalf("response type = %T; want *pb.StringValue", resp.Value)
+			t.Fatalf("response type = %T; want *pb.StringValue", respMsg)
 		}
 		if got, want := sv.GetValue(), "echo: hello"; got != want {
 			t.Errorf("response = %q; want %q", got, want)
@@ -662,7 +689,7 @@ func TestDynamicPeerServerCallsClient(t *testing.T) {
 	srv, addrs := testDynamicServer(t)
 
 	// Client connects and registers a handler.
-	clientHandlers := map[string]stream.Handler{
+	clientHandlers := map[string]Handler{
 		mock.TestMethod: func(_ ServerCtx, in *Message) (*Message, error) {
 			req := AsProto[*pb.StringValue](in)
 			return NewResponseMessage(in, pb.String("dynamic: "+req.GetValue())), nil
@@ -674,7 +701,7 @@ func TestDynamicPeerServerCallsClient(t *testing.T) {
 		t.Fatalf("NewConfiguration() error: %v", err)
 	}
 	for _, node := range cfg.Nodes() {
-		node.setHandlers(clientHandlers)
+		node.setRequestHandler(mockRequestHandler{handlers: clientHandlers})
 	}
 
 	// Wait for the dynamic peer to appear.
@@ -691,7 +718,7 @@ func TestDynamicPeerServerCallsClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMessage() error: %v", err)
 	}
-	replyChan := make(chan stream.NodeResponse[proto.Message], 1)
+	replyChan := make(chan NodeResponse[*stream.Message], 1)
 	peerNode.router.Register(reqMsg.GetMessageSeqNo(), stream.Request{
 		Ctx:          ctx,
 		Msg:          reqMsg,
@@ -707,9 +734,13 @@ func TestDynamicPeerServerCallsClient(t *testing.T) {
 		if resp.Err != nil {
 			t.Fatalf("response error: %v", resp.Err)
 		}
-		sv, ok := resp.Value.(*pb.StringValue)
+		respMsg, err := unmarshalResponse(resp.Value)
+		if err != nil {
+			t.Fatalf("failed to unmarshal response: %v", err)
+		}
+		sv, ok := respMsg.(*pb.StringValue)
 		if !ok {
-			t.Fatalf("response type = %T; want *pb.StringValue", resp.Value)
+			t.Fatalf("response type = %T; want *pb.StringValue", respMsg)
 		}
 		if got, want := sv.GetValue(), "dynamic: hello"; got != want {
 			t.Errorf("response = %q; want %q", got, want)

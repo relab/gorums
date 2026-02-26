@@ -1,9 +1,19 @@
 package stream
 
 import (
+	"context"
 	"sync"
 	"time"
 )
+
+// RequestHandler handles an incoming message from a stream. It is called in
+// a new goroutine for every request. The 'release' function must be idempotent
+// and must be called in the handler implementation to allow the next request
+// on the stream to be processed. The 'send' function is used to asynchronously
+// send a response message back to the communicating peer.
+type RequestHandler interface {
+	HandleRequest(ctx context.Context, msg *Message, release func(), send func(*Message))
+}
 
 // MessageRouter handles response routing for pending calls on a bidi stream.
 // It is owned by the Node and injected into each Channel, so the router
@@ -14,13 +24,13 @@ import (
 // delivers the response on its response channel.
 //
 // The router also provides handler lookup via a shared handler map. All routers
-// for the same role (server-side or client-side) share the same handler map by
+// for the same role (server-side or client-side) share the same RequestHandler
 // reference, so handlers registered once are visible to all routers.
 type MessageRouter struct {
-	mu       sync.Mutex
-	pending  map[uint64]Request
-	latency  time.Duration
-	handlers map[string]Handler // shared by reference; may be nil
+	mu      sync.Mutex
+	pending map[uint64]Request
+	latency time.Duration
+	handler RequestHandler // shared by reference; may be nil
 }
 
 // NewMessageRouter creates a new MessageRouter.
@@ -31,21 +41,20 @@ func NewMessageRouter() *MessageRouter {
 	}
 }
 
-// SetHandlers sets the shared handler map for this router.
-// All routers that share the same map will see the same handlers.
+// SetRequestHandler sets the RequestHandler for this router.
+// All routers that share the same handler will execute incoming server-initiated calls.
 // This must be called before the router is used for handler lookup.
-func (r *MessageRouter) SetHandlers(handlers map[string]Handler) {
-	r.handlers = handlers
+func (r *MessageRouter) SetRequestHandler(handler RequestHandler) {
+	r.handler = handler
 }
 
-// HandleRequest looks up a handler by method name.
+// RequestHandler returns the RequestHandler if set.
 // Returns the handler and true if found, or nil and false otherwise.
-func (r *MessageRouter) HandleRequest(method string) (Handler, bool) {
-	if r.handlers == nil {
+func (r *MessageRouter) RequestHandler() (RequestHandler, bool) {
+	if r.handler == nil {
 		return nil, false
 	}
-	h, ok := r.handlers[method]
-	return h, ok
+	return r.handler, true
 }
 
 // Register registers a pending call awaiting a response.

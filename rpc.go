@@ -6,7 +6,7 @@ import "github.com/relab/gorums/internal/stream"
 //
 // This method should be used by generated code only.
 func RPCCall[Req, Resp msg](ctx *NodeContext, req Req, method string) (Resp, error) {
-	replyChan := make(chan NodeResponse[msg], 1)
+	replyChan := make(chan NodeResponse[*stream.Message], 1)
 	reqMsg, err := stream.NewMessage(ctx, ctx.nextMsgID(), method, req)
 	if err != nil {
 		var zero Resp
@@ -20,11 +20,15 @@ func RPCCall[Req, Resp msg](ctx *NodeContext, req Req, method string) (Resp, err
 		if r.Err != nil {
 			return zero, r.Err
 		}
-		resp, ok := r.Value.(Resp)
+		respMsg, err := unmarshalResponse(r.Value)
+		if err != nil {
+			return zero, err
+		}
+		resp, ok := respMsg.(Resp)
 		if !ok {
 			return zero, ErrTypeMismatch
 		}
-		return resp, r.Err
+		return resp, nil
 	case <-ctx.Done():
 		var zero Resp
 		return zero, ctx.Err()

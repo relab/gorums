@@ -140,8 +140,6 @@ func (im *InboundManager) isKnown(id uint32) bool {
 // AcceptPeer identifies a connecting peer by its NodeID metadata, registers
 // it if recognized, and returns the peer's Node along with a cleanup function
 // that should be deferred to unregister the peer when the stream ends.
-// The handlers map is propagated to the peer's router so that it can dispatch
-// server-initiated requests.
 //
 // For known peers, the pre-created Node is returned. For unknown peers when
 // dynamicPeers is enabled, a new Node is created with an auto-assigned ID.
@@ -149,7 +147,7 @@ func (im *InboundManager) isKnown(id uint32) bool {
 // disabled, it returns (nil, noop, nil) where noop is a no-op cleanup function.
 // The error return is reserved for future use (e.g., credential validation);
 // it is currently always nil.
-func (im *InboundManager) AcceptPeer(ctx context.Context, inboundStream stream.BidiStream, handlers map[string]stream.Handler) (stream.PeerNode, func(), error) {
+func (im *InboundManager) AcceptPeer(ctx context.Context, inboundStream stream.BidiStream) (stream.PeerNode, func(), error) {
 	noop := func() {}
 	if im == nil {
 		return nil, noop, nil
@@ -157,25 +155,24 @@ func (im *InboundManager) AcceptPeer(ctx context.Context, inboundStream stream.B
 	id := nodeID(ctx)
 	if im.isKnown(id) {
 		// Known peer — register on pre-created node.
-		return im.registerPeer(id, inboundStream, ctx, handlers)
+		return im.registerPeer(id, inboundStream, ctx)
 	}
 	if !im.dynamicPeers {
 		// External client or unknown peer.
 		return nil, noop, nil
 	}
 	// Dynamic peer — create new node with auto-assigned ID.
-	return im.acceptDynamic(inboundStream, ctx, handlers)
+	return im.acceptDynamic(inboundStream, ctx)
 }
 
 // registerPeer attaches an inbound channel to the pre-created Node for the
 // given peer and updates the live configuration. If the node already has an
 // active channel (e.g., a stale stream from a previous connection), attachStream
 // atomically replaces it. The returned cleanup function detaches the channel.
-func (im *InboundManager) registerPeer(id uint32, inboundStream stream.BidiStream, streamCtx context.Context, handlers map[string]stream.Handler) (stream.PeerNode, func(), error) {
+func (im *InboundManager) registerPeer(id uint32, inboundStream stream.BidiStream, streamCtx context.Context) (stream.PeerNode, func(), error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	node := im.nodes[id]
-	node.setHandlers(handlers)
 	node.attachStream(inboundStream, streamCtx, im.sendBufferSize)
 	im.rebuildConfig()
 
@@ -195,13 +192,12 @@ func (im *InboundManager) registerPeer(id uint32, inboundStream stream.BidiStrea
 // connecting client. The node is added to the nodes map and the configuration
 // is rebuilt. The returned cleanup function removes the dynamic node entirely
 // when the stream ends (unlike known peers which persist for reconnection).
-func (im *InboundManager) acceptDynamic(inboundStream stream.BidiStream, streamCtx context.Context, handlers map[string]stream.Handler) (stream.PeerNode, func(), error) {
+func (im *InboundManager) acceptDynamic(inboundStream stream.BidiStream, streamCtx context.Context) (stream.PeerNode, func(), error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	id := im.nextDynamicID
 	im.nextDynamicID++
 	node := newPeerNode(id, "dynamic", im.getMsgID)
-	node.setHandlers(handlers)
 	node.attachStream(inboundStream, streamCtx, im.sendBufferSize)
 	im.nodes[id] = node
 	im.rebuildConfig()
