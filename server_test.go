@@ -9,7 +9,6 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -45,19 +44,8 @@ func appendStringInterceptor(inStr, outStr string) gorums.Interceptor {
 		// update the underlying request gorums.Message's message field (pb.StringValue in this case)
 		req.Value += inStr
 
-		// TODO(meling): I did not like this change; I need to think more about this;
-		//  can we make interceptors modify the request and responses in a cleaner way?
-		//  Maybe we can add a method to stream.Message to modify/marshal the payload?
-		//  Or maybe interceptors can operate on a InterceptorMessage wrapper that can
-		//  hold the proto message that can be manipulated directly, and only on the way
-		//  out of the interceptor chain, the wrapper is marshaled into the stream.Message.Payload.
-
-		// re-marshal the modified request into the in message
-		reqPayload, err := proto.Marshal(req)
-		if err != nil {
-			return nil, err
-		}
-		in.SetPayload(reqPayload)
+		// We do not need to re-marshal into the payload here.
+		// The next handler in the chain will access req via gorums.AsProto(in) which reads in.Msg.
 
 		// call the next handler
 		out, err := next(ctx, in)
@@ -67,12 +55,8 @@ func appendStringInterceptor(inStr, outStr string) gorums.Interceptor {
 		resp := gorums.AsProto[*pb.StringValue](out)
 		// update the underlying response gorums.Message's message field (pb.StringValue in this case)
 		resp.Value += outStr
-		// re-marshal the modified response into the out message
-		respPayload, err := proto.Marshal(resp)
-		if err != nil {
-			return nil, err
-		}
-		out.SetPayload(respPayload)
+		// We do not need to re-marshal the response into the payload either.
+		// SendMessage will lazily marshal it before sending it on the wire.
 		return out, err
 	}
 }

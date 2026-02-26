@@ -11,7 +11,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/relab/gorums/internal/stream"
 )
@@ -149,15 +148,10 @@ func (n *Node) detachStream() {
 // call and was handled; false if it should be dispatched as a new request.
 // This implements the [stream.PeerNode] interface.
 func (n *Node) RouteResponse(msg *stream.Message) bool {
-	err := msg.ErrorStatus()
-	var resp proto.Message
-	if err == nil {
-		resp, err = stream.UnmarshalResponse(msg)
-	}
-	return n.router.RouteResponse(msg.GetMessageSeqNo(), stream.NodeResponse[proto.Message]{
+	return n.router.RouteResponse(msg.GetMessageSeqNo(), NodeResponse[*stream.Message]{
 		NodeID: n.id,
-		Value:  resp,
-		Err:    err,
+		Value:  msg,
+		Err:    msg.ErrorStatus(),
 	})
 }
 
@@ -170,9 +164,9 @@ func (n *Node) Enqueue(req stream.Request) {
 	}
 }
 
-// setHandlers sets the shared handler map on this node's router.
-func (n *Node) setHandlers(handlers map[string]stream.Handler) {
-	n.router.SetHandlers(handlers)
+// setRequestHandler sets the RequestHandler on this node's router.
+func (n *Node) setRequestHandler(handler stream.RequestHandler) {
+	n.router.SetRequestHandler(handler)
 }
 
 // compile-time assertion that Node implements the PeerNode interface.

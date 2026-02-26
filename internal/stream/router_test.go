@@ -148,49 +148,41 @@ func TestRouterRequeuePending(t *testing.T) {
 	}
 }
 
-func TestRouterHandleRequest(t *testing.T) {
+type mockRequestHandler struct {
+	called bool
+}
+
+func (m *mockRequestHandler) HandleRequest(ctx context.Context, msg *Message, release func(), send func(*Message)) {
+	m.called = true
+	release()
+}
+
+func TestRouterRequestHandler(t *testing.T) {
 	r := NewMessageRouter()
 
-	// No handlers set: lookup should return false.
-	if _, ok := r.HandleRequest("some.Method"); ok {
-		t.Error("HandleRequest should return false when no handlers are set")
+	// No handler set: lookup should return false.
+	if _, ok := r.RequestHandler(); ok {
+		t.Error("RequestHandler should return false when no handler is set")
 	}
 
-	// Set a shared handler map with one entry.
-	called := false
-	handlers := map[string]Handler{
-		mock.TestMethod: func(_ ServerCtx, _ *Envelope) (*Envelope, error) {
-			called = true
-			return nil, nil
-		},
-	}
-	r.SetHandlers(handlers)
+	// Set a mock RequestHandler.
+	mockHandler := &mockRequestHandler{}
+	r.SetRequestHandler(mockHandler)
 
-	// Lookup registered method.
-	h, ok := r.HandleRequest(mock.TestMethod)
+	// Lookup registered handler.
+	h, ok := r.RequestHandler()
 	if !ok {
-		t.Fatal("HandleRequest should return true for registered method")
+		t.Fatal("RequestHandler should return true for registered handler")
 	}
 	if h == nil {
-		t.Fatal("HandleRequest returned nil handler")
-	}
-
-	// Lookup unknown method.
-	if _, ok := r.HandleRequest("unknown.Method"); ok {
-		t.Error("HandleRequest should return false for unknown method")
-	}
-
-	// Shared map: adding a handler to the map is visible to the router.
-	handlers["new.Method"] = func(_ ServerCtx, _ *Envelope) (*Envelope, error) {
-		return nil, nil
-	}
-	if _, ok := r.HandleRequest("new.Method"); !ok {
-		t.Error("HandleRequest should see handlers added to the shared map")
+		t.Fatal("RequestHandler returned nil handler")
 	}
 
 	// Verify the handler is callable.
-	_, _ = h(ServerCtx{}, nil)
-	if !called {
+	emptyRelease := func() {}
+	emptySend := func(*Message) {}
+	h.HandleRequest(context.Background(), &Message{}, emptyRelease, emptySend)
+	if !mockHandler.called {
 		t.Error("handler was not called")
 	}
 }

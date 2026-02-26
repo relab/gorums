@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/relab/gorums/internal/stream"
+	"github.com/relab/gorums/internal/testutils/mock"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -12,9 +14,21 @@ import (
 func makeClientCtx[Req, Resp msg](t *testing.T, numNodes int, responses []NodeResponse[msg]) *ClientCtx[Req, Resp] {
 	t.Helper()
 
-	resultChan := make(chan NodeResponse[msg], len(responses))
+	resultChan := make(chan NodeResponse[*stream.Message], len(responses))
 	for _, r := range responses {
-		resultChan <- r
+		var sm *stream.Message
+		if r.Value != nil {
+			var err error
+			sm, err = stream.NewMessage(t.Context(), 1, mock.TestMethod, r.Value)
+			if err != nil {
+				t.Fatalf("failed to marshal mock response: %v", err)
+			}
+		}
+		resultChan <- NodeResponse[*stream.Message]{
+			NodeID: r.NodeID,
+			Value:  sm,
+			Err:    r.Err,
+		}
 	}
 	close(resultChan)
 

@@ -1,18 +1,17 @@
-package stream
+package gorums
 
 import (
 	"fmt"
 
+	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
-// UnmarshalRequest unmarshals the request proto message from the message.
+// unmarshalRequest unmarshals the request proto message from the message.
 // It uses the method name in the message to look up the Input type from the proto registry.
-//
-// This function should only be used by internal channel operations.
-func UnmarshalRequest(in *Message) (proto.Message, error) {
+func unmarshalRequest(in *stream.Message) (proto.Message, error) {
 	// get method descriptor from registry
 	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(in.GetMethod()))
 	if err != nil {
@@ -37,11 +36,9 @@ func UnmarshalRequest(in *Message) (proto.Message, error) {
 	return req, nil
 }
 
-// UnmarshalResponse unmarshals the response proto message from the message.
+// unmarshalResponse unmarshals the response proto message from the message.
 // It uses the method name in the message to look up the Output type from the proto registry.
-//
-// This function should only be used by internal channel operations.
-func UnmarshalResponse(out *Message) (proto.Message, error) {
+func unmarshalResponse(out *stream.Message) (proto.Message, error) {
 	// get method descriptor from registry
 	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(out.GetMethod()))
 	if err != nil {

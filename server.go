@@ -8,22 +8,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-type (
-	// Interceptor is a function that can intercept and modify incoming requests
-	// and outgoing responses. It receives a ServerCtx, the incoming Message, and
-	// a Handler representing the next element in the chain (either another
-	// Interceptor or the actual server method). It returns a Message and an error.
-	Interceptor = stream.Interceptor
-	// Handler is a function that processes a request and returns a response.
-	Handler = stream.Handler
-	// ServerCtx is a context that is passed from the Gorums server to the handler.
-	// It allows the handler to release its lock on the server, allowing the next
-	// request to be processed. This happens automatically when the handler returns.
-	ServerCtx = stream.ServerCtx
-	// Message encapsulates the stream.Message and the actual proto.Message.
-	Message = stream.Envelope
-)
-
+// serverOptions contains configuration options for creating a new Server.
 type serverOptions struct {
 	buffer          uint
 	grpcOpts        []grpc.ServerOption
@@ -123,6 +108,7 @@ func WithOnConfigChange(f func(Configuration)) ServerOption {
 type Server struct {
 	srv          *stream.Server
 	grpcServer   *grpc.Server
+	handlers     map[string]Handler
 	interceptors []Interceptor
 	inboundMgr   *InboundManager // nil if no peers configured
 }
@@ -142,11 +128,12 @@ func NewServer(opts ...ServerOption) *Server {
 		acceptor = newInboundManager(serverOpts.myID, serverOpts.peerOpt, serverOpts.peerSendBuffer, serverOpts.onConfigChange, serverOpts.dynamicPeers)
 	}
 	s := &Server{
-		srv:          stream.NewServer(serverOpts.buffer, acceptor, serverOpts.connectCallback),
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
+		handlers:     make(map[string]Handler),
 		interceptors: serverOpts.interceptors,
 		inboundMgr:   acceptor,
 	}
+	s.srv = stream.NewServer(serverOpts.buffer, acceptor, serverOpts.connectCallback, s)
 	stream.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
 }
@@ -173,7 +160,46 @@ func (s *Server) DynamicConfig() Configuration {
 //
 // This function should only be used by generated code.
 func (s *Server) RegisterHandler(method string, handler Handler) {
-	s.srv.RegisterHandler(method, stream.ChainInterceptors(handler, s.interceptors...))
+	s.handlers[method] = chainInterceptors(handler, s.interceptors...)
+}
+
+// HandleRequest processes an incoming request from the stream, dispatching it
+// to the appropriate registered handler. It serves as the bridge between the
+// multiplexing in the stream package and the RPC logic in the gorums package.
+//
+// This is the "default interceptor"; it is the first and last handler in the chain.
+// It is responsible for releasing the mutex when the handler chain is done,
+// unless already released by the handler itself, or an interceptor in the chain.
+func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, release func(), send func(*stream.Message)) {
+	srvCtx := ServerCtx{
+		Context: ctx,
+		release: release,
+		send:    send,
+		srv:     s,
+	}
+	defer srvCtx.Release()
+
+	handler, ok := s.handlers[reqMsg.GetMethod()]
+	if !ok {
+		// No handler registered: we just ignore the message and release the lock.
+		return
+	}
+
+	msg, err := unmarshalRequest(reqMsg)
+	in := &Message{Msg: msg, Message: reqMsg}
+	if err != nil {
+		_ = srvCtx.SendMessage(MessageWithError(in, nil, err))
+		return
+	}
+
+	out, err := handler(srvCtx, in)
+	// If there is no response and no error, we do not send anything back to the client.
+	// This corresponds to a unidirectional message from client to server, where clients
+	// are not expected to receive a response.
+	if out == nil && err == nil {
+		return
+	}
+	_ = srvCtx.SendMessage(MessageWithError(in, out, err))
 }
 
 // Serve starts serving on the listener.

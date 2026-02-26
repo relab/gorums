@@ -15,16 +15,19 @@ type msg = proto.Message
 // NodeResponse is a type alias for stream.NodeResponse.
 type NodeResponse[T any] = stream.NodeResponse[T]
 
-// mapToCallResponse converts a NodeResponse[msg] to a NodeResponse[Resp].
+// mapToCallResponse converts a NodeResponse[*stream.Message] to a NodeResponse[Resp].
 // This is necessary because the channel layer's response router returns a
-// NodeResponse[msg], while the calltype expects a NodeResponse[Resp].
-func mapToCallResponse[Resp msg](channelResp NodeResponse[msg]) NodeResponse[Resp] {
+// NodeResponse[*stream.Message] while the calltype expects a NodeResponse[Resp].
+func mapToCallResponse[Resp msg](channelResp NodeResponse[*stream.Message]) NodeResponse[Resp] {
 	callResp := NodeResponse[Resp]{
 		NodeID: channelResp.NodeID,
 		Err:    channelResp.Err,
 	}
 	if channelResp.Err == nil {
-		if val, ok := channelResp.Value.(Resp); ok {
+		respMsg, err := unmarshalResponse(channelResp.Value)
+		if err != nil {
+			callResp.Err = err
+		} else if val, ok := respMsg.(Resp); ok {
 			callResp.Value = val
 		} else {
 			callResp.Err = ErrTypeMismatch

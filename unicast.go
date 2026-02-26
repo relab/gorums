@@ -28,7 +28,7 @@ func Unicast[Req msg](ctx *NodeContext, req Req, method string, opts ...CallOpti
 	}
 
 	// Default: block until send completes
-	replyChan := make(chan NodeResponse[msg], 1)
+	replyChan := make(chan NodeResponse[*stream.Message], 1)
 	ctx.enqueue(stream.Request{Ctx: ctx, Msg: reqMsg, WaitSendDone: true, ResponseChan: replyChan})
 
 	// Wait for send confirmation
