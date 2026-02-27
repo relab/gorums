@@ -88,7 +88,7 @@ func TestSystemSymmetricConfiguration(t *testing.T) {
 
 		nodeList := gorums.WithNodeList(addrs)
 		srvOpts := []gorums.ServerOption{
-			gorums.WithPeers(myID, nodeList),
+			gorums.WithConfig(myID, nodeList),
 		}
 
 		cfgOpts := []gorums.Option{
@@ -124,7 +124,7 @@ func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
 
 		nodeList := gorums.WithNodeList(addrs)
 		srvOpts := []gorums.ServerOption{
-			gorums.WithPeers(myID, nodeList),
+			gorums.WithConfig(myID, nodeList),
 		}
 
 		cfgOpts := []gorums.Option{
@@ -208,7 +208,7 @@ func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
 
 		nodeList := gorums.WithNodeList(addrs)
 		srvOpts := []gorums.ServerOption{
-			gorums.WithPeers(myID, nodeList),
+			gorums.WithConfig(myID, nodeList),
 		}
 
 		cfgOpts := []gorums.Option{

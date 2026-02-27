@@ -37,10 +37,12 @@ func (s *System) Config() Configuration {
 	return s.srv.Config()
 }
 
-// DynamicConfig returns the Configuration of all currently connected dynamic peers.
+// ClientConfig returns a [Configuration] of all connected client peers.
+// The returned slice is replaced atomically on each connect/disconnect;
+// retaining a reference to an old value is safe.
 // Returns nil if no peer tracking is configured.
-func (s *System) DynamicConfig() Configuration {
-	return s.srv.DynamicConfig()
+func (s *System) ClientConfig() Configuration {
+	return s.srv.ClientConfig()
 }
 
 // NewOutboundConfig creates an outbound Configuration for connecting to
