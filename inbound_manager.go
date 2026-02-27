@@ -47,43 +47,45 @@ func metadataWithNodeID(id uint32) metadata.MD {
 // that can be used for server-initiated quorum calls, multicast, and other
 // call types.
 //
-// When dynamicPeers is enabled, unknown clients (those without a recognized
-// NodeID) are accepted and assigned auto-generated IDs. Dynamic nodes are
+// When clientPeers is enabled, unknown clients (those without a recognized
+// NodeID) are accepted and assigned auto-generated IDs. Client nodes are
 // removed from the nodes map when they disconnect.
 //
 // InboundManager is safe for concurrent use.
 type InboundManager struct {
-	mu             sync.RWMutex
-	myID           uint32              // this server's own NodeID; always present in inboundCfg
-	nodes          map[uint32]*Node    // pre-created for known peers; dynamic peers added on connect
-	config         Configuration       // auto-updated slice of known peers, sorted by ID
-	dynamicConfig  Configuration       // auto-updated slice of dynamic peers, sorted by ID
-	nextMsgID      atomic.Uint64       // counter for server-initiated message IDs
-	sendBufferSize uint                // send buffer size for inbound channels
-	onConfigChange func(Configuration) // optional; called after each config change
-	dynamicPeers   bool                // accept unknown clients with auto-assigned IDs
-	nextDynamicID  uint32              // next ID to assign to a dynamic peer
+	mu              sync.RWMutex
+	myID            uint32              // this server's own NodeID; always present in inboundCfg
+	nodes           map[uint32]*Node    // pre-created for known peers; client peers added on connect
+	config          Configuration       // auto-updated slice of known peers, sorted by ID
+	clientConfig    Configuration       // auto-updated slice of client peers, sorted by ID
+	nextMsgID       atomic.Uint64       // counter for server-initiated message IDs
+	sendBufferSize  uint                // send buffer size for inbound channels
+	onConfigChange  func(Configuration) // optional; called after each known-peer config change
+	onClientsChange func(Configuration) // optional; called after each client-peer config change
+	clientPeers     bool                // accept unknown clients with auto-assigned IDs
+	nextClientID    uint32              // next ID to assign to a client peer
 }
 
-// dynamicIDStart is the starting ID for dynamically assigned peers.
+// clientIDStart is the starting ID for dynamically assigned client peers.
 // Chosen to be high enough to avoid collisions with typical known-peer IDs.
-const dynamicIDStart = 1 << 20
+const clientIDStart = 1 << 20
 
 // newInboundManager creates an InboundManager for this server whose NodeID is myID.
 // If opt is non-nil, the InboundManager is configured with the given NodeListOption
 // defining the set of known peers. If myID is present in the NodeListOption it is
 // immediately included in the Config as the self-node, so that quorum thresholds
-// account for the local replica from the moment of construction. If dynamicPeers is
+// account for the local replica from the moment of construction. If clientPeers is
 // true, unknown clients are accepted with auto-assigned IDs. Panics on configuration
 // errors (invalid addresses, duplicate nodes, etc.)
-func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfigChange func(Configuration), dynamicPeers bool) *InboundManager {
+func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfigChange, onClientsChange func(Configuration), clientPeers bool) *InboundManager {
 	im := &InboundManager{
-		myID:           myID,
-		nodes:          make(map[uint32]*Node),
-		sendBufferSize: sendBuffer,
-		onConfigChange: onConfigChange,
-		dynamicPeers:   dynamicPeers,
-		nextDynamicID:  dynamicIDStart,
+		myID:            myID,
+		nodes:           make(map[uint32]*Node),
+		sendBufferSize:  sendBuffer,
+		onConfigChange:  onConfigChange,
+		onClientsChange: onClientsChange,
+		clientPeers:     clientPeers,
+		nextClientID:    clientIDStart,
 	}
 	if opt != nil {
 		if err := opt.newServerConfig(im); err != nil {
@@ -101,22 +103,24 @@ func (im *InboundManager) KnownIDs() []uint32 {
 	return slices.Sorted(maps.Keys(im.nodes))
 }
 
-// Config returns a Configuration of all connected known peers, plus this node.
+// Config returns a [Configuration] of all connected known peers, plus this node.
 // The returned slice is replaced atomically on each connect/disconnect;
 // retaining a reference to an old configuration is safe.
+// Returns nil if no peer tracking is configured.
 func (im *InboundManager) Config() Configuration {
 	im.mu.RLock()
 	defer im.mu.RUnlock()
 	return im.config
 }
 
-// DynamicConfig returns a Configuration of all connected dynamic peers.
+// ClientConfig returns a [Configuration] of all connected client peers.
 // The returned slice is replaced atomically on each connect/disconnect;
 // retaining a reference to an old value is safe.
-func (im *InboundManager) DynamicConfig() Configuration {
+// Returns nil if no peer tracking is configured.
+func (im *InboundManager) ClientConfig() Configuration {
 	im.mu.RLock()
 	defer im.mu.RUnlock()
-	return im.dynamicConfig
+	return im.clientConfig
 }
 
 // getMsgID returns the next unique message ID for server-initiated calls.
@@ -148,8 +152,8 @@ func (im *InboundManager) isKnown(id uint32) bool {
 // that should be deferred to unregister the peer when the stream ends.
 //
 // For known peers, the pre-created Node is returned. For unknown peers when
-// dynamicPeers is enabled, a new Node is created with an auto-assigned ID.
-// For a nil receiver, external (non-replica) clients when dynamic mode is
+// clientPeers is enabled, a new Node is created with an auto-assigned ID.
+// For a nil receiver, external (non-replica) clients when client mode is
 // disabled, it returns (nil, noop, nil) where noop is a no-op cleanup function.
 // The error return is reserved for future use (e.g., credential validation);
 // it is currently always nil.
@@ -163,12 +167,12 @@ func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream st
 		// Known peer — register on pre-created node.
 		return im.registerPeer(streamCtx, inboundStream, id)
 	}
-	if !im.dynamicPeers {
+	if !im.clientPeers {
 		// External client or unknown peer.
 		return nil, noop, nil
 	}
-	// Dynamic peer — create new node with auto-assigned ID.
-	return im.acceptDynamic(streamCtx, inboundStream)
+	// Client peer — create new node with auto-assigned ID.
+	return im.acceptClient(streamCtx, inboundStream)
 }
 
 // registerPeer attaches an inbound channel to the pre-created Node for the
@@ -194,16 +198,16 @@ func (im *InboundManager) registerPeer(streamCtx context.Context, inboundStream 
 	}, nil
 }
 
-// acceptDynamic creates a new node with an auto-assigned ID for an unknown
+// acceptClient creates a new node with an auto-assigned ID for an unknown
 // connecting client. The node is added to the nodes map and the configuration
-// is rebuilt. The returned cleanup function removes the dynamic node entirely
+// is rebuilt. The returned cleanup function removes the client node entirely
 // when the stream ends (unlike known peers which persist for reconnection).
-func (im *InboundManager) acceptDynamic(streamCtx context.Context, inboundStream stream.BidiStream) (stream.PeerNode, func(), error) {
+func (im *InboundManager) acceptClient(streamCtx context.Context, inboundStream stream.BidiStream) (stream.PeerNode, func(), error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
-	id := im.nextDynamicID
-	im.nextDynamicID++
-	node := newPeerNode(id, "dynamic", im.getMsgID)
+	id := im.nextClientID
+	im.nextClientID++
+	node := newPeerNode(id, "client", im.getMsgID)
 	node.attachStream(streamCtx, inboundStream, im.sendBufferSize)
 	im.nodes[id] = node
 	im.rebuildConfig()
@@ -221,17 +225,17 @@ func (im *InboundManager) acceptDynamic(streamCtx context.Context, inboundStream
 	}, nil
 }
 
-// rebuildConfig rebuilds inbound and dynamic configurations from the current nodes map.
+// rebuildConfig rebuilds inbound and client configurations from the current nodes map.
 // A node is included in the known Config if it has an active channel (peer connected)
-// or if it is myID. A node is included in DynamicConfig if it is a connected dynamic peer.
+// or if it is myID. A node is included in ClientConfig if it is a connected client peer.
 // Callers must hold the lock.
 func (im *InboundManager) rebuildConfig() {
 	cfg := make(Configuration, 0, len(im.nodes))
-	dynamicCfg := make(Configuration, 0)
+	clientCfg := make(Configuration, 0)
 	for id, node := range im.nodes {
-		if id >= dynamicIDStart {
+		if id >= clientIDStart {
 			if node.channel.Load() != nil {
-				dynamicCfg = append(dynamicCfg, node)
+				clientCfg = append(clientCfg, node)
 			}
 		} else {
 			if id == im.myID || node.channel.Load() != nil {
@@ -240,11 +244,14 @@ func (im *InboundManager) rebuildConfig() {
 		}
 	}
 	OrderedBy(ID).Sort(cfg)
-	OrderedBy(ID).Sort(dynamicCfg)
+	OrderedBy(ID).Sort(clientCfg)
 	im.config = cfg
-	im.dynamicConfig = dynamicCfg
+	im.clientConfig = clientCfg
 	if im.onConfigChange != nil {
-		im.onConfigChange(cfg) // Note: only calling onConfigChange for known peers currently
+		im.onConfigChange(cfg)
+	}
+	if im.onClientsChange != nil {
+		im.onClientsChange(clientCfg)
 	}
 }
 

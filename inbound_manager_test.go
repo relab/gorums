@@ -60,7 +60,7 @@ func newTestInboundManager(t *testing.T, myID uint32) *InboundManager {
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
 		3: {"127.0.0.1:9083"},
-	}), 0, nil, false)
+	}), 0, nil, nil, false)
 	return im
 }
 
@@ -127,11 +127,11 @@ func TestNewInboundManager(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.wantPanic != "" {
 				shouldPanic(t, tc.wantPanic, func() {
-					newInboundManager(1, tc.opt, 0, nil, false)
+					newInboundManager(1, tc.opt, 0, nil, nil, false)
 				})
 				return
 			}
-			im := newInboundManager(1, tc.opt, 0, nil, false)
+			im := newInboundManager(1, tc.opt, 0, nil, nil, false)
 			if got := im.KnownIDs(); !slices.Equal(got, tc.wantIDs) {
 				t.Errorf("KnownIDs() = %v; want %v", got, tc.wantIDs)
 			}
@@ -352,7 +352,7 @@ func testPeerServer(t *testing.T) (*Server, []string) {
 	t.Helper()
 	var srv *Server
 	addrs := TestServers(t, 1, func(_ int) ServerIface {
-		srv = NewServer(WithPeers(1, peerNodes()))
+		srv = NewServer(WithConfig(1, peerNodes()))
 		return srv
 	})
 	return srv, addrs
@@ -542,25 +542,25 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 	}
 }
 
-// testDynamicServer creates a Server with WithDynamicPeers() only, starts it
+// testClientServer creates a Server with WithClientConfig() only, starts it
 // via TestServers, and returns the server and its addresses.
-func testDynamicServer(t *testing.T) (*Server, []string) {
+func testClientServer(t *testing.T) (*Server, []string) {
 	t.Helper()
 	var srv *Server
 	addrs := TestServers(t, 1, func(_ int) ServerIface {
-		srv = NewServer(WithDynamicPeers())
+		srv = NewServer(WithClientConfig())
 		return srv
 	})
 	return srv, addrs
 }
 
-// testMixedServer creates a Server with both WithPeers and WithDynamicPeers,
+// testMixedServer creates a Server with both WithConfig and WithClientConfig,
 // starts it via TestServers, and returns the server and its addresses.
 func testMixedServer(t *testing.T) (*Server, []string) {
 	t.Helper()
 	var srv *Server
 	addrs := TestServers(t, 1, func(_ int) ServerIface {
-		srv = NewServer(WithPeers(1, peerNodes()), WithDynamicPeers())
+		srv = NewServer(WithConfig(1, peerNodes()), WithClientConfig())
 		return srv
 	})
 	return srv, addrs
@@ -578,53 +578,53 @@ func connectAsExternal(t *testing.T, addrs []string) *Manager {
 	return mgr
 }
 
-// TestDynamicPeerConnects verifies that a server with WithDynamicPeers()
-// accepts an unknown client and includes it in Config.
-func TestDynamicPeerConnects(t *testing.T) {
-	srv, addrs := testDynamicServer(t)
+// TestClientConfigConnects verifies that a server with WithClientConfig()
+// accepts an unknown client and includes it in ClientConfig.
+func TestClientConfigConnects(t *testing.T) {
+	srv, addrs := testClientServer(t)
 
 	// Initially no peers (no self-node since myID == 0)
-	checkIDs(t, srv.Config(), []uint32{}, "before connect")
+	checkIDs(t, srv.ClientConfig(), []uint32{}, "before connect")
 
 	connectAsExternal(t, addrs)
 
-	// Dynamic peer should appear with auto-assigned ID >= dynamicIDStart.
-	WaitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) > 0 })
-	cfg := srv.DynamicConfig()
+	// Client peer should appear with auto-assigned ID >= clientIDStart.
+	WaitForConfigCondition(t, srv.ClientConfig, func(cfg Configuration) bool { return len(cfg) > 0 })
+	cfg := srv.ClientConfig()
 	if len(cfg) != 1 {
-		t.Fatalf("DynamicConfig has %d nodes; want 1", len(cfg))
+		t.Fatalf("ClientConfig has %d nodes; want 1", len(cfg))
 	}
-	if cfg[0].ID() < dynamicIDStart {
-		t.Errorf("dynamic peer ID = %d; want >= %d", cfg[0].ID(), dynamicIDStart)
+	if cfg[0].ID() < clientIDStart {
+		t.Errorf("Client peer ID = %d; want >= %d", cfg[0].ID(), clientIDStart)
 	}
 }
 
-// TestDynamicPeerDisconnects verifies that dynamic peers are removed from
-// Config and the nodes map when they disconnect.
-func TestDynamicPeerDisconnects(t *testing.T) {
-	srv, addrs := testDynamicServer(t)
+// TestClientConfigDisconnects verifies that client peers are removed from
+// ClientConfig and the nodes map when they disconnect.
+func TestClientConfigDisconnects(t *testing.T) {
+	srv, addrs := testClientServer(t)
 
 	mgr := connectAsExternal(t, addrs)
 
-	// Wait for the dynamic peer to appear.
-	WaitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) > 0 })
-	if len(srv.DynamicConfig()) != 1 {
-		t.Fatalf("DynamicConfig has %d nodes; want 1", len(srv.DynamicConfig()))
+	// Wait for the client peer to appear.
+	WaitForConfigCondition(t, srv.ClientConfig, func(cfg Configuration) bool { return len(cfg) > 0 })
+	if len(srv.ClientConfig()) != 1 {
+		t.Fatalf("ClientConfig has %d nodes; want 1", len(srv.ClientConfig()))
 	}
 
-	// Disconnect the dynamic peer.
+	// Disconnect the client peer.
 	if err := mgr.Close(); err != nil {
 		t.Fatalf("mgr.Close() error: %v", err)
 	}
 
 	// Wait for config to become empty.
-	WaitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) == 0 })
-	checkIDs(t, srv.DynamicConfig(), []uint32{}, "after disconnect")
+	WaitForConfigCondition(t, srv.ClientConfig, func(cfg Configuration) bool { return len(cfg) == 0 })
+	checkIDs(t, srv.ClientConfig(), []uint32{}, "after disconnect")
 }
 
-// TestDynamicPeerMixedMode verifies that a server with both WithPeers and
-// WithDynamicPeers accepts known peers by ID and unknown clients dynamically.
-func TestDynamicPeerMixedMode(t *testing.T) {
+// TestClientConfigMixedMode verifies that a server with both WithConfig and
+// WithClientConfig accepts known peers by ID and unknown clients dynamically.
+func TestClientConfigMixedMode(t *testing.T) {
 	srv, addrs := testMixedServer(t)
 
 	// Self-node (ID 1) is present initially.
@@ -638,13 +638,13 @@ func TestDynamicPeerMixedMode(t *testing.T) {
 	connectAsExternal(t, addrs)
 
 	// Wait for 1 dynamic node.
-	WaitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) == 1 })
-	dynCfg := srv.DynamicConfig()
+	WaitForConfigCondition(t, srv.ClientConfig, func(cfg Configuration) bool { return len(cfg) == 1 })
+	dynCfg := srv.ClientConfig()
 	if len(dynCfg) != 1 {
-		t.Fatalf("DynamicConfig has %d nodes; want 1", len(dynCfg))
+		t.Fatalf("ClientConfig has %d nodes; want 1", len(dynCfg))
 	}
-	if dynCfg[0].ID() < dynamicIDStart {
-		t.Errorf("dynamic peer ID = %d; want >= %d", dynCfg[0].ID(), dynamicIDStart)
+	if dynCfg[0].ID() < clientIDStart {
+		t.Errorf("Client peer ID = %d; want >= %d", dynCfg[0].ID(), clientIDStart)
 	}
 	cfg := srv.Config()
 	if len(cfg) != 2 {
@@ -656,10 +656,10 @@ func TestDynamicPeerMixedMode(t *testing.T) {
 	}
 }
 
-// TestDynamicPeerServerCallsClient verifies that a server can send a request
+// TestClientConfigServerCallsClient verifies that a server can send a request
 // to a dynamically connected client and receive a response.
-func TestDynamicPeerServerCallsClient(t *testing.T) {
-	srv, addrs := testDynamicServer(t)
+func TestClientConfigServerCallsClient(t *testing.T) {
+	srv, addrs := testClientServer(t)
 
 	// Client connects and registers a handler.
 	clientHandlers := map[string]Handler{
@@ -677,11 +677,11 @@ func TestDynamicPeerServerCallsClient(t *testing.T) {
 		node.setRequestHandler(mockRequestHandler{handlers: clientHandlers})
 	}
 
-	// Wait for the dynamic peer to appear.
-	WaitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) > 0 })
-	dynCfg := srv.DynamicConfig()
+	// Wait for the client peer to appear.
+	WaitForConfigCondition(t, srv.ClientConfig, func(cfg Configuration) bool { return len(cfg) > 0 })
+	dynCfg := srv.ClientConfig()
 	if len(dynCfg) != 1 {
-		t.Fatalf("DynamicConfig has %d nodes; want 1", len(dynCfg))
+		t.Fatalf("ClientConfig has %d nodes; want 1", len(dynCfg))
 	}
 	peerNode := dynCfg[0]
 

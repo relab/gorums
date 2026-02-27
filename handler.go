@@ -65,7 +65,9 @@ func (ctx *ServerCtx) SendMessage(out *Message) error {
 	return nil
 }
 
-// Config returns the Configuration of all currently connected known peers.
+// Config returns a [Configuration] of all connected known peers, plus this node.
+// The returned slice is replaced atomically on each connect/disconnect;
+// retaining a reference to an old configuration is safe.
 // Returns nil if no peer tracking is configured.
 func (ctx *ServerCtx) Config() Configuration {
 	if ctx.srv == nil {
@@ -74,13 +76,15 @@ func (ctx *ServerCtx) Config() Configuration {
 	return ctx.srv.Config()
 }
 
-// DynamicConfig returns the Configuration of all currently connected dynamic peers.
+// ClientConfig returns a [Configuration] of all connected client peers.
+// The returned slice is replaced atomically on each connect/disconnect;
+// retaining a reference to an old value is safe.
 // Returns nil if no peer tracking is configured.
-func (ctx *ServerCtx) DynamicConfig() Configuration {
+func (ctx *ServerCtx) ClientConfig() Configuration {
 	if ctx.srv == nil {
 		return nil
 	}
-	return ctx.srv.DynamicConfig()
+	return ctx.srv.ClientConfig()
 }
 
 // NewResponseMessage creates a new response envelope based on the provided proto

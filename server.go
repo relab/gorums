@@ -15,11 +15,12 @@ type serverOptions struct {
 	connectCallback func(context.Context)
 	interceptors    []Interceptor
 	// Peer management options (create InboundManager internally)
-	myID           uint32
-	peerOpt        NodeListOption
-	dynamicPeers   bool
-	peerSendBuffer uint
-	onConfigChange func(Configuration)
+	myID            uint32
+	peerOpt         NodeListOption
+	clientPeers     bool
+	peerSendBuffer  uint
+	onConfigChange  func(Configuration)
+	onClientsChange func(Configuration)
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -62,25 +63,39 @@ func WithInterceptors(i ...Interceptor) ServerOption {
 	}
 }
 
-// WithPeers configures the server to track known peers identified by their
-// NodeID metadata. When a client connects and sends a recognized NodeID, the
-// server registers it and includes it in the live Config.
-// The myID parameter is this server's own NodeID; it is always present in the
-// Config so that quorum thresholds account for the local replica.
-func WithPeers(myID uint32, opt NodeListOption) ServerOption {
+// WithConfig configures the server to track known peer servers identified by their
+// NodeID metadata. When a server connects as a client with a recognized NodeID, the
+// server registers the node and includes it in the [Configuration] returned by [Config].
+// The myID parameter is this server's own NodeID; it is always present in the [Config]
+// so that quorum thresholds account for the local replica.
+// The optional onChange callback is called after each change to the known peer [Configuration]
+// (server peer connect or disconnect). It is invoked while the manager's lock is held,
+// so it must not call [Config] or other blocking methods.
+// Use it only to signal or copy; do not perform long work inside the callback.
+func WithConfig(myID uint32, opt NodeListOption, onChange ...func(Configuration)) ServerOption {
 	return func(o *serverOptions) {
 		o.myID = myID
 		o.peerOpt = opt
+		if len(onChange) > 0 {
+			o.onConfigChange = onChange[0]
+		}
 	}
 }
 
-// WithDynamicPeers enables the server to accept unknown clients (those without
+// WithClientConfig enables the server to accept unknown clients (those without
 // a recognized NodeID). Each unknown client is assigned a sequential auto-generated
-// ID and included in DynamicConfig. Dynamic nodes are removed when they disconnect.
-// Can be combined with WithPeers for mixed mode.
-func WithDynamicPeers() ServerOption {
+// ID and included in the [Configuration] returned by [ClientConfig]. Client nodes are
+// removed when they disconnect. Can be combined with [WithConfig] for mixed mode.
+// The optional onChange callback is called after each change to the [ClientConfig]
+// (client peer connect or disconnect). It is invoked while the manager's lock is held,
+// so it must not call [ClientConfig] or other blocking methods.
+// Use it only to signal or copy; do not perform long work inside the callback.
+func WithClientConfig(onChange ...func(Configuration)) ServerOption {
 	return func(o *serverOptions) {
-		o.dynamicPeers = true
+		o.clientPeers = true
+		if len(onChange) > 0 {
+			o.onClientsChange = onChange[0]
+		}
 	}
 }
 
@@ -93,17 +108,6 @@ func WithPeerSendBufferSize(size uint) ServerOption {
 	}
 }
 
-// WithOnConfigChange registers a callback that is called after each change to
-// the server's live Config (peer connect or disconnect).
-// The callback is invoked with the new Configuration while the manager's lock
-// is held, so it must not call Config or other blocking methods.
-// Use it only to signal or copy; do not perform long work inside the callback.
-func WithOnConfigChange(f func(Configuration)) ServerOption {
-	return func(o *serverOptions) {
-		o.onConfigChange = f
-	}
-}
-
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
 	srv          *stream.Server
@@ -113,8 +117,8 @@ type Server struct {
 	inboundMgr   *InboundManager // nil if no peers configured
 }
 
-// NewServer returns a new instance of [gorums.Server].
-// If WithPeers or WithDynamicPeers options are provided, an InboundManager is
+// NewServer returns a new instance of [Server].
+// If [WithConfig] or [WithClientConfig] options are provided, an InboundManager is
 // created internally to track connected peers.
 // Panics on configuration errors (invalid addresses, duplicate nodes, etc.)
 // since these are programmer errors detectable at startup.
@@ -124,8 +128,8 @@ func NewServer(opts ...ServerOption) *Server {
 		opt(&serverOpts)
 	}
 	var acceptor *InboundManager
-	if serverOpts.peerOpt != nil || serverOpts.dynamicPeers {
-		acceptor = newInboundManager(serverOpts.myID, serverOpts.peerOpt, serverOpts.peerSendBuffer, serverOpts.onConfigChange, serverOpts.dynamicPeers)
+	if serverOpts.peerOpt != nil || serverOpts.clientPeers {
+		acceptor = newInboundManager(serverOpts.myID, serverOpts.peerOpt, serverOpts.peerSendBuffer, serverOpts.onConfigChange, serverOpts.onClientsChange, serverOpts.clientPeers)
 	}
 	s := &Server{
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
@@ -138,7 +142,9 @@ func NewServer(opts ...ServerOption) *Server {
 	return s
 }
 
-// Config returns the Configuration of all currently connected known peers.
+// Config returns a [Configuration] of all connected known peers, plus this node.
+// The returned slice is replaced atomically on each connect/disconnect;
+// retaining a reference to an old configuration is safe.
 // Returns nil if no peer tracking is configured.
 func (s *Server) Config() Configuration {
 	if s.inboundMgr == nil {
@@ -147,13 +153,15 @@ func (s *Server) Config() Configuration {
 	return s.inboundMgr.Config()
 }
 
-// DynamicConfig returns the Configuration of all currently connected dynamic peers.
+// ClientConfig returns a [Configuration] of all connected client peers.
+// The returned slice is replaced atomically on each connect/disconnect;
+// retaining a reference to an old value is safe.
 // Returns nil if no peer tracking is configured.
-func (s *Server) DynamicConfig() Configuration {
+func (s *Server) ClientConfig() Configuration {
 	if s.inboundMgr == nil {
 		return nil
 	}
-	return s.inboundMgr.DynamicConfig()
+	return s.inboundMgr.ClientConfig()
 }
 
 // RegisterHandler registers a request handler for the specified method name.
