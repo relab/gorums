@@ -82,3 +82,12 @@ func WithPerNodeMetadata(f func(uint32) metadata.MD) ManagerOption {
 		o.perNodeMD = f
 	}
 }
+
+// WithNodeID returns a ManagerOption that automatically includes this client's
+// node ID in the outgoing metadata. This is required for symmetric configurations
+// because the server needs to identify the connecting client.
+func WithNodeID(id uint32) ManagerOption {
+	return func(o *managerOptions) {
+		o.metadata = metadata.Join(o.metadata, metadataWithNodeID(id))
+	}
+}

@@ -43,6 +43,18 @@ func (s *System) DynamicConfig() Configuration {
 	return s.srv.DynamicConfig()
 }
 
+// NewOutboundConfig creates an outbound Configuration for connecting to
+// peers. It automatically includes this system's NodeID in the
+// connection metadata, enabling the remote server to identify
+// this replica.
+func (s *System) NewOutboundConfig(opts ...Option) (Configuration, error) {
+	if s.srv.inboundMgr == nil {
+		return NewConfig(opts...)
+	}
+	opts = append([]Option{WithNodeID(s.srv.inboundMgr.myID)}, opts...)
+	return NewConfig(opts...)
+}
+
 // RegisterService registers the service with the server using the provided register function.
 // The closer is added to the list of closers to be closed when the system is stopped.
 //
