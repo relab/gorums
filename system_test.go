@@ -2,6 +2,7 @@ package gorums_test
 
 import (
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -199,4 +200,70 @@ func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
+	systems, configs := gorums.TestSystems(t, 3, func(i int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
+		myID := uint32(i + 1)
+
+		nodeList := gorums.WithNodeList(addrs)
+		srvOpts := []gorums.ServerOption{
+			gorums.WithPeers(myID, nodeList),
+		}
+
+		cfgOpts := []gorums.Option{
+			nodeList,
+			gorums.InsecureDialOptions(t),
+		}
+
+		return srvOpts, cfgOpts
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(len(systems))
+
+	// Register mock handler to each system
+	for i, sys := range systems {
+		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
+			srv.RegisterHandler(mock.Stream, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+				wg.Done()
+				return nil, nil
+			})
+		})
+	}
+
+	// Wait for connections to establish
+	for _, sys := range systems {
+		gorums.WaitForConfigCondition(t, sys.Config, func(cfg gorums.Configuration) bool {
+			return cfg.Size() == len(systems)
+		})
+	}
+
+	cfg := configs[0]
+
+	t.Run("Multicast", func(t *testing.T) {
+		ctx := gorums.TestContext(t, 2*time.Second)
+		err := gorums.Multicast(
+			cfg.Context(ctx),
+			pb.String("test"),
+			mock.Stream,
+		)
+		if err != nil {
+			t.Fatalf("multicast error: %v", err)
+		}
+
+		// Wait for all handlers to be invoked, or timeout
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			// Success
+		case <-time.After(2 * time.Second):
+			t.Fatal("Timeout waiting for multicast handlers to be invoked")
+		}
+	})
 }
