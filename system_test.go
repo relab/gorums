@@ -267,3 +267,144 @@ func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
 		}
 	})
 }
+
+func TestSystemStreamDedupQuorumCall(t *testing.T) {
+	systems, configs := gorums.TestSystems(t, 3, func(i int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
+		myID := uint32(i + 1)
+
+		nodeList := gorums.WithNodeList(addrs)
+		srvOpts := []gorums.ServerOption{
+			gorums.WithConfig(myID, nodeList),
+		}
+
+		cfgOpts := []gorums.Option{
+			nodeList,
+			gorums.InsecureDialOptions(t),
+		}
+
+		return srvOpts, cfgOpts
+	})
+
+	// Register echo handler to each system
+	for i, sys := range systems {
+		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
+			srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+				req := gorums.AsProto[*pb.StringValue](in)
+				resp := pb.String("echo: " + req.GetValue())
+				return gorums.NewResponseMessage(in, resp), nil
+			})
+		})
+	}
+
+	// Wait for connections to establish
+	for _, sys := range systems {
+		gorums.WaitForConfigCondition(t, sys.Config, func(cfg gorums.Configuration) bool {
+			return cfg.Size() == 3
+		})
+	}
+
+	// Verify stream dedup: for each peer pair, exactly one side should have
+	// an outbound channel. The lower-ID node keeps its outbound.
+	for i, cfg := range configs {
+		myID := uint32(i + 1)
+		for _, node := range cfg.Nodes() {
+			peerID := node.ID()
+			if peerID == myID {
+				continue // skip self
+			}
+			ch := gorums.TestNodeChannel(node)
+			if myID < peerID {
+				// Lower-ID node: should have outbound channel (conn != nil)
+				if ch == nil {
+					t.Errorf("system %d -> peer %d: expected outbound channel; got nil", myID, peerID)
+				} else if ch.IsInbound() {
+					t.Errorf("system %d -> peer %d: expected outbound channel; got inbound", myID, peerID)
+				}
+			} else {
+				// Higher-ID node: should have no outbound channel (waiting for inbound)
+				if ch != nil && !ch.IsInbound() {
+					t.Errorf("system %d -> peer %d: expected no outbound channel; got outbound", myID, peerID)
+				}
+			}
+		}
+	}
+
+	// Verify quorum calls still work across deduplicated streams
+	cfg := configs[0]
+	ctx := gorums.TestContext(t, 2*time.Second)
+
+	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+		cfg.Context(ctx),
+		pb.String("dedup-test"),
+		mock.TestMethod,
+	)
+
+	result, err := responses.Majority()
+	if err != nil {
+		t.Fatalf("quorum call error: %v", err)
+	}
+	if result.GetValue() != "echo: dedup-test" {
+		t.Errorf("Expected %q, got %q", "echo: dedup-test", result.GetValue())
+	}
+}
+
+func TestSystemStreamDedupMulticast(t *testing.T) {
+	systems, configs := gorums.TestSystems(t, 3, func(i int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
+		myID := uint32(i + 1)
+
+		nodeList := gorums.WithNodeList(addrs)
+		srvOpts := []gorums.ServerOption{
+			gorums.WithConfig(myID, nodeList),
+		}
+
+		cfgOpts := []gorums.Option{
+			nodeList,
+			gorums.InsecureDialOptions(t),
+		}
+
+		return srvOpts, cfgOpts
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(len(systems))
+
+	for i, sys := range systems {
+		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
+			srv.RegisterHandler(mock.Stream, func(_ gorums.ServerCtx, _ *gorums.Message) (*gorums.Message, error) {
+				wg.Done()
+				return nil, nil
+			})
+		})
+	}
+
+	// Wait for connections to establish
+	for _, sys := range systems {
+		gorums.WaitForConfigCondition(t, sys.Config, func(cfg gorums.Configuration) bool {
+			return cfg.Size() == len(systems)
+		})
+	}
+
+	cfg := configs[0]
+	ctx := gorums.TestContext(t, 2*time.Second)
+	err := gorums.Multicast(
+		cfg.Context(ctx),
+		pb.String("dedup-multicast"),
+		mock.Stream,
+	)
+	if err != nil {
+		t.Fatalf("multicast error: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Success
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout waiting for multicast handlers to be invoked")
+	}
+}

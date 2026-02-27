@@ -25,6 +25,7 @@ type managerOptions struct {
 	sendBuffer   uint
 	metadata     metadata.MD
 	perNodeMD    func(uint32) metadata.MD
+	inboundMgr   *InboundManager // set by withInboundManager for stream dedup
 }
 
 func newManagerOptions() managerOptions {
@@ -89,5 +90,15 @@ func WithPerNodeMetadata(f func(uint32) metadata.MD) ManagerOption {
 func WithNodeID(id uint32) ManagerOption {
 	return func(o *managerOptions) {
 		o.metadata = metadata.Join(o.metadata, metadataWithNodeID(id))
+	}
+}
+
+// withInboundManager returns a ManagerOption that enables stream deduplication
+// by linking the Manager to the given InboundManager. When set, the Manager
+// shares Node objects with the InboundManager for known peers, enforcing one
+// steady-state stream per peer pair using the lower-ID-owns-outbound rule.
+func withInboundManager(im *InboundManager) ManagerOption {
+	return func(o *managerOptions) {
+		o.inboundMgr = im
 	}
 }

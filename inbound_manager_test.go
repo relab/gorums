@@ -722,3 +722,62 @@ func TestClientConfigServerCallsClient(t *testing.T) {
 		t.Fatal("timed out waiting for response")
 	}
 }
+
+// TestInboundManagerPeerNode verifies that PeerNode returns the correct Node for
+// known peers, nil for unknown IDs, and nil for zero ID.
+func TestInboundManagerPeerNode(t *testing.T) {
+	im := newTestInboundManager(t, 1)
+	tests := []struct {
+		name    string
+		id      uint32
+		wantNil bool
+	}{
+		{name: "KnownPeer2", id: 2, wantNil: false},
+		{name: "KnownPeer3", id: 3, wantNil: false},
+		{name: "SelfNode", id: 1, wantNil: false},
+		{name: "UnknownPeer", id: 99, wantNil: true},
+		{name: "ZeroID", id: 0, wantNil: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			node := im.PeerNode(tc.id)
+			if tc.wantNil {
+				if node != nil {
+					t.Errorf("PeerNode(%d) = %v; want nil", tc.id, node)
+				}
+			} else {
+				if node == nil {
+					t.Fatalf("PeerNode(%d) = nil; want non-nil", tc.id)
+				}
+				if node.ID() != tc.id {
+					t.Errorf("PeerNode(%d).ID() = %d; want %d", tc.id, node.ID(), tc.id)
+				}
+			}
+		})
+	}
+}
+
+// TestInboundManagerRefreshConfig verifies that RefreshConfig picks up
+// externally-attached outbound channels by rebuilding the configuration.
+func TestInboundManagerRefreshConfig(t *testing.T) {
+	im := newTestInboundManager(t, 1)
+	// Initially only the self-node is in the config (no channels attached).
+	checkIDs(t, im.Config(), []uint32{1}, "initial config")
+
+	// Simulate attaching an outbound channel to peer 2 externally
+	// (as the Manager would do during stream dedup).
+	peer2 := im.PeerNode(2)
+	if peer2 == nil {
+		t.Fatal("PeerNode(2) = nil; want non-nil")
+	}
+	// Store a test channel to simulate an outbound connection.
+	testCh := stream.NewChannelWithState(nil)
+	peer2.channel.Store(testCh)
+
+	// Config should still be stale (only self-node) before RefreshConfig.
+	checkIDs(t, im.Config(), []uint32{1}, "before RefreshConfig")
+
+	// After RefreshConfig, peer 2 should appear in the config.
+	im.RefreshConfig()
+	checkIDs(t, im.Config(), []uint32{1, 2}, "after RefreshConfig")
+}
