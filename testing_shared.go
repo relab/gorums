@@ -177,6 +177,66 @@ func TestServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []
 	return addrs
 }
 
+// TestSystems starts numServers Gorums Systems using the given options function.
+// The systems are automatically stopped when the test finishes via t.Cleanup.
+// It returns a slice of the created *System objects, and their corresponding
+// outbound Configuration objects.
+func TestSystems(t testing.TB, numServers int, setup func(i int, addrs []string) ([]ServerOption, []Option)) ([]*System, []Configuration) {
+	t.Helper()
+
+	// Skip goleak check for benchmarks
+	if _, ok := t.(*testing.B); !ok {
+		// Register goleak check FIRST so it runs LAST (after all other cleanup)
+		t.Cleanup(func() { goleak.VerifyNone(t) })
+	}
+
+	addrs := make([]string, numServers)
+	systems := make([]*System, numServers)
+	configs := make([]Configuration, numServers)
+	cfgOptsList := make([][]Option, numServers)
+
+	// Pre-allocate listeners to ensure we get addresses that
+	// the systems can use in the setup function below.
+	listeners := make([]net.Listener, numServers)
+	for i := range listeners {
+		lis, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		listeners[i] = lis
+		addrs[i] = lis.Addr().String()
+	}
+
+	for i := range numServers {
+		srvOpts, cfgOpts := setup(i, addrs)
+		cfgOptsList[i] = cfgOpts
+
+		sys := &System{
+			srv: NewServer(srvOpts...),
+			lis: listeners[i],
+		}
+		systems[i] = sys
+		go sys.Serve()
+	}
+
+	// Register server cleanup SECOND so it runs BEFORE goleak check
+	t.Cleanup(func() {
+		for _, sys := range systems {
+			_ = sys.Stop()
+		}
+	})
+
+	for i, sys := range systems {
+		cfg, err := sys.NewOutboundConfig(cfgOptsList[i]...)
+		if err != nil {
+			t.Fatalf("Failed to create outbound config for system %d: %v", i+1, err)
+		}
+		configs[i] = cfg
+	}
+
+	return systems, configs
+}
+
 // ServerIface is the interface that must be implemented by a server in order to support the TestSetup function.
 type ServerIface interface {
 	Serve(net.Listener) error
