@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/internal/testutils/mock"
+	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 type mockCloser struct {
@@ -76,5 +78,125 @@ func TestSystemStopError(t *testing.T) {
 	err = sys.Stop()
 	if err == nil {
 		t.Error("expected error from Stop, got nil")
+	}
+}
+
+func TestSystemSymmetricConfiguration(t *testing.T) {
+	systems, configs := gorums.TestSystems(t, 3, func(i int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
+		myID := uint32(i + 1)
+
+		nodeList := gorums.WithNodeList(addrs)
+		srvOpts := []gorums.ServerOption{
+			gorums.WithPeers(myID, nodeList),
+		}
+
+		cfgOpts := []gorums.Option{
+			nodeList,
+			gorums.InsecureDialOptions(t),
+		}
+
+		return srvOpts, cfgOpts
+	})
+
+	// Each replica connects to the other two via System.NewOutboundConfig
+	// (NodeID is automatically included in metadata)
+	for i, sys := range systems {
+		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
+			// Register mock handlers for the server sides if needed for other tests
+		})
+	}
+
+	// Wait for connections to establish
+	for i, sys := range systems {
+		gorums.WaitForConfigCondition(t, sys.Config, func(cfg gorums.Configuration) bool {
+			return cfg.Size() == 3
+		})
+		if got := sys.Config().Size(); got != 3 {
+			t.Fatalf("system %d config size: %d, expected: 3", i+1, got)
+		}
+	}
+}
+
+func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
+	systems, configs := gorums.TestSystems(t, 3, func(i int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
+		myID := uint32(i + 1)
+
+		nodeList := gorums.WithNodeList(addrs)
+		srvOpts := []gorums.ServerOption{
+			gorums.WithPeers(myID, nodeList),
+		}
+
+		cfgOpts := []gorums.Option{
+			nodeList,
+			gorums.InsecureDialOptions(t),
+		}
+
+		return srvOpts, cfgOpts
+	})
+
+	// Register mock handler to each system
+	for i, sys := range systems {
+		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
+			srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+				req := gorums.AsProto[*pb.StringValue](in)
+				resp := pb.String("echo: " + req.GetValue())
+				return gorums.NewResponseMessage(in, resp), nil
+			})
+		})
+	}
+
+	// Wait for connections to establish
+	for _, sys := range systems {
+		gorums.WaitForConfigCondition(t, sys.Config, func(cfg gorums.Configuration) bool {
+			return cfg.Size() == 3
+		})
+	}
+
+	// type alias short hand for the responses type
+	type respType = *gorums.Responses[*pb.StringValue]
+	tests := []struct {
+		name      string
+		call      func(respType) (*pb.StringValue, error)
+		wantValue string
+	}{
+		{
+			name:      "Majority",
+			call:      respType.Majority,
+			wantValue: "echo: test",
+		},
+		{
+			name:      "First",
+			call:      respType.First,
+			wantValue: "echo: test",
+		},
+		{
+			name:      "All",
+			call:      respType.All,
+			wantValue: "echo: test",
+		},
+	}
+
+	// Use the explicit config from node 1 outbound.
+	cfg := configs[0]
+	// Sub tests for each response type logic across symmetric routing
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := gorums.TestContext(t, 2*time.Second)
+
+			responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				cfg.Context(ctx),
+				pb.String("test"),
+				mock.TestMethod,
+			)
+
+			result, err := tt.call(responses)
+			if err != nil {
+				t.Fatalf("quorum call error: %v", err)
+			}
+
+			if result.GetValue() != tt.wantValue {
+				t.Errorf("Expected %q, got %q", tt.wantValue, result.GetValue())
+			}
+		})
 	}
 }
