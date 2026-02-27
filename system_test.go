@@ -96,10 +96,10 @@ func TestSystemSymmetricConfiguration(t *testing.T) {
 	// Wait for connections to establish
 	for i, sys := range systems {
 		gorums.WaitForConfigCondition(t, sys.Config, func(cfg gorums.Configuration) bool {
-			return cfg.Size() == 3
+			return cfg.Size() == len(systems)
 		})
-		if got := sys.Config().Size(); got != 3 {
-			t.Fatalf("system %d config size: %d, expected: 3", i+1, got)
+		if got := sys.Config().Size(); got != len(systems) {
+			t.Fatalf("system %d config size: %d, expected: %d", i+1, got, len(systems))
 		}
 	}
 }
@@ -123,6 +123,30 @@ func createTestSystems(t *testing.T, numSystems int) ([]*gorums.System, []gorums
 	return systems, configs
 }
 
+// waitWithTimeout waits for wg to reach zero or calls t.Fatal if the timeout elapses.
+func waitWithTimeout(t *testing.T, wg *sync.WaitGroup) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Timeout waiting for handlers to be invoked")
+	}
+}
+
+func awaitSystemReady(t *testing.T, systems []*gorums.System) {
+	t.Helper()
+	for _, sys := range systems {
+		gorums.WaitForConfigCondition(t, sys.Config, func(cfg gorums.Configuration) bool {
+			return cfg.Size() == len(systems)
+		})
+	}
+}
+
 func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
 	systems, configs := createTestSystems(t, 3)
 
@@ -137,12 +161,7 @@ func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
 		})
 	}
 
-	// Wait for connections to establish
-	for _, sys := range systems {
-		gorums.WaitForConfigCondition(t, sys.Config, func(cfg gorums.Configuration) bool {
-			return cfg.Size() == 3
-		})
-	}
+	awaitSystemReady(t, systems)
 
 	// type alias short hand for the responses type
 	type respType = *gorums.Responses[*pb.StringValue]
@@ -209,12 +228,7 @@ func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
 		})
 	}
 
-	// Wait for connections to establish
-	for _, sys := range systems {
-		gorums.WaitForConfigCondition(t, sys.Config, func(cfg gorums.Configuration) bool {
-			return cfg.Size() == len(systems)
-		})
-	}
+	awaitSystemReady(t, systems)
 
 	cfg := configs[0]
 
@@ -229,19 +243,7 @@ func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
 			t.Fatalf("multicast error: %v", err)
 		}
 
-		// Wait for all handlers to be invoked, or timeout
-		done := make(chan struct{})
-		go func() {
-			wg.Wait()
-			close(done)
-		}()
-
-		select {
-		case <-done:
-			// Success
-		case <-time.After(2 * time.Second):
-			t.Fatal("Timeout waiting for multicast handlers to be invoked")
-		}
+		waitWithTimeout(t, &wg)
 	})
 }
 
@@ -259,12 +261,7 @@ func TestSystemStreamDedupQuorumCall(t *testing.T) {
 		})
 	}
 
-	// Wait for connections to establish
-	for _, sys := range systems {
-		gorums.WaitForConfigCondition(t, sys.Config, func(cfg gorums.Configuration) bool {
-			return cfg.Size() == 3
-		})
-	}
+	awaitSystemReady(t, systems)
 
 	// Verify stream dedup: for each peer pair, exactly one side should have
 	// an outbound channel. The lower-ID node keeps its outbound.
@@ -326,12 +323,7 @@ func TestSystemStreamDedupMulticast(t *testing.T) {
 		})
 	}
 
-	// Wait for connections to establish
-	for _, sys := range systems {
-		gorums.WaitForConfigCondition(t, sys.Config, func(cfg gorums.Configuration) bool {
-			return cfg.Size() == len(systems)
-		})
-	}
+	awaitSystemReady(t, systems)
 
 	cfg := configs[0]
 	ctx := gorums.TestContext(t, 2*time.Second)
@@ -344,16 +336,5 @@ func TestSystemStreamDedupMulticast(t *testing.T) {
 		t.Fatalf("multicast error: %v", err)
 	}
 
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		// Success
-	case <-time.After(2 * time.Second):
-		t.Fatal("Timeout waiting for multicast handlers to be invoked")
-	}
+	waitWithTimeout(t, &wg)
 }
