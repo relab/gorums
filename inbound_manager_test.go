@@ -371,20 +371,6 @@ func testPeerServer(t *testing.T) (*Server, []string) {
 	return srv, addrs
 }
 
-// waitForConfigCondition polls the getCfg function until the condition cond returns true
-// or the timeout elapses.
-func waitForConfigCondition(t *testing.T, getCfg func() Configuration, cond func(Configuration) bool) {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if cond(getCfg()) {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	t.Errorf("timeout waiting for config; got %v", getCfg().NodeIDs())
-}
-
 func equalNodeIDs(ids []uint32) func(Configuration) bool {
 	return func(cfg Configuration) bool {
 		return slices.Equal(cfg.NodeIDs(), ids)
@@ -425,7 +411,7 @@ func TestKnownPeerConnects(t *testing.T) {
 
 	connectAsPeer(t, 2, addrs)
 
-	waitForConfigCondition(t, srv.Config, equalNodeIDs([]uint32{1, 2}))
+	WaitForConfigCondition(t, srv.Config, equalNodeIDs([]uint32{1, 2}))
 	checkIDs(t, srv.Config(), []uint32{1, 2}, "after connect")
 }
 
@@ -436,14 +422,14 @@ func TestKnownPeerDisconnects(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
 	mgr := connectAsPeer(t, 2, addrs)
-	waitForConfigCondition(t, srv.Config, equalNodeIDs([]uint32{1, 2}))
+	WaitForConfigCondition(t, srv.Config, equalNodeIDs([]uint32{1, 2}))
 
 	// Close the peer manager to trigger disconnect; Close is idempotent so
 	// t.Cleanup (registered by connectAsPeer via TestManager) is harmless.
 	if err := mgr.Close(); err != nil {
 		t.Fatalf("mgr.Close() error: %v", err)
 	}
-	waitForConfigCondition(t, srv.Config, equalNodeIDs([]uint32{1}))
+	WaitForConfigCondition(t, srv.Config, equalNodeIDs([]uint32{1}))
 	checkIDs(t, srv.Config(), []uint32{1}, "after disconnect")
 }
 
@@ -516,7 +502,7 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 	}
 
 	// Wait for the peer to appear in the inbound config.
-	waitForConfigCondition(t, srv.Config, equalNodeIDs([]uint32{1, 2}))
+	WaitForConfigCondition(t, srv.Config, equalNodeIDs([]uint32{1, 2}))
 
 	// Server sends a request to the client via the inbound node.
 	inboundCfg := srv.Config()
@@ -616,7 +602,7 @@ func TestDynamicPeerConnects(t *testing.T) {
 	connectAsExternal(t, addrs)
 
 	// Dynamic peer should appear with auto-assigned ID >= dynamicIDStart.
-	waitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) > 0 })
+	WaitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) > 0 })
 	cfg := srv.DynamicConfig()
 	if len(cfg) != 1 {
 		t.Fatalf("DynamicConfig has %d nodes; want 1", len(cfg))
@@ -634,7 +620,7 @@ func TestDynamicPeerDisconnects(t *testing.T) {
 	mgr := connectAsExternal(t, addrs)
 
 	// Wait for the dynamic peer to appear.
-	waitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) > 0 })
+	WaitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) > 0 })
 	if len(srv.DynamicConfig()) != 1 {
 		t.Fatalf("DynamicConfig has %d nodes; want 1", len(srv.DynamicConfig()))
 	}
@@ -645,7 +631,7 @@ func TestDynamicPeerDisconnects(t *testing.T) {
 	}
 
 	// Wait for config to become empty.
-	waitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) == 0 })
+	WaitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) == 0 })
 	checkIDs(t, srv.DynamicConfig(), []uint32{}, "after disconnect")
 }
 
@@ -659,13 +645,13 @@ func TestDynamicPeerMixedMode(t *testing.T) {
 
 	// Connect known peer (ID 2).
 	connectAsPeer(t, 2, addrs)
-	waitForConfigCondition(t, srv.Config, equalNodeIDs([]uint32{1, 2}))
+	WaitForConfigCondition(t, srv.Config, equalNodeIDs([]uint32{1, 2}))
 
 	// Connect unknown client (dynamic peer).
 	connectAsExternal(t, addrs)
 
 	// Wait for 1 dynamic node.
-	waitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) == 1 })
+	WaitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) == 1 })
 	dynCfg := srv.DynamicConfig()
 	if len(dynCfg) != 1 {
 		t.Fatalf("DynamicConfig has %d nodes; want 1", len(dynCfg))
@@ -705,7 +691,7 @@ func TestDynamicPeerServerCallsClient(t *testing.T) {
 	}
 
 	// Wait for the dynamic peer to appear.
-	waitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) > 0 })
+	WaitForConfigCondition(t, srv.DynamicConfig, func(cfg Configuration) bool { return len(cfg) > 0 })
 	dynCfg := srv.DynamicConfig()
 	if len(dynCfg) != 1 {
 		t.Fatalf("DynamicConfig has %d nodes; want 1", len(dynCfg))
