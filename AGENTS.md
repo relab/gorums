@@ -120,6 +120,8 @@ These files are generated from templates. Instead:
 - Commit individual units of work with clear, descriptive messages
 - Never use `git add -A` without first checking `git status`
 - Run tests before committing
+- DO NOT commit anything ever again unless explicitly asked to.
+- DEFINITELY DO NOT push ever, even if asked.
 
 ## Building and Testing
 
