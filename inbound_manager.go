@@ -4,9 +4,10 @@ import (
 	"context"
 	"maps"
 	"slices"
-	"strconv"
 	"sync"
 	"sync/atomic"
+
+	"github.com/relab/gorums/internal/strconv"
 
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc/metadata"
@@ -28,11 +29,16 @@ func nodeID(ctx context.Context) uint32 {
 	if len(vals) == 0 {
 		return 0
 	}
-	id, err := strconv.ParseUint(vals[0], 10, 32)
+	id, err := strconv.ParseInteger[uint32](vals[0], 10)
 	if err != nil || id == 0 {
 		return 0
 	}
 	return uint32(id)
+}
+
+// metadataWithNodeID returns a metadata.MD containing the gorums-node-id key with the given id value.
+func metadataWithNodeID(id uint32) metadata.MD {
+	return metadata.Pairs(gorumsNodeIDKey, strconv.Format(id, 10))
 }
 
 // InboundManager manages server-side awareness of connected peers.
