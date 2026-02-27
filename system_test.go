@@ -30,10 +30,10 @@ func TestSystemLifecycle(t *testing.T) {
 	closer1 := &mockCloser{}
 	closer2 := &mockCloser{}
 
-	sys.RegisterService(closer1, func(srv *gorums.Server) {
+	sys.RegisterService(closer1, func(*gorums.Server) {
 		// In a real scenario, we would register a Gorums service here.
 	})
-	sys.RegisterService(closer2, func(srv *gorums.Server) {
+	sys.RegisterService(closer2, func(*gorums.Server) {
 		// Register another service or just use the callback.
 	})
 
@@ -69,7 +69,7 @@ func TestSystemStopError(t *testing.T) {
 
 	errCloser := &mockCloser{err: errors.New("closer error")}
 
-	sys.RegisterService(errCloser, func(srv *gorums.Server) {})
+	sys.RegisterService(errCloser, func(*gorums.Server) {})
 
 	go func() {
 		_ = sys.Serve()
@@ -102,7 +102,7 @@ func TestSystemSymmetricConfiguration(t *testing.T) {
 	// Each replica connects to the other two via System.NewOutboundConfig
 	// (NodeID is automatically included in metadata)
 	for i, sys := range systems {
-		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
+		sys.RegisterService(configs[i].Manager(), func(*gorums.Server) {
 			// Register mock handlers for the server sides if needed for other tests
 		})
 	}
@@ -138,7 +138,7 @@ func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
 	// Register mock handler to each system
 	for i, sys := range systems {
 		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
-			srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+			srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 				req := gorums.AsProto[*pb.StringValue](in)
 				resp := pb.String("echo: " + req.GetValue())
 				return gorums.NewResponseMessage(in, resp), nil
@@ -225,7 +225,7 @@ func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
 	// Register mock handler to each system
 	for i, sys := range systems {
 		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
-			srv.RegisterHandler(mock.Stream, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+			srv.RegisterHandler(mock.Stream, func(_ gorums.ServerCtx, _ *gorums.Message) (*gorums.Message, error) {
 				wg.Done()
 				return nil, nil
 			})
