@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"slices"
 	"sync"
@@ -68,6 +69,9 @@ type InboundManager struct {
 
 // clientIDStart is the starting ID for dynamically assigned client peers.
 // Chosen to be high enough to avoid collisions with typical known-peer IDs.
+// The available ID space is [clientIDStart, math.MaxUint32], giving approximately
+// 4.3 billion unique IDs before exhaustion. acceptClient rejects new peers if the
+// counter reaches math.MaxUint32 to prevent silent wraparound.
 const clientIDStart = 1 << 20
 
 // newInboundManager creates an InboundManager for this server whose NodeID is myID.
@@ -205,6 +209,9 @@ func (im *InboundManager) registerPeer(streamCtx context.Context, inboundStream 
 func (im *InboundManager) acceptClient(streamCtx context.Context, inboundStream stream.BidiStream) (stream.PeerNode, func(), error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
+	if im.nextClientID == ^uint32(0) {
+		return nil, func() {}, errors.New("gorums: dynamic client ID space exhausted")
+	}
 	id := im.nextClientID
 	im.nextClientID++
 	node := newPeerNode(id, "client", im.getMsgID)
