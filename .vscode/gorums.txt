@@ -11,6 +11,7 @@ checkf
 clevel
 compiletests
 cpuprofile
+dedup
 demultiplexing
 descriptorpb
 devel

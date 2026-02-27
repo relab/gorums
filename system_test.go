@@ -83,21 +83,7 @@ func TestSystemStopError(t *testing.T) {
 }
 
 func TestSystemSymmetricConfiguration(t *testing.T) {
-	systems, configs := gorums.TestSystems(t, 3, func(i int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
-		myID := uint32(i + 1)
-
-		nodeList := gorums.WithNodeList(addrs)
-		srvOpts := []gorums.ServerOption{
-			gorums.WithConfig(myID, nodeList),
-		}
-
-		cfgOpts := []gorums.Option{
-			nodeList,
-			gorums.InsecureDialOptions(t),
-		}
-
-		return srvOpts, cfgOpts
-	})
+	systems, configs := createTestSystems(t, 3)
 
 	// Each replica connects to the other two via System.NewOutboundConfig
 	// (NodeID is automatically included in metadata)
@@ -118,8 +104,8 @@ func TestSystemSymmetricConfiguration(t *testing.T) {
 	}
 }
 
-func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
-	systems, configs := gorums.TestSystems(t, 3, func(i int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
+func createTestSystems(t *testing.T, numSystems int) ([]*gorums.System, []gorums.Configuration) {
+	systems, configs := gorums.TestSystems(t, numSystems, func(i int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
 		myID := uint32(i + 1)
 
 		nodeList := gorums.WithNodeList(addrs)
@@ -134,6 +120,11 @@ func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
 
 		return srvOpts, cfgOpts
 	})
+	return systems, configs
+}
+
+func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
+	systems, configs := createTestSystems(t, 3)
 
 	// Register mock handler to each system
 	for i, sys := range systems {
@@ -203,21 +194,7 @@ func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
 }
 
 func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
-	systems, configs := gorums.TestSystems(t, 3, func(i int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
-		myID := uint32(i + 1)
-
-		nodeList := gorums.WithNodeList(addrs)
-		srvOpts := []gorums.ServerOption{
-			gorums.WithConfig(myID, nodeList),
-		}
-
-		cfgOpts := []gorums.Option{
-			nodeList,
-			gorums.InsecureDialOptions(t),
-		}
-
-		return srvOpts, cfgOpts
-	})
+	systems, configs := createTestSystems(t, 3)
 
 	var wg sync.WaitGroup
 	wg.Add(len(systems))
@@ -269,21 +246,7 @@ func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
 }
 
 func TestSystemStreamDedupQuorumCall(t *testing.T) {
-	systems, configs := gorums.TestSystems(t, 3, func(i int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
-		myID := uint32(i + 1)
-
-		nodeList := gorums.WithNodeList(addrs)
-		srvOpts := []gorums.ServerOption{
-			gorums.WithConfig(myID, nodeList),
-		}
-
-		cfgOpts := []gorums.Option{
-			nodeList,
-			gorums.InsecureDialOptions(t),
-		}
-
-		return srvOpts, cfgOpts
-	})
+	systems, configs := createTestSystems(t, 3)
 
 	// Register echo handler to each system
 	for i, sys := range systems {
@@ -349,21 +312,7 @@ func TestSystemStreamDedupQuorumCall(t *testing.T) {
 }
 
 func TestSystemStreamDedupMulticast(t *testing.T) {
-	systems, configs := gorums.TestSystems(t, 3, func(i int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
-		myID := uint32(i + 1)
-
-		nodeList := gorums.WithNodeList(addrs)
-		srvOpts := []gorums.ServerOption{
-			gorums.WithConfig(myID, nodeList),
-		}
-
-		cfgOpts := []gorums.Option{
-			nodeList,
-			gorums.InsecureDialOptions(t),
-		}
-
-		return srvOpts, cfgOpts
-	})
+	systems, configs := createTestSystems(t, 3)
 
 	var wg sync.WaitGroup
 	wg.Add(len(systems))
