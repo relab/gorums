@@ -33,3 +33,13 @@ func ParseInteger[T Integer](s string, base int) (res T, err error) {
 	}
 	return
 }
+
+// Format returns the string representation of i in the given base,
+// for 2 <= base <= 36. The result uses the lower-case letters 'a' to 'z'
+// for digit values >= 10.
+func Format[T Integer](i T, base int) string {
+	if signed[T]() {
+		return strconv.FormatInt(int64(i), base)
+	}
+	return strconv.FormatUint(uint64(i), base)
+}
