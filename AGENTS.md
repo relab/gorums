@@ -66,14 +66,12 @@ These files are generated from templates. Instead:
 ### Testing Requirements
 
 - Use testing utilities in `testing_shared.go` for common test setup
-- If the provided testing utilities are insufficient, create new ones in `testing_shared.go` and document their usage
 - Always write table-driven tests when same logic needs to be tested with multiple inputs
 - Organize related tests using subtests
 - Test names should be capitalized, like TestFileNameFeatureName, e.g., TestQuorumCallFeatureName, for some feature in `quorumcall_test.go`
 - Run relevant tests after each change
 - NEVER delete failing tests - fix the underlying issue - unless the test is no longer relevant
 - NEVER skip tests or ignore failures
-- NEVER use another testing framework than Go's testing package
 - If addressing a test failure requires significant changes, stop and ask for guidance
 - Test coverage should be comprehensive
 - ALL tests must pass before considering work complete
