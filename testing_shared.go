@@ -18,6 +18,19 @@ import (
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+// testNode is a minimal minimal NodeAddress for use in tests.
+type testNode struct {
+	addr string
+}
+
+func (n testNode) Addr() string { return n.addr }
+
+// Compile-time assertions: both node providers satisfy NodeListOption.
+var (
+	_ NodeListOption = nodeMap[testNode](nil)
+	_ NodeListOption = nodeList(nil)
+)
+
 // TestContext creates a context with timeout for testing.
 // It uses t.Context() as the parent and automatically cancels on cleanup.
 func TestContext(t testing.TB, timeout time.Duration) context.Context {

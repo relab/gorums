@@ -16,19 +16,6 @@ import (
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// inboundTestNode is a minimal NodeAddress for use in InboundManager tests.
-type inboundTestNode struct {
-	addr string
-}
-
-func (n inboundTestNode) Addr() string { return n.addr }
-
-// Compile-time assertions: both node providers satisfy NodeListOption.
-var (
-	_ NodeListOption = nodeMap[inboundTestNode](nil)
-	_ NodeListOption = nodeList(nil)
-)
-
 // mockBidiStream is a minimal stream.BidiStream for testing InboundManager.
 // Recv blocks until a message is sent or the stream is closed.
 type mockBidiStream struct {
@@ -69,10 +56,10 @@ func shouldPanic(t *testing.T, wantSubstr string, fn func()) {
 // newTestInboundManager creates an InboundManager with myID and three known peers.
 func newTestInboundManager(t *testing.T, myID uint32) *InboundManager {
 	t.Helper()
-	im := newInboundManager(myID, WithNodes(map[uint32]inboundTestNode{
-		1: {addr: "127.0.0.1:9081"},
-		2: {addr: "127.0.0.1:9082"},
-		3: {addr: "127.0.0.1:9083"},
+	im := newInboundManager(myID, WithNodes(map[uint32]testNode{
+		1: {"127.0.0.1:9081"},
+		2: {"127.0.0.1:9082"},
+		3: {"127.0.0.1:9083"},
 	}), 0, nil, false)
 	return im
 }
@@ -87,39 +74,39 @@ func TestNewInboundManager(t *testing.T) {
 	}{
 		{
 			name: "ValidNodes",
-			opt: WithNodes(map[uint32]inboundTestNode{
-				1: {addr: "127.0.0.1:9081"},
-				2: {addr: "127.0.0.1:9082"},
-				3: {addr: "127.0.0.1:9083"},
+			opt: WithNodes(map[uint32]testNode{
+				1: {"127.0.0.1:9081"},
+				2: {"127.0.0.1:9082"},
+				3: {"127.0.0.1:9083"},
 			}),
 			wantIDs:    []uint32{1, 2, 3},
 			wantCfgIDs: []uint32{1}, // only self-node until peers connect
 		},
 		{
 			name:      "EmptyMapRejected",
-			opt:       WithNodes(map[uint32]inboundTestNode{}),
+			opt:       WithNodes(map[uint32]testNode{}),
 			wantPanic: "missing required node map",
 		},
 		{
 			name: "NodeZeroRejected",
-			opt: WithNodes(map[uint32]inboundTestNode{
-				0: {addr: "127.0.0.1:9080"},
-				1: {addr: "127.0.0.1:9081"},
+			opt: WithNodes(map[uint32]testNode{
+				0: {"127.0.0.1:9080"},
+				1: {"127.0.0.1:9081"},
 			}),
 			wantPanic: "node 0 is reserved",
 		},
 		{
 			name: "DuplicateAddressRejected",
-			opt: WithNodes(map[uint32]inboundTestNode{
-				1: {addr: "127.0.0.1:9081"},
-				2: {addr: "127.0.0.1:9081"}, // same address as ID 1
+			opt: WithNodes(map[uint32]testNode{
+				1: {"127.0.0.1:9081"},
+				2: {"127.0.0.1:9081"}, // same address as ID 1
 			}),
 			wantPanic: "already in use by node",
 		},
 		{
 			name: "InvalidAddressRejected",
-			opt: WithNodes(map[uint32]inboundTestNode{
-				1: {addr: "not-an-address"},
+			opt: WithNodes(map[uint32]testNode{
+				1: {"not-an-address"},
 			}),
 			wantPanic: "invalid address",
 		},
@@ -379,9 +366,9 @@ func equalNodeIDs(ids []uint32) func(Configuration) bool {
 
 // peerNodes creates the peer NodeListOption used by the E2E tests.
 func peerNodes() NodeListOption {
-	return WithNodes(map[uint32]inboundTestNode{
-		1: {addr: "127.0.0.1:9001"},
-		2: {addr: "127.0.0.1:9002"},
+	return WithNodes(map[uint32]testNode{
+		1: {"127.0.0.1:9001"},
+		2: {"127.0.0.1:9002"},
 	})
 }
 
