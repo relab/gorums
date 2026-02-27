@@ -59,6 +59,7 @@ Meling
 memprofile
 mktemp
 multicast
+multicasts
 naddr
 netrwhist
 obj's
