@@ -34,6 +34,20 @@ func InsecureDialOptions(_ testing.TB) ManagerOption {
 	)
 }
 
+// WaitForConfigCondition polls the config function until the condition cond returns true
+// or the timeout elapses. This is useful for waiting on dynamic config updates.
+func WaitForConfigCondition(t testing.TB, config func() Configuration, cond func(Configuration) bool) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if cond(config()) {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Errorf("timeout waiting for config; got %v", config().NodeIDs())
+}
+
 // TestQuorumCallError creates a QuorumCallError for testing.
 // The nodeErrors map contains node IDs and their corresponding errors.
 func TestQuorumCallError(_ testing.TB, nodeErrors map[uint32]error) QuorumCallError {
