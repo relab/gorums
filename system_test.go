@@ -3,6 +3,7 @@ package gorums_test
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -345,8 +346,11 @@ func TestSystemSymmetricQuorumCallFromHandler_Config(t *testing.T) {
 	}
 	t.Logf("Final result: %s", result.GetValue())
 
-	if result.GetValue() == "" {
-		t.Errorf("Expected non-empty result")
+	wantResult := "echoes: outer-call | inner-echo: inner-call"
+	if strings.Contains(result.GetValue(), wantResult) {
+		t.Logf("Found expected result: %s", result.GetValue())
+	} else {
+		t.Errorf("Expected %s in result, got: %s", wantResult, result.GetValue())
 	}
 }
 
@@ -362,6 +366,7 @@ func TestSystemSymmetricMulticastFromHandler_Config(t *testing.T) {
 	for i, sys := range systems {
 		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
 			srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+				t.Logf("System %d received multicast on %v: %v", i+1, mock.TestMethod, in.Msg)
 				if cfg := ctx.Config(); cfg != nil && cfg.Size() == 3 {
 					_ = gorums.Multicast(
 						cfg.Context(t.Context()),
@@ -373,6 +378,7 @@ func TestSystemSymmetricMulticastFromHandler_Config(t *testing.T) {
 			})
 
 			srv.RegisterHandler(mock.Stream, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+				t.Logf("System %d received multicast on %v: %v", i+1, mock.Stream, in.Msg)
 				wg.Done()
 				return nil, nil
 			})
@@ -405,6 +411,7 @@ func TestSystemSymmetricQuorumCallFromHandler_ClientConfig(t *testing.T) {
 	sysServer.RegisterService(configs[0].Manager(), func(srv *gorums.Server) {
 		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 			req := gorums.AsProto[*pb.StringValue](in)
+			t.Logf("SERVER received quorum call on %v: %v", mock.TestMethod, req.GetValue())
 			if req.GetValue() == "inner-call" {
 				return gorums.NewResponseMessage(in, pb.String("inner-echo: "+req.GetValue())), nil
 			}
@@ -413,15 +420,27 @@ func TestSystemSymmetricQuorumCallFromHandler_ClientConfig(t *testing.T) {
 			if cfg == nil || cfg.Size() != 2 {
 				return nil, errors.New("expected client config size 2")
 			}
+
+			// Release the NodeStream mutex before making the inner quorum call.
+			// The ClientConfig has 2 nodes: system 0's self-connection and system 1.
+			// System 1's inner response arrives on the same NodeStream that is
+			// currently blocked waiting for this handler — releasing first prevents
+			// a deadlock if system 1 responds before the self-connection does.
+			ctx.Release()
+
 			responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
 				cfg.Context(ctx.Context),
 				pb.String("inner-call"),
-				mock.TestMethod, // this is sent to client
+				mock.TestMethod, // sent back to the two client peers
 			)
+			// First() returns whichever client responds first:
+			//   - system 0 self-connection → "inner-echo: inner-call"
+			//   - system 1 → "client-echoed: inner-call"
 			res, err := responses.First()
 			if err != nil {
 				return nil, err
 			}
+			t.Logf("SERVER final result from %v: %v", mock.TestMethod, res.GetValue())
 			return gorums.NewResponseMessage(in, pb.String(req.GetValue()+" | "+res.GetValue())), nil
 		})
 	})
@@ -430,6 +449,7 @@ func TestSystemSymmetricQuorumCallFromHandler_ClientConfig(t *testing.T) {
 	sysClient.RegisterService(configs[1].Manager(), func(srv *gorums.Server) {
 		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 			req := gorums.AsProto[*pb.StringValue](in)
+			t.Logf("CLIENT received quorum call on %v: %v", mock.TestMethod, req.GetValue())
 			return gorums.NewResponseMessage(in, pb.String("client-echoed: "+req.GetValue())), nil
 		})
 	})
@@ -448,8 +468,11 @@ func TestSystemSymmetricQuorumCallFromHandler_ClientConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("quorum call error: %v", err)
 	}
-	if result.GetValue() == "" {
-		t.Errorf("Expected non-empty result")
+	t.Logf("CLIENT final result from %v: %v", mock.TestMethod, result.GetValue())
+	// The result prefix is fixed; the suffix depends on which client peer responded
+	// first to the inner call (self-connection vs system 1 — both are valid).
+	if !strings.HasPrefix(result.GetValue(), "outer-call | ") {
+		t.Errorf("Expected result to start with %q, got %q", "outer-call | ", result.GetValue())
 	}
 }
 
@@ -461,9 +484,16 @@ func TestSystemSymmetricMulticastFromHandler_ClientConfig(t *testing.T) {
 		return []gorums.ServerOption{gorums.WithClientConfig()}, []gorums.Option{gorums.WithNodeList([]string{addrs[0]}), gorums.InsecureDialOptions(t)}
 	})
 
+	// Outer multicast from client triggers 1 server handler.
+	// That server handler multicasts to config of size 2 -> 2 messages sent.
+	// So wg expects 2 receives.
+	var wg sync.WaitGroup
+	wg.Add(2)
+
 	sysServer := systems[0]
 	sysServer.RegisterService(configs[0].Manager(), func(srv *gorums.Server) {
 		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+			t.Logf("SERVER received multicast on %v: %v", mock.TestMethod, in.Msg)
 			if cfg := ctx.ClientConfig(); cfg != nil && cfg.Size() == 2 {
 				_ = gorums.Multicast(
 					cfg.Context(t.Context()),
@@ -473,26 +503,17 @@ func TestSystemSymmetricMulticastFromHandler_ClientConfig(t *testing.T) {
 			}
 			return nil, nil // one-way
 		})
-	})
-
-	// Outer multicast from client triggers 1 server handler.
-	// That server handler multicasts to config of size 2 -> 2 messages sent.
-	// So wg expects 2 receives.
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	sysClient := systems[1]
-	sysClient.RegisterService(configs[1].Manager(), func(srv *gorums.Server) {
 		srv.RegisterHandler(mock.Stream, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-			t.Log("CLIENT received multicast!")
+			t.Logf("SERVER received multicast on %v: %v", mock.Stream, in.Msg)
 			wg.Done()
 			return nil, nil
 		})
 	})
 
-	sysServer.RegisterService(configs[0].Manager(), func(srv *gorums.Server) {
+	sysClient := systems[1]
+	sysClient.RegisterService(configs[1].Manager(), func(srv *gorums.Server) {
 		srv.RegisterHandler(mock.Stream, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-			t.Log("SERVER received multicast!")
+			t.Logf("CLIENT received multicast on %v: %v", mock.Stream, in.Msg)
 			wg.Done()
 			return nil, nil
 		})
