@@ -54,7 +54,20 @@ func (s *System) NewOutboundConfig(opts ...Option) (Configuration, error) {
 		return NewConfig(opts...)
 	}
 	opts = append([]Option{WithNodeID(s.srv.inboundMgr.myID)}, opts...)
-	return NewConfig(opts...)
+	// TODO(meling): consider if we can integrate the setHandler logic into the Manager or InboundManager or NewConfig()
+	cfg, err := NewConfig(opts...)
+	if err != nil {
+		return nil, err
+	}
+	// Register the server as a RequestHandler on each outbound node so that
+	// server-initiated requests arriving via the bidirectional back-channel are
+	// dispatched to this server's registered handlers.
+	for _, node := range cfg.Nodes() {
+		if node.ID() != s.srv.inboundMgr.myID {
+			node.setRequestHandler(s.srv)
+		}
+	}
+	return cfg, nil
 }
 
 // RegisterService registers the service with the server using the provided register function.
