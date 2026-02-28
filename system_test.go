@@ -232,23 +232,21 @@ func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
 	awaitSystemReady(t, systems)
 
 	cfg := configs[0]
+	ctx := gorums.TestContext(t, 2*time.Second)
+	err := gorums.Multicast(
+		cfg.Context(ctx),
+		pb.String("test"),
+		mock.Stream,
+	)
+	if err != nil {
+		t.Fatalf("multicast error: %v", err)
+	}
 
-	t.Run("Multicast", func(t *testing.T) {
-		ctx := gorums.TestContext(t, 2*time.Second)
-		err := gorums.Multicast(
-			cfg.Context(ctx),
-			pb.String("test"),
-			mock.Stream,
-		)
-		if err != nil {
-			t.Fatalf("multicast error: %v", err)
-		}
-
-		waitWithTimeout(t, &wg)
-	})
+	waitWithTimeout(t, &wg)
 }
 
-func TestSystemStreamDedupQuorumCall(t *testing.T) {
+func TestSystemStreamDeduplicated(t *testing.T) {
+	t.Skip("Temporarily skipping since I've rolled back the stream deduplication changes. Will re-enable once we reintroduce stream deduplication.")
 	systems, configs := createTestSystems(t, 3)
 
 	// Register echo handler to each system
@@ -289,55 +287,6 @@ func TestSystemStreamDedupQuorumCall(t *testing.T) {
 			}
 		}
 	}
-
-	// Verify quorum calls still work across deduplicated streams
-	cfg := configs[0]
-	ctx := gorums.TestContext(t, 2*time.Second)
-
-	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
-		cfg.Context(ctx),
-		pb.String("dedup-test"),
-		mock.TestMethod,
-	)
-
-	result, err := responses.Majority()
-	if err != nil {
-		t.Fatalf("quorum call error: %v", err)
-	}
-	if result.GetValue() != "echo: dedup-test" {
-		t.Errorf("Expected %q, got %q", "echo: dedup-test", result.GetValue())
-	}
-}
-
-func TestSystemStreamDedupMulticast(t *testing.T) {
-	systems, configs := createTestSystems(t, 3)
-
-	var wg sync.WaitGroup
-	wg.Add(len(systems))
-
-	for i, sys := range systems {
-		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
-			srv.RegisterHandler(mock.Stream, func(_ gorums.ServerCtx, _ *gorums.Message) (*gorums.Message, error) {
-				wg.Done()
-				return nil, nil
-			})
-		})
-	}
-
-	awaitSystemReady(t, systems)
-
-	cfg := configs[0]
-	ctx := gorums.TestContext(t, 2*time.Second)
-	err := gorums.Multicast(
-		cfg.Context(ctx),
-		pb.String("dedup-multicast"),
-		mock.Stream,
-	)
-	if err != nil {
-		t.Fatalf("multicast error: %v", err)
-	}
-
-	waitWithTimeout(t, &wg)
 }
 
 func TestSystemSymmetricQuorumCallFromHandler_Config(t *testing.T) {
