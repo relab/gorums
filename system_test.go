@@ -162,7 +162,7 @@ func awaitClientReady(t *testing.T, sys *gorums.System, n int) {
 // so that system 1 appears in system 0's ClientConfig, and system 0 has a self-connection.
 func createClientServerSystems(t *testing.T) ([]*gorums.System, []gorums.Configuration) {
 	t.Helper()
-	return gorums.TestSystems(t, 2, func(i int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
+	return gorums.TestSystems(t, 2, func(_ int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
 		return []gorums.ServerOption{gorums.WithClientConfig()},
 			[]gorums.Option{gorums.WithNodeList([]string{addrs[0]}), gorums.InsecureDialOptions(t)}
 	})
@@ -380,7 +380,7 @@ func TestSystemSymmetricMulticastFromHandler_Config(t *testing.T) {
 				return nil, nil // one-way
 			})
 
-			srv.RegisterHandler(mock.Stream, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+			srv.RegisterHandler(mock.Stream, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 				t.Logf("System %d received multicast on %v: %v", i+1, mock.Stream, in.Msg)
 				wg.Done()
 				return nil, nil
