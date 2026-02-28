@@ -49,38 +49,12 @@ func (s *System) ClientConfig() Configuration {
 // peers. It automatically includes this system's NodeID in the
 // connection metadata, enabling the remote server to identify
 // this replica.
-//
-// When the server has an InboundManager (symmetric configuration),
-// stream deduplication is enabled: shared Node objects from the
-// InboundManager are adopted, and only the lower-ID node in each pair
-// creates an outbound connection. After building the configuration,
-// it refreshes the InboundManager's config and sets request handlers on
-// shared nodes so that server-initiated calls arriving on outbound
-// channels are dispatched through the server's handler chain.
 func (s *System) NewOutboundConfig(opts ...Option) (Configuration, error) {
 	if s.srv.inboundMgr == nil {
 		return NewConfig(opts...)
 	}
-	opts = append([]Option{
-		WithNodeID(s.srv.inboundMgr.myID),
-		withInboundManager(s.srv.inboundMgr),
-	}, opts...)
-	cfg, err := NewConfig(opts...)
-	if err != nil {
-		return nil, err
-	}
-	// Refresh InboundManager's config so that peers with newly-attached
-	// outbound channels appear in Config().
-	s.srv.inboundMgr.RefreshConfig()
-	// Set the server's request handler on all shared nodes' routers so that
-	// the outbound channel's receiver goroutine can dispatch incoming
-	// server-initiated requests through the server's handler chain.
-	for _, node := range cfg.Nodes() {
-		if node.ID() != s.srv.inboundMgr.myID {
-			node.setRequestHandler(s.srv)
-		}
-	}
-	return cfg, nil
+	opts = append([]Option{WithNodeID(s.srv.inboundMgr.myID)}, opts...)
+	return NewConfig(opts...)
 }
 
 // RegisterService registers the service with the server using the provided register function.

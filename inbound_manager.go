@@ -132,27 +132,6 @@ func (im *InboundManager) getMsgID() uint64 {
 	return im.nextMsgID.Add(1)
 }
 
-// PeerNode returns the pre-created Node for a known peer with the given ID.
-// Returns nil if id is 0 or the ID is not a known peer.
-func (im *InboundManager) PeerNode(id uint32) *Node {
-	if id == 0 {
-		return nil
-	}
-	im.mu.RLock()
-	defer im.mu.RUnlock()
-	return im.nodes[id]
-}
-
-// RefreshConfig rebuilds the known-peer configuration from the current nodes map.
-// This should be called after external code (e.g., Manager during stream dedup)
-// attaches an outbound channel to a shared peer node, so that Config() reflects
-// the updated connectivity state.
-func (im *InboundManager) RefreshConfig() {
-	im.mu.Lock()
-	defer im.mu.Unlock()
-	im.rebuildConfig()
-}
-
 // newNode creates a peer node for the given id and normalized addr and
 // registers it in the manager's node map. This must be called during
 // construction before any peers connect, so no locking is needed.
