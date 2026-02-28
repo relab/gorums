@@ -229,6 +229,39 @@ func configContext(t *testing.T, ctx gorums.ServerCtx, client bool) *gorums.Conf
 	return configContext
 }
 
+// outerChainedHandler returns an outer handler that fans out an inner quorum call
+// on innerMethod, then combines the outer request value with the inner result.
+// Unlike innerQuorumCallHandler, routing is done entirely by method registration:
+// no message-content inspection is needed.
+func outerChainedHandler(
+	t *testing.T,
+	myID int,
+	client bool,
+	innerMethod string,
+	respFn func(*gorums.Responses[*pb.StringValue]) (*pb.StringValue, error),
+) gorums.Handler {
+	t.Helper()
+	return func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+		req := gorums.AsProto[*pb.StringValue](in)
+		t.Logf("System %d received outer request: %s", myID, req.GetValue())
+		// Release the NodeStream mutex before making the inner quorum call.
+		// Without this, the NodeStream's Recv loop cannot read the inner-call
+		// responses off the wire while this handler is blocked waiting for them,
+		// causing a deadlock.
+		ctx.Release()
+		responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+			configContext(t, ctx, client),
+			req,
+			innerMethod,
+		)
+		res, err := respFn(responses)
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, pb.String(req.GetValue()+" | "+res.GetValue())), nil
+	}
+}
+
 func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
 	systems, configs := createTestSystems(t, 3)
 
@@ -474,6 +507,79 @@ func TestSystemSymmetricQuorumCallFromHandler_ClientConfig(t *testing.T) {
 	t.Logf("CLIENT final result: %v", result.GetValue())
 	// The prefix is always "outer-call | "; the suffix depends on which peer
 	// won the inner First() race (self-connection vs system 1 — both are valid).
+	if !strings.HasPrefix(result.GetValue(), "outer-call | ") {
+		t.Errorf("Expected result to start with %q, got %q", "outer-call | ", result.GetValue())
+	}
+}
+
+func TestSystemChainedQuorumCallFromHandler_Config(t *testing.T) {
+	systems, configs := createTestSystems(t, 3)
+
+	for i, sys := range systems {
+		myID := i + 1
+		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
+			// Outer handler fans out to EchoMethod; inner handler replies directly.
+			srv.RegisterHandler(mock.TestMethod, outerChainedHandler(t, myID, false, mock.EchoMethod, (*gorums.Responses[*pb.StringValue]).Majority))
+			srv.RegisterHandler(mock.EchoMethod, stringEchoHandler("inner-echo"))
+		})
+	}
+
+	awaitSystemReady(t, systems)
+
+	cfg := configs[0]
+	ctx := gorums.TestContext(t, 2*time.Second)
+
+	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+		cfg.Context(ctx),
+		pb.String("outer-call"),
+		mock.TestMethod,
+	)
+	result, err := responses.Majority()
+	if err != nil {
+		t.Fatalf("quorum call error: %v", err)
+	}
+	t.Logf("Final result: %s", result.GetValue())
+
+	wantResult := "outer-call | inner-echo: outer-call"
+	if !strings.Contains(result.GetValue(), wantResult) {
+		t.Errorf("Expected %q in result, got: %s", wantResult, result.GetValue())
+	}
+}
+
+func TestSystemChainedQuorumCallFromHandler_ClientConfig(t *testing.T) {
+	systems, configs := createClientServerSystems(t)
+	sysServer, sysClient := systems[0], systems[1]
+
+	// Server: outer handler fans out an inner quorum call on EchoMethod to all
+	// client peers (self-connection + system 1) and returns whichever responds first.
+	sysServer.RegisterService(configs[0].Manager(), func(srv *gorums.Server) {
+		srv.RegisterHandler(mock.TestMethod, outerChainedHandler(t, 1, true, mock.EchoMethod, (*gorums.Responses[*pb.StringValue]).First))
+		srv.RegisterHandler(mock.EchoMethod, stringEchoHandler("server-echo"))
+	})
+
+	// Client: echoes inner quorum calls back with a prefix.
+	sysClient.RegisterService(configs[1].Manager(), func(srv *gorums.Server) {
+		srv.RegisterHandler(mock.EchoMethod, stringEchoHandler("client-echo"))
+	})
+
+	awaitClientReady(t, sysServer, 2)
+
+	cfgClient := configs[1]
+	ctx := gorums.TestContext(t, 2*time.Second)
+	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+		cfgClient.Context(ctx),
+		pb.String("outer-call"),
+		mock.TestMethod,
+	)
+	result, err := responses.First()
+	if err != nil {
+		t.Fatalf("quorum call error: %v", err)
+	}
+	t.Logf("CLIENT final result: %v", result.GetValue())
+	// The prefix is always "outer-call | "; the suffix depends on which peer
+	// won the inner First() race:
+	//   self-connection → "server-echo: outer-call"
+	//   system 1        → "client-echo: outer-call"
 	if !strings.HasPrefix(result.GetValue(), "outer-call | ") {
 		t.Errorf("Expected result to start with %q, got %q", "outer-call | ", result.GetValue())
 	}

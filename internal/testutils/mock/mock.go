@@ -17,6 +17,7 @@ func init() {
 			Name: "mock.MockService",
 			Methods: []Method{
 				{Name: "Test", Input: &pb.StringValue{}, Output: &pb.StringValue{}},
+				{Name: "Echo", Input: &pb.StringValue{}, Output: &pb.StringValue{}},
 				{Name: "GetValue", Input: &pb.Int32Value{}, Output: &pb.Int32Value{}},
 				{Name: "Stream", Input: &pb.StringValue{}, Output: &pb.StringValue{}},
 			},
@@ -27,9 +28,10 @@ func init() {
 	}
 }
 
-// TestMethod and GetValueMethod are the methods supported by the mock package.
+// TestMethod, EchoMethod, GetValueMethod, and Stream are the methods supported by the mock package.
 const (
 	TestMethod     = "mock.MockService.Test"
+	EchoMethod     = "mock.MockService.Echo"
 	GetValueMethod = "mock.MockService.GetValue"
 	Stream         = "mock.MockService.Stream"
 )
