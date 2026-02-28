@@ -307,6 +307,12 @@ func TestSystemSymmetricQuorumCallFromHandler_Config(t *testing.T) {
 					return nil, errors.New("expected config size 3")
 				}
 
+				// Release the NodeStream mutex before making the inner quorum call.
+				// Without this, the NodeStream's Recv loop cannot read the inner-call
+				// responses off the wire while this handler is blocked waiting for them,
+				// causing a deadlock.
+				ctx.Release()
+
 				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
 					cfg.Context(ctx.Context),
 					pb.String("inner-call"),
