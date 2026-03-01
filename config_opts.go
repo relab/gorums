@@ -135,7 +135,7 @@ func (b *nodeBuilder) add(id uint32, addr string) error {
 	}
 
 	b.addrToID[normalizedAddr] = id
-	node, err := b.registry.newNode(id, addr)
+	node, err := b.registry.newNode(id, normalizedAddr)
 	if err != nil {
 		return err
 	}
