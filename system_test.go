@@ -371,11 +371,14 @@ func TestSystemSymmetricMulticastFromHandler_Config(t *testing.T) {
 			srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 				t.Logf("System %d received multicast on %v: %v", i+1, mock.TestMethod, in.Msg)
 				if cfg := ctx.Config(); cfg != nil && cfg.Size() == 3 {
-					_ = gorums.Multicast(
+					err := gorums.Multicast(
 						cfg.Context(t.Context()),
 						pb.String("inner-multicast"),
 						mock.Stream,
 					)
+					if err != nil {
+						t.Fatalf("multicast error: %v", err)
+					}
 				}
 				return nil, nil // one-way
 			})
@@ -392,11 +395,14 @@ func TestSystemSymmetricMulticastFromHandler_Config(t *testing.T) {
 
 	cfg := configs[0]
 	ctx := gorums.TestContext(t, 2*time.Second)
-	_ = gorums.Multicast(
+	err := gorums.Multicast(
 		cfg.Context(ctx),
 		pb.String("outer-multicast"),
 		mock.TestMethod,
 	)
+	if err != nil {
+		t.Fatalf("multicast error: %v", err)
+	}
 
 	waitWithTimeout(t, &wg)
 }
@@ -489,11 +495,14 @@ func TestSystemSymmetricMulticastFromHandler_ClientConfig(t *testing.T) {
 		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 			t.Logf("SERVER received multicast: %v", in.Msg)
 			if cfg := ctx.ClientConfig(); cfg != nil && cfg.Size() == 2 {
-				_ = gorums.Multicast(
+				err := gorums.Multicast(
 					cfg.Context(t.Context()),
 					pb.String("inner-call"),
 					mock.Stream,
 				)
+				if err != nil {
+					t.Fatalf("multicast error: %v", err)
+				}
 			}
 			return nil, nil // one-way
 		})
@@ -516,11 +525,14 @@ func TestSystemSymmetricMulticastFromHandler_ClientConfig(t *testing.T) {
 
 	cfgClient := configs[1]
 	ctx := gorums.TestContext(t, 2*time.Second)
-	_ = gorums.Multicast(
+	err := gorums.Multicast(
 		cfgClient.Context(ctx),
 		pb.String("trigger"),
 		mock.TestMethod,
 	)
+	if err != nil {
+		t.Fatalf("multicast error: %v", err)
+	}
 
 	waitWithTimeout(t, &wg)
 }
