@@ -89,7 +89,7 @@ type nodeBuilder struct {
 	nodes    Configuration
 }
 
-// newNodeBuilder creates a new nodeBuilder initialized with existing nodes from the manager.
+// newNodeBuilder creates a new nodeBuilder initialized with existing nodes from the registry.
 func newNodeBuilder(registry nodeRegistry, capacity int) *nodeBuilder {
 	addrToID := make(map[string]uint32, capacity)
 	idToNode := make(map[uint32]*Node, capacity)
