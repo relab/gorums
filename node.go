@@ -77,6 +77,7 @@ type nodeOptions struct {
 	Metadata       metadata.MD
 	PerNodeMD      func(uint32) metadata.MD
 	DialOpts       []grpc.DialOption
+	RequestHandler stream.RequestHandler
 	Manager        *Manager // only used for backward compatibility to allow Configuration.Manager()
 }
 
@@ -88,12 +89,16 @@ func newNode(addr string, opts nodeOptions) (*Node, error) {
 		return nil, err
 	}
 
+	router := stream.NewMessageRouter()
+	if opts.RequestHandler != nil {
+		router.SetRequestHandler(opts.RequestHandler)
+	}
 	n := &Node{
 		id:       opts.ID,
 		addr:     tcpAddr.String(),
 		mgr:      opts.Manager,
 		msgIDGen: opts.MsgIDGen,
-		router:   stream.NewMessageRouter(),
+		router:   router,
 	}
 
 	// Create gRPC connection to the node without connecting (lazy dial).
@@ -162,11 +167,6 @@ func (n *Node) Enqueue(req stream.Request) {
 	if ch := n.channel.Load(); ch != nil {
 		ch.Enqueue(req)
 	}
-}
-
-// setRequestHandler sets the RequestHandler on this node's router.
-func (n *Node) setRequestHandler(handler stream.RequestHandler) {
-	n.router.SetRequestHandler(handler)
 }
 
 // compile-time assertion that Node implements the PeerNode interface.

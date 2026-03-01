@@ -470,7 +470,7 @@ func (m mockRequestHandler) HandleRequest(ctx context.Context, msg *stream.Messa
 func TestKnownPeerServerCallsClient(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
-	// Client connects as peer 2 and registers a handler on its outbound nodes.
+	// Client connects as peer 2 with a handler injected via withRequestHandler.
 	clientHandlers := map[string]Handler{
 		mock.TestMethod: func(_ ServerCtx, in *Message) (*Message, error) {
 			req := AsProto[*pb.StringValue](in)
@@ -478,14 +478,10 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 		},
 	}
 	peerMD := metadata.Pairs(gorumsNodeIDKey, "2")
-	mgr := TestManager(t, WithMetadata(peerMD))
-	cfg, err := NewConfiguration(mgr, WithNodeList(addrs))
+	mgr := TestManager(t, WithMetadata(peerMD), withRequestHandler(mockRequestHandler{handlers: clientHandlers}, 0))
+	_, err := NewConfiguration(mgr, WithNodeList(addrs))
 	if err != nil {
 		t.Fatalf("NewConfiguration() error: %v", err)
-	}
-	// Set client-side handlers on all outbound nodes.
-	for _, node := range cfg.Nodes() {
-		node.setRequestHandler(mockRequestHandler{handlers: clientHandlers})
 	}
 
 	// Wait for the peer to appear in the inbound config.
@@ -661,20 +657,17 @@ func TestClientConfigMixedMode(t *testing.T) {
 func TestClientConfigServerCallsClient(t *testing.T) {
 	srv, addrs := testClientServer(t)
 
-	// Client connects and registers a handler.
+	// Client connects and injects a handler via withRequestHandler.
 	clientHandlers := map[string]Handler{
 		mock.TestMethod: func(_ ServerCtx, in *Message) (*Message, error) {
 			req := AsProto[*pb.StringValue](in)
 			return NewResponseMessage(in, pb.String("dynamic: "+req.GetValue())), nil
 		},
 	}
-	mgr := TestManager(t)
-	cfg, err := NewConfiguration(mgr, WithNodeList(addrs))
+	mgr := TestManager(t, withRequestHandler(mockRequestHandler{handlers: clientHandlers}, 0))
+	_, err := NewConfiguration(mgr, WithNodeList(addrs))
 	if err != nil {
 		t.Fatalf("NewConfiguration() error: %v", err)
-	}
-	for _, node := range cfg.Nodes() {
-		node.setRequestHandler(mockRequestHandler{handlers: clientHandlers})
 	}
 
 	// Wait for the client peer to appear.
