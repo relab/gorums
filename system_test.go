@@ -318,7 +318,11 @@ func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
 }
 
 func TestSystemStreamDeduplicated(t *testing.T) {
-	t.Skip("Temporarily skipping since I've rolled back the stream deduplication changes. Will re-enable once we reintroduce stream deduplication.")
+	// An initial draft implementation of the stream dedup logic was accidentally
+	// merged (by Gemini 3.1 Pro), and reverted in commit e321c832b71cc1.
+	// Stream deduplication is tracked by issue #279: We will re-enable this
+	// test once we reintroduce stream deduplication logic in a future PR.
+	t.Skip("Temporarily skipping since I've rolled back the stream deduplication changes.")
 	systems, configs := createTestSystems(t, 3)
 
 	// Register echo handler to each system
