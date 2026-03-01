@@ -17,7 +17,6 @@ type NodeListOption interface {
 // nodeRegistry abstracts the node management operations required to build a Configuration.
 // Implemented by Manager and InboundManager.
 type nodeRegistry interface {
-	NodeIDs() []uint32
 	Nodes() []*Node
 	newNode(id uint32, addr string) (*Node, error)
 }
@@ -86,6 +85,7 @@ type nodeBuilder struct {
 	registry nodeRegistry
 	addrToID map[string]uint32 // normalized address -> node ID
 	idToNode map[uint32]*Node  // existing node ID -> node
+	maxID    uint32            // maximum existing node ID
 	nodes    Configuration
 }
 
@@ -93,15 +93,19 @@ type nodeBuilder struct {
 func newNodeBuilder(registry nodeRegistry, capacity int) *nodeBuilder {
 	addrToID := make(map[string]uint32, capacity)
 	idToNode := make(map[uint32]*Node, capacity)
+	maxID := uint32(0)
 	// Populate with existing nodes from the registry (already normalized)
 	for _, existingNode := range registry.Nodes() {
-		addrToID[existingNode.Address()] = existingNode.ID()
-		idToNode[existingNode.ID()] = existingNode
+		id := existingNode.ID()
+		addrToID[existingNode.Address()] = id
+		idToNode[id] = existingNode
+		maxID = max(maxID, id)
 	}
 	return &nodeBuilder{
 		registry: registry,
 		addrToID: addrToID,
 		idToNode: idToNode,
+		maxID:    maxID,
 		nodes:    make(Configuration, 0, capacity),
 	}
 }
@@ -147,10 +151,7 @@ func (b *nodeBuilder) configuration() Configuration {
 
 // nextID returns the next available node ID (max existing ID + 1).
 func (b *nodeBuilder) nextID() uint32 {
-	if nodeIDs := b.registry.NodeIDs(); len(nodeIDs) > 0 {
-		return slices.Max(nodeIDs) + 1
-	}
-	return 1
+	return b.maxID + 1
 }
 
 // normalizeAddr normalizes an address string to a canonical form using
