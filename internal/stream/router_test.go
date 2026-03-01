@@ -155,31 +155,29 @@ func (m *mockRequestHandler) HandleRequest(_ context.Context, _ *Message, releas
 }
 
 func TestRouterRequestHandler(t *testing.T) {
-	r := NewMessageRouter()
+	t.Run("NoHandler", func(t *testing.T) {
+		r := NewMessageRouter()
+		if _, ok := r.RequestHandler(); ok {
+			t.Error("RequestHandler should return false when no handler is set")
+		}
+	})
 
-	// No handler set: lookup should return false.
-	if _, ok := r.RequestHandler(); ok {
-		t.Error("RequestHandler should return false when no handler is set")
-	}
+	t.Run("WithHandler", func(t *testing.T) {
+		mockHandler := &mockRequestHandler{}
+		r := NewMessageRouter(mockHandler)
 
-	// Set a mock RequestHandler.
-	mockHandler := &mockRequestHandler{}
-	r.SetRequestHandler(mockHandler)
+		h, ok := r.RequestHandler()
+		if !ok {
+			t.Fatal("RequestHandler should return true for registered handler")
+		}
+		if h == nil {
+			t.Fatal("RequestHandler returned nil handler")
+		}
 
-	// Lookup registered handler.
-	h, ok := r.RequestHandler()
-	if !ok {
-		t.Fatal("RequestHandler should return true for registered handler")
-	}
-	if h == nil {
-		t.Fatal("RequestHandler returned nil handler")
-	}
-
-	// Verify the handler is callable.
-	emptyRelease := func() {}
-	emptySend := func(*Message) {}
-	h.HandleRequest(context.Background(), &Message{}, emptyRelease, emptySend)
-	if !mockHandler.called {
-		t.Error("handler was not called")
-	}
+		// Verify the handler is callable.
+		h.HandleRequest(context.Background(), &Message{}, func() {}, func(*Message) {})
+		if !mockHandler.called {
+			t.Error("handler was not called")
+		}
+	})
 }
