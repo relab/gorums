@@ -89,16 +89,12 @@ func newNode(addr string, opts nodeOptions) (*Node, error) {
 		return nil, err
 	}
 
-	router := stream.NewMessageRouter()
-	if opts.RequestHandler != nil {
-		router.SetRequestHandler(opts.RequestHandler)
-	}
 	n := &Node{
 		id:       opts.ID,
 		addr:     tcpAddr.String(),
 		mgr:      opts.Manager,
 		msgIDGen: opts.MsgIDGen,
-		router:   router,
+		router:   stream.NewMessageRouter(opts.RequestHandler),
 	}
 
 	// Create gRPC connection to the node without connecting (lazy dial).

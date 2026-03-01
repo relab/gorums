@@ -87,15 +87,6 @@ func WithPerNodeMetadata(f func(uint32) metadata.MD) ManagerOption {
 	}
 }
 
-// WithNodeID returns a ManagerOption that automatically includes this client's
-// node ID in the outgoing metadata. This is required for symmetric configurations
-// because the server needs to identify the connecting client.
-func WithNodeID(id uint32) ManagerOption {
-	return func(o *managerOptions) {
-		o.metadata = metadata.Join(o.metadata, metadataWithNodeID(id))
-	}
-}
-
 // withRequestHandler returns a ManagerOption that sets the RequestHandler used to
 // dispatch server-initiated requests arriving on the bidirectional back-channel,
 // and records localID as this node's own NodeID. The localID is included in this

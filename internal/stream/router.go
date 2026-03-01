@@ -33,19 +33,19 @@ type MessageRouter struct {
 	handler RequestHandler // shared by reference; may be nil
 }
 
-// NewMessageRouter creates a new MessageRouter.
-func NewMessageRouter() *MessageRouter {
+// NewMessageRouter creates a new MessageRouter with an optional RequestHandler.
+// The handler, if provided, is used to dispatch server-initiated requests that
+// arrive on the bidirectional back-channel: when the client receives a message
+// that does not match a pending outbound call, the Channel passes it to the
+// handler via RequestHandler(). Passing nil (or omitting the argument) disables
+// server-initiated dispatch on this router.
+func NewMessageRouter(handler ...RequestHandler) *MessageRouter {
+	handler = append(handler, nil) // ensure handler[0] is always valid
 	return &MessageRouter{
 		pending: make(map[uint64]Request),
 		latency: -1 * time.Second,
+		handler: handler[0],
 	}
-}
-
-// SetRequestHandler sets the RequestHandler for this router.
-// All routers that share the same handler will execute incoming server-initiated calls.
-// This must be called before the router is used for handler lookup.
-func (r *MessageRouter) SetRequestHandler(handler RequestHandler) {
-	r.handler = handler
 }
 
 // RequestHandler returns the RequestHandler if set.
