@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"maps"
@@ -115,15 +116,16 @@ func (im *InboundManager) Node(id uint32) (node *Node, found bool) {
 	return node, found
 }
 
-// Nodes returns a slice of each known peer node.
+// Nodes returns a slice of known peer nodes in order of their IDs.
+// Nodes with no active channel (disconnected peers) are still included
+// since they are still part of the configuration and may reconnect.
+// Client peer nodes are removed when they disconnect.
 func (im *InboundManager) Nodes() []*Node {
 	im.mu.RLock()
 	defer im.mu.RUnlock()
-	nodes := make([]*Node, 0, len(im.nodes))
-	for _, node := range im.nodes {
-		nodes = append(nodes, node)
-	}
-	return nodes
+	return slices.SortedFunc(maps.Values(im.nodes), func(a, b *Node) int {
+		return cmp.Compare(a.ID(), b.ID())
+	})
 }
 
 // Config returns a [Configuration] of all connected known peers, plus this node.

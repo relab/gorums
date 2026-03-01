@@ -157,8 +157,6 @@ func (b *nodeBuilder) addNew(id uint32, addr string) error {
 
 // configuration returns the built Configuration, sorted by ID.
 func (b *nodeBuilder) configuration() Configuration {
-	// The caller will sort the resulting nodes if needed.
-	// We only sort the newly added nodes to ensure consistent order.
 	OrderedBy(ID).Sort(b.nodes)
 	return b.nodes
 }
