@@ -89,12 +89,12 @@ func (ctx *ServerCtx) ClientConfig() Configuration {
 
 // ConfigContext returns a [ConfigContext] encapsulating the [Configuration] of
 // all connected known peers, plus this node.
-// Returns nil if no peer tracking is configured or if no peers are connected.
+// Returns nil if no peer tracking is configured.
 func (ctx *ServerCtx) ConfigContext() *ConfigContext {
 	if ctx.srv == nil {
 		return nil
 	}
-	if cfg := ctx.srv.Config(); len(cfg) > 0 {
+	if cfg := ctx.srv.Config(); cfg != nil {
 		return cfg.Context(ctx)
 	}
 	return nil
