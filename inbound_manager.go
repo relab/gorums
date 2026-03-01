@@ -135,6 +135,8 @@ const serverIDMask = uint64(1) << 63
 
 // getMsgID returns the next unique message ID for server-initiated calls.
 // The high bit is always set to avoid collision with client-initiated IDs.
+// Exhausting the remaining 63-bit counter space requires approximately
+// 292,000 years at one million calls per second.
 func (im *InboundManager) getMsgID() uint64 {
 	return im.nextMsgID.Add(1) | serverIDMask
 }
