@@ -132,8 +132,10 @@ func TestNewInboundManager(t *testing.T) {
 				return
 			}
 			im := newInboundManager(1, tc.opt, 0, nil, nil, false)
-			if got := im.NodeIDs(); !slices.Equal(got, tc.wantIDs) {
-				t.Errorf("NodeIDs() = %v; want %v", got, tc.wantIDs)
+			for i, node := range im.Nodes() {
+				if node.ID() != tc.wantIDs[i] {
+					t.Errorf("Node %d ID = %d; want %d", i, node.ID(), tc.wantIDs[i])
+				}
 			}
 			if got := im.Config().NodeIDs(); !slices.Equal(got, tc.wantCfgIDs) {
 				t.Errorf("Config().NodeIDs() = %v; want %v", got, tc.wantCfgIDs)
