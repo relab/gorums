@@ -385,7 +385,7 @@ func TestSystemSymmetricMulticastFromHandler_Config(t *testing.T) {
 						mock.Stream,
 					)
 					if err != nil {
-						t.Fatalf("multicast error: %v", err)
+						return nil, err // failed to multicast
 					}
 				}
 				return nil, nil // one-way
@@ -509,7 +509,7 @@ func TestSystemSymmetricMulticastFromHandler_ClientConfig(t *testing.T) {
 					mock.Stream,
 				)
 				if err != nil {
-					t.Fatalf("multicast error: %v", err)
+					return nil, err // failed to multicast
 				}
 			}
 			return nil, nil // one-way
