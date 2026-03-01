@@ -92,7 +92,7 @@ func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfi
 		nextClientID:    clientIDStart,
 	}
 	if opt != nil {
-		if err := opt.newServerConfig(im); err != nil {
+		if _, err := opt.newConfig(im); err != nil {
 			panic("gorums: invalid peer configuration: " + err.Error())
 		}
 	}
@@ -100,11 +100,30 @@ func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfi
 	return im
 }
 
-// KnownIDs returns the sorted list of NodeIDs the manager was configured with.
-func (im *InboundManager) KnownIDs() []uint32 {
+// NodeIDs returns the sorted list of NodeIDs the manager was configured with.
+func (im *InboundManager) NodeIDs() []uint32 {
 	im.mu.RLock()
 	defer im.mu.RUnlock()
 	return slices.Sorted(maps.Keys(im.nodes))
+}
+
+// Node returns the known peer node with the given id if present.
+func (im *InboundManager) Node(id uint32) (node *Node, found bool) {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+	node, found = im.nodes[id]
+	return node, found
+}
+
+// Nodes returns a slice of each known peer node.
+func (im *InboundManager) Nodes() []*Node {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+	nodes := make([]*Node, 0, len(im.nodes))
+	for _, node := range im.nodes {
+		nodes = append(nodes, node)
+	}
+	return nodes
 }
 
 // Config returns a [Configuration] of all connected known peers, plus this node.
@@ -144,8 +163,10 @@ func (im *InboundManager) getMsgID() uint64 {
 // newNode creates a peer node for the given id and normalized addr and
 // registers it in the manager's node map. This must be called during
 // construction before any peers connect, so no locking is needed.
-func (im *InboundManager) newNode(id uint32, addr string) {
-	im.nodes[id] = newPeerNode(id, addr, im.getMsgID)
+func (im *InboundManager) newNode(addr string, id uint32) (*Node, error) {
+	node := newPeerNode(id, addr, im.getMsgID)
+	im.nodes[id] = node
+	return node, nil
 }
 
 // isKnown returns true if the given NodeID is a known peer.

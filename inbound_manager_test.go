@@ -132,8 +132,8 @@ func TestNewInboundManager(t *testing.T) {
 				return
 			}
 			im := newInboundManager(1, tc.opt, 0, nil, nil, false)
-			if got := im.KnownIDs(); !slices.Equal(got, tc.wantIDs) {
-				t.Errorf("KnownIDs() = %v; want %v", got, tc.wantIDs)
+			if got := im.NodeIDs(); !slices.Equal(got, tc.wantIDs) {
+				t.Errorf("NodeIDs() = %v; want %v", got, tc.wantIDs)
 			}
 			if got := im.Config().NodeIDs(); !slices.Equal(got, tc.wantCfgIDs) {
 				t.Errorf("Config().NodeIDs() = %v; want %v", got, tc.wantCfgIDs)
