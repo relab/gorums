@@ -46,8 +46,9 @@ func (s *System) ClientConfig() Configuration {
 }
 
 // NewOutboundConfig creates an outbound [Configuration] for connecting to peers.
-// It automatically includes this system's NodeID in the connection metadata,
-// enabling the remote server to identify this replica.
+// When peer tracking / symmetric configuration is enabled, it automatically
+// includes this system's NodeID in the connection metadata, enabling the
+// remote server to identify this replica.
 func (s *System) NewOutboundConfig(opts ...Option) (Configuration, error) {
 	if s.srv.inboundMgr == nil {
 		return NewConfig(opts...)
