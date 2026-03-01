@@ -101,7 +101,7 @@ func (m *Manager) addNode(node *Node) {
 	m.nodes = append(m.nodes, node)
 }
 
-func (m *Manager) newNode(addr string, id uint32) (*Node, error) {
+func (m *Manager) newNode(id uint32, addr string) (*Node, error) {
 	if _, found := m.Node(id); found {
 		return nil, fmt.Errorf("node %d already exists", id)
 	}

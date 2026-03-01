@@ -20,7 +20,7 @@ type nodeRegistry interface {
 	NodeIDs() []uint32
 	Node(id uint32) (*Node, bool)
 	Nodes() []*Node
-	newNode(addr string, id uint32) (*Node, error)
+	newNode(id uint32, addr string) (*Node, error)
 }
 
 // NodeAddress must be implemented by types that can be used as node addresses.
@@ -147,7 +147,7 @@ func (b *nodeBuilder) addNew(id uint32, addr string) error {
 		return fmt.Errorf("config: address %q already in use by node %d", normalizedAddr, existingID)
 	}
 	b.addrToID[normalizedAddr] = id
-	node, err := b.registry.newNode(addr, id)
+	node, err := b.registry.newNode(id, addr)
 	if err != nil {
 		return err
 	}
