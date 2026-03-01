@@ -124,6 +124,8 @@ func (m *Manager) newNode(addr string, id uint32) (*Node, error) {
 }
 
 // getMsgID returns a unique message ID for a new RPC from this client's manager.
+// Client-initiated IDs never have the high bit set in practice: reaching 2^63
+// requires approximately 292,000 years at one million calls per second.
 func (m *Manager) getMsgID() uint64 {
 	return atomic.AddUint64(&m.nextMsgID, 1)
 }
