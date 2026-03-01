@@ -132,7 +132,11 @@ func TestNewInboundManager(t *testing.T) {
 				return
 			}
 			im := newInboundManager(1, tc.opt, 0, nil, nil, false)
-			for i, node := range im.Nodes() {
+			nodes := im.Nodes()
+			if len(nodes) != len(tc.wantIDs) {
+				t.Fatalf("len(im.Nodes()) = %d; want %d", len(nodes), len(tc.wantIDs))
+			}
+			for i, node := range nodes {
 				if node.ID() != tc.wantIDs[i] {
 					t.Errorf("Node %d ID = %d; want %d", i, node.ID(), tc.wantIDs[i])
 				}
