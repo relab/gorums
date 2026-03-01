@@ -101,21 +101,6 @@ func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfi
 	return im
 }
 
-// NodeIDs returns the sorted list of NodeIDs the manager was configured with.
-func (im *InboundManager) NodeIDs() []uint32 {
-	im.mu.RLock()
-	defer im.mu.RUnlock()
-	return slices.Sorted(maps.Keys(im.nodes))
-}
-
-// Node returns the known peer node with the given id if present.
-func (im *InboundManager) Node(id uint32) (node *Node, found bool) {
-	im.mu.RLock()
-	defer im.mu.RUnlock()
-	node, found = im.nodes[id]
-	return node, found
-}
-
 // Nodes returns a slice of known peer nodes in order of their IDs.
 // Nodes with no active channel (disconnected peers) are still included
 // since they are still part of the configuration and may reconnect.
