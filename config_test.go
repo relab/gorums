@@ -166,7 +166,7 @@ func TestConfigurationExtend(t *testing.T) {
 			extendOpt: gorums.WithNodes(map[uint32]testNode{
 				2: {addr: "127.0.0.1:9090"}, // ID 2 already exists, rejected
 			}),
-			wantErr: "config: node 2 already in use",
+			wantErr: `config: node 2 already in use by "127.0.0.1:9082"`,
 		},
 		{
 			name:         "WithNodes/Reject/AddressConflict",
