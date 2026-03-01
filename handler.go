@@ -89,22 +89,28 @@ func (ctx *ServerCtx) ClientConfig() Configuration {
 
 // ConfigContext returns a [ConfigContext] encapsulating the [Configuration] of
 // all connected known peers, plus this node.
-// Returns nil if no peer tracking is configured.
+// Returns nil if no peer tracking is configured or if no peers are connected.
 func (ctx *ServerCtx) ConfigContext() *ConfigContext {
 	if ctx.srv == nil {
 		return nil
 	}
-	return ctx.srv.Config().Context(ctx)
+	if cfg := ctx.srv.Config(); len(cfg) > 0 {
+		return cfg.Context(ctx)
+	}
+	return nil
 }
 
 // ClientConfigContext returns a [ConfigContext] encapsulating the [Configuration] of
 // all connected client peers.
-// Returns nil if no peer tracking is configured.
+// Returns nil if no peer tracking is configured or if no clients are connected.
 func (ctx *ServerCtx) ClientConfigContext() *ConfigContext {
 	if ctx.srv == nil {
 		return nil
 	}
-	return ctx.srv.ClientConfig().Context(ctx)
+	if cfg := ctx.srv.ClientConfig(); len(cfg) > 0 {
+		return cfg.Context(ctx)
+	}
+	return nil
 }
 
 // NewResponseMessage creates a new response envelope based on the provided proto
