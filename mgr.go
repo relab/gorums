@@ -112,6 +112,7 @@ func (m *Manager) newNode(addr string, id uint32) (*Node, error) {
 		Metadata:       m.opts.metadata,
 		PerNodeMD:      m.opts.perNodeMD,
 		DialOpts:       m.opts.grpcDialOpts,
+		RequestHandler: m.opts.requestHandlerFor(id),
 		Manager:        m,
 	}
 	n, err := newNode(addr, opts)

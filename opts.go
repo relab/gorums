@@ -6,6 +6,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/relab/gorums/internal/stream"
 )
 
 // Option is a marker interface for options to NewConfig.
@@ -25,6 +27,8 @@ type managerOptions struct {
 	sendBuffer   uint
 	metadata     metadata.MD
 	perNodeMD    func(uint32) metadata.MD
+	handler      stream.RequestHandler
+	localNodeID  uint32 // if non-zero, skip setting handler on this node ID
 }
 
 func newManagerOptions() managerOptions {
@@ -90,4 +94,27 @@ func WithNodeID(id uint32) ManagerOption {
 	return func(o *managerOptions) {
 		o.metadata = metadata.Join(o.metadata, metadataWithNodeID(id))
 	}
+}
+
+// withRequestHandler returns a ManagerOption that sets the RequestHandler used to
+// dispatch server-initiated requests arriving on the bidirectional back-channel,
+// and records localID as this node's own NodeID. The localID is included in this
+// node's outgoing metadata for each connection, enabling the server to identify
+// this replica. The handler is not installed for the self-connection (if any) to
+// avoid deadlocks in symmetric configurations.
+func withRequestHandler(handler stream.RequestHandler, localID uint32) ManagerOption {
+	return func(o *managerOptions) {
+		o.handler = handler
+		o.localNodeID = localID
+		o.metadata = metadata.Join(o.metadata, metadataWithNodeID(localID))
+	}
+}
+
+// requestHandlerFor returns the RequestHandler for the given node ID, or nil if no
+// handler is configured or if id is this node's own local ID (self-connection).
+func (o *managerOptions) requestHandlerFor(id uint32) stream.RequestHandler {
+	if o.handler == nil || id == o.localNodeID {
+		return nil
+	}
+	return o.handler
 }

@@ -45,29 +45,16 @@ func (s *System) ClientConfig() Configuration {
 	return s.srv.ClientConfig()
 }
 
-// NewOutboundConfig creates an outbound Configuration for connecting to
-// peers. It automatically includes this system's NodeID in the
-// connection metadata, enabling the remote server to identify
-// this replica.
+// NewOutboundConfig creates an outbound [Configuration] for connecting to peers.
+// It automatically includes this system's NodeID in the connection metadata,
+// enabling the remote server to identify this replica.
 func (s *System) NewOutboundConfig(opts ...Option) (Configuration, error) {
 	if s.srv.inboundMgr == nil {
 		return NewConfig(opts...)
 	}
-	opts = append([]Option{WithNodeID(s.srv.inboundMgr.myID)}, opts...)
-	// TODO(meling): consider if we can integrate the setHandler logic into the Manager or InboundManager or NewConfig()
-	cfg, err := NewConfig(opts...)
-	if err != nil {
-		return nil, err
-	}
-	// Register the server as a RequestHandler on each outbound node so that
-	// server-initiated requests arriving via the bidirectional back-channel are
-	// dispatched to this server's registered handlers.
-	for _, node := range cfg.Nodes() {
-		if node.ID() != s.srv.inboundMgr.myID {
-			node.setRequestHandler(s.srv)
-		}
-	}
-	return cfg, nil
+	return NewConfig(append([]Option{
+		withRequestHandler(s.srv, s.srv.inboundMgr.myID),
+	}, opts...)...)
 }
 
 // RegisterService registers the service with the server using the provided register function.
