@@ -176,19 +176,19 @@ func stringEchoHandler(prefix string) gorums.Handler {
 	}
 }
 
-func configContext(t *testing.T, ctx gorums.ServerCtx, client bool) *gorums.ConfigContext {
+func configContext(ctx gorums.ServerCtx, client bool) (*gorums.ConfigContext, error) {
 	if client {
 		configContext := ctx.ClientConfigContext()
 		if configContext == nil {
-			t.Fatal("ClientConfigContext: expected non-nil config")
+			return nil, errors.New("ClientConfigContext: expected non-nil config")
 		}
-		return configContext
+		return configContext, nil
 	}
 	configContext := ctx.ConfigContext()
 	if configContext == nil {
-		t.Fatal("ConfigContext: expected non-nil config")
+		return nil, errors.New("ConfigContext: expected non-nil config")
 	}
-	return configContext
+	return configContext, nil
 }
 
 // outerChainedHandler returns an outer handler that fans out an inner quorum call
@@ -211,8 +211,12 @@ func outerChainedHandler(
 		// responses off the wire while this handler is blocked waiting for them,
 		// causing a deadlock.
 		ctx.Release()
+		configCtx, err := configContext(ctx, client)
+		if err != nil {
+			return nil, err
+		}
 		responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
-			configContext(t, ctx, client),
+			configCtx,
 			req,
 			innerMethod,
 		)
