@@ -88,6 +88,21 @@ func (s *storageServer) WriteRPC(_ gorums.ServerCtx, req *pb.WriteRequest) (resp
 	return s.Write(req)
 }
 
+// WriteUnicast is an RPC handler for one-way unicast writes.
+func (s *storageServer) WriteUnicast(_ gorums.ServerCtx, req *pb.WriteRequest) {
+	if _, err := s.Write(req); err != nil {
+		s.logger.Printf("WriteUnicast error: %v", err)
+	}
+}
+
+// WriteMulticast is an RPC handler for one-way multicast writes.
+func (s *storageServer) WriteMulticast(_ gorums.ServerCtx, req *pb.WriteRequest) {
+	_, err := s.Write(req)
+	if err != nil {
+		s.logger.Printf("Write error: %v", err)
+	}
+}
+
 // ReadQC is an RPC handler for a quorum call
 func (s *storageServer) ReadQC(_ gorums.ServerCtx, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
 	return s.Read(req)
@@ -96,13 +111,6 @@ func (s *storageServer) ReadQC(_ gorums.ServerCtx, req *pb.ReadRequest) (resp *p
 // WriteQC is an RPC handler for a quorum call
 func (s *storageServer) WriteQC(_ gorums.ServerCtx, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
 	return s.Write(req)
-}
-
-func (s *storageServer) WriteMulticast(_ gorums.ServerCtx, req *pb.WriteRequest) {
-	_, err := s.Write(req)
-	if err != nil {
-		s.logger.Printf("Write error: %v", err)
-	}
 }
 
 // Read reads a value from storage

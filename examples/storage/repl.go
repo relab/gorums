@@ -29,6 +29,7 @@ nodes                           Print a list of the available nodes
 rpc   [node index] [operation]	Executes an RPC on the given node.
 qc    [operation]             	Executes a quorum call on all nodes.
 mcast [key] [value]             Executes a multicast write call on all nodes.
+ucast [node index] [key] [value] Executes a unicast write call on one node.
 cfg   [config] [operation]   	Executes a quorum call on a configuration.
 
 The following operations are supported:
@@ -122,9 +123,15 @@ func Repl(mgr *pb.Manager, defaultCfg pb.Configuration) error {
 		case "rpc":
 			r.rpc(args[1:])
 		case "qc":
+			fallthrough
+		case "quorumcall":
 			r.qc(args[1:])
 		case "cfg":
 			r.qcCfg(args[1:])
+		case "ucast":
+			fallthrough
+		case "unicast":
+			r.unicast(args[1:])
 		case "mcast":
 			fallthrough
 		case "multicast":
@@ -167,6 +174,35 @@ func (r repl) rpc(args []string) {
 	}
 }
 
+func (r repl) unicast(args []string) {
+	if len(args) < 3 {
+		fmt.Println("'unicast' requires a node index, a key, and a value.")
+		return
+	}
+
+	index, err := strconv.Atoi(args[0])
+	if err != nil {
+		fmt.Printf("Invalid id '%s'. node index must be numeric.\n", args[0])
+		return
+	}
+
+	if index < 0 || index >= r.cfg.Size() {
+		fmt.Printf("Invalid index. Must be between 0 and %d.\n", r.cfg.Size()-1)
+		return
+	}
+
+	node := r.cfg[index]
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	nodeCtx := node.Context(ctx)
+	err = pb.WriteUnicast(nodeCtx, pb.WriteRequest_builder{Key: args[1], Value: args[2], Time: timestamppb.Now()}.Build())
+	cancel()
+	if err != nil {
+		fmt.Printf("Write unicast failed to send: %v\n", err)
+		return
+	}
+	fmt.Println("Unicast OK: (server output not synchronized)")
+}
+
 func (r repl) multicast(args []string) {
 	if len(args) < 2 {
 		fmt.Println("'multicast' requires a key and a value.")
@@ -175,8 +211,12 @@ func (r repl) multicast(args []string) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	cfgCtx := r.cfg.Context(ctx)
-	pb.WriteMulticast(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1]}.Build())
+	err := pb.WriteMulticast(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1]}.Build())
 	cancel()
+	if err != nil {
+		fmt.Printf("Write multicast failed to send: %v\n", err)
+		return
+	}
 	fmt.Println("Multicast OK: (server output not synchronized)")
 }
 
