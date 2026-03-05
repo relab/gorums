@@ -100,6 +100,18 @@ func WriteRPC(ctx *NodeContext, in *WriteRequest) (*WriteResponse, error) {
 	return gorums.RPCCall[*WriteRequest, *WriteResponse](ctx, in, "proto.Storage.WriteRPC")
 }
 
+// WriteUnicast executes a one-way Write unicast call on a single node.
+// It does not wait for a response.
+func WriteUnicast(ctx *NodeContext, in *WriteRequest, opts ...gorums.CallOption) error {
+	return gorums.Unicast(ctx, in, "proto.Storage.WriteUnicast", opts...)
+}
+
+// WriteMulticast executes a Write multicast call on a configuration of nodes.
+// It does not wait for any responses.
+func WriteMulticast(ctx *ConfigContext, in *WriteRequest, opts ...gorums.CallOption) error {
+	return gorums.Multicast(ctx, in, "proto.Storage.WriteMulticast", opts...)
+}
+
 // ReadQC executes a Read quorum call on a configuration of nodes and
 // returns the most recent value.
 func ReadQC(ctx *ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*ReadResponse] {
@@ -118,19 +130,14 @@ func WriteQC(ctx *ConfigContext, in *WriteRequest, opts ...gorums.CallOption) *g
 	)
 }
 
-// WriteMulticast executes a Write multicast call on a configuration of nodes.
-// It does not wait for any responses.
-func WriteMulticast(ctx *ConfigContext, in *WriteRequest, opts ...gorums.CallOption) error {
-	return gorums.Multicast(ctx, in, "proto.Storage.WriteMulticast", opts...)
-}
-
 // Storage is the server-side API for the Storage Service
 type StorageServer interface {
 	ReadRPC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
 	WriteRPC(ctx gorums.ServerCtx, request *WriteRequest) (response *WriteResponse, err error)
+	WriteUnicast(ctx gorums.ServerCtx, request *WriteRequest)
+	WriteMulticast(ctx gorums.ServerCtx, request *WriteRequest)
 	ReadQC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
 	WriteQC(ctx gorums.ServerCtx, request *WriteRequest) (response *WriteResponse, err error)
-	WriteMulticast(ctx gorums.ServerCtx, request *WriteRequest)
 }
 
 func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
@@ -150,6 +157,16 @@ func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
 		}
 		return gorums.NewResponseMessage(in, resp), nil
 	})
+	srv.RegisterHandler("proto.Storage.WriteUnicast", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+		req := gorums.AsProto[*WriteRequest](in)
+		impl.WriteUnicast(ctx, req)
+		return nil, nil
+	})
+	srv.RegisterHandler("proto.Storage.WriteMulticast", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+		req := gorums.AsProto[*WriteRequest](in)
+		impl.WriteMulticast(ctx, req)
+		return nil, nil
+	})
 	srv.RegisterHandler("proto.Storage.ReadQC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*ReadRequest](in)
 		resp, err := impl.ReadQC(ctx, req)
@@ -165,10 +182,5 @@ func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
 			return nil, err
 		}
 		return gorums.NewResponseMessage(in, resp), nil
-	})
-	srv.RegisterHandler("proto.Storage.WriteMulticast", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*WriteRequest](in)
-		impl.WriteMulticast(ctx, req)
-		return nil, nil
 	})
 }
