@@ -8,7 +8,7 @@ Gorums also uses [Protocol Buffers](https://developers.google.com/protocol-buffe
 
 This guide describes how to use Gorums as a user.
 The guide requires a working Go installation.
-At least Go version 1.16 is required.
+At least Go version 1.25 is required.
 
 There are a few tools that need to be installed first:
 
@@ -44,13 +44,14 @@ The storage can store a single `{value, timestamp}` tuple with methods for readi
 First, we define our storage as a gRPC service by using the protocol buffers interface definition language (IDL).
 Refer to the protocol buffers [language guide](https://developers.google.com/protocol-buffers/docs/proto3) to learn more about the Protobuf IDL.
 
-Let's create a file, `storage.proto`, in a new Go package called `gorumsexample`.
-We will use `$HOME/gorumsexample` as the project root, and we will use the Go module system:
+The runnable version of this example lives in `examples/storage`.
+The protobuf definition for that example lives in `examples/storage/proto/storage.proto`.
+If you are starting from scratch, you can still create your own module and use the same proto structure.
 
 ```shell
-mkdir $HOME/gorumsexample
-cd $HOME/gorumsexample
-go mod init gorumsexample
+mkdir $HOME/storageexample
+cd $HOME/storageexample
+go mod init storageexample
 go get github.com/relab/gorums
 ```
 
@@ -77,8 +78,8 @@ The file `storage.proto` should have the following content, illustrating the dif
 ```proto
 edition = "2024";
 
-package gorumsexample;
-option go_package = "github.com/relab/gorums/examples/gorumsexample";
+package proto;
+option go_package = "github.com/relab/gorums/examples/storage/proto";
 option features.field_presence = IMPLICIT;
 
 import "google/protobuf/empty.proto";
@@ -278,7 +279,7 @@ The manager will use these options when connecting to nodes.
 Below we use only a simple insecure connection option.
 
 ```go
-package gorumsexample
+package proto
 
 import (
   "log"
