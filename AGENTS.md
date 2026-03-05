@@ -44,6 +44,7 @@ gorums/
 - Large changes must be broken into small, manageable units to be committed separately
 - NEVER make unrelated changes in the same commit (e.g., code + documentation + formatting)
 - Instead, if you discover a bug or issue while working, document the issue in a separate file `doc/issue-*.md`
+- COMMIT messages must follow conventional commit style (at most 75 characters wide), must be human readable plain text and easily copyable, and must not contain any markdown links or formatting.
 
 ### Code Generation Workflow
 
@@ -196,7 +197,6 @@ Before making significant changes, consult:
 
 - `doc/user-guide.md` - Understanding the API and usage patterns
 - `doc/dev-guide.md` - Development workflow and architecture
-- `doc/design-doc-layering.md` - System architecture and layering
 
 - `README.md` - Project overview and getting started
 - When editing markdown files, use one sentences per line, so that diffs are easier to read.
