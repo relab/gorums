@@ -81,9 +81,9 @@ type nodeOptions struct {
 	Manager        *Manager // only used for backward compatibility to allow Configuration.Manager()
 }
 
-// newNode creates a new node using the provided options. It establishes
+// newOutboundNode creates a new node using the provided options. It establishes
 // the connection (lazy dial) and initializes the outbound channel.
-func newNode(addr string, opts nodeOptions) (*Node, error) {
+func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -115,10 +115,10 @@ func newNode(addr string, opts nodeOptions) (*Node, error) {
 	return n, nil
 }
 
-// newPeerNode creates a Node for a known peer or self without an active
+// newInboundNode creates a Node for a known peer or self without an active
 // channel. Used by InboundManager at construction time for all configured
 // peers; the channel is attached when the peer's stream arrives.
-func newPeerNode(id uint32, addr string, msgIDGen func() uint64) *Node {
+func newInboundNode(id uint32, addr string, msgIDGen func() uint64) *Node {
 	return &Node{
 		id:       id,
 		addr:     addr,

@@ -151,7 +151,7 @@ func (im *InboundManager) getMsgID() uint64 {
 // registers it in the manager's node map. This must be called during
 // construction before any peers connect, so no locking is needed.
 func (im *InboundManager) newNode(id uint32, addr string) (*Node, error) {
-	node := newPeerNode(id, addr, im.getMsgID)
+	node := newInboundNode(id, addr, im.getMsgID)
 	im.nodes[id] = node
 	return node, nil
 }
@@ -231,7 +231,7 @@ func (im *InboundManager) acceptClient(streamCtx context.Context, inboundStream 
 	}
 	id := im.nextClientID
 	im.nextClientID++
-	node := newPeerNode(id, "client", im.getMsgID)
+	node := newInboundNode(id, "client", im.getMsgID)
 	node.attachStream(streamCtx, inboundStream, im.sendBufferSize)
 	im.nodes[id] = node
 	im.rebuildConfig()

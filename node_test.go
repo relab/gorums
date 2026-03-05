@@ -58,7 +58,7 @@ func printNodes(t *testing.T, nodes []*Node) {
 // TestNodeRouteResponse verifies that Node.RouteResponse correctly routes
 // an incoming response message to a pending server-initiated call.
 func TestNodeRouteResponse(t *testing.T) {
-	n := newPeerNode(42, "127.0.0.1:9000", func() uint64 { return 0 })
+	n := newInboundNode(42, "127.0.0.1:9000", func() uint64 { return 0 })
 	replyChan := make(chan NodeResponse[*stream.Message], 1)
 
 	// Register a pending call with msgID=7 on the node's router.
@@ -110,7 +110,7 @@ func BenchmarkNodeEnqueue(b *testing.B) {
 	b.Run("ChannelNil", func(b *testing.B) {
 		// No stream attached: channel.Load() returns nil → early return.
 		// Measures the pure atomic load + nil-guard overhead.
-		n := newPeerNode(1, "127.0.0.1:9081", func() uint64 { return 0 })
+		n := newInboundNode(1, "127.0.0.1:9081", func() uint64 { return 0 })
 		b.ResetTimer()
 		for range b.N {
 			n.Enqueue(req)
@@ -120,7 +120,7 @@ func BenchmarkNodeEnqueue(b *testing.B) {
 	b.Run("AtomicLoadNonNil", func(b *testing.B) {
 		// Stub channel attached; measures atomic.Pointer.Load() + non-nil branch
 		// without going through Channel.Enqueue (which requires a running goroutine).
-		n := newPeerNode(1, "127.0.0.1:9081", func() uint64 { return 0 })
+		n := newInboundNode(1, "127.0.0.1:9081", func() uint64 { return 0 })
 		n.channel.Store(stream.NewChannelWithState(nil))
 		b.ResetTimer()
 		for range b.N {
@@ -161,7 +161,7 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 
 	// Wrap the outbound channel in a Node, adding the one atomic.Pointer.Load
 	// that Node.enqueue performs on every dispatch.
-	n := newPeerNode(1, lis.Addr().String(), func() uint64 { return 0 })
+	n := newInboundNode(1, lis.Addr().String(), func() uint64 { return 0 })
 	ch := stream.NewOutboundChannel(context.Background(), 1, 10, conn, n.router)
 	b.Cleanup(func() { _ = ch.Close() })
 	n.channel.Store(ch)

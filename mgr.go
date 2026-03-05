@@ -115,7 +115,7 @@ func (m *Manager) newNode(id uint32, addr string) (*Node, error) {
 		RequestHandler: m.opts.requestHandlerFor(id),
 		Manager:        m,
 	}
-	n, err := newNode(addr, opts)
+	n, err := newOutboundNode(addr, opts)
 	if err != nil {
 		return nil, err
 	}
