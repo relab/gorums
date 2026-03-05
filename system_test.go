@@ -321,50 +321,6 @@ func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
 	waitWithTimeout(t, &wg)
 }
 
-func TestSystemStreamDeduplicated(t *testing.T) {
-	// An initial draft implementation of the stream dedup logic was accidentally
-	// merged (by Gemini 3.1 Pro), and reverted in commit e321c832b71cc1.
-	// Stream deduplication is tracked by issue #279: We will re-enable this
-	// test once we reintroduce stream deduplication logic in a future PR.
-	t.Skip("Temporarily skipping since I've rolled back the stream deduplication changes.")
-	systems, configs := createTestSystems(t, 3)
-
-	// Register echo handler to each system
-	for i, sys := range systems {
-		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
-			srv.RegisterHandler(mock.TestMethod, stringEchoHandler("echo"))
-		})
-	}
-
-	awaitSystemReady(t, systems)
-
-	// Verify stream dedup: for each peer pair, exactly one side should have
-	// an outbound channel. The lower-ID node keeps its outbound.
-	for i, cfg := range configs {
-		myID := uint32(i + 1)
-		for _, node := range cfg.Nodes() {
-			peerID := node.ID()
-			if peerID == myID {
-				continue // skip self
-			}
-			ch := gorums.TestNodeChannel(node)
-			if myID < peerID {
-				// Lower-ID node: should have outbound channel (conn != nil)
-				if ch == nil {
-					t.Errorf("system %d -> peer %d: expected outbound channel; got nil", myID, peerID)
-				} else if ch.IsInbound() {
-					t.Errorf("system %d -> peer %d: expected outbound channel; got inbound", myID, peerID)
-				}
-			} else {
-				// Higher-ID node: should have no outbound channel (waiting for inbound)
-				if ch != nil && !ch.IsInbound() {
-					t.Errorf("system %d -> peer %d: expected no outbound channel; got outbound", myID, peerID)
-				}
-			}
-		}
-	}
-}
-
 func TestSystemSymmetricMulticastFromHandler_Config(t *testing.T) {
 	systems, configs := createTestSystems(t, 3)
 

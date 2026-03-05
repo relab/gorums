@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/relab/gorums/internal/stream"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"go.uber.org/goleak"
 	"google.golang.org/grpc"
@@ -70,12 +69,6 @@ func TestQuorumCallError(_ testing.TB, nodeErrors map[uint32]error) QuorumCallEr
 		errs = append(errs, nodeError{cause: err, nodeID: nodeID})
 	}
 	return QuorumCallError{cause: ErrIncomplete, errors: errs}
-}
-
-// TestNodeChannel returns the current channel for the given node, or nil
-// if no channel is attached. This is intended for test inspection only.
-func TestNodeChannel(n *Node) *stream.Channel {
-	return n.channel.Load()
 }
 
 // TestManager creates a new Manager with real network dial support and any additional
