@@ -127,6 +127,15 @@ func newPeerNode(id uint32, addr string, msgIDGen func() uint64) *Node {
 	}
 }
 
+// IsInbound returns true if the node has an active inbound channel.
+func (n *Node) IsInbound() bool {
+	if n == nil {
+		return false
+	}
+	ch := n.channel.Load()
+	return ch != nil && ch.IsInbound()
+}
+
 // attachStream attaches a new inbound channel to the node when a peer connects.
 // If the node already has an active channel (e.g., a stale stream from a previous
 // connection), it is atomically replaced and the old channel is closed.
