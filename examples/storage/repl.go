@@ -36,8 +36,8 @@ The following operations are supported:
 
 read 	[key]        	Read a value
 write	[key] [value]	Write a value
-nread   [key]           Nested quorum call (aliases: readNestedQC, ReadNestedQC)
-nwrite  [key] [value]   Nested multicast (aliases: writeNestedMulticast, WriteNestedMulticast)
+nread   [key]           Nested quorum call
+nwrite  [key] [value]   Nested multicast
 
 Examples:
 
@@ -53,6 +53,8 @@ The command performs the write quorum call on node 1 and 2
 > cfg 0,2 write foo 'bar baz'
 The command performs the write quorum call on node 0 and 2
 `
+
+var delayOutput = 200 * time.Millisecond
 
 type repl struct {
 	mgr  *pb.Manager
@@ -202,7 +204,8 @@ func (r repl) unicast(args []string) {
 		fmt.Printf("Write unicast failed to send: %v\n", err)
 		return
 	}
-	fmt.Println("Unicast OK: (server output not synchronized)")
+	time.Sleep(delayOutput)
+	fmt.Println("Unicast OK")
 }
 
 func (r repl) multicast(args []string) {
@@ -219,7 +222,8 @@ func (r repl) multicast(args []string) {
 		fmt.Printf("Write multicast failed to send: %v\n", err)
 		return
 	}
-	fmt.Println("Multicast OK: (server output not synchronized)")
+	time.Sleep(delayOutput)
+	fmt.Println("Multicast OK")
 }
 
 func (r repl) qc(args []string) {
@@ -360,6 +364,7 @@ func (repl) readNestedQC(args []string, config pb.Configuration) {
 		fmt.Printf("%s was not found\n", args[0])
 		return
 	}
+	time.Sleep(delayOutput)
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
@@ -380,6 +385,7 @@ func (repl) writeNestedMulticast(args []string, config pb.Configuration) {
 		fmt.Printf("Failed to update %s in nested multicast path.\n", args[0])
 		return
 	}
+	time.Sleep(delayOutput)
 	fmt.Println("Nested write OK")
 }
 
