@@ -43,6 +43,18 @@ service Storage {
   rpc WriteQC(WriteRequest) returns (WriteResponse) {
     option (gorums.quorumcall) = true;
   }
+
+  // ReadNestedQC executes a quorum call where each server handler performs
+  // a nested quorum call using ServerCtx.Config().
+  rpc ReadNestedQC(ReadRequest) returns (ReadResponse) {
+    option (gorums.quorumcall) = true;
+  }
+
+  // WriteNestedMulticast executes a quorum call where each server handler
+  // performs a nested multicast using ServerCtx.Config().
+  rpc WriteNestedMulticast(WriteRequest) returns (WriteResponse) {
+    option (gorums.quorumcall) = true;
+  }
 }
 
 // ReadRequest is the request message for Read RPCs and Read quorum calls.

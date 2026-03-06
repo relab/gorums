@@ -130,6 +130,24 @@ func WriteQC(ctx *ConfigContext, in *WriteRequest, opts ...gorums.CallOption) *g
 	)
 }
 
+// ReadNestedQC executes a quorum call where each server handler performs
+// a nested quorum call using ServerCtx.Config().
+func ReadNestedQC(ctx *ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*ReadResponse] {
+	return gorums.QuorumCall[*ReadRequest, *ReadResponse](
+		ctx, in, "proto.Storage.ReadNestedQC",
+		opts...,
+	)
+}
+
+// WriteNestedMulticast executes a quorum call where each server handler
+// performs a nested multicast using ServerCtx.Config().
+func WriteNestedMulticast(ctx *ConfigContext, in *WriteRequest, opts ...gorums.CallOption) *gorums.Responses[*WriteResponse] {
+	return gorums.QuorumCall[*WriteRequest, *WriteResponse](
+		ctx, in, "proto.Storage.WriteNestedMulticast",
+		opts...,
+	)
+}
+
 // Storage is the server-side API for the Storage Service
 type StorageServer interface {
 	ReadRPC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
@@ -138,6 +156,8 @@ type StorageServer interface {
 	WriteMulticast(ctx gorums.ServerCtx, request *WriteRequest)
 	ReadQC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
 	WriteQC(ctx gorums.ServerCtx, request *WriteRequest) (response *WriteResponse, err error)
+	ReadNestedQC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
+	WriteNestedMulticast(ctx gorums.ServerCtx, request *WriteRequest) (response *WriteResponse, err error)
 }
 
 func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
@@ -178,6 +198,22 @@ func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
 	srv.RegisterHandler("proto.Storage.WriteQC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*WriteRequest](in)
 		resp, err := impl.WriteQC(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
+	})
+	srv.RegisterHandler("proto.Storage.ReadNestedQC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+		req := gorums.AsProto[*ReadRequest](in)
+		resp, err := impl.ReadNestedQC(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
+	})
+	srv.RegisterHandler("proto.Storage.WriteNestedMulticast", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+		req := gorums.AsProto[*WriteRequest](in)
+		resp, err := impl.WriteNestedMulticast(ctx, req)
 		if err != nil {
 			return nil, err
 		}

@@ -26,6 +26,53 @@ func NewSystem(addr string, opts ...ServerOption) (*System, error) {
 	}, nil
 }
 
+// NewLocalSystems creates n Gorums systems listening on random localhost ports.
+// It pre-allocates all listeners before creating any system, so the full list
+// of addresses is available when configuring each system — solving the
+// chicken-and-egg problem of needing peer addresses before binding.
+//
+// Each system is automatically configured with [WithNodeList] and [WithConfig]
+// derived from the allocated addresses, assigning node IDs 1..n in order.
+// Additional server options can be provided via opts.
+//
+// The returned systems are not started; the caller must call [System.Serve]
+// (typically via a goroutine) after registering any services. This ensures
+// that handlers are registered before the server begins accepting connections.
+//
+// The returned stop function stops all systems and should be called when done,
+// e.g. via defer. If any listener cannot be created, all previously opened
+// listeners are closed and an error is returned.
+func NewLocalSystems(n int, opts ...ServerOption) ([]*System, func(), error) {
+	listeners := make([]net.Listener, n)
+	addrs := make([]string, n)
+	for i := range n {
+		lis, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			for j := range i {
+				listeners[j].Close()
+			}
+			return nil, nil, err
+		}
+		listeners[i] = lis
+		addrs[i] = lis.Addr().String()
+	}
+	nodeList := WithNodeList(addrs)
+	systems := make([]*System, n)
+	for i := range n {
+		sysOpts := append([]ServerOption{WithConfig(uint32(i+1), nodeList)}, opts...)
+		systems[i] = &System{
+			srv: NewServer(sysOpts...),
+			lis: listeners[i],
+		}
+	}
+	stop := func() {
+		for _, sys := range systems {
+			_ = sys.Stop()
+		}
+	}
+	return systems, stop, nil
+}
+
 // Addr returns the address the system is listening on.
 func (s *System) Addr() string {
 	return s.lis.Addr().String()

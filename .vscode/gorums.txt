@@ -62,6 +62,9 @@ multicast
 multicasts
 naddr
 netrwhist
+nofoo
+nread
+nwrite
 obj's
 objc
 oneway
