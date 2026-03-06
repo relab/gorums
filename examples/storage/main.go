@@ -43,7 +43,14 @@ func main() {
 		dialOpts := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
 		for i, sys := range systems {
 			storage := newStorageServer(os.Stderr, fmt.Sprintf("node %d", i))
-			cfg, err := sys.NewOutboundConfig(gorums.WithNodeList(addrs), dialOpts)
+			// Exclude self from peer config to avoid self-connection issues in nested calls.
+			peerAddrs := make([]string, 0, len(addrs)-1)
+			for _, addr := range addrs {
+				if addr != sys.Addr() {
+					peerAddrs = append(peerAddrs, addr)
+				}
+			}
+			cfg, err := sys.NewOutboundConfig(gorums.WithNodeList(peerAddrs), dialOpts)
 			if err != nil {
 				log.Fatalf("Failed to create server peer configuration: %v", err)
 			}
