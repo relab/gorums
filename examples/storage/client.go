@@ -13,19 +13,15 @@ func runClient(addresses []string) error {
 	if len(addresses) < 1 {
 		log.Fatalln("No addresses provided!")
 	}
-
-	// init gorums manager
 	mgr := proto.NewManager(
 		gorums.WithDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()), // disable TLS
 		),
 	)
-	// create configuration containing all nodes
 	cfg, err := proto.NewConfiguration(mgr, gorums.WithNodeList(addresses))
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	return Repl(mgr, cfg)
 }
 

@@ -349,14 +349,16 @@ const file_storage_proto_storage_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12.\n" +
 	"\x04time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\"!\n" +
 	"\rWriteResponse\x12\x10\n" +
-	"\x03new\x18\x01 \x01(\bR\x03new2\xf5\x02\n" +
+	"\x03new\x18\x01 \x01(\bR\x03new2\xfd\x03\n" +
 	"\aStorage\x124\n" +
 	"\aReadRPC\x12\x12.proto.ReadRequest\x1a\x13.proto.ReadResponse\"\x00\x127\n" +
 	"\bWriteRPC\x12\x13.proto.WriteRequest\x1a\x14.proto.WriteResponse\"\x00\x12A\n" +
 	"\fWriteUnicast\x12\x13.proto.WriteRequest\x1a\x16.google.protobuf.Empty\"\x04\x90\xb5\x18\x01\x12C\n" +
 	"\x0eWriteMulticast\x12\x13.proto.WriteRequest\x1a\x16.google.protobuf.Empty\"\x04\x98\xb5\x18\x01\x127\n" +
 	"\x06ReadQC\x12\x12.proto.ReadRequest\x1a\x13.proto.ReadResponse\"\x04\xa0\xb5\x18\x01\x12:\n" +
-	"\aWriteQC\x12\x13.proto.WriteRequest\x1a\x14.proto.WriteResponse\"\x04\xa0\xb5\x18\x01B5Z.github.com/relab/gorums/examples/storage/proto\x92\x03\x02\b\x02b\beditionsp\xe9\a"
+	"\aWriteQC\x12\x13.proto.WriteRequest\x1a\x14.proto.WriteResponse\"\x04\xa0\xb5\x18\x01\x12=\n" +
+	"\fReadNestedQC\x12\x12.proto.ReadRequest\x1a\x13.proto.ReadResponse\"\x04\xa0\xb5\x18\x01\x12G\n" +
+	"\x14WriteNestedMulticast\x12\x13.proto.WriteRequest\x1a\x14.proto.WriteResponse\"\x04\xa0\xb5\x18\x01B5Z.github.com/relab/gorums/examples/storage/proto\x92\x03\x02\b\x02b\beditionsp\xe9\a"
 
 var file_storage_proto_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_storage_proto_storage_proto_goTypes = []any{
@@ -368,25 +370,29 @@ var file_storage_proto_storage_proto_goTypes = []any{
 	(*emptypb.Empty)(nil),         // 5: google.protobuf.Empty
 }
 var file_storage_proto_storage_proto_depIdxs = []int32{
-	4, // 0: proto.ReadResponse.time:type_name -> google.protobuf.Timestamp
-	4, // 1: proto.WriteRequest.time:type_name -> google.protobuf.Timestamp
-	0, // 2: proto.Storage.ReadRPC:input_type -> proto.ReadRequest
-	2, // 3: proto.Storage.WriteRPC:input_type -> proto.WriteRequest
-	2, // 4: proto.Storage.WriteUnicast:input_type -> proto.WriteRequest
-	2, // 5: proto.Storage.WriteMulticast:input_type -> proto.WriteRequest
-	0, // 6: proto.Storage.ReadQC:input_type -> proto.ReadRequest
-	2, // 7: proto.Storage.WriteQC:input_type -> proto.WriteRequest
-	1, // 8: proto.Storage.ReadRPC:output_type -> proto.ReadResponse
-	3, // 9: proto.Storage.WriteRPC:output_type -> proto.WriteResponse
-	5, // 10: proto.Storage.WriteUnicast:output_type -> google.protobuf.Empty
-	5, // 11: proto.Storage.WriteMulticast:output_type -> google.protobuf.Empty
-	1, // 12: proto.Storage.ReadQC:output_type -> proto.ReadResponse
-	3, // 13: proto.Storage.WriteQC:output_type -> proto.WriteResponse
-	8, // [8:14] is the sub-list for method output_type
-	2, // [2:8] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	4,  // 0: proto.ReadResponse.time:type_name -> google.protobuf.Timestamp
+	4,  // 1: proto.WriteRequest.time:type_name -> google.protobuf.Timestamp
+	0,  // 2: proto.Storage.ReadRPC:input_type -> proto.ReadRequest
+	2,  // 3: proto.Storage.WriteRPC:input_type -> proto.WriteRequest
+	2,  // 4: proto.Storage.WriteUnicast:input_type -> proto.WriteRequest
+	2,  // 5: proto.Storage.WriteMulticast:input_type -> proto.WriteRequest
+	0,  // 6: proto.Storage.ReadQC:input_type -> proto.ReadRequest
+	2,  // 7: proto.Storage.WriteQC:input_type -> proto.WriteRequest
+	0,  // 8: proto.Storage.ReadNestedQC:input_type -> proto.ReadRequest
+	2,  // 9: proto.Storage.WriteNestedMulticast:input_type -> proto.WriteRequest
+	1,  // 10: proto.Storage.ReadRPC:output_type -> proto.ReadResponse
+	3,  // 11: proto.Storage.WriteRPC:output_type -> proto.WriteResponse
+	5,  // 12: proto.Storage.WriteUnicast:output_type -> google.protobuf.Empty
+	5,  // 13: proto.Storage.WriteMulticast:output_type -> google.protobuf.Empty
+	1,  // 14: proto.Storage.ReadQC:output_type -> proto.ReadResponse
+	3,  // 15: proto.Storage.WriteQC:output_type -> proto.WriteResponse
+	1,  // 16: proto.Storage.ReadNestedQC:output_type -> proto.ReadResponse
+	3,  // 17: proto.Storage.WriteNestedMulticast:output_type -> proto.WriteResponse
+	10, // [10:18] is the sub-list for method output_type
+	2,  // [2:10] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_storage_proto_storage_proto_init() }

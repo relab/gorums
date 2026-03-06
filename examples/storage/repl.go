@@ -23,19 +23,21 @@ Servers interactively. Take a look at the files 'client.go' and 'server.go'
 for the source code of the RPC handlers and quorum functions.
 The following commands can be used:
 
-help                            Show this text
-exit                            Exit the program
-nodes                           Print a list of the available nodes
-rpc   [node index] [operation]	Executes an RPC on the given node.
-qc    [operation]             	Executes a quorum call on all nodes.
-mcast [key] [value]             Executes a multicast write call on all nodes.
+help                             Show this text
+exit                             Exit the program
+nodes                            Print a list of the available nodes
+rpc   [node index] [operation]	 Executes an RPC on the given node.
+qc    [operation]             	 Executes a quorum call on all nodes.
+mcast [key] [value]              Executes a multicast write call on all nodes.
 ucast [node index] [key] [value] Executes a unicast write call on one node.
-cfg   [config] [operation]   	Executes a quorum call on a configuration.
+cfg   [config] [operation]   	 Executes a quorum call on a configuration.
 
 The following operations are supported:
 
 read 	[key]        	Read a value
 write	[key] [value]	Write a value
+nread   [key]           Nested quorum call (aliases: readNestedQC, ReadNestedQC)
+nwrite  [key] [value]   Nested multicast (aliases: writeNestedMulticast, WriteNestedMulticast)
 
 Examples:
 
@@ -231,6 +233,10 @@ func (r repl) qc(args []string) {
 		r.readQC(args[1:], r.cfg)
 	case "write":
 		r.writeQC(args[1:], r.cfg)
+	case "nread":
+		r.readNestedQC(args[1:], r.cfg)
+	case "nwrite":
+		r.writeNestedMulticast(args[1:], r.cfg)
 	}
 }
 
@@ -248,6 +254,10 @@ func (r repl) qcCfg(args []string) {
 		r.readQC(args[2:], cfg)
 	case "write":
 		r.writeQC(args[2:], cfg)
+	case "nread":
+		r.readNestedQC(args[2:], cfg)
+	case "nwrite":
+		r.writeNestedMulticast(args[2:], cfg)
 	}
 }
 
@@ -331,6 +341,46 @@ func (repl) writeQC(args []string, config pb.Configuration) {
 		return
 	}
 	fmt.Println("Write OK")
+}
+
+func (repl) readNestedQC(args []string, config pb.Configuration) {
+	if len(args) < 1 {
+		fmt.Println("Read requires a key to read.")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	cfgCtx := config.Context(ctx)
+	resp, err := newestValue(pb.ReadNestedQC(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build()))
+	cancel()
+	if err != nil {
+		fmt.Printf("Nested read quorum call finished with error: %v\n", err)
+		return
+	}
+	if !resp.GetOK() {
+		fmt.Printf("%s was not found\n", args[0])
+		return
+	}
+	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
+}
+
+func (repl) writeNestedMulticast(args []string, config pb.Configuration) {
+	if len(args) < 2 {
+		fmt.Println("Write requires a key and a value to write.")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	cfgCtx := config.Context(ctx)
+	resp, err := pb.WriteNestedMulticast(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build()).Majority()
+	cancel()
+	if err != nil {
+		fmt.Printf("Nested write quorum call finished with error: %v\n", err)
+		return
+	}
+	if !resp.GetNew() {
+		fmt.Printf("Failed to update %s in nested multicast path.\n", args[0])
+		return
+	}
+	fmt.Println("Nested write OK")
 }
 
 func (r repl) parseConfiguration(cfgStr string) (cfg pb.Configuration) {
