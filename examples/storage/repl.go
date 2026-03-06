@@ -198,7 +198,9 @@ func (r repl) unicast(args []string) {
 	node := r.cfg[index]
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	nodeCtx := node.Context(ctx)
-	err = pb.WriteUnicast(nodeCtx, pb.WriteRequest_builder{Key: args[1], Value: args[2], Time: timestamppb.Now()}.Build())
+	err = pb.WriteUnicast(nodeCtx, pb.WriteRequest_builder{
+		Key: args[1], Value: args[2], Time: timestamppb.Now(),
+	}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Write unicast failed to send: %v\n", err)
@@ -216,7 +218,9 @@ func (r repl) multicast(args []string) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	cfgCtx := r.cfg.Context(ctx)
-	err := pb.WriteMulticast(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1]}.Build())
+	err := pb.WriteMulticast(cfgCtx, pb.WriteRequest_builder{
+		Key: args[0], Value: args[1], Time: timestamppb.Now(),
+	}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Write multicast failed to send: %v\n", err)
@@ -293,7 +297,9 @@ func (repl) writeRPC(args []string, node *pb.Node) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	nodeCtx := node.Context(ctx)
-	resp, err := pb.WriteRPC(nodeCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
+	resp, err := pb.WriteRPC(nodeCtx, pb.WriteRequest_builder{
+		Key: args[0], Value: args[1], Time: timestamppb.Now(),
+	}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)
@@ -335,7 +341,9 @@ func (repl) writeQC(args []string, config pb.Configuration) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	cfgCtx := config.Context(ctx)
 	// Use the responses iterator to count successful updates
-	resp, err := numUpdated(pb.WriteQC(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build()))
+	resp, err := numUpdated(pb.WriteQC(cfgCtx, pb.WriteRequest_builder{
+		Key: args[0], Value: args[1], Time: timestamppb.Now(),
+	}.Build()))
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)
@@ -376,7 +384,9 @@ func (repl) writeNestedMulticast(args []string, config pb.Configuration) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	cfgCtx := config.Context(ctx)
-	resp, err := pb.WriteNestedMulticast(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build()).Majority()
+	resp, err := pb.WriteNestedMulticast(cfgCtx, pb.WriteRequest_builder{
+		Key: args[0], Value: args[1], Time: timestamppb.Now(),
+	}.Build()).Majority()
 	cancel()
 	if err != nil {
 		fmt.Printf("Nested write quorum call finished with error: %v\n", err)
