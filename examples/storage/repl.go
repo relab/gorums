@@ -249,8 +249,9 @@ func (r repl) qcCfg(args []string) {
 		fmt.Println("'cfg' requires a configuration and an operation.")
 		return
 	}
-	cfg := r.parseConfiguration(args[0])
-	if cfg == nil {
+	cfg, err := r.parseConfiguration(args[0])
+	if err != nil {
+		fmt.Printf("Failed to parse configuration: %v\n", err)
 		return
 	}
 	switch args[1] {
@@ -389,19 +390,31 @@ func (repl) writeNestedMulticast(args []string, config pb.Configuration) {
 	fmt.Println("Nested write OK")
 }
 
-func (r repl) parseConfiguration(cfgStr string) (cfg pb.Configuration) {
+func (r repl) parseConfiguration(cfgStr string) (pb.Configuration, error) {
+	indices, err := parseIndices(cfgStr, r.mgr.Size())
+	if err != nil {
+		return nil, err
+	}
+
+	nodes := make([]*pb.Node, 0, len(indices))
+	mgrNodes := r.mgr.Nodes()
+	for _, i := range indices {
+		nodes = append(nodes, mgrNodes[i])
+	}
+	gorums.OrderedBy(gorums.ID).Sort(nodes)
+	return pb.Configuration(nodes), nil
+}
+
+func parseIndices(cfgStr string, numNodes int) (indices []int, err error) {
 	// configuration using range syntax
 	if i := strings.Index(cfgStr, ":"); i > -1 {
 		var start, stop int
-		var err error
-		numNodes := r.mgr.Size()
 		if i == 0 {
 			start = 0
 		} else {
 			start, err = strconv.Atoi(cfgStr[:i])
 			if err != nil {
-				fmt.Printf("Failed to parse configuration: %v\n", err)
-				return nil
+				return nil, err
 			}
 		}
 		if i == len(cfgStr)-1 {
@@ -409,40 +422,32 @@ func (r repl) parseConfiguration(cfgStr string) (cfg pb.Configuration) {
 		} else {
 			stop, err = strconv.Atoi(cfgStr[i+1:])
 			if err != nil {
-				fmt.Printf("Failed to parse configuration: %v\n", err)
-				return nil
+				return nil, err
 			}
 		}
-		if start >= stop || start < 0 || stop >= numNodes {
-			fmt.Println("Invalid configuration.")
-			return nil
+		if start >= stop || start < 0 || stop > numNodes {
+			return nil, fmt.Errorf("invalid configuration")
 		}
-		nodes := make([]*pb.Node, 0)
-		for _, node := range r.mgr.Nodes()[start:stop] {
-			nodes = append(nodes, node)
+		indices = make([]int, 0, stop-start)
+		for j := start; j < stop; j++ {
+			indices = append(indices, j)
 		}
-		gorums.OrderedBy(gorums.ID).Sort(nodes)
-		return pb.Configuration(nodes)
+		return indices, nil
 	}
 	// configuration using list of indices
-	if indices := strings.Split(cfgStr, ","); len(indices) > 0 {
-		nodes := make([]*pb.Node, 0, len(indices))
-		mgrNodes := r.mgr.Nodes()
-		for _, index := range indices {
-			i, err := strconv.Atoi(index)
+	if indicesStr := strings.Split(cfgStr, ","); len(indicesStr) > 0 {
+		indices = make([]int, 0, len(indicesStr))
+		for _, indexStr := range indicesStr {
+			i, err := strconv.Atoi(indexStr)
 			if err != nil {
-				fmt.Printf("Failed to parse configuration: %v\n", err)
-				return nil
+				return nil, err
 			}
-			if i < 0 || i >= len(mgrNodes) {
-				fmt.Println("Invalid configuration.")
-				return nil
+			if i < 0 || i >= numNodes {
+				return nil, fmt.Errorf("invalid configuration")
 			}
-			nodes = append(nodes, mgrNodes[i])
+			indices = append(indices, i)
 		}
-		gorums.OrderedBy(gorums.ID).Sort(nodes)
-		return pb.Configuration(nodes)
+		return indices, nil
 	}
-	fmt.Println("Invalid configuration.")
-	return nil
+	return nil, fmt.Errorf("invalid configuration")
 }
