@@ -417,39 +417,31 @@ func (r repl) parseConfiguration(cfgStr string) (cfg pb.Configuration) {
 			fmt.Println("Invalid configuration.")
 			return nil
 		}
-		nodes := make([]string, 0)
+		nodes := make([]*pb.Node, 0)
 		for _, node := range r.mgr.Nodes()[start:stop] {
-			nodes = append(nodes, node.Address())
+			nodes = append(nodes, node)
 		}
-		cfg, err = gorums.NewConfiguration(r.mgr, gorums.WithNodeList(nodes))
-		if err != nil {
-			fmt.Printf("Failed to create configuration: %v\n", err)
-			return nil
-		}
-		return cfg
+		gorums.OrderedBy(gorums.ID).Sort(nodes)
+		return pb.Configuration(nodes)
 	}
 	// configuration using list of indices
 	if indices := strings.Split(cfgStr, ","); len(indices) > 0 {
-		selectedNodes := make([]string, 0, len(indices))
-		nodes := r.mgr.Nodes()
+		nodes := make([]*pb.Node, 0, len(indices))
+		mgrNodes := r.mgr.Nodes()
 		for _, index := range indices {
 			i, err := strconv.Atoi(index)
 			if err != nil {
 				fmt.Printf("Failed to parse configuration: %v\n", err)
 				return nil
 			}
-			if i < 0 || i >= len(nodes) {
+			if i < 0 || i >= len(mgrNodes) {
 				fmt.Println("Invalid configuration.")
 				return nil
 			}
-			selectedNodes = append(selectedNodes, nodes[i].Address())
+			nodes = append(nodes, mgrNodes[i])
 		}
-		cfg, err := gorums.NewConfiguration(r.mgr, gorums.WithNodeList(selectedNodes))
-		if err != nil {
-			fmt.Printf("Failed to create configuration: %v\n", err)
-			return nil
-		}
-		return cfg
+		gorums.OrderedBy(gorums.ID).Sort(nodes)
+		return pb.Configuration(nodes)
 	}
 	fmt.Println("Invalid configuration.")
 	return nil
