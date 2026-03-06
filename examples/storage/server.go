@@ -113,9 +113,9 @@ func (s *storageServer) WriteQC(_ gorums.ServerCtx, req *pb.WriteRequest) (resp 
 // ReadNestedQC is a quorum-call handler that performs a nested quorum call
 // on the server's known peer configuration.
 func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
-	cfg := ctx.Config()
-	if len(cfg) < 2 && len(s.peerCfg) > 0 {
-		cfg = s.peerCfg
+	cfg := s.peerCfg
+	if len(cfg) == 0 {
+		cfg = ctx.Config()
 	}
 	if len(cfg) == 0 {
 		return nil, fmt.Errorf("nested quorum call requires server peer configuration")
@@ -128,9 +128,9 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) 
 // WriteNestedMulticast is a quorum-call handler that performs a nested multicast
 // on the server's known peer configuration.
 func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerCtx, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
-	cfg := ctx.Config()
-	if len(cfg) < 2 && len(s.peerCfg) > 0 {
-		cfg = s.peerCfg
+	cfg := s.peerCfg
+	if len(cfg) == 0 {
+		cfg = ctx.Config()
 	}
 	if len(cfg) == 0 {
 		return pb.WriteResponse_builder{New: false}.Build(), fmt.Errorf("nested multicast requires server peer configuration")
