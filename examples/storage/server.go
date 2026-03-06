@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -54,11 +55,24 @@ type storageServer struct {
 	peerCfg pb.Configuration
 }
 
-func newStorageServer(out io.Writer, addr string) *storageServer {
+func newStorageServer(out io.Writer, label string) *storageServer {
 	return &storageServer{
 		storage: make(map[string]state),
-		logger:  log.New(out, fmt.Sprintf("%s: ", addr), log.Ltime|log.Lmicroseconds|log.Lmsgprefix),
+		logger:  log.New(rawWriter{out}, label+": ", 0),
 	}
+}
+
+// rawWriter wraps a writer and replaces lone \n with \r\n,
+// so that log output renders correctly in raw terminal mode.
+type rawWriter struct {
+	w io.Writer
+}
+
+func (rw rawWriter) Write(p []byte) (n int, err error) {
+	replaced := bytes.ReplaceAll(p, []byte("\n"), []byte("\r\n"))
+	_, err = rw.w.Write(replaced)
+	// Return original length to satisfy the io.Writer contract.
+	return len(p), err
 }
 
 // ReadRPC is an RPC handler
