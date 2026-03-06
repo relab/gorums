@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -40,8 +41,8 @@ func main() {
 			addrs[i] = sys.Addr()
 		}
 		dialOpts := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
-		for _, sys := range systems {
-			storage := newStorageServer(os.Stderr, sys.Addr())
+		for i, sys := range systems {
+			storage := newStorageServer(os.Stderr, fmt.Sprintf("node %d", i))
 			cfg, err := sys.NewOutboundConfig(gorums.WithNodeList(addrs), dialOpts)
 			if err != nil {
 				log.Fatalf("Failed to create server peer configuration: %v", err)
