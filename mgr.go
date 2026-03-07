@@ -108,7 +108,7 @@ func (m *Manager) newNode(id uint32, addr string) (*Node, error) {
 	// Use a local (in-process) node when this ID is our own local node
 	// and a handler is configured (symmetric peer configuration).
 	if id == m.opts.localNodeID && m.opts.handler != nil {
-		n := newLocalNode(id, m.getMsgID, m.opts.handler, m)
+		n := newLocalNode(id, addr, m.getMsgID, m.opts.handler, m)
 		m.addNode(n)
 		return n, nil
 	}

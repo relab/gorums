@@ -56,16 +56,17 @@ func metadataWithNodeID(id uint32) metadata.MD {
 // InboundManager is safe for concurrent use.
 type InboundManager struct {
 	mu              sync.RWMutex
-	myID            uint32              // this server's own NodeID; always present in inboundCfg
-	nodes           map[uint32]*Node    // pre-created for known peers; client peers added on connect
-	config          Configuration       // auto-updated slice of known peers, sorted by ID
-	clientConfig    Configuration       // auto-updated slice of client peers, sorted by ID
-	nextMsgID       atomic.Uint64       // counter for server-initiated message IDs
-	sendBufferSize  uint                // send buffer size for inbound channels
-	onConfigChange  func(Configuration) // optional; called after each known-peer config change
-	onClientsChange func(Configuration) // optional; called after each client-peer config change
-	clientPeers     bool                // accept unknown clients with auto-assigned IDs
-	nextClientID    uint32              // next ID to assign to a client peer
+	myID            uint32                // this server's own NodeID; always present in inboundCfg
+	nodes           map[uint32]*Node      // pre-created for known peers; client peers added on connect
+	config          Configuration         // auto-updated slice of known peers, sorted by ID
+	clientConfig    Configuration         // auto-updated slice of client peers, sorted by ID
+	nextMsgID       atomic.Uint64         // counter for server-initiated message IDs
+	sendBufferSize  uint                  // send buffer size for inbound channels
+	selfHandler     stream.RequestHandler // handler for in-process dispatch on the self-node
+	onConfigChange  func(Configuration)   // optional; called after each known-peer config change
+	onClientsChange func(Configuration)   // optional; called after each client-peer config change
+	clientPeers     bool                  // accept unknown clients with auto-assigned IDs
+	nextClientID    uint32                // next ID to assign to a client peer
 }
 
 // clientIDStart is the starting ID for dynamically assigned client peers.
@@ -89,6 +90,7 @@ func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfi
 		myID:            myID,
 		nodes:           make(map[uint32]*Node),
 		sendBufferSize:  sendBuffer,
+		selfHandler:     selfHandler,
 		onConfigChange:  onConfigChange,
 		onClientsChange: onClientsChange,
 		clientPeers:     clientPeers,
@@ -99,21 +101,8 @@ func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfi
 			panic("gorums: invalid peer configuration: " + err.Error())
 		}
 	}
-	im.setSelfHandler(selfHandler)
 	im.rebuildConfig()
 	return im
-}
-
-// setSelfHandler installs a local (in-process) channel on the self-node,
-// enabling direct handler invocation when the self-node is part of a
-// configuration. This must be called during construction before any peers
-// connect. The handler is typically the local *Server.
-func (im *InboundManager) setSelfHandler(h stream.RequestHandler) {
-	if selfNode, ok := im.nodes[im.myID]; ok {
-		router := stream.NewMessageRouter(h)
-		selfNode.router = router
-		selfNode.channel.Store(stream.NewLocalChannel(im.myID, router))
-	}
 }
 
 // Nodes returns a slice of known peer nodes in order of their IDs.
@@ -170,8 +159,15 @@ func (im *InboundManager) getMsgID() uint64 {
 // newNode creates a peer node for the given id and normalized addr and
 // registers it in the manager's node map. This must be called during
 // construction before any peers connect, so no locking is needed.
+// If id equals myID, a local (in-process) node is created instead of an
+// inbound node, enabling direct handler invocation without a network round-trip.
 func (im *InboundManager) newNode(id uint32, addr string) (*Node, error) {
-	node := newInboundNode(id, addr, im.getMsgID)
+	var node *Node
+	if id == im.myID && im.selfHandler != nil {
+		node = newLocalNode(id, addr, im.getMsgID, im.selfHandler, nil)
+	} else {
+		node = newInboundNode(id, addr, im.getMsgID)
+	}
 	im.nodes[id] = node
 	return node, nil
 }
