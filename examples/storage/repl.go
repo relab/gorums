@@ -74,9 +74,6 @@ func newRepl(mgr *pb.Manager, cfg pb.Configuration) *repl {
 }
 
 // ReadLine reads a line from the terminal in raw mode.
-//
-// FIXME: ReadLine currently does not work with arrow keys on windows for some reason
-// See: https://stackoverflow.com/questions/58237670/terminal-raw-mode-does-not-support-arrows-on-windows
 func (r repl) ReadLine() (string, error) {
 	fd := int(os.Stdin.Fd())
 	oldState, err := term.MakeRaw(fd)
