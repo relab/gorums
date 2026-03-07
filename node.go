@@ -131,10 +131,11 @@ func newInboundNode(id uint32, addr string, msgIDGen func() uint64) *Node {
 // network. It is used for the self-node when this process is both client and
 // server in a symmetric peer configuration. The provided handler (typically
 // the local *Server) serves requests directly without a gRPC round-trip.
-func newLocalNode(id uint32, msgIDGen func() uint64, handler stream.RequestHandler, mgr *Manager) *Node {
+func newLocalNode(id uint32, addr string, msgIDGen func() uint64, handler stream.RequestHandler, mgr *Manager) *Node {
 	router := stream.NewMessageRouter(handler)
 	n := &Node{
 		id:       id,
+		addr:     addr,
 		mgr:      mgr,
 		msgIDGen: msgIDGen,
 		router:   router,
