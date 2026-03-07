@@ -80,9 +80,11 @@ const clientIDStart = 1 << 20
 // defining the set of known peers. If myID is present in the NodeListOption it is
 // immediately included in the Config as the self-node, so that quorum thresholds
 // account for the local replica from the moment of construction. If clientPeers is
-// true, unknown clients are accepted with auto-assigned IDs. Panics on configuration
-// errors (invalid addresses, duplicate nodes, etc.)
-func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfigChange, onClientsChange func(Configuration), clientPeers bool) *InboundManager {
+// true, unknown clients are accepted with auto-assigned IDs. The selfHandler is
+// installed on the self-node (if present) to enable in-process dispatch without
+// a network round-trip. Panics on configuration errors (invalid addresses,
+// duplicate nodes, etc.)
+func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfigChange, onClientsChange func(Configuration), clientPeers bool, selfHandler stream.RequestHandler) *InboundManager {
 	im := &InboundManager{
 		myID:            myID,
 		nodes:           make(map[uint32]*Node),
@@ -97,8 +99,21 @@ func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfi
 			panic("gorums: invalid peer configuration: " + err.Error())
 		}
 	}
+	im.setSelfHandler(selfHandler)
 	im.rebuildConfig()
 	return im
+}
+
+// setSelfHandler installs a local (in-process) channel on the self-node,
+// enabling direct handler invocation when the self-node is part of a
+// configuration. This must be called during construction before any peers
+// connect. The handler is typically the local *Server.
+func (im *InboundManager) setSelfHandler(h stream.RequestHandler) {
+	if selfNode, ok := im.nodes[im.myID]; ok {
+		router := stream.NewMessageRouter(h)
+		selfNode.router = router
+		selfNode.channel.Store(stream.NewLocalChannel(im.myID, router))
+	}
 }
 
 // Nodes returns a slice of known peer nodes in order of their IDs.
@@ -136,15 +151,6 @@ func (im *InboundManager) ClientConfig() Configuration {
 // NodeID returns this server's own NodeID.
 func (im *InboundManager) NodeID() uint32 {
 	return im.myID
-}
-
-// setSelfServer sets the Server reference on the self-node, enabling
-// local handler invocation when the self-node is part of a configuration.
-// This must be called during construction before any peers connect.
-func (im *InboundManager) setSelfServer(srv *Server) {
-	if selfNode, ok := im.nodes[im.myID]; ok {
-		selfNode.srv = srv
-	}
 }
 
 // serverIDMask is the high bit of a uint64, used to partition message ID spaces.

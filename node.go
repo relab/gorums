@@ -53,7 +53,6 @@ type Node struct {
 	msgIDGen func() uint64
 	router   *stream.MessageRouter
 	channel  atomic.Pointer[stream.Channel]
-	srv      *Server // non-nil only for the self-node; enables local handler invocation
 }
 
 // Context creates a new NodeContext from the given parent context
@@ -128,6 +127,22 @@ func newInboundNode(id uint32, addr string, msgIDGen func() uint64) *Node {
 	}
 }
 
+// newLocalNode creates a Node that dispatches calls in-process, bypassing the
+// network. It is used for the self-node when this process is both client and
+// server in a symmetric peer configuration. The provided handler (typically
+// the local *Server) serves requests directly without a gRPC round-trip.
+func newLocalNode(id uint32, msgIDGen func() uint64, handler stream.RequestHandler, mgr *Manager) *Node {
+	router := stream.NewMessageRouter(handler)
+	n := &Node{
+		id:       id,
+		mgr:      mgr,
+		msgIDGen: msgIDGen,
+		router:   router,
+	}
+	n.channel.Store(stream.NewLocalChannel(id, router))
+	return n
+}
+
 // IsInbound returns true if the node has an active inbound channel.
 func (n *Node) IsInbound() bool {
 	if n == nil {
@@ -167,19 +182,10 @@ func (n *Node) RouteResponse(msg *stream.Message) bool {
 }
 
 // Enqueue enqueues a request to this node's channel.
-// If the node is the self-node (srv != nil) and the request is a server-initiated
-// call (ResponseChan is set or WaitSendDone is true), the request is handled
-// locally by invoking [Server.handleLocally] in a new goroutine, bypassing
-// the network. Response echo-backs from [stream.Server.NodeStream] (ResponseChan
-// nil, WaitSendDone false) are routed through the inbound channel as normal so
-// the response reaches the outbound side's response router.
-// If neither a server nor a channel is available, the request is silently dropped.
+// For local channels the channel handles in-process dispatch directly.
+// If no channel is available, the request is silently dropped.
 // This implements the [stream.PeerNode] interface.
 func (n *Node) Enqueue(req stream.Request) {
-	if n.srv != nil && (req.ResponseChan != nil || req.WaitSendDone) {
-		go n.srv.handleLocally(n.id, req)
-		return
-	}
 	if ch := n.channel.Load(); ch != nil {
 		ch.Enqueue(req)
 	}

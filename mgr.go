@@ -105,6 +105,13 @@ func (m *Manager) newNode(id uint32, addr string) (*Node, error) {
 	if _, found := m.Node(id); found {
 		return nil, fmt.Errorf("node %d already exists", id)
 	}
+	// Use a local (in-process) node when this ID is our own local node
+	// and a handler is configured (symmetric peer configuration).
+	if id == m.opts.localNodeID && m.opts.handler != nil {
+		n := newLocalNode(id, m.getMsgID, m.opts.handler, m)
+		m.addNode(n)
+		return n, nil
+	}
 	opts := nodeOptions{
 		ID:             id,
 		SendBufferSize: m.opts.sendBuffer,
@@ -112,7 +119,7 @@ func (m *Manager) newNode(id uint32, addr string) (*Node, error) {
 		Metadata:       m.opts.metadata,
 		PerNodeMD:      m.opts.perNodeMD,
 		DialOpts:       m.opts.grpcDialOpts,
-		RequestHandler: m.opts.requestHandlerFor(id),
+		RequestHandler: m.opts.handler,
 		Manager:        m,
 	}
 	n, err := newOutboundNode(addr, opts)

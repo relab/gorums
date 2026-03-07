@@ -6,8 +6,6 @@ import (
 
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // serverOptions contains configuration options for creating a new Server.
@@ -129,21 +127,27 @@ func NewServer(opts ...ServerOption) *Server {
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
-	var acceptor *InboundManager
-	if serverOpts.peerOpt != nil || serverOpts.clientPeers {
-		acceptor = newInboundManager(serverOpts.myID, serverOpts.peerOpt, serverOpts.peerSendBuffer, serverOpts.onConfigChange, serverOpts.onClientsChange, serverOpts.clientPeers)
-	}
+	// Allocate s first so it can serve as the selfHandler for the InboundManager.
+	// HandleRequest only accesses s.handlers and s.interceptors, both of which are
+	// set below before newInboundManager is called, so the reference is safe to pass.
 	s := &Server{
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
 		handlers:     make(map[string]Handler),
 		interceptors: serverOpts.interceptors,
-		inboundMgr:   acceptor,
 	}
-	s.srv = stream.NewServer(serverOpts.buffer, acceptor, serverOpts.connectCallback, s)
+	if serverOpts.peerOpt != nil || serverOpts.clientPeers {
+		s.inboundMgr = newInboundManager(
+			serverOpts.myID,
+			serverOpts.peerOpt,
+			serverOpts.peerSendBuffer,
+			serverOpts.onConfigChange,
+			serverOpts.onClientsChange,
+			serverOpts.clientPeers,
+			s,
+		)
+	}
+	s.srv = stream.NewServer(serverOpts.buffer, s.inboundMgr, serverOpts.connectCallback, s)
 	stream.RegisterGorumsServer(s.grpcServer, s.srv)
-	if acceptor != nil {
-		acceptor.setSelfServer(s)
-	}
 	return s
 }
 
@@ -213,43 +217,6 @@ func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, rele
 		return
 	}
 	_ = srvCtx.SendMessage(MessageWithError(in, out, err))
-}
-
-// handleLocally invokes [HandleRequest] in-process for the self-node.
-// The send function delivers the response directly to the request's ResponseChan,
-// bypassing the network. For one-way calls (WaitSendDone), a completion
-// confirmation is sent after HandleRequest returns.
-func (s *Server) handleLocally(localID uint32, req stream.Request) {
-	var responded bool
-	send := func(msg *stream.Message) {
-		responded = true
-		if req.ResponseChan != nil {
-			req.ResponseChan <- stream.NodeResponse[*stream.Message]{
-				NodeID: localID,
-				Value:  msg,
-				Err:    msg.ErrorStatus(),
-			}
-		}
-	}
-	// release is a no-op: there is no stream ordering mutex for local calls.
-	s.HandleRequest(req.Ctx, req.Msg, func() {}, send)
-
-	if req.ResponseChan == nil {
-		return
-	}
-	if req.WaitSendDone {
-		// One-way call (multicast/unicast): confirm handler completion.
-		req.ResponseChan <- stream.NodeResponse[*stream.Message]{NodeID: localID}
-		return
-	}
-	if !responded {
-		// Two-way call but handler didn't send a response (no handler registered).
-		// Send error so the iterator doesn't block forever.
-		req.ResponseChan <- stream.NodeResponse[*stream.Message]{
-			NodeID: localID,
-			Err:    status.Error(codes.Unimplemented, "no handler registered"),
-		}
-	}
 }
 
 // Serve starts serving on the listener.
