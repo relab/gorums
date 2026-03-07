@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
-	"github.com/google/shlex"
 	"github.com/relab/gorums"
 	pb "github.com/relab/gorums/examples/storage/proto"
 	"golang.org/x/term"
@@ -108,10 +108,10 @@ func Repl(mgr *pb.Manager, defaultCfg pb.Configuration) error {
 			fmt.Fprintf(os.Stderr, "Failed to read line: %v\n", err)
 			return err
 		}
-		args, err := shlex.Split(l)
+		args, err := splitQuoted(l)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to split command: %v\n", err)
-			return err
+			fmt.Fprintf(os.Stderr, "Failed to split command arguments: %v\n", err)
+			continue
 		}
 		if len(args) < 1 {
 			continue
@@ -460,4 +460,58 @@ func parseIndices(cfgStr string, numNodes int) (indices []int, err error) {
 		return indices, nil
 	}
 	return nil, fmt.Errorf("invalid configuration")
+}
+
+func splitQuoted(s string) ([]string, error) {
+	var args []string
+	var currentArg strings.Builder
+	var quote rune
+	escaped := false
+
+	flush := func() {
+		if currentArg.Len() > 0 {
+			args = append(args, currentArg.String())
+			currentArg.Reset()
+		}
+	}
+
+	for _, r := range s {
+		switch {
+		case escaped:
+			currentArg.WriteRune(r)
+			escaped = false
+
+		case quote != 0:
+			switch r {
+			case '\\':
+				escaped = true
+			case quote:
+				quote = 0
+			default:
+				currentArg.WriteRune(r)
+			}
+
+		case r == '\'' || r == '"':
+			quote = r
+
+		case unicode.IsSpace(r):
+			flush()
+
+		case r == '\\':
+			escaped = true
+
+		default:
+			currentArg.WriteRune(r)
+		}
+	}
+
+	if escaped {
+		return nil, fmt.Errorf("unfinished escape")
+	}
+	if quote != 0 {
+		return nil, fmt.Errorf("unterminated quoted string")
+	}
+
+	flush()
+	return args, nil
 }
