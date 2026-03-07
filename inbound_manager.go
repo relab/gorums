@@ -133,6 +133,20 @@ func (im *InboundManager) ClientConfig() Configuration {
 	return im.clientConfig
 }
 
+// NodeID returns this server's own NodeID.
+func (im *InboundManager) NodeID() uint32 {
+	return im.myID
+}
+
+// setSelfServer sets the Server reference on the self-node, enabling
+// local handler invocation when the self-node is part of a configuration.
+// This must be called during construction before any peers connect.
+func (im *InboundManager) setSelfServer(srv *Server) {
+	if selfNode, ok := im.nodes[im.myID]; ok {
+		selfNode.srv = srv
+	}
+}
+
 // serverIDMask is the high bit of a uint64, used to partition message ID spaces.
 // Server-initiated call IDs always have this bit set; client-initiated IDs never do.
 // This prevents message ID collisions when requests flow in both directions over the
