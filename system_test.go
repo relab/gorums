@@ -324,11 +324,11 @@ func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
 func TestSystemSymmetricMulticastFromHandler_Config(t *testing.T) {
 	systems, configs := createTestSystems(t, 3)
 
-	// 3 servers receive the outer multicast. each server multicasts to a config of 3 nodes.
-	// however, self-node enqueues are silently dropped in gorums, so each server only sends to 2 peers.
-	// total = 3 * 2 = 6 messages received.
+	// 3 servers receive the outer multicast. Each server multicasts to a config of 3 nodes.
+	// The self-node's handler is invoked locally, so each server sends to all 3 nodes.
+	// Total = 3 * 3 = 9 messages received.
 	var wg sync.WaitGroup
-	wg.Add(6)
+	wg.Add(9)
 
 	for i, sys := range systems {
 		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {

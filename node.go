@@ -53,6 +53,7 @@ type Node struct {
 	msgIDGen func() uint64
 	router   *stream.MessageRouter
 	channel  atomic.Pointer[stream.Channel]
+	srv      *Server // non-nil only for the self-node; enables local handler invocation
 }
 
 // Context creates a new NodeContext from the given parent context
@@ -165,10 +166,20 @@ func (n *Node) RouteResponse(msg *stream.Message) bool {
 	})
 }
 
-// Enqueue enqueues a request to this node's channel. If the channel is nil,
-// e.g., for the self-node, the request is silently dropped.
+// Enqueue enqueues a request to this node's channel.
+// If the node is the self-node (srv != nil) and the request is a server-initiated
+// call (ResponseChan is set or WaitSendDone is true), the request is handled
+// locally by invoking [Server.handleLocally] in a new goroutine, bypassing
+// the network. Response echo-backs from [stream.Server.NodeStream] (ResponseChan
+// nil, WaitSendDone false) are routed through the inbound channel as normal so
+// the response reaches the outbound side's response router.
+// If neither a server nor a channel is available, the request is silently dropped.
 // This implements the [stream.PeerNode] interface.
 func (n *Node) Enqueue(req stream.Request) {
+	if n.srv != nil && (req.ResponseChan != nil || req.WaitSendDone) {
+		go n.srv.handleLocally(n.id, req)
+		return
+	}
 	if ch := n.channel.Load(); ch != nil {
 		ch.Enqueue(req)
 	}
