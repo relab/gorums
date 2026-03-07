@@ -133,10 +133,31 @@ func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn 
 	return c
 }
 
+// NewLocalChannel creates a Channel that dispatches requests in-process,
+// bypassing the network entirely. The provided router must carry the
+// RequestHandler used to serve incoming call types on this node.
+// No goroutines are started; the channel's Close is a no-op.
+func NewLocalChannel(id uint32, router *MessageRouter) *Channel {
+	c := &Channel{
+		id:     id,
+		router: router,
+	}
+	c.closeOnceFunc = sync.OnceValue(func() error { return nil })
+	return c
+}
+
+// isLocal returns true if this channel dispatches in-process rather than over a
+// network connection.
+func (c *Channel) isLocal() bool {
+	// The nil sendQ is the discriminator: all outbound and inbound channels always
+	// allocate a sendQ via make(chan Request, ...) in newChannel.
+	return c.sendQ == nil
+}
+
 // IsInbound returns true if this channel was created from a server-side stream
 // rather than an outbound client connection.
 func (c *Channel) IsInbound() bool {
-	return c.conn == nil
+	return c.conn == nil && c.sendQ != nil
 }
 
 // NewChannelWithState creates a new Channel with a specific state for testing.
@@ -228,7 +249,48 @@ func (c *Channel) isConnected() bool {
 	return c.conn.GetState() == connectivity.Ready && c.getStream() != nil
 }
 
+// dispatchLocalRequest handles a request in-process for the self-node,
+// bypassing the network. The send function delivers the response directly
+// to the request's ResponseChan. For one-way calls (WaitSendDone),
+// a completion confirmation is sent after HandleRequest returns.
+func (c *Channel) dispatchLocalRequest(rh RequestHandler, req Request) {
+	var responded bool
+	send := func(msg *Message) {
+		responded = true
+		if req.ResponseChan != nil {
+			req.ResponseChan <- response{
+				NodeID: c.id,
+				Value:  msg,
+				Err:    msg.ErrorStatus(),
+			}
+		}
+	}
+	// release is a no-op: there is no stream ordering mutex for local calls.
+	rh.HandleRequest(req.Ctx, req.Msg, func() {}, send)
+
+	if req.ResponseChan == nil {
+		return
+	}
+	if req.WaitSendDone {
+		// One-way call (multicast/unicast): confirm handler completion.
+		req.ResponseChan <- response{NodeID: c.id}
+		return
+	}
+	if !responded {
+		// Two-way call but handler didn't send a response (no handler registered).
+		// Send error so the iterator doesn't block forever.
+		req.ResponseChan <- response{
+			NodeID: c.id,
+			Err:    status.Error(codes.Unimplemented, "no handler registered"),
+		}
+	}
+}
+
 // Enqueue adds the request to the send queue.
+// If the channel is a local channel, the request is dispatched in-process via
+// the registered RequestHandler without touching the network. Response
+// echo-backs (ResponseChan nil, WaitSendDone false) are silently dropped for
+// local channels since there is no stream to echo back on.
 // If the node is closed, it responds with an error instead.
 //
 // WaitSendDone and Streaming are mutually exclusive: WaitSendDone is for one-way
@@ -236,6 +298,14 @@ func (c *Channel) isConnected() bool {
 // correctable calls that keep the router entry alive for multiple server responses.
 // Combining them would cause double delivery on the response channel.
 func (c *Channel) Enqueue(req Request) {
+	if c.isLocal() {
+		if req.ResponseChan != nil || req.WaitSendDone {
+			if rh, ok := c.router.RequestHandler(); ok {
+				go c.dispatchLocalRequest(rh, req)
+			}
+		}
+		return
+	}
 	if req.WaitSendDone && req.Streaming {
 		panic("stream: WaitSendDone and Streaming are mutually exclusive")
 	}

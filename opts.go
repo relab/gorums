@@ -100,12 +100,3 @@ func withRequestHandler(handler stream.RequestHandler, localID uint32) ManagerOp
 		o.metadata = metadata.Join(o.metadata, metadataWithNodeID(localID))
 	}
 }
-
-// requestHandlerFor returns the RequestHandler for the given node ID, or nil if no
-// handler is configured or if id is this node's own local ID (self-connection).
-func (o *managerOptions) requestHandlerFor(id uint32) stream.RequestHandler {
-	if o.handler == nil || id == o.localNodeID {
-		return nil
-	}
-	return o.handler
-}
