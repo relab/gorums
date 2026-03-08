@@ -122,6 +122,9 @@ func (im *inboundManager) Nodes() []*Node {
 // retaining a reference to an old configuration is safe.
 // Returns nil if no peer tracking is configured.
 func (im *inboundManager) Config() Configuration {
+	if im == nil {
+		return nil
+	}
 	im.mu.RLock()
 	defer im.mu.RUnlock()
 	return im.config
@@ -132,6 +135,9 @@ func (im *inboundManager) Config() Configuration {
 // retaining a reference to an old value is safe.
 // Returns nil if no peer tracking is configured.
 func (im *inboundManager) ClientConfig() Configuration {
+	if im == nil {
+		return nil
+	}
 	im.mu.RLock()
 	defer im.mu.RUnlock()
 	return im.clientConfig
