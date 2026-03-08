@@ -6,7 +6,7 @@ import (
 )
 
 // PeerAcceptor identifies and registers incoming peers on a stream.
-// It is implemented by InboundManager in the gorums package.
+// It is implemented by inboundManager in the gorums package.
 type PeerAcceptor interface {
 	AcceptPeer(ctx context.Context, stream BidiStream) (PeerNode, func(), error)
 }

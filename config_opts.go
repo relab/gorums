@@ -8,14 +8,14 @@ import (
 )
 
 // NodeListOption must be implemented by node providers. It is used by both the
-// Manager (outbound) and by InboundManager (inbound) via newConfig.
+// Manager (outbound) and by inboundManager (inbound) via newConfig.
 type NodeListOption interface {
 	Option
 	newConfig(nodeRegistry) (Configuration, error)
 }
 
 // nodeRegistry abstracts the node management operations required to build a Configuration.
-// Implemented by Manager and InboundManager.
+// Implemented by Manager and inboundManager.
 type nodeRegistry interface {
 	Nodes() []*Node
 	newNode(id uint32, addr string) (*Node, error)
