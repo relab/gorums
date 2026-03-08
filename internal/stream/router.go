@@ -9,8 +9,10 @@ import (
 // RequestHandler handles an incoming message from a stream. It is called in
 // a new goroutine for every request. The 'release' function must be idempotent
 // and must be called in the handler implementation to allow the next request
-// on the stream to be processed. The 'send' function is used to asynchronously
-// send a response message back to the communicating peer.
+// on the stream to be processed. The 'send' function delivers a response back
+// to the communicating peer. For two-way call types, send must be called exactly
+// once and synchronously (before HandleRequest returns); for one-way call types,
+// send must not be called.
 type RequestHandler interface {
 	HandleRequest(ctx context.Context, msg *Message, release func(), send func(*Message))
 }

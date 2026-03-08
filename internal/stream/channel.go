@@ -250,40 +250,36 @@ func (c *Channel) isConnected() bool {
 }
 
 // dispatchLocalRequest handles a request in-process for the self-node,
-// bypassing the network. The send function delivers the response directly
-// to the request's ResponseChan. For one-way calls (WaitSendDone),
-// a completion confirmation is sent after HandleRequest returns.
+// bypassing the network. The send callback delivers the response directly
+// to the request's ResponseChan for two-way calls. For one-way calls
+// (WaitSendDone=true), the send callback is a no-op and a completion
+// confirmation is sent after HandleRequest returns.
+//
+// HandleRequest is required to call send synchronously (before returning)
+// for two-way calls; see RequestHandler for the full contract.
 func (c *Channel) dispatchLocalRequest(rh RequestHandler, req Request) {
-	var responded bool
 	send := func(msg *Message) {
-		responded = true
-		if req.ResponseChan != nil {
-			req.ResponseChan <- response{
-				NodeID: c.id,
-				Value:  msg,
-				Err:    msg.ErrorStatus(),
-			}
+		if req.WaitSendDone || req.ResponseChan == nil {
+			// One-way calls confirm send completion via the WaitSendDone
+			// path below; ignore any response from the handler.
+			return
+		}
+		req.ResponseChan <- response{
+			NodeID: c.id,
+			Value:  msg,
+			Err:    msg.ErrorStatus(),
 		}
 	}
 	// release is a no-op: there is no stream ordering mutex for local calls.
 	rh.HandleRequest(req.Ctx, req.Msg, func() {}, send)
 
-	if req.ResponseChan == nil {
-		return
-	}
-	if req.WaitSendDone {
-		// One-way call (multicast/unicast): confirm handler completion.
+	if req.WaitSendDone && req.ResponseChan != nil {
+		// One-way call (multicast/unicast): confirm handler has completed.
 		req.ResponseChan <- response{NodeID: c.id}
-		return
 	}
-	if !responded {
-		// Two-way call but handler didn't send a response (no handler registered).
-		// Send error so the iterator doesn't block forever.
-		req.ResponseChan <- response{
-			NodeID: c.id,
-			Err:    status.Error(codes.Unimplemented, "no handler registered"),
-		}
-	}
+	// For two-way calls (WaitSendDone=false, ResponseChan!=nil):
+	// HandleRequest called send() synchronously, which already delivered
+	// the response (or an Unimplemented error for unregistered methods).
 }
 
 // Enqueue adds the request to the send queue.

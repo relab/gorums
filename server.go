@@ -6,6 +6,8 @@ import (
 
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // serverOptions contains configuration options for creating a new Server.
@@ -176,7 +178,8 @@ func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, rele
 
 	handler, ok := s.handlers[reqMsg.GetMethod()]
 	if !ok {
-		// No handler registered: we just ignore the message and release the lock.
+		in := &Message{Message: reqMsg}
+		_ = srvCtx.SendMessage(MessageWithError(in, nil, status.Errorf(codes.Unimplemented, "no handler registered for method %s", reqMsg.GetMethod())))
 		return
 	}
 
