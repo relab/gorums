@@ -266,9 +266,11 @@ func (c *Channel) dispatchLocalRequest(rh RequestHandler, req Request) {
 		}
 	}
 	// For two-way calls, deliver the response via the send closure.
-	// For one-way calls (ResponseChan is nil), the send closure is a no-op.
+	// For one-way calls (WaitSendDone=true or ResponseChan==nil), send is a no-op:
+	// the confirmation was already delivered above, and a second write would either
+	// race with the caller consuming the channel or block on a full response channel.
 	send := func(msg *Message) {
-		if req.ResponseChan == nil {
+		if req.WaitSendDone || req.ResponseChan == nil {
 			return
 		}
 		select {
