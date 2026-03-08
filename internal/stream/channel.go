@@ -60,6 +60,10 @@ type Channel struct {
 	// Node and injected into the Channel, so it survives channel replacement.
 	router        *MessageRouter
 	closeOnceFunc func() error
+
+	// localMu is the serialization gate for local dispatch, mirroring
+	// NodeStream's lock+release pattern to ensure handlers are serialized.
+	localMu sync.Mutex
 }
 
 // NewOutboundChannel creates a new channel for the given node and starts
@@ -250,14 +254,26 @@ func (c *Channel) isConnected() bool {
 }
 
 // dispatchLocalRequest handles a request in-process for the self-node,
-// bypassing the network.
+// bypassing the network. It explicitly acquires the channel's localMu to ensure
+// identical sequential execution semantics as remote nodes, where execution
+// is serialized until the handler returns or explicitly calls ServerCtx.Release().
 //
 // For one-way calls (WaitSendDone=true), the send completion confirmation
 // is delivered before HandleRequest runs, matching remote-node semantics
 // where confirmation is sent after stream.Send() completes, but decoupled
 // from the handler runtime. For two-way calls, the send closure delivers
 // the response directly to the request's ResponseChan.
-func (c *Channel) dispatchLocalRequest(rh RequestHandler, req Request) {
+func (c *Channel) dispatchLocalRequest(req Request) {
+	if req.Ctx.Err() != nil {
+		c.replyError(req, req.Ctx.Err())
+		return
+	}
+	rh, ok := c.router.RequestHandler()
+	if !ok {
+		c.replyError(req, status.Error(codes.Unimplemented, "no request handler registered"))
+		return
+	}
+
 	if req.WaitSendDone && req.ResponseChan != nil {
 		select {
 		case req.ResponseChan <- response{NodeID: c.id}:
@@ -278,8 +294,12 @@ func (c *Channel) dispatchLocalRequest(rh RequestHandler, req Request) {
 		case <-req.Ctx.Done():
 		}
 	}
-	// release is a no-op: there is no stream ordering mutex for local calls.
-	rh.HandleRequest(req.Msg.AppendToIncomingContext(req.Ctx), req.Msg, func() {}, send)
+
+	c.localMu.Lock()
+	var once sync.Once
+	release := func() { once.Do(c.localMu.Unlock) }
+
+	go rh.HandleRequest(req.Msg.AppendToIncomingContext(req.Ctx), req.Msg, release, send)
 }
 
 // Enqueue adds the request to the send queue.
@@ -297,16 +317,7 @@ func (c *Channel) Enqueue(req Request) {
 		panic("stream: WaitSendDone and Streaming are mutually exclusive")
 	}
 	if c.isLocal() {
-		if req.Ctx.Err() != nil {
-			c.replyError(req, req.Ctx.Err())
-			return
-		}
-		rh, ok := c.router.RequestHandler()
-		if !ok {
-			c.replyError(req, status.Error(codes.Unimplemented, "no request handler registered"))
-			return
-		}
-		go c.dispatchLocalRequest(rh, req)
+		c.dispatchLocalRequest(req)
 		return
 	}
 	// Two-stage select: the outer non-blocking check catches the already-closed
