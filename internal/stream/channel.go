@@ -253,6 +253,48 @@ func (c *Channel) isConnected() bool {
 	return c.conn.GetState() == connectivity.Ready && c.getStream() != nil
 }
 
+// Enqueue adds the request to the send queue.
+//
+// If it is a local channel, the request is dispatched in-process via
+// the registered RequestHandler without touching the network.
+// If the node is closed, it responds with an error instead.
+//
+// WaitSendDone and Streaming are mutually exclusive: WaitSendDone is for one-way
+// calls that want send-completion confirmation, while Streaming is for
+// correctable calls that keep the router entry alive for multiple server responses.
+// Combining them would cause double delivery on the response channel.
+func (c *Channel) Enqueue(req Request) {
+	if req.WaitSendDone && req.Streaming {
+		panic("stream: WaitSendDone and Streaming are mutually exclusive")
+	}
+	if c.isLocal() {
+		c.dispatchLocalRequest(req)
+		return
+	}
+	// Two-stage select: the outer non-blocking check catches the already-closed
+	// case deterministically. Go's select only falls through to default when no
+	// other case is ready, so if connCtx.Done() is already closed it always
+	// wins — unlike a plain single select, where Go randomly picks between a
+	// ready Done channel and a buffered sendQ.
+	// The inner select handles the case where the node closes concurrently
+	// while we are waiting for sendQ space; there a narrow race remains, but
+	// drainSendQ (deferred in sender) will drain and replyError any entry that
+	// slips through after sender exits.
+	select {
+	case <-c.connCtx.Done():
+		// the node's close() method was called: respond with error instead of enqueueing
+		c.replyError(req, ErrNodeClosed)
+	default:
+		select {
+		case <-c.connCtx.Done():
+			// the node's close() method was called: respond with error instead of enqueueing
+			c.replyError(req, ErrNodeClosed)
+		case c.sendQ <- req:
+			// enqueued successfully
+		}
+	}
+}
+
 // dispatchLocalRequest handles a request in-process for the self-node,
 // bypassing the network. It explicitly acquires the channel's localMu to ensure
 // identical sequential execution semantics as remote nodes, where execution
@@ -300,48 +342,6 @@ func (c *Channel) dispatchLocalRequest(req Request) {
 	release := func() { once.Do(c.localMu.Unlock) }
 
 	go rh.HandleRequest(req.Msg.AppendToIncomingContext(req.Ctx), req.Msg, release, send)
-}
-
-// Enqueue adds the request to the send queue.
-//
-// If it is a local channel, the request is dispatched in-process via
-// the registered RequestHandler without touching the network.
-// If the node is closed, it responds with an error instead.
-//
-// WaitSendDone and Streaming are mutually exclusive: WaitSendDone is for one-way
-// calls that want send-completion confirmation, while Streaming is for
-// correctable calls that keep the router entry alive for multiple server responses.
-// Combining them would cause double delivery on the response channel.
-func (c *Channel) Enqueue(req Request) {
-	if req.WaitSendDone && req.Streaming {
-		panic("stream: WaitSendDone and Streaming are mutually exclusive")
-	}
-	if c.isLocal() {
-		c.dispatchLocalRequest(req)
-		return
-	}
-	// Two-stage select: the outer non-blocking check catches the already-closed
-	// case deterministically. Go's select only falls through to default when no
-	// other case is ready, so if connCtx.Done() is already closed it always
-	// wins — unlike a plain single select, where Go randomly picks between a
-	// ready Done channel and a buffered sendQ.
-	// The inner select handles the case where the node closes concurrently
-	// while we are waiting for sendQ space; there a narrow race remains, but
-	// drainSendQ (deferred in sender) will drain and replyError any entry that
-	// slips through after sender exits.
-	select {
-	case <-c.connCtx.Done():
-		// the node's close() method was called: respond with error instead of enqueueing
-		c.replyError(req, ErrNodeClosed)
-	default:
-		select {
-		case <-c.connCtx.Done():
-			// the node's close() method was called: respond with error instead of enqueueing
-			c.replyError(req, ErrNodeClosed)
-		case c.sendQ <- req:
-			// enqueued successfully
-		}
-	}
 }
 
 // cancelPendingMsgs cancels all pending messages by sending an error response to each.
