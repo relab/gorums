@@ -17,11 +17,13 @@ import (
 // handler to allow processing the next request from the stream.
 //
 // The send function is used to deliver the provided response message
-// back to the communicating peer. For two-way call types, send must be
-// called exactly once and synchronously (before HandleRequest returns).
-// For one-way call types, the client has no pending router entry to
-// receive a response; any message delivered via send will not be
-// routable on the client side and silently dropped.
+// back to the communicating peer. For two-way call types, send may be
+// called zero or more times (e.g., for streaming correctable calls).
+// However, callers must not invoke send after HandleRequest returns,
+// as the underlying routing state may no longer be valid. For one-way
+// call types, the client has no pending router entry to receive a
+// response; any message delivered via send will not be routable on
+// the client side and will be silently dropped.
 type RequestHandler interface {
 	HandleRequest(ctx context.Context, msg *Message, release func(), send func(*Message))
 }
