@@ -298,5 +298,8 @@ func (im *inboundManager) rebuildConfig() {
 	}
 }
 
-// compile-time assertion that inboundManager implements the PeerAcceptor interface.
-var _ stream.PeerAcceptor = (*inboundManager)(nil)
+// compile-time assertion for interface compliance.
+var (
+	_ stream.PeerAcceptor = (*inboundManager)(nil)
+	_ nodeRegistry        = (*inboundManager)(nil)
+)

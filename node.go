@@ -192,9 +192,6 @@ func (n *Node) Enqueue(req stream.Request) {
 	}
 }
 
-// compile-time assertion that Node implements the PeerNode interface.
-var _ stream.PeerNode = (*Node)(nil)
-
 // close this node.
 func (n *Node) close() error {
 	if ch := n.channel.Load(); ch != nil {
@@ -346,3 +343,6 @@ var LastNodeError = func(n1, n2 *Node) bool {
 	}
 	return true
 }
+
+// compile-time assertion for interface compliance.
+var _ stream.PeerNode = (*Node)(nil)
