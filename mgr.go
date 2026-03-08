@@ -136,3 +136,6 @@ func (m *Manager) newNode(id uint32, addr string) (*Node, error) {
 func (m *Manager) getMsgID() uint64 {
 	return atomic.AddUint64(&m.nextMsgID, 1)
 }
+
+// compile-time assertion for interface compliance.
+var _ nodeRegistry = (*Manager)(nil)

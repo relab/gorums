@@ -211,3 +211,6 @@ func (s *Server) GracefulStop() {
 func (s *Server) Stop() {
 	s.grpcServer.Stop()
 }
+
+// compile-time assertion for interface compliance.
+var _ stream.RequestHandler = (*Server)(nil)
