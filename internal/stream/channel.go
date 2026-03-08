@@ -250,43 +250,41 @@ func (c *Channel) isConnected() bool {
 }
 
 // dispatchLocalRequest handles a request in-process for the self-node,
-// bypassing the network. The send callback delivers the response directly
-// to the request's ResponseChan for two-way calls. For one-way calls
-// (WaitSendDone=true), the send callback is a no-op and a completion
-// confirmation is sent after HandleRequest returns.
+// bypassing the network.
 //
-// HandleRequest is required to call send synchronously (before returning)
-// for two-way calls; see RequestHandler for the full contract.
+// For one-way calls (WaitSendDone=true), the send completion confirmation
+// is delivered before HandleRequest runs, matching remote-node semantics
+// where confirmation is sent after stream.Send() completes, but decoupled
+// from the handler runtime. For two-way calls, the send callback delivers
+// the response directly to the request's ResponseChan.
 func (c *Channel) dispatchLocalRequest(rh RequestHandler, req Request) {
-	send := func(msg *Message) {
-		if req.WaitSendDone || req.ResponseChan == nil {
-			// One-way calls confirm send completion via the WaitSendDone
-			// path below; ignore any response from the handler.
+	if req.WaitSendDone && req.ResponseChan != nil {
+		select {
+		case req.ResponseChan <- response{NodeID: c.id}:
+		case <-req.Ctx.Done():
 			return
 		}
-		req.ResponseChan <- response{
-			NodeID: c.id,
-			Value:  msg,
-			Err:    msg.ErrorStatus(),
+	}
+	// For two-way calls, deliver the response via the send callback.
+	// For one-way calls, the handler must not call send per the RequestHandler
+	// contract, so this closure is only exercised for two-way calls.
+	send := func(msg *Message) {
+		if req.ResponseChan == nil {
+			return
+		}
+		select {
+		case req.ResponseChan <- response{NodeID: c.id, Value: msg, Err: msg.ErrorStatus()}:
+		case <-req.Ctx.Done():
 		}
 	}
 	// release is a no-op: there is no stream ordering mutex for local calls.
-	rh.HandleRequest(req.Ctx, req.Msg, func() {}, send)
-
-	if req.WaitSendDone && req.ResponseChan != nil {
-		// One-way call (multicast/unicast): confirm handler has completed.
-		req.ResponseChan <- response{NodeID: c.id}
-	}
-	// For two-way calls (WaitSendDone=false, ResponseChan!=nil):
-	// HandleRequest called send() synchronously, which already delivered
-	// the response (or an Unimplemented error for unregistered methods).
+	rh.HandleRequest(req.Msg.AppendToIncomingContext(req.Ctx), req.Msg, func() {}, send)
 }
 
 // Enqueue adds the request to the send queue.
-// If the channel is a local channel, the request is dispatched in-process via
-// the registered RequestHandler without touching the network. Response
-// echo-backs (ResponseChan nil, WaitSendDone false) are silently dropped for
-// local channels since there is no stream to echo back on.
+//
+// If it is a local channel, the request is dispatched in-process via
+// the registered RequestHandler without touching the network.
 // If the node is closed, it responds with an error instead.
 //
 // WaitSendDone and Streaming are mutually exclusive: WaitSendDone is for one-way
@@ -294,16 +292,21 @@ func (c *Channel) dispatchLocalRequest(rh RequestHandler, req Request) {
 // correctable calls that keep the router entry alive for multiple server responses.
 // Combining them would cause double delivery on the response channel.
 func (c *Channel) Enqueue(req Request) {
-	if c.isLocal() {
-		if req.ResponseChan != nil || req.WaitSendDone {
-			if rh, ok := c.router.RequestHandler(); ok {
-				go c.dispatchLocalRequest(rh, req)
-			}
-		}
-		return
-	}
 	if req.WaitSendDone && req.Streaming {
 		panic("stream: WaitSendDone and Streaming are mutually exclusive")
+	}
+	if c.isLocal() {
+		if req.Ctx.Err() != nil {
+			c.replyError(req, req.Ctx.Err())
+			return
+		}
+		rh, ok := c.router.RequestHandler()
+		if !ok {
+			c.replyError(req, status.Error(codes.Unimplemented, "no request handler registered"))
+			return
+		}
+		go c.dispatchLocalRequest(rh, req)
+		return
 	}
 	// Two-stage select: the outer non-blocking check catches the already-closed
 	// case deterministically. Go's select only falls through to default when no
