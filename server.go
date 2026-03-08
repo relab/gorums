@@ -164,9 +164,10 @@ func (s *Server) RegisterHandler(method string, handler Handler) {
 // to the appropriate registered handler. It serves as the bridge between the
 // multiplexing in the stream package and the RPC logic in the gorums package.
 //
-// For one-way (unidirectional) calls, the handler returns nil, nil and no
-// response is sent. For two-way calls, the response is delivered via the
-// send callback provided by the caller.
+// send is invoked in two infrastructure-level error cases regardless of call type:
+// no handler is registered for the method, or the request cannot be unmarshaled.
+// For requests that reach the handler: one-way handlers return nil, nil and send
+// is not invoked; two-way handlers return a response which is delivered via send.
 //
 // This is the "default interceptor"; it is the first and last handler in the chain.
 // It is responsible for releasing the mutex when the handler chain is done,

@@ -255,7 +255,7 @@ func (c *Channel) isConnected() bool {
 // For one-way calls (WaitSendDone=true), the send completion confirmation
 // is delivered before HandleRequest runs, matching remote-node semantics
 // where confirmation is sent after stream.Send() completes, but decoupled
-// from the handler runtime. For two-way calls, the send callback delivers
+// from the handler runtime. For two-way calls, the send closure delivers
 // the response directly to the request's ResponseChan.
 func (c *Channel) dispatchLocalRequest(rh RequestHandler, req Request) {
 	if req.WaitSendDone && req.ResponseChan != nil {
@@ -265,9 +265,8 @@ func (c *Channel) dispatchLocalRequest(rh RequestHandler, req Request) {
 			return
 		}
 	}
-	// For two-way calls, deliver the response via the send callback.
-	// For one-way calls, the handler must not call send per the RequestHandler
-	// contract, so this closure is only exercised for two-way calls.
+	// For two-way calls, deliver the response via the send closure.
+	// For one-way calls (ResponseChan is nil), the send closure is a no-op.
 	send := func(msg *Message) {
 		if req.ResponseChan == nil {
 			return

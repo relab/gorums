@@ -19,8 +19,9 @@ import (
 // The send function is used to deliver the provided response message
 // back to the communicating peer. For two-way call types, send must be
 // called exactly once and synchronously (before HandleRequest returns).
-// For one-way call types, send may be invoked to report errors; callers
-// may pass a no-op send function.
+// For one-way call types, the client has no pending router entry to
+// receive a response; any message delivered via send will not be
+// routable on the client side and silently dropped.
 type RequestHandler interface {
 	HandleRequest(ctx context.Context, msg *Message, release func(), send func(*Message))
 }
