@@ -14,7 +14,7 @@ type serverOptions struct {
 	grpcOpts        []grpc.ServerOption
 	connectCallback func(context.Context)
 	interceptors    []Interceptor
-	// Peer management options (create InboundManager internally)
+	// Peer management options
 	myID            uint32
 	peerOpt         NodeListOption
 	clientPeers     bool
@@ -114,11 +114,11 @@ type Server struct {
 	grpcServer      *grpc.Server
 	handlers        map[string]Handler
 	interceptors    []Interceptor
-	*InboundManager // nil if no peers configured
+	*inboundManager // nil if no peers configured
 }
 
 // NewServer returns a new instance of [Server].
-// If [WithConfig] or [WithClientConfig] options are provided, an InboundManager is
+// If [WithConfig] or [WithClientConfig] options are provided, an inboundManager is
 // created internally to track connected peers.
 // Panics on configuration errors (invalid addresses, duplicate nodes, etc.)
 // since these are programmer errors detectable at startup.
@@ -127,7 +127,7 @@ func NewServer(opts ...ServerOption) *Server {
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
-	// Allocate s first so it can serve as the selfHandler for the InboundManager.
+	// Allocate s first so it can serve as the selfHandler for the inboundManager.
 	// HandleRequest only accesses s.handlers and s.interceptors, both of which are
 	// set below before newInboundManager is called, so the reference is safe to pass.
 	s := &Server{
@@ -136,7 +136,7 @@ func NewServer(opts ...ServerOption) *Server {
 		interceptors: serverOpts.interceptors,
 	}
 	if serverOpts.peerOpt != nil || serverOpts.clientPeers {
-		s.InboundManager = newInboundManager(
+		s.inboundManager = newInboundManager(
 			serverOpts.myID,
 			serverOpts.peerOpt,
 			serverOpts.peerSendBuffer,
@@ -146,7 +146,7 @@ func NewServer(opts ...ServerOption) *Server {
 			s,
 		)
 	}
-	s.srv = stream.NewServer(serverOpts.buffer, serverOpts.connectCallback, s.InboundManager, s)
+	s.srv = stream.NewServer(serverOpts.buffer, serverOpts.connectCallback, s.inboundManager, s)
 	stream.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
 }

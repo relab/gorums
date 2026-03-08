@@ -16,7 +16,7 @@ import (
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// mockBidiStream is a minimal stream.BidiStream for testing InboundManager.
+// mockBidiStream is a minimal stream.BidiStream for testing inboundManager.
 // Recv blocks until a message is sent or the stream is closed.
 type mockBidiStream struct {
 	ch chan *stream.Message
@@ -53,8 +53,8 @@ func shouldPanic(t *testing.T, wantSubstr string, fn func()) {
 	fn()
 }
 
-// newTestInboundManager creates an InboundManager with myID and three known peers.
-func newTestInboundManager(t *testing.T, myID uint32) *InboundManager {
+// newTestInboundManager creates an inboundManager with myID and three known peers.
+func newTestInboundManager(t *testing.T, myID uint32) *inboundManager {
 	t.Helper()
 	im := newInboundManager(myID, WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9081"},

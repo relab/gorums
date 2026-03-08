@@ -116,7 +116,7 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 }
 
 // newInboundNode creates a Node for a known peer or self without an active
-// channel. Used by InboundManager at construction time for all configured
+// channel. Used by inboundManager at construction time for all configured
 // peers; the channel is attached when the peer's stream arrives.
 func newInboundNode(id uint32, addr string, msgIDGen func() uint64) *Node {
 	return &Node{
