@@ -508,7 +508,7 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 
 	// Create request message and register it for response routing.
 	ctx := TestContext(t, 5*time.Second)
-	reqMsg, err := stream.NewMessage(ctx, srv.inboundMgr.getMsgID(), mock.TestMethod, pb.String("hello"))
+	reqMsg, err := stream.NewMessage(ctx, srv.getMsgID(), mock.TestMethod, pb.String("hello"))
 	if err != nil {
 		t.Fatalf("NewMessage() error: %v", err)
 	}
@@ -686,7 +686,7 @@ func TestClientConfigServerCallsClient(t *testing.T) {
 
 	// Create request and register for response routing.
 	ctx := TestContext(t, 5*time.Second)
-	reqMsg, err := stream.NewMessage(ctx, srv.inboundMgr.getMsgID(), mock.TestMethod, pb.String("hello"))
+	reqMsg, err := stream.NewMessage(ctx, srv.getMsgID(), mock.TestMethod, pb.String("hello"))
 	if err != nil {
 		t.Fatalf("NewMessage() error: %v", err)
 	}

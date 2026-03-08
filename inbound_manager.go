@@ -139,6 +139,9 @@ func (im *InboundManager) ClientConfig() Configuration {
 
 // NodeID returns this server's own NodeID.
 func (im *InboundManager) NodeID() uint32 {
+	if im == nil {
+		return 0
+	}
 	return im.myID
 }
 

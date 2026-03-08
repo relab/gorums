@@ -50,11 +50,11 @@ func (s *System) ClientConfig() Configuration {
 // includes this system's NodeID in the connection metadata, enabling the
 // remote server to identify this replica.
 func (s *System) NewOutboundConfig(opts ...Option) (Configuration, error) {
-	if s.srv.inboundMgr == nil {
+	if s.srv.InboundManager == nil {
 		return NewConfig(opts...)
 	}
 	return NewConfig(append([]Option{
-		withRequestHandler(s.srv, s.srv.inboundMgr.myID),
+		withRequestHandler(s.srv, s.srv.NodeID()),
 	}, opts...)...)
 }
 
