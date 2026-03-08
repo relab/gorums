@@ -110,11 +110,11 @@ func WithPeerSendBufferSize(size uint) ServerOption {
 
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
-	srv          *stream.Server
-	grpcServer   *grpc.Server
-	handlers     map[string]Handler
-	interceptors []Interceptor
-	inboundMgr   *InboundManager // nil if no peers configured
+	srv             *stream.Server
+	grpcServer      *grpc.Server
+	handlers        map[string]Handler
+	interceptors    []Interceptor
+	*InboundManager // nil if no peers configured
 }
 
 // NewServer returns a new instance of [Server].
@@ -136,7 +136,7 @@ func NewServer(opts ...ServerOption) *Server {
 		interceptors: serverOpts.interceptors,
 	}
 	if serverOpts.peerOpt != nil || serverOpts.clientPeers {
-		s.inboundMgr = newInboundManager(
+		s.InboundManager = newInboundManager(
 			serverOpts.myID,
 			serverOpts.peerOpt,
 			serverOpts.peerSendBuffer,
@@ -146,31 +146,9 @@ func NewServer(opts ...ServerOption) *Server {
 			s,
 		)
 	}
-	s.srv = stream.NewServer(serverOpts.buffer, s.inboundMgr, serverOpts.connectCallback, s)
+	s.srv = stream.NewServer(serverOpts.buffer, serverOpts.connectCallback, s.InboundManager, s)
 	stream.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
-}
-
-// Config returns a [Configuration] of all connected known peers, plus this node.
-// The returned slice is replaced atomically on each connect/disconnect;
-// retaining a reference to an old configuration is safe.
-// Returns nil if no peer tracking is configured.
-func (s *Server) Config() Configuration {
-	if s.inboundMgr == nil {
-		return nil
-	}
-	return s.inboundMgr.Config()
-}
-
-// ClientConfig returns a [Configuration] of all connected client peers.
-// The returned slice is replaced atomically on each connect/disconnect;
-// retaining a reference to an old value is safe.
-// Returns nil if no peer tracking is configured.
-func (s *Server) ClientConfig() Configuration {
-	if s.inboundMgr == nil {
-		return nil
-	}
-	return s.inboundMgr.ClientConfig()
 }
 
 // RegisterHandler registers a request handler for the specified method name.

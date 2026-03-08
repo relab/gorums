@@ -21,18 +21,18 @@ type PeerNode interface {
 // Server handles NodeStream connections.
 type Server struct {
 	buffer    uint
-	acceptor  PeerAcceptor
 	onConnect func(context.Context)
+	acceptor  PeerAcceptor
 	handler   RequestHandler
 	UnimplementedGorumsServer
 }
 
 // NewServer creates a new Server.
-func NewServer(buffer uint, acceptor PeerAcceptor, onConnect func(context.Context), handler RequestHandler) *Server {
+func NewServer(buffer uint, onConnect func(context.Context), acceptor PeerAcceptor, handler RequestHandler) *Server {
 	return &Server{
 		buffer:    buffer,
-		acceptor:  acceptor,
 		onConnect: onConnect,
+		acceptor:  acceptor,
 		handler:   handler,
 	}
 }
