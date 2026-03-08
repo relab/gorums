@@ -372,36 +372,68 @@ func TestSystemSymmetricMulticastFromHandler_Config(t *testing.T) {
 }
 
 func TestSystemChainedQuorumCallFromHandler_Config(t *testing.T) {
-	systems, configs := createTestSystems(t, 3)
+	type respType = *gorums.Responses[*pb.StringValue]
 
-	for i, sys := range systems {
-		myID := i + 1
-		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
-			// Outer handler fans out to EchoMethod; inner handler replies directly.
-			srv.RegisterHandler(mock.TestMethod, outerChainedHandler(t, myID, false, mock.EchoMethod, (*gorums.Responses[*pb.StringValue]).Majority))
-			srv.RegisterHandler(mock.EchoMethod, stringEchoHandler("inner-echo"))
+	// seqAll drains the Seq iterator to exhaustion and returns the last value.
+	// This is the regression path for the self-node dispatch bug where .Seq()
+	// and .All() would time out when self was included in the quorum.
+	seqAll := func(r respType) (*pb.StringValue, error) {
+		var last *pb.StringValue
+		for result := range r.Seq() {
+			if result.Err != nil {
+				return nil, result.Err
+			}
+			last = result.Value
+		}
+		if last == nil {
+			return nil, errors.New("Seq: no responses received")
+		}
+		return last, nil
+	}
+
+	tests := []struct {
+		name    string
+		innerFn func(respType) (*pb.StringValue, error)
+		outerFn func(respType) (*pb.StringValue, error)
+	}{
+		{name: "Majority", innerFn: respType.Majority, outerFn: respType.Majority},
+		{name: "All", innerFn: respType.All, outerFn: respType.All}, // Regression: .All() must not time out when self-node is included.
+		{name: "Seq", innerFn: seqAll, outerFn: respType.All},       // Regression: draining .Seq() to exhaustion must not time out when self-node is included.
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			systems, configs := createTestSystems(t, 3)
+
+			for i, sys := range systems {
+				myID := i + 1
+				sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
+					srv.RegisterHandler(mock.TestMethod, outerChainedHandler(t, myID, false, mock.EchoMethod, tt.innerFn))
+					srv.RegisterHandler(mock.EchoMethod, stringEchoHandler("inner-echo"))
+				})
+			}
+
+			awaitSystemReady(t, systems)
+
+			cfg := configs[0]
+			ctx := gorums.TestContext(t, 2*time.Second)
+
+			responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				cfg.Context(ctx),
+				pb.String("outer-call"),
+				mock.TestMethod,
+			)
+			result, err := tt.outerFn(responses)
+			if err != nil {
+				t.Fatalf("quorum call error: %v", err)
+			}
+			t.Logf("Final result: %s", result.GetValue())
+
+			wantResult := "outer-call | inner-echo: outer-call"
+			if !strings.Contains(result.GetValue(), wantResult) {
+				t.Errorf("Expected %q in result, got: %s", wantResult, result.GetValue())
+			}
 		})
-	}
-
-	awaitSystemReady(t, systems)
-
-	cfg := configs[0]
-	ctx := gorums.TestContext(t, 2*time.Second)
-
-	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
-		cfg.Context(ctx),
-		pb.String("outer-call"),
-		mock.TestMethod,
-	)
-	result, err := responses.Majority()
-	if err != nil {
-		t.Fatalf("quorum call error: %v", err)
-	}
-	t.Logf("Final result: %s", result.GetValue())
-
-	wantResult := "outer-call | inner-echo: outer-call"
-	if !strings.Contains(result.GetValue(), wantResult) {
-		t.Errorf("Expected %q in result, got: %s", wantResult, result.GetValue())
 	}
 }
 
