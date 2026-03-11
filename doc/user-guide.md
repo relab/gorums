@@ -935,6 +935,77 @@ func CountingInterceptor[Req, Resp proto.Message](
 
 **Note:** Custom interceptors can be defined in any package. The `ClientCtx` type and `QuorumInterceptor` signature are exported from the gorums package.
 
+### Server-Side Interceptors
+
+Gorums also supports server-side interceptors that wrap inbound RPC handlers, similar to gRPC server interceptors.
+A server-side interceptor implements the `gorums.Interceptor` signature:
+
+```go
+type Interceptor func(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error)
+```
+
+You can pass multiple interceptors when starting a Gorums server. They can perform logging, latency injection, metadata insertion, and request validation before sending the request to the handler.
+
+Below are several examples based on the `examples/interceptors` package.
+
+#### Server-Side Logging Interceptor
+
+```go
+func LoggingInterceptor(addr string) gorums.Interceptor {
+    return func(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+        req := gorums.AsProto[proto.Message](in)
+        log.Printf("[%s]: LoggingInterceptor(incoming): Method=%s, Message=%s", addr, in.GetMethod(), req)
+
+        start := time.Now()
+        out, err := next(ctx, in)
+
+        duration := time.Since(start)
+        resp := gorums.AsProto[proto.Message](out)
+        log.Printf("[%s]: LoggingInterceptor(outgoing): Method=%s, Duration=%s, Err=%v, Message=%v", addr, in.GetMethod(), duration, err, resp)
+        return out, err
+    }
+}
+```
+
+#### Delay and Metadata Interceptors
+
+Interceptors can inject arbitrary delays based on client properties or attach metadata to the incoming requests:
+
+```go
+func DelayedInterceptor(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+    delay := 50 * time.Millisecond
+    time.Sleep(delay)
+    return next(ctx, in)
+}
+
+func MetadataInterceptor(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+    // Inject a custom metadata field for the handler
+    entry := gorums.MetadataEntry_builder{
+        Key:   "customKey",
+        Value: "customValue",
+    }.Build()
+    in.SetEntry([]*gorums.MetadataEntry{entry})
+
+    return next(ctx, in)
+}
+```
+
+#### Rejecting Requests (Filtering)
+
+A server interceptor can also stop a request from reaching the handler entirely.
+
+```go
+// NoFooAllowedInterceptor rejects requests for messages with key "foo".
+func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+    if req, ok := gorums.AsProto[proto.Message](in).(T); ok {
+        if req.GetKey() == "foo" {
+            return nil, fmt.Errorf("requests for key 'foo' are not allowed")
+        }
+    }
+    return next(ctx, in)
+}
+```
+
 ## Error Handling
 
 Gorums provides structured error types to help you understand and handle failures in quorum calls.
