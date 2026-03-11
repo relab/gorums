@@ -209,6 +209,9 @@ type StorageServer interface {
 }
 ```
 
+It is worth noting that unicast and multicast methods do not return a response or error, as they are one-way calls.
+The client-side functions for these methods return an error if the request could not be sent, but do not return any information about the success or failure of the request at the server side.
+
 **Note:**
 You may decide to keep the `.proto` file and the generated `.pb.go` files in a separate directory/package and import that package (the generated Gorums API) into your application.
 We skip that here for the sake of simplicity.
