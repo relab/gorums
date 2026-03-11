@@ -55,7 +55,14 @@ service Storage {
   rpc WriteNestedMulticast(WriteRequest) returns (WriteResponse) {
     option (gorums.quorumcall) = true;
   }
+
+  // ReadCorrectable executes a quorum call that supports correctable responses.
+  // It returns a stream of ReadResponse as multiple nodes respond or updates occur.
+  rpc ReadCorrectable(ReadRequest) returns (stream ReadResponse) {
+    option (gorums.quorumcall) = true;
+  }
 }
+
 
 // ReadRequest is the request message for Read RPCs and Read quorum calls.
 message ReadRequest {

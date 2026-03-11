@@ -35,6 +35,7 @@ cfg   [config] [operation]   	 Executes a quorum call on a configuration.
 The following operations are supported:
 
 read 	[key]        	Read a value
+cread   [key]           Correctable Read a value (streams updates)
 write	[key] [value]	Write a value
 nread   [key]           Nested quorum call
 nwrite  [key] [value]   Nested multicast
@@ -236,6 +237,8 @@ func (r repl) qc(args []string) {
 	switch args[0] {
 	case "read":
 		r.readQC(args[1:], r.cfg)
+	case "cread":
+		r.creadQC(args[1:], r.cfg)
 	case "write":
 		r.writeQC(args[1:], r.cfg)
 	case "nread":
@@ -258,6 +261,8 @@ func (r repl) qcCfg(args []string) {
 	switch args[1] {
 	case "read":
 		r.readQC(args[2:], cfg)
+	case "cread":
+		r.creadQC(args[2:], cfg)
 	case "write":
 		r.writeQC(args[2:], cfg)
 	case "nread":
@@ -328,6 +333,37 @@ func (repl) readQC(args []string, config pb.Configuration) {
 		return
 	}
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
+}
+
+func (repl) creadQC(args []string, config pb.Configuration) {
+	if len(args) < 1 {
+		fmt.Println("Correctable Read requires a key to read.")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	cfgCtx := config.Context(ctx)
+
+	// Create a correctable call expecting at least majority
+	majority := (config.Size() + 1) / 2
+	corr := pb.ReadCorrectable(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build()).Correctable(majority)
+
+	// Process updates as they arrive
+	for level := 1; level <= majority; level++ {
+		<-corr.Watch(level)
+		resp, currentLevel, err := corr.Get()
+		if err != nil {
+			fmt.Printf("Read correctable error at level %d: %v\n", currentLevel, err)
+			break
+		}
+		if !resp.GetOK() {
+			fmt.Printf("%s was not found (level %d)\n", args[0], currentLevel)
+		} else {
+			fmt.Printf("%s = %s (level %d)\n", args[0], resp.GetValue(), currentLevel)
+		}
+	}
+	cancel()
+	time.Sleep(delayOutput)
+	fmt.Println("Correctable read finished")
 }
 
 func (repl) writeQC(args []string, config pb.Configuration) {
