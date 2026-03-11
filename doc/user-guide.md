@@ -286,7 +286,7 @@ There are some important things to note about implementing the server interfaces
   }
   ```
 
-* The context passed to the handlers is the gRPC stream context of the underlying gRPC stream.
+* The context passed to the handlers is derived from the gRPC stream context, extended with any per-request metadata carried in the incoming message.
   This context can be used to retrieve [metadata](https://github.com/grpc/grpc-go/blob/master/Documentation/grpc-metadata.md)
   and [peer](https://godoc.org/google.golang.org/grpc/peer) information from the client.
 
@@ -354,7 +354,7 @@ The code below shows how to create a configuration:
   }
 ```
 
-The `Manager` and `Configuration` types also have few other available methods.
+The `Manager` and `Configuration` types also have a few other available methods.
 Inspect the package documentation or source code for details.
 
 We can now invoke the WriteUnicast RPC on each `node` in the configuration:
