@@ -84,6 +84,16 @@ sequenceDiagram
     Node A-->>Client: ReadResponse(Value, Time)
     Node B-->>Client: ReadResponse(Value, Time)
     Note over Client: Client aggregates responses
+
+    Note over Client,Node B: Correctable (Streaming)
+    Client->>Node A: ReadQCStream(Req)
+    Client->>Node B: ReadQCStream(Req)
+    Node A-->>Client: ReadResponse(v1, t1)
+    Node B-->>Client: ReadResponse(v1, t1)
+    Note over Client: Client reads first quorum result
+    Node A-->>Client: ReadResponse(v2, t2)
+    Node B-->>Client: ReadResponse(v2, t2)
+    Note over Client: Client reads updated quorum result
 ```
 
 The generated API is similar to unary gRPC, unless the `stream` keyword is used in the proto definition.
