@@ -1,3 +1,4 @@
+Addrs
 Ansible
 benchgraph
 benchmem
@@ -11,6 +12,7 @@ checkf
 clevel
 compiletests
 cpuprofile
+cread
 dedup
 demultiplexing
 descriptorpb

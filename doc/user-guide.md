@@ -1302,7 +1302,7 @@ Values containing spaces must be quoted: `qc write greeting 'hello world'`.
 
 ### REPL Example Session
 
-```
+```text
 > nodes
 Nodes:
 0: 127.0.0.1:54321
@@ -1340,3 +1340,90 @@ greeting = gorums
 ```
 
 The `nread` and `nwrite` commands trigger server-side nested quorum calls and nested multicasts, which are described in the following sections.
+
+## Nested Quorum Calls with ServerCtx.Config
+
+A server handler (the server method itself) can act as a client and issue its own quorum calls to other nodes.
+These are called *nested quorum calls*, because one quorum call triggers another from inside the server handler.
+
+`ServerCtx.Config()` returns a `Configuration` of all currently connected known peers, as configured with `gorums.WithConfig`.
+This makes it straightforward for a handler to fan out a sub-request to the rest of the cluster.
+
+### Setting Up Peer Tracking
+
+Enable peer tracking for the server at construction time:
+
+```go
+gorumsSrv := gorums.NewServer(
+    gorums.WithConfig(myNodeID, gorums.WithNodeList(peerAddrs)),
+)
+```
+
+The `myNodeID` is this server's own node ID.
+It is included in the configuration returned by `Config()` so that all quorum thresholds account for the local replica.
+
+Each node in `peerAddrs` that connects sends its node ID in connection metadata.
+When the peer connects, `Config()` starts returning that node as an available target.
+
+The storage example uses `gorums.NewLocalSystems`, which calls `WithConfig` automatically for each system and stores the node list for outbound configuration.
+
+### Writing the Handler
+
+Call `ctx.Release()` before making nested outbound calls to release the handler's exclusive lock on the server,
+allowing the server to continue processing inbound messages while the nested calls are in flight.
+Without `Release()`, the server would block all other inbound messages until the nested calls complete.
+
+```go
+// ReadNestedQC is a quorum-call handler that fans out a nested ReadQC
+// to all known connected peers and returns the most recent value.
+func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (*pb.ReadResponse, error) {
+    cfg := ctx.Config()
+    if len(cfg) == 0 {
+        return nil, fmt.Errorf("ReadNestedQC requires a server peer configuration")
+    }
+    // Release the handler lock before making nested outbound calls to avoid
+    // blocking inbound message processing on this server.
+    ctx.Release()
+    return newestValue(pb.ReadQC(cfg.Context(ctx), req))
+}
+```
+
+The same pattern applies to nested multicast:
+
+```go
+func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerCtx, req *pb.WriteRequest) (*pb.WriteResponse, error) {
+    cfg := ctx.Config()
+    if len(cfg) == 0 {
+        return pb.WriteResponse_builder{New: false}.Build(), fmt.Errorf("WriteNestedMulticast requires a server peer configuration")
+    }
+    ctx.Release()
+    if err := pb.WriteMulticast(cfg.Context(ctx), req); err != nil {
+        return pb.WriteResponse_builder{New: false}.Build(), err
+    }
+    return pb.WriteResponse_builder{New: true}.Build(), nil
+}
+```
+
+### Sequence Diagram
+
+The following diagram shows the flow for `ReadNestedQC`:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Node A
+    participant Node B
+    participant Node C
+
+    Client->>Node A: ReadNestedQC(key)
+    Note over Node A: ctx.Release()
+    Node A->>Node B: ReadQC(key) [nested]
+    Node A->>Node C: ReadQC(key) [nested]
+    Node B-->>Node A: ReadResponse(value, time)
+    Node C-->>Node A: ReadResponse(value, time)
+    Note over Node A: pick newest
+    Node A-->>Client: ReadResponse(newest value)
+```
+
+The client sees a single quorum call, but internally each receiving node fans out to all of its peers and returns the freshest value found across the whole cluster.
+
