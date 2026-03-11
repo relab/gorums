@@ -65,12 +65,20 @@ See [benchmarking.md](./benchmarking.md)
 Below is a description of the current `Makefile` targets.
 The `Makefile` itself also serves as documentation; inspect it for details.
 
-| Target            | Description                                                                  |
-| ----------------- | ---------------------------------------------------------------------------- |
-| `dev`             | Updates `template_static.go` and regenerates generated files from templates. |
-| `benchmark`       | Compiles the benchmark tool.                                                 |
-| `tools`           | Installs required tools such as `protoc-gen-go` and `protoc-gen-go-grpc`.    |
-| `installgorums`   | Reinstalls the `protoc-gen-gorums` plugin.                                   |
-| `bootstrapgorums` | Used to bootstrap the plugin.                                                |
-| `test`            | Run Gorums tests (using bufconn by default).                                 |
-| `integrationtest` | Run integration tests with real TCP connections.                             |
+| Target            | Description                                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------------------ |
+| `all`             | Builds `dev`, `benchmark`, and compiles tests (default target).                                        |
+| `dev`             | Updates `template_static.go` and regenerates generated files from templates.                           |
+| `genproto`        | Force-regenerates all protobuf and Gorums files across the repo (dev, benchmark, tests, examples).     |
+| `benchmark`       | Compiles the benchmark tool.                                                                           |
+| `compiletests`    | Compiles test protos in `internal/tests`.                                                              |
+| `tools`           | Installs required tools (`protoc-gen-go`, `protoc-gen-go-grpc`, `stress`, etc.) via `go install tool`. |
+| `installgorums`   | Reinstalls the `protoc-gen-gorums` plugin.                                                             |
+| `bootstrapgorums` | Bootstraps the plugin when it is not yet installed.                                                    |
+| `test`            | Runs all tests (using bufconn by default).                                                             |
+| `integrationtest` | Runs integration tests with real TCP connections.                                                      |
+| `testrace`        | Runs tests with the race detector enabled.                                                             |
+| `benchtest`       | Validates that benchmarks compile and run without error (short runs).                                  |
+| `bench`           | Runs benchmarks with proper measurement for performance analysis.                                      |
+| `stresstest`      | Runs stress tests (build tag: `stress`) for thorough testing.                                          |
+| `modernize`       | Applies Go modernization fixes across the codebase.                                                    |
