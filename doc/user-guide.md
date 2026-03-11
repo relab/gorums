@@ -57,15 +57,21 @@ go get github.com/relab/gorums
 
 ### Call Types
 
-Gorums offers several call types including synchronous quorum calls, and one-way `unicast` and `multicast` communication.
+Gorums offers several call types including quorum calls, and one-way unicast and multicast communication.
 To select a call type for a Protobuf service method, specify one of the following options (they cannot be combined):
 
-| Call type   | Gorums option       | Description                                                       |
-| ----------- | ------------------- | ----------------------------------------------------------------- |
-| Ordered RPC | no option           | FIFO-ordered synchronous RPC to a single node.                    |
-| Unicast     | `gorums.unicast`    | FIFO-ordered one-way asynchronous unicast.                        |
-| Multicast   | `gorums.multicast`  | FIFO-ordered one-way asynchronous multicast.                      |
-| Quorum Call | `gorums.quorumcall` | FIFO-ordered synchronous quorum call on a configuration of nodes. |
+| Call type               | Gorums option                  | Description                                                                                                                                     |
+| ----------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ordered RPC             | no option                      | FIFO-ordered synchronous RPC to a single node.                                                                                                  |
+| Unicast                 | `gorums.unicast`               | FIFO-ordered one-way asynchronous unicast.                                                                                                      |
+| Multicast               | `gorums.multicast`             | FIFO-ordered one-way asynchronous multicast.                                                                                                    |
+| Quorum Call             | `gorums.quorumcall`            | FIFO-ordered asynchronous quorum call on a configuration of nodes.                                                                              |
+| Synchronous Quorum Call | `gorums.quorumcall`            | Synchronous variant; chain a terminal method (`.First()`, `.Majority()`, `.All()`, `.Threshold(n)`) to block until the quorum threshold is met. |
+| Correctable             | `gorums.quorumcall` + `stream` | Streaming quorum call; use `.Correctable(n)` to observe progressive updates as nodes respond.                                                   |
+
+The generated API is similar to unary gRPC, unless the `stream` keyword is used in the proto definition.
+Server streaming is only supported for quorum calls.
+Client streaming is not supported.
 
 ```mermaid
 sequenceDiagram
@@ -95,10 +101,6 @@ sequenceDiagram
     Node B-->>Client: ReadResponse(v2, t2)
     Note over Client: Client reads updated quorum result
 ```
-
-The generated API is similar to unary gRPC, unless the `stream` keyword is used in the proto definition.
-Server streaming is only supported for quorum calls.
-Client streaming is not supported.
 
 ### Configuring Call Types in Protobuf
 
