@@ -1244,3 +1244,99 @@ func ExampleConfigClient() {
   }
 }
 ```
+
+## Interactive REPL
+
+The storage example (`examples/storage`) includes an interactive Read-Eval-Print Loop (REPL) that lets you send RPCs and quorum calls against live storage servers.
+
+### Running the Storage Example
+
+Start the storage example without arguments to launch four local servers and the REPL automatically:
+
+```shell
+cd examples
+go run ./storage
+```
+
+To connect to remote servers instead of starting local ones, pass their addresses separated by commas:
+
+```shell
+go run ./storage --connect localhost:8080,localhost:8081,localhost:8082
+```
+
+To enable server-side interceptors, pass a comma-separated list of interceptor names:
+
+```shell
+go run ./storage --interceptors logging,nofoo
+```
+
+Available interceptors: `logging`, `nofoo`, `metadata`, `delayed`.
+
+### REPL Commands
+
+Once the REPL starts, the following commands are available:
+
+| Command                            | Description                                        |
+| ---------------------------------- | -------------------------------------------------- |
+| `help`                             | Print the help message                             |
+| `nodes`                            | List available nodes and their addresses           |
+| `exit`                             | Exit the REPL                                      |
+| `rpc <node> read <key>`            | Read from a single node via ordered RPC            |
+| `rpc <node> write <key> <value>`   | Write to a single node via ordered RPC             |
+| `ucast <node> <key> <value>`       | One-way unicast write to a single node             |
+| `mcast <key> <value>`              | One-way multicast write to all nodes               |
+| `qc read <key>`                    | Read quorum call on all nodes                      |
+| `qc write <key> <value>`           | Write quorum call on all nodes                     |
+| `qc cread <key>`                   | Correctable read quorum call (streams updates)     |
+| `qc nread <key>`                   | Nested read quorum call (server fans out to peers) |
+| `qc nwrite <key> <value>`          | Nested write quorum call via multicast             |
+| `cfg <nodes> read <key>`           | Read quorum call on a node sub-configuration       |
+| `cfg <nodes> write <key> <value>`  | Write quorum call on a node sub-configuration      |
+| `cfg <nodes> cread <key>`          | Correctable read on a sub-configuration            |
+| `cfg <nodes> nread <key>`          | Nested read on a sub-configuration                 |
+| `cfg <nodes> nwrite <key> <value>` | Nested write via multicast on a sub-configuration  |
+
+The `<node>` argument is a zero-based index into the node list shown by `nodes`.
+The `<nodes>` argument for `cfg` is a range (`1:3` selects nodes 1 and 2) or a comma-separated list (`0,2` selects nodes 0 and 2).
+Values containing spaces must be quoted: `qc write greeting 'hello world'`.
+
+### REPL Example Session
+
+```
+> nodes
+Nodes:
+0: 127.0.0.1:54321
+1: 127.0.0.1:54322
+2: 127.0.0.1:54323
+3: 127.0.0.1:54324
+
+> qc write greeting hello
+Write OK
+
+> qc read greeting
+greeting = hello
+
+> rpc 0 read greeting
+greeting = hello
+
+> ucast 1 greeting world
+Unicast OK
+
+> mcast greeting gorums
+Multicast OK
+
+> cfg 0,1 read greeting
+greeting = gorums
+
+> qc cread greeting
+greeting = gorums (level 1)
+greeting = gorums (level 2)
+Correctable read finished
+
+> qc nread greeting
+greeting = gorums
+
+> exit
+```
+
+The `nread` and `nwrite` commands trigger server-side nested quorum calls and nested multicasts, which are described in the following sections.
