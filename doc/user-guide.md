@@ -67,6 +67,25 @@ To select a call type for a Protobuf service method, specify one of the followin
 | Multicast   | `gorums.multicast`  | FIFO-ordered one-way asynchronous multicast.                      |
 | Quorum Call | `gorums.quorumcall` | FIFO-ordered synchronous quorum call on a configuration of nodes. |
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Node A
+    participant Node B
+
+    Note over Client,Node B: Multicast (One-way)
+    Client->>Node A: WriteMulticast(Req)
+    Client->>Node B: WriteMulticast(Req)
+    Note over Client: Client continues immediately
+
+    Note over Client,Node B: Quorum Call (Synchronous)
+    Client->>Node A: ReadQC(Req)
+    Client->>Node B: ReadQC(Req)
+    Node A-->>Client: ReadResponse(Value, Time)
+    Node B-->>Client: ReadResponse(Value, Time)
+    Note over Client: Client aggregates responses
+```
+
 The generated API is similar to unary gRPC, unless the `stream` keyword is used in the proto definition.
 Server streaming is only supported for quorum calls.
 Client streaming is not supported.
