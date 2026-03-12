@@ -8,7 +8,7 @@ Gorums also uses [Protocol Buffers](https://developers.google.com/protocol-buffe
 
 This guide describes how to use Gorums as a user.
 The guide requires a working Go installation.
-At least Go version 1.25 is required.
+At least Go version 1.26 is required.
 
 There are a few tools that need to be installed first:
 
