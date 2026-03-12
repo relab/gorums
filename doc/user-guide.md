@@ -1427,3 +1427,112 @@ sequenceDiagram
 
 The client sees a single quorum call, but internally each receiving node fans out to all of its peers and returns the freshest value found across the whole cluster.
 
+## Reverse Direction Calls with ServerCtx.ClientConfig
+
+`ServerCtx.ClientConfig()` returns a `Configuration` of all currently connected *client peers* — nodes that connected to this server dynamically, rather than being pre-configured with `WithConfig`.
+A handler can use this configuration to make outbound calls back towards those clients, reversing the usual direction of communication.
+
+This pattern is particularly useful when clients are behind a firewall and cannot accept inbound connections.
+Clients can still initiate outbound connections to a server with a public IP address.
+Once a client establishes a connection, the server retains a reverse-direction stream back to that client, and `ClientConfig()` includes it as a callable target.
+The server can therefore fan out quorum calls to all connected clients without requiring any additional network connections or firewall rules.
+
+A typical setup: each client connects to the server and calls a `Register` RPC to announce itself as ready.
+When the server's handler is later invoked — for example, by an external coordinator — it uses `ctx.ClientConfig()` to fan out the call to all registered clients and aggregate their responses.
+
+### Setting Up the Server
+
+Enable anonymous client tracking at server construction time with `gorums.WithClientConfig()`:
+
+```go
+gorumsSrv := gorums.NewServer(gorums.WithClientConfig())
+```
+
+`WithClientConfig` can be combined with `WithConfig` (mixed mode):
+
+```go
+gorumsSrv := gorums.NewServer(
+    gorums.WithConfig(myNodeID, gorums.WithNodeList(knownPeers)),  // static known peers
+    gorums.WithClientConfig(),                                     // dynamic unknown clients
+)
+```
+
+For example, to enable this in a local test cluster:
+
+```go
+systems, stop, err := gorums.NewLocalSystems(4, gorums.WithClientConfig())
+```
+
+> **Note:** The `nread` and `nwrite` commands in the storage REPL example use `ctx.Config()` (the static server-to-server direction) rather than `ctx.ClientConfig()`.
+> Reverse direction calls require every participant to act as both a Gorums server *and* to expose its own server method handlers so that peers can call back to it.
+> The REPL client in the storage example does not implement any server method handlers, so calling back to it via `ClientConfig()` is not supported in that example.
+
+### Connecting as an Anonymous Client
+
+A node appears in `ClientConfig()` only when it connects without a recognized node ID.
+Clients behind a firewall typically have no pre-configured `myID`, so they connect as anonymous clients.
+
+A client connecting without a node ID announces `NodeID=0`.
+The server assigns it a dynamic ID and includes it in `ClientConfig()`.
+The client can then call `Register` (a unicast) to signal that it is ready to receive calls:
+
+```go
+nodeCtx := serverNode.Context(ctx)
+err = pb.Register(nodeCtx, &pb.RegisterRequest{})
+```
+
+In contrast, a client with a pre-configured node ID (created with `WithConfig`) announces its static node ID — servers with a matching node list will put it in their static `Config()`, not `ClientConfig()`.
+
+### Writing the Handler
+
+In a `WithClientConfig()`-only setup, the handler reads `ctx.ClientConfig()` to reach all currently connected peers:
+
+```go
+// ReadNestedQC fans out a ReadQC to all clients that have registered.
+// The server must be started with WithClientConfig() to track inbound client connections.
+func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (*pb.ReadResponse, error) {
+    cfg := ctx.ClientConfig()
+    if len(cfg) == 0 {
+        return nil, fmt.Errorf("ReadNestedQC: no client peers connected")
+    }
+    ctx.Release()
+    return newestValue(pb.ReadQC(cfg.Context(ctx), req))
+}
+```
+
+The key difference from `ServerCtx.Config()` is the direction of each per-node connection:
+
+| Method               | Connection direction                            | Typical use case                                   |
+| -------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| `ctx.Config()`       | Outbound (this server connects to peers)        | Static cluster with known membership               |
+| `ctx.ClientConfig()` | Inbound reversed (server calls back to clients) | Clients behind a firewall that connect to a server |
+
+### Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant Coord as Coordinator
+    participant Srv as Server
+    participant A as Client A
+    participant B as Client B
+    participant C as Client C
+
+    Note over A,C: Clients are behind a firewall — they initiate outbound connections
+    A->>Srv: [connect + Register()]
+    B->>Srv: [connect + Register()]
+    C->>Srv: [connect + Register()]
+
+    Coord->>Srv: ReadNestedQC(key)
+    Note over Srv: ctx.ClientConfig() = {A, B, C}
+    Note over Srv: ctx.Release()
+    Srv->>A: ReadQC(key) [reverse-direction]
+    Srv->>B: ReadQC(key) [reverse-direction]
+    Srv->>C: ReadQC(key) [reverse-direction]
+    A-->>Srv: ReadResponse(value, time)
+    B-->>Srv: ReadResponse(value, time)
+    C-->>Srv: ReadResponse(value, time)
+    Note over Srv: pick newest
+    Srv-->>Coord: ReadResponse(newest value)
+```
+
+The reverse-direction calls reuse the existing inbound gRPC streams established by the clients, so no additional network connections or firewall rules are needed.
