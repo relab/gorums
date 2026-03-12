@@ -30,6 +30,9 @@ func main() {
 	addrs := strings.Split(*remotes, ",")
 	// start local servers if no remote servers were specified
 	if len(addrs) == 1 && addrs[0] == "" {
+		// NewLocalSystems pre-allocates all listeners and configures each system
+		// with WithConfig (node IDs 1..n). It also stores the node list in each System,
+		// so NewOutboundConfig needs only dial options — no explicit node list.
 		systems, stop, err := gorums.NewLocalSystems(4, srvOpts...)
 		if err != nil {
 			log.Fatalf("Failed to create local systems: %v", err)
@@ -43,18 +46,13 @@ func main() {
 		dialOpts := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
 		for i, sys := range systems {
 			storage := newStorageServer(os.Stderr, fmt.Sprintf("node %d", i))
-			// Exclude self from peer config to avoid self-connection issues in nested calls.
-			peerAddrs := make([]string, 0, len(addrs)-1)
-			for _, addr := range addrs {
-				if addr != sys.Addr() {
-					peerAddrs = append(peerAddrs, addr)
-				}
-			}
-			cfg, err := sys.NewOutboundConfig(gorums.WithNodeList(peerAddrs), dialOpts)
+			// NewOutboundConfig uses the node list stored by NewLocalSystems.
+			// Self-connections are routed via the local handler (no network round-trip),
+			// so no manual self-exclusion is needed.
+			_, err := sys.NewOutboundConfig(dialOpts)
 			if err != nil {
 				log.Fatalf("Failed to create server peer configuration: %v", err)
 			}
-			storage.peerCfg = cfg
 			sys.RegisterService(nil, func(srv *gorums.Server) {
 				pb.RegisterStorageServer(srv, storage)
 			})
