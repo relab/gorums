@@ -84,12 +84,12 @@ func TestSystemStopError(t *testing.T) {
 }
 
 func TestSystemSymmetricConfiguration(t *testing.T) {
-	systems, configs := createTestSystems(t, 3)
+	systems := gorums.TestSystems(t, 3)
 
-	// Each replica connects to the other two via System.NewOutboundConfig
-	// (NodeID is automatically included in metadata)
-	for i, sys := range systems {
-		sys.RegisterService(configs[i].Manager(), func(*gorums.Server) {
+	// Outbound config is auto-created by NewLocalSystems.
+	// (NodeID is automatically included in connection metadata)
+	for _, sys := range systems {
+		sys.RegisterService(nil, func(*gorums.Server) {
 			// Register mock handlers for the server sides if needed for other tests
 		})
 	}
@@ -103,25 +103,6 @@ func TestSystemSymmetricConfiguration(t *testing.T) {
 			t.Fatalf("system %d config size: %d, expected: %d", i+1, got, len(systems))
 		}
 	}
-}
-
-func createTestSystems(t *testing.T, numSystems int) ([]*gorums.System, []gorums.Configuration) {
-	systems, configs := gorums.TestSystems(t, numSystems, func(i int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
-		myID := uint32(i + 1)
-
-		nodeList := gorums.WithNodeList(addrs)
-		srvOpts := []gorums.ServerOption{
-			gorums.WithConfig(myID, nodeList),
-		}
-
-		cfgOpts := []gorums.Option{
-			nodeList,
-			gorums.InsecureDialOptions(t),
-		}
-
-		return srvOpts, cfgOpts
-	})
-	return systems, configs
 }
 
 // waitWithTimeout waits for wg to reach zero or calls t.Fatal if the timeout elapses.
@@ -157,15 +138,47 @@ func awaitClientReady(t *testing.T, sys *gorums.System, n int) {
 }
 
 // createClientServerSystems creates two systems configured for client-server testing.
-// System 0 acts as the server (both systems use WithClientConfig so the server can
-// reach clients back via their inbound channels). Both systems dial system 0's address
+// System 0 acts as the server; both systems use WithClientConfig so the server can
+// reach clients back via their inbound channels. Both systems dial system 0's address
 // so that system 1 appears in system 0's ClientConfig, and system 0 has a self-connection.
 func createClientServerSystems(t *testing.T) ([]*gorums.System, []gorums.Configuration) {
 	t.Helper()
-	return gorums.TestSystems(t, 2, func(_ int, addrs []string) ([]gorums.ServerOption, []gorums.Option) {
-		return []gorums.ServerOption{gorums.WithClientConfig()},
-			[]gorums.Option{gorums.WithNodeList([]string{addrs[0]}), gorums.InsecureDialOptions(t)}
+	dialOpts := gorums.InsecureDialOptions(t)
+
+	sys0, err := gorums.NewSystem("127.0.0.1:0", gorums.WithClientConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sys1, err := gorums.NewSystem("127.0.0.1:0", gorums.WithClientConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Both systems connect to sys0's address only.
+	nodeList := gorums.WithNodeList([]string{sys0.Addr()})
+	cfg0, err := sys0.NewOutboundConfig(nodeList, dialOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg1, err := sys1.NewOutboundConfig(nodeList, dialOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	systems := []*gorums.System{sys0, sys1}
+	for _, sys := range systems {
+		go func() { _ = sys.Serve() }()
+	}
+
+	t.Cleanup(func() {
+		_ = cfg0.Manager().Close()
+		_ = cfg1.Manager().Close()
+		for _, sys := range systems {
+			_ = sys.Stop()
+		}
 	})
+
+	return systems, []gorums.Configuration{cfg0, cfg1}
 }
 
 // stringEchoHandler returns a handler that replies with prefix+": "+request value.
@@ -229,11 +242,11 @@ func outerChainedHandler(
 }
 
 func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
-	systems, configs := createTestSystems(t, 3)
+	systems := gorums.TestSystems(t, 3)
 
 	// Register mock handler to each system
-	for i, sys := range systems {
-		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
+	for _, sys := range systems {
+		sys.RegisterService(nil, func(srv *gorums.Server) {
 			srv.RegisterHandler(mock.TestMethod, stringEchoHandler("echo"))
 		})
 	}
@@ -264,8 +277,8 @@ func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
 		},
 	}
 
-	// Use the explicit config from node 1 outbound.
-	cfg := configs[0]
+	// Use the auto-created outbound config from system 0.
+	cfg := systems[0].OutboundConfig()
 	// Sub tests for each response type logic across symmetric routing
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -290,14 +303,14 @@ func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
 }
 
 func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
-	systems, configs := createTestSystems(t, 3)
+	systems := gorums.TestSystems(t, 3)
 
 	var wg sync.WaitGroup
 	wg.Add(len(systems))
 
 	// Register mock handler to each system
-	for i, sys := range systems {
-		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
+	for _, sys := range systems {
+		sys.RegisterService(nil, func(srv *gorums.Server) {
 			srv.RegisterHandler(mock.Stream, func(_ gorums.ServerCtx, _ *gorums.Message) (*gorums.Message, error) {
 				wg.Done()
 				return nil, nil
@@ -307,7 +320,7 @@ func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
 
 	awaitSystemReady(t, systems)
 
-	cfg := configs[0]
+	cfg := systems[0].OutboundConfig()
 	ctx := gorums.TestContext(t, 2*time.Second)
 	err := gorums.Multicast(
 		cfg.Context(ctx),
@@ -322,7 +335,7 @@ func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
 }
 
 func TestSystemSymmetricMulticastFromHandler_Config(t *testing.T) {
-	systems, configs := createTestSystems(t, 3)
+	systems := gorums.TestSystems(t, 3)
 
 	// 3 servers receive the outer multicast. Each server multicasts to a config of 3 nodes.
 	// The self-node's handler is invoked locally, so each server sends to all 3 nodes.
@@ -331,7 +344,7 @@ func TestSystemSymmetricMulticastFromHandler_Config(t *testing.T) {
 	wg.Add(9)
 
 	for i, sys := range systems {
-		sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
+		sys.RegisterService(nil, func(srv *gorums.Server) {
 			srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 				t.Logf("System %d received multicast on %v: %v", i+1, mock.TestMethod, in.Msg)
 				if cfg := ctx.Config(); cfg != nil && cfg.Size() == 3 {
@@ -357,7 +370,7 @@ func TestSystemSymmetricMulticastFromHandler_Config(t *testing.T) {
 
 	awaitSystemReady(t, systems)
 
-	cfg := configs[0]
+	cfg := systems[0].OutboundConfig()
 	ctx := gorums.TestContext(t, 2*time.Second)
 	err := gorums.Multicast(
 		cfg.Context(ctx),
@@ -403,11 +416,11 @@ func TestSystemChainedQuorumCallFromHandler_Config(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			systems, configs := createTestSystems(t, 3)
+			systems := gorums.TestSystems(t, 3)
 
 			for i, sys := range systems {
 				myID := i + 1
-				sys.RegisterService(configs[i].Manager(), func(srv *gorums.Server) {
+				sys.RegisterService(nil, func(srv *gorums.Server) {
 					srv.RegisterHandler(mock.TestMethod, outerChainedHandler(t, myID, false, mock.EchoMethod, tt.innerFn))
 					srv.RegisterHandler(mock.EchoMethod, stringEchoHandler("inner-echo"))
 				})
@@ -415,7 +428,7 @@ func TestSystemChainedQuorumCallFromHandler_Config(t *testing.T) {
 
 			awaitSystemReady(t, systems)
 
-			cfg := configs[0]
+			cfg := systems[0].OutboundConfig()
 			ctx := gorums.TestContext(t, 2*time.Second)
 
 			responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](

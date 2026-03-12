@@ -28,6 +28,8 @@ type serverOptions struct {
 // ServerOption is used to change settings for the GorumsServer
 type ServerOption func(*serverOptions)
 
+func (ServerOption) isOption() {}
+
 // WithReceiveBufferSize sets the buffer size for the server.
 // A larger buffer may result in higher throughput at the cost of higher latency.
 func WithReceiveBufferSize(size uint) ServerOption {

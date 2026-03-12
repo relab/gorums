@@ -83,8 +83,10 @@ func NewConfig(opts ...Option) (Configuration, error) {
 				return nil, fmt.Errorf("gorums: multiple NodeListOptions provided")
 			}
 			nodeListOption = o
+		case ServerOption:
+			return nil, fmt.Errorf("gorums: ServerOption not valid for NewConfig; pass it to NewSystem or NewLocalSystems instead")
 		default:
-			return nil, fmt.Errorf("gorums: unknown option type: %T", opt)
+			return nil, fmt.Errorf("gorums: unsupported option type for NewConfig: %T", opt)
 		}
 	}
 	if nodeListOption == nil {
