@@ -31,9 +31,10 @@ func main() {
 	// start local servers if no remote servers were specified
 	if len(addrs) == 1 && addrs[0] == "" {
 		// NewLocalSystems pre-allocates all listeners and configures each system
-		// with WithConfig (node IDs 1..n). It also stores the node list in each System,
-		// so NewOutboundConfig needs only dial options — no explicit node list.
-		systems, stop, err := gorums.NewLocalSystems(4, srvOpts...)
+		// with WithConfig (node IDs 1..n). Passing dial options auto-creates an
+		// outbound Configuration for each system (accessible via sys.OutboundConfig).
+		dialOpts := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
+		systems, stop, err := gorums.NewLocalSystems(4, srvOpts, dialOpts)
 		if err != nil {
 			log.Fatalf("Failed to create local systems: %v", err)
 		}
@@ -43,16 +44,8 @@ func main() {
 		for i, sys := range systems {
 			addrs[i] = sys.Addr()
 		}
-		dialOpts := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
 		for i, sys := range systems {
 			storage := newStorageServer(os.Stderr, fmt.Sprintf("node %d", i))
-			// NewOutboundConfig uses the node list stored by NewLocalSystems.
-			// Self-connections are routed via the local handler (no network round-trip),
-			// so no manual self-exclusion is needed.
-			_, err := sys.NewOutboundConfig(dialOpts)
-			if err != nil {
-				log.Fatalf("Failed to create server peer configuration: %v", err)
-			}
 			sys.RegisterService(nil, func(srv *gorums.Server) {
 				pb.RegisterStorageServer(srv, storage)
 			})
@@ -70,7 +63,7 @@ func main() {
 }
 
 // parseInterceptors converts a comma-separated interceptor list into server options.
-func parseInterceptors(ic string) []gorums.ServerOption {
+func parseInterceptors(ic string) gorums.ServerOption {
 	if ic == "" {
 		return nil
 	}
@@ -89,5 +82,5 @@ func parseInterceptors(ic string) []gorums.ServerOption {
 			log.Fatalf("Unknown interceptor: %s", name)
 		}
 	}
-	return []gorums.ServerOption{gorums.WithInterceptors(ics...)}
+	return gorums.WithInterceptors(ics...)
 }
