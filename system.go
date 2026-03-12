@@ -9,9 +9,10 @@ import (
 // System encapsulates the state of a Gorums system, including the server,
 // listener, and any registered closers (e.g. managers).
 type System struct {
-	closers []io.Closer
-	srv     *Server
-	lis     net.Listener
+	closers  []io.Closer
+	srv      *Server
+	lis      net.Listener
+	nodeList NodeListOption // stored node list for use in NewOutboundConfig; nil if not set
 }
 
 // NewSystem creates a new Gorums System listening on the specified address with the provided server options.
@@ -61,8 +62,9 @@ func NewLocalSystems(n int, opts ...ServerOption) ([]*System, func(), error) {
 	for i := range n {
 		sysOpts := append([]ServerOption{WithConfig(uint32(i+1), nodeList)}, opts...)
 		systems[i] = &System{
-			srv: NewServer(sysOpts...),
-			lis: listeners[i],
+			srv:      NewServer(sysOpts...),
+			lis:      listeners[i],
+			nodeList: nodeList,
 		}
 	}
 	stop := func() {
@@ -96,13 +98,18 @@ func (s *System) ClientConfig() Configuration {
 // When peer tracking / symmetric configuration is enabled, it automatically
 // includes this system's NodeID in the connection metadata, enabling the
 // remote server to identify this replica.
+// If the system was created by [NewLocalSystems], the stored node list is used
+// automatically, so callers do not need to pass a [NodeListOption] explicitly.
+// Any opts provided are appended after the defaults and can override them.
 func (s *System) NewOutboundConfig(opts ...Option) (Configuration, error) {
-	if s.srv.inboundManager == nil {
-		return NewConfig(opts...)
+	var base []Option
+	if s.nodeList != nil {
+		base = append(base, s.nodeList)
 	}
-	return NewConfig(append([]Option{
-		withRequestHandler(s.srv, s.srv.NodeID()),
-	}, opts...)...)
+	if s.srv.inboundManager != nil {
+		base = append(base, withRequestHandler(s.srv, s.srv.NodeID()))
+	}
+	return NewConfig(append(base, opts...)...)
 }
 
 // RegisterService registers the service with the server using the provided register function.

@@ -52,7 +52,6 @@ type storageServer struct {
 	storage map[string]state
 	mut     sync.Mutex
 	logger  *log.Logger
-	peerCfg pb.Configuration
 }
 
 func newStorageServer(out io.Writer, label string) *storageServer {
@@ -122,12 +121,9 @@ func (s *storageServer) ReadCorrectable(_ gorums.ServerCtx, req *pb.ReadRequest,
 }
 
 // ReadNestedQC is a quorum-call handler that performs a nested quorum call
-// on the server's known peer configuration.
+// using the server's known-peer configuration from WithConfig.
 func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
-	cfg := s.peerCfg
-	if len(cfg) == 0 {
-		cfg = ctx.Config()
-	}
+	cfg := ctx.Config()
 	if len(cfg) == 0 {
 		return nil, fmt.Errorf("nested quorum call requires server peer configuration")
 	}
@@ -137,12 +133,9 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) 
 }
 
 // WriteNestedMulticast is a quorum-call handler that performs a nested multicast
-// on the server's known peer configuration.
+// using the server's known-peer configuration from WithConfig.
 func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerCtx, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
-	cfg := s.peerCfg
-	if len(cfg) == 0 {
-		cfg = ctx.Config()
-	}
+	cfg := ctx.Config()
 	if len(cfg) == 0 {
 		return pb.WriteResponse_builder{New: false}.Build(), fmt.Errorf("nested multicast requires server peer configuration")
 	}
