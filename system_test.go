@@ -22,7 +22,7 @@ func (m *mockCloser) Close() error {
 	return m.err
 }
 
-func TestSystemLifecycle(t *testing.T) {
+func TestSystemStopClosesRegisteredServices(t *testing.T) {
 	sys, err := gorums.NewSystem("127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Failed to create system: %v", err)
@@ -62,7 +62,7 @@ func TestSystemLifecycle(t *testing.T) {
 	}
 }
 
-func TestSystemStopError(t *testing.T) {
+func TestSystemStopReturnsCloserError(t *testing.T) {
 	sys, err := gorums.NewSystem("127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Failed to create system: %v", err)
@@ -83,7 +83,7 @@ func TestSystemStopError(t *testing.T) {
 	}
 }
 
-func TestSystemSymmetricConfiguration(t *testing.T) {
+func TestSystemSymmetricConfigurationConnectsAllPeers(t *testing.T) {
 	systems := gorums.TestSystems(t, 3)
 
 	// Outbound config is auto-created by NewLocalSystems.
@@ -137,48 +137,40 @@ func awaitClientReady(t *testing.T, sys *gorums.System, n int) {
 	})
 }
 
-// createClientServerSystems creates two systems configured for client-server testing.
-// System 0 acts as the server; both systems use WithClientConfig so the server can
-// reach clients back via their inbound channels. Both systems dial system 0's address
-// so that system 1 appears in system 0's ClientConfig, and system 0 has a self-connection.
-func createClientServerSystems(t *testing.T) ([]*gorums.System, []gorums.Configuration) {
+// createClientServerSystems creates a server system and a client for back-channel testing.
+// The server automatically tracks anonymous clients and can dispatch reverse-direction
+// calls to them via [ServerCtx.ClientConfig].
+// The client is a standalone [*gorums.Server] (no listener needed) whose registered handlers
+// are reachable by the server over the existing bidirectional gRPC stream. The returned
+// [gorums.Configuration] is the client's outbound config pointing at the server.
+func createClientServerSystems(t *testing.T) (*gorums.System, *gorums.Server, gorums.Configuration) {
 	t.Helper()
-	dialOpts := gorums.InsecureDialOptions(t)
 
-	sys0, err := gorums.NewSystem("127.0.0.1:0", gorums.WithClientConfig())
-	if err != nil {
-		t.Fatal(err)
-	}
-	sys1, err := gorums.NewSystem("127.0.0.1:0", gorums.WithClientConfig())
+	// Server side: accepts anonymous clients for reverse-direction calls.
+	sys, err := gorums.NewSystem("127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Both systems connect to sys0's address only.
-	nodeList := gorums.WithNodeList([]string{sys0.Addr()})
-	cfg0, err := sys0.NewOutboundConfig(nodeList, dialOpts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg1, err := sys1.NewOutboundConfig(nodeList, dialOpts)
+	// Client side: a plain Server whose handlers the server can invoke via the back-channel.
+	// No listener is required — dispatch is over the client's outbound gRPC stream.
+	clientSrv := gorums.NewServer()
+
+	// The client dials the server; NewConfig on the server wires up the back-channel dispatcher.
+	nodeList := gorums.WithNodeList([]string{sys.Addr()})
+	cfg, err := clientSrv.NewConfig(nodeList, gorums.InsecureDialOptions(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	systems := []*gorums.System{sys0, sys1}
-	for _, sys := range systems {
-		go func() { _ = sys.Serve() }()
-	}
+	go func() { _ = sys.Serve() }()
 
 	t.Cleanup(func() {
-		_ = cfg0.Manager().Close()
-		_ = cfg1.Manager().Close()
-		for _, sys := range systems {
-			_ = sys.Stop()
-		}
+		_ = cfg.Manager().Close()
+		_ = sys.Stop()
 	})
 
-	return systems, []gorums.Configuration{cfg0, cfg1}
+	return sys, clientSrv, cfg
 }
 
 // stringEchoHandler returns a handler that replies with prefix+": "+request value.
@@ -241,7 +233,7 @@ func outerChainedHandler(
 	}
 }
 
-func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
+func TestSystemSymmetricConfigurationRoutesQuorumCalls(t *testing.T) {
 	systems := gorums.TestSystems(t, 3)
 
 	// Register mock handler to each system
@@ -302,7 +294,7 @@ func TestSystemSymmetricConfigurationQuorumCall(t *testing.T) {
 	}
 }
 
-func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
+func TestSystemSymmetricConfigurationRoutesMulticast(t *testing.T) {
 	systems := gorums.TestSystems(t, 3)
 
 	var wg sync.WaitGroup
@@ -334,7 +326,7 @@ func TestSystemSymmetricConfigurationMulticast(t *testing.T) {
 	waitWithTimeout(t, &wg)
 }
 
-func TestSystemSymmetricMulticastFromHandler_Config(t *testing.T) {
+func TestSystemHandlerCanMulticastViaConfig(t *testing.T) {
 	systems := gorums.TestSystems(t, 3)
 
 	// 3 servers receive the outer multicast. Each server multicasts to a config of 3 nodes.
@@ -384,7 +376,7 @@ func TestSystemSymmetricMulticastFromHandler_Config(t *testing.T) {
 	waitWithTimeout(t, &wg)
 }
 
-func TestSystemChainedQuorumCallFromHandler_Config(t *testing.T) {
+func TestSystemHandlerCanChainQuorumCallViaConfig(t *testing.T) {
 	type respType = *gorums.Responses[*pb.StringValue]
 
 	// seqAll drains the Seq iterator to exhaustion and returns the last value.
@@ -450,25 +442,20 @@ func TestSystemChainedQuorumCallFromHandler_Config(t *testing.T) {
 	}
 }
 
-func TestSystemChainedQuorumCallFromHandler_ClientConfig(t *testing.T) {
-	systems, configs := createClientServerSystems(t)
-	sysServer, sysClient := systems[0], systems[1]
+func TestSystemHandlerCanChainQuorumCallViaClientConfig(t *testing.T) {
+	sysServer, clientSrv, cfgClient := createClientServerSystems(t)
 
 	// Server: outer handler fans out an inner quorum call on EchoMethod to all
-	// client peers (self-connection + system 1) and returns whichever responds first.
-	sysServer.RegisterService(configs[0].Manager(), func(srv *gorums.Server) {
+	// client peers and returns whichever responds first.
+	sysServer.RegisterService(nil, func(srv *gorums.Server) {
 		srv.RegisterHandler(mock.TestMethod, outerChainedHandler(t, 1, true, mock.EchoMethod, (*gorums.Responses[*pb.StringValue]).First))
-		srv.RegisterHandler(mock.EchoMethod, stringEchoHandler("server-echo"))
 	})
 
-	// Client: echoes inner quorum calls back with a prefix.
-	sysClient.RegisterService(configs[1].Manager(), func(srv *gorums.Server) {
-		srv.RegisterHandler(mock.EchoMethod, stringEchoHandler("client-echo"))
-	})
+	// Client: handles EchoMethod calls dispatched back by the server via ClientConfig.
+	clientSrv.RegisterHandler(mock.EchoMethod, stringEchoHandler("client-echo"))
 
-	awaitClientReady(t, sysServer, 2)
+	awaitClientReady(t, sysServer, 1)
 
-	cfgClient := configs[1]
 	ctx := gorums.TestContext(t, 2*time.Second)
 	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
 		cfgClient.Context(ctx),
@@ -480,30 +467,25 @@ func TestSystemChainedQuorumCallFromHandler_ClientConfig(t *testing.T) {
 		t.Fatalf("quorum call error: %v", err)
 	}
 	t.Logf("CLIENT final result: %v", result.GetValue())
-	// The prefix is always "outer-call | "; the suffix depends on which peer
-	// won the inner First() race:
-	//   self-connection → "server-echo: outer-call"
-	//   system 1        → "client-echo: outer-call"
+	// The server fans out EchoMethod to ClientConfig (client only).
+	// Result: "outer-call | client-echo: outer-call"
 	if !strings.HasPrefix(result.GetValue(), "outer-call | ") {
 		t.Errorf("Expected result to start with %q, got %q", "outer-call | ", result.GetValue())
 	}
 }
 
-func TestSystemSymmetricMulticastFromHandler_ClientConfig(t *testing.T) {
-	systems, configs := createClientServerSystems(t)
+func TestSystemHandlerCanMulticastViaClientConfig(t *testing.T) {
+	sysServer, clientSrv, cfgClient := createClientServerSystems(t)
 
-	// Outer multicast from client triggers 1 server handler.
-	// That server handler multicasts to config of size 2 -> 2 messages sent.
-	// So wg expects 2 receives.
+	// Outer multicast from client triggers the server handler once.
+	// The server fans out an inner multicast via ClientConfig (1 client) -> 1 message.
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(1)
 
-	sysServer, sysClient := systems[0], systems[1]
-
-	sysServer.RegisterService(configs[0].Manager(), func(srv *gorums.Server) {
+	sysServer.RegisterService(nil, func(srv *gorums.Server) {
 		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 			t.Logf("SERVER received multicast: %v", in.Msg)
-			if cfg := ctx.ClientConfig(); cfg != nil && cfg.Size() == 2 {
+			if cfg := ctx.ClientConfig(); cfg != nil && cfg.Size() == 1 {
 				err := gorums.Multicast(
 					cfg.Context(t.Context()),
 					pb.String("inner-call"),
@@ -515,24 +497,17 @@ func TestSystemSymmetricMulticastFromHandler_ClientConfig(t *testing.T) {
 			}
 			return nil, nil // one-way
 		})
-		srv.RegisterHandler(mock.Stream, func(_ gorums.ServerCtx, _ *gorums.Message) (*gorums.Message, error) {
-			t.Log("SERVER received inner multicast")
-			wg.Done()
-			return nil, nil
-		})
 	})
 
-	sysClient.RegisterService(configs[1].Manager(), func(srv *gorums.Server) {
-		srv.RegisterHandler(mock.Stream, func(_ gorums.ServerCtx, _ *gorums.Message) (*gorums.Message, error) {
-			t.Log("CLIENT received inner multicast")
-			wg.Done()
-			return nil, nil
-		})
+	// Client handles the reverse-direction multicast dispatched by the server.
+	clientSrv.RegisterHandler(mock.Stream, func(_ gorums.ServerCtx, _ *gorums.Message) (*gorums.Message, error) {
+		t.Log("CLIENT received inner multicast")
+		wg.Done()
+		return nil, nil
 	})
 
-	awaitClientReady(t, sysServer, 2)
+	awaitClientReady(t, sysServer, 1)
 
-	cfgClient := configs[1]
 	ctx := gorums.TestContext(t, 2*time.Second)
 	err := gorums.Multicast(
 		cfgClient.Context(ctx),
