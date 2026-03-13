@@ -1,7 +1,9 @@
 package gorums
 
 import (
+	"fmt"
 	"log"
+	"reflect"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -99,4 +101,31 @@ func withRequestHandler(handler stream.RequestHandler, localID uint32) ManagerOp
 		o.localNodeID = localID
 		o.metadata = metadata.Join(o.metadata, metadataWithNodeID(localID))
 	}
+}
+
+// splitOptions separates a slice of [Option]s into [ServerOption]s, [ManagerOption]s,
+// and a single [NodeListOption]. It returns an error if more than one [NodeListOption]
+// is provided or if an unsupported option type is encountered.
+func splitOptions(opts []Option) (srvOpts []ServerOption, mgrOpts []ManagerOption, nodeListOpt NodeListOption, err error) {
+	for _, opt := range opts {
+		// A typed interface value (e.g. ManagerOption(nil)) is not equal to nil, so we need
+		// to also check if the underlying value is actually nil to avoid panics.
+		if opt == nil || reflect.ValueOf(opt).IsNil() {
+			continue
+		}
+		switch o := opt.(type) {
+		case ServerOption:
+			srvOpts = append(srvOpts, o)
+		case ManagerOption:
+			mgrOpts = append(mgrOpts, o)
+		case NodeListOption:
+			if nodeListOpt != nil {
+				return nil, nil, nil, fmt.Errorf("gorums: multiple NodeListOptions provided")
+			}
+			nodeListOpt = o
+		default:
+			return nil, nil, nil, fmt.Errorf("gorums: unsupported option type: %T", opt)
+		}
+	}
+	return srvOpts, mgrOpts, nodeListOpt, nil
 }
