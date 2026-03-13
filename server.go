@@ -17,12 +17,10 @@ type serverOptions struct {
 	connectCallback func(context.Context)
 	interceptors    []Interceptor
 	// Peer management options
-	myID            uint32
-	peerOpt         NodeListOption
-	clientPeers     bool
-	peerSendBuffer  uint
-	onConfigChange  func(Configuration)
-	onClientsChange func(Configuration)
+	myID           uint32
+	peerOpt        NodeListOption
+	peerSendBuffer uint
+	onConfigChange func(Configuration)
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -86,23 +84,6 @@ func WithConfig(myID uint32, opt NodeListOption, onChange ...func(Configuration)
 	}
 }
 
-// WithClientConfig enables the server to accept unknown clients (those without
-// a recognized NodeID). Each unknown client is assigned a sequential auto-generated
-// ID and included in the [Configuration] returned by [ClientConfig]. Client nodes are
-// removed when they disconnect. Can be combined with [WithConfig] for mixed mode.
-// The optional onChange callback is called after each change to the [ClientConfig]
-// (client peer connect or disconnect). It is invoked while the manager's lock is held,
-// so it must not call [ClientConfig] or other blocking methods.
-// Use it only to signal or copy; do not perform long work inside the callback.
-func WithClientConfig(onChange ...func(Configuration)) ServerOption {
-	return func(o *serverOptions) {
-		o.clientPeers = true
-		if len(onChange) > 0 {
-			o.onClientsChange = onChange[0]
-		}
-	}
-}
-
 // WithPeerSendBufferSize sets the size of the per-node send buffer for channels
 // created when inbound peers connect. A larger buffer may increase throughput
 // for asynchronous call types at the cost of latency. The default is 0 (unbuffered).
@@ -114,16 +95,19 @@ func WithPeerSendBufferSize(size uint) ServerOption {
 
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
-	srv             *stream.Server
-	grpcServer      *grpc.Server
-	handlers        map[string]Handler
-	interceptors    []Interceptor
-	*inboundManager // nil if no peers configured
+	srv          *stream.Server
+	grpcServer   *grpc.Server
+	handlers     map[string]Handler
+	interceptors []Interceptor
+	*inboundManager
 }
 
 // NewServer returns a new instance of [Server].
-// If [WithConfig] or [WithClientConfig] options are provided, an inboundManager is
-// created internally to track connected peers.
+//
+// The server tracks connected clients that specify their node IDs; their
+// configurations are accessible via [ServerCtx.ClientConfig] and [Server.ClientConfig].
+// If [WithConfig] is also provided, the server additionally tracks known peers
+// with static node IDs, accessible via [ServerCtx.Config] and [Server.Config].
 // Panics on configuration errors (invalid addresses, duplicate nodes, etc.)
 // since these are programmer errors detectable at startup.
 func NewServer(opts ...ServerOption) *Server {
@@ -139,20 +123,36 @@ func NewServer(opts ...ServerOption) *Server {
 		handlers:     make(map[string]Handler),
 		interceptors: serverOpts.interceptors,
 	}
-	if serverOpts.peerOpt != nil || serverOpts.clientPeers {
-		s.inboundManager = newInboundManager(
-			serverOpts.myID,
-			serverOpts.peerOpt,
-			serverOpts.peerSendBuffer,
-			serverOpts.onConfigChange,
-			serverOpts.onClientsChange,
-			serverOpts.clientPeers,
-			s,
-		)
-	}
+	s.inboundManager = newInboundManager(
+		serverOpts.myID,
+		serverOpts.peerOpt,
+		serverOpts.peerSendBuffer,
+		serverOpts.onConfigChange,
+		s,
+	)
 	s.srv = stream.NewServer(serverOpts.buffer, serverOpts.connectCallback, s.inboundManager, s)
 	stream.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
+}
+
+// NewConfig creates a new outbound [Configuration] connecting to the given nodes,
+// with this server installed as the back-channel request handler.
+// Use this method when creating a client-side configuration that must receive
+// reverse-direction calls from the server via [ServerCtx.ClientConfig].
+//
+// The client advertises no node ID; the remote server assigns it a dynamic ID
+// and includes it in [ClientConfig].
+//
+// Example:
+//
+//	clientSrv := gorums.NewServer()
+//	clientSrv.RegisterHandler(pb.MyMethod, myHandler)
+//	cfg, err := clientSrv.NewConfig(
+//	    gorums.WithNodeList(serverAddrs),
+//	    gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+//	)
+func (s *Server) NewConfig(opts ...Option) (Configuration, error) {
+	return NewConfig(append([]Option{withRequestHandler(s, 0)}, opts...)...)
 }
 
 // RegisterHandler registers a request handler for the specified method name.

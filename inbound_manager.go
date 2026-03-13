@@ -38,6 +38,18 @@ func nodeID(ctx context.Context) uint32 {
 	return uint32(id)
 }
 
+// hasPeerMetadata reports whether ctx contains the gorums-node-id metadata key,
+// regardless of its value. A client that sends this key (even with value "0")
+// has declared itself capable of receiving back-channel calls. Regular clients
+// (those using NewConfig rather than (*Server).NewConfig) never send this key.
+func hasPeerMetadata(ctx context.Context) bool {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return false
+	}
+	return len(md.Get(gorumsNodeIDKey)) > 0
+}
+
 // metadataWithNodeID returns a metadata.MD containing the gorums-node-id key with the given id value.
 func metadataWithNodeID(id uint32) metadata.MD {
 	return metadata.Pairs(gorumsNodeIDKey, strconv.Format(id, 10))
@@ -55,18 +67,16 @@ func metadataWithNodeID(id uint32) metadata.MD {
 //
 // inboundManager is safe for concurrent use.
 type inboundManager struct {
-	mu              sync.RWMutex
-	myID            uint32                // this server's own NodeID; always present in inboundCfg
-	nodes           map[uint32]*Node      // pre-created for known peers; client peers added on connect
-	config          Configuration         // auto-updated slice of known peers, sorted by ID
-	clientConfig    Configuration         // auto-updated slice of client peers, sorted by ID
-	nextMsgID       atomic.Uint64         // counter for server-initiated message IDs
-	sendBufferSize  uint                  // send buffer size for inbound channels
-	selfHandler     stream.RequestHandler // handler for in-process dispatch on the self-node
-	onConfigChange  func(Configuration)   // optional; called after each known-peer config change
-	onClientsChange func(Configuration)   // optional; called after each client-peer config change
-	clientPeers     bool                  // accept unknown clients with auto-assigned IDs
-	nextClientID    uint32                // next ID to assign to a client peer
+	mu             sync.RWMutex
+	myID           uint32                // this server's own NodeID; always present in inboundCfg
+	nodes          map[uint32]*Node      // pre-created for known peers; client peers added on connect
+	config         Configuration         // auto-updated slice of known peers, sorted by ID
+	clientConfig   Configuration         // auto-updated slice of client peers, sorted by ID
+	nextMsgID      atomic.Uint64         // counter for server-initiated message IDs
+	sendBufferSize uint                  // send buffer size for inbound channels
+	selfHandler    stream.RequestHandler // handler for in-process dispatch on the self-node
+	onConfigChange func(Configuration)   // optional; called after each known-peer config change
+	nextClientID   uint32                // next ID to assign to a client peer
 }
 
 // clientIDStart is the starting ID for dynamically assigned client peers.
@@ -85,16 +95,14 @@ const clientIDStart = 1 << 20
 // installed on the self-node (if present) to enable in-process dispatch without
 // a network round-trip. Panics on configuration errors (invalid addresses,
 // duplicate nodes, etc.)
-func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfigChange, onClientsChange func(Configuration), clientPeers bool, selfHandler stream.RequestHandler) *inboundManager {
+func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfigChange func(Configuration), selfHandler stream.RequestHandler) *inboundManager {
 	im := &inboundManager{
-		myID:            myID,
-		nodes:           make(map[uint32]*Node),
-		sendBufferSize:  sendBuffer,
-		selfHandler:     selfHandler,
-		onConfigChange:  onConfigChange,
-		onClientsChange: onClientsChange,
-		clientPeers:     clientPeers,
-		nextClientID:    clientIDStart,
+		myID:           myID,
+		nodes:          make(map[uint32]*Node),
+		sendBufferSize: sendBuffer,
+		selfHandler:    selfHandler,
+		onConfigChange: onConfigChange,
+		nextClientID:   clientIDStart,
 	}
 	if opt != nil {
 		if _, err := opt.newConfig(im); err != nil {
@@ -193,16 +201,15 @@ func (im *inboundManager) isKnown(id uint32) bool {
 	return ok
 }
 
-// AcceptPeer identifies a connecting peer by its NodeID metadata, registers
-// it if recognized, and returns the peer's Node along with a cleanup function
-// that should be deferred to unregister the peer when the stream ends.
+// AcceptPeer accepts an inbound stream and returns the associated peer node
+// and a cleanup function. It currently never returns an error, but the signature
+// supports error handling to allow for authenticated peer connections in the future.
 //
-// For known peers, the pre-created Node is returned. For unknown peers when
-// clientPeers is enabled, a new Node is created with an auto-assigned ID.
-// For a nil receiver, external (non-replica) clients when client mode is
-// disabled, it returns (nil, noop, nil) where noop is a no-op cleanup function.
-// The error return is reserved for future use (e.g., credential validation);
-// it is currently always nil.
+// If the stream identifies a known peer, AcceptPeer registers it and returns
+// that peer's node.
+// If the stream includes peer metadata with node ID 0, AcceptPeer creates a
+// client peer node with an assigned ID.
+// Otherwise, AcceptPeer returns (nil, noop, nil).
 func (im *inboundManager) AcceptPeer(streamCtx context.Context, inboundStream stream.BidiStream) (stream.PeerNode, func(), error) {
 	noop := func() {}
 	if im == nil {
@@ -213,11 +220,16 @@ func (im *inboundManager) AcceptPeer(streamCtx context.Context, inboundStream st
 		// Known peer — register on pre-created node.
 		return im.registerPeer(streamCtx, inboundStream, id)
 	}
-	if !im.clientPeers {
-		// External client or unknown peer.
+	if id != 0 {
+		// Unknown positive ID: misconfigured or unrecognized peer — reject quietly.
 		return nil, noop, nil
 	}
-	// Client peer — create new node with auto-assigned ID.
+	if !hasPeerMetadata(streamCtx) {
+		// Regular client (no gorums-node-id key): accept the connection but do not
+		// track it in ClientConfig — the client cannot receive back-channel calls.
+		return nil, noop, nil
+	}
+	// Peer-capable anonymous client (gorums-node-id: 0) — create new node with auto-assigned ID.
 	return im.acceptClient(streamCtx, inboundStream)
 }
 
@@ -298,9 +310,6 @@ func (im *inboundManager) rebuildConfig() {
 	im.clientConfig = clientCfg
 	if im.onConfigChange != nil {
 		im.onConfigChange(cfg)
-	}
-	if im.onClientsChange != nil {
-		im.onClientsChange(clientCfg)
 	}
 }
 
