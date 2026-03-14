@@ -479,6 +479,7 @@ func parseIndices(cfgStr string, numNodes int) (indices []int, err error) {
 	}
 	// configuration using list of indices
 	if indicesStr := strings.Split(cfgStr, ","); len(indicesStr) > 0 {
+		seen := make(map[int]struct{}, len(indicesStr))
 		indices = make([]int, 0, len(indicesStr))
 		for _, indexStr := range indicesStr {
 			i, err := strconv.Atoi(indexStr)
@@ -488,6 +489,10 @@ func parseIndices(cfgStr string, numNodes int) (indices []int, err error) {
 			if i < 0 || i >= numNodes {
 				return nil, fmt.Errorf("invalid configuration")
 			}
+			if _, exists := seen[i]; exists {
+				return nil, fmt.Errorf("duplicate index: %d", i)
+			}
+			seen[i] = struct{}{}
 			indices = append(indices, i)
 		}
 		return indices, nil
