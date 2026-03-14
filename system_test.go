@@ -2,6 +2,7 @@ package gorums_test
 
 import (
 	"errors"
+	"net"
 	"strings"
 	"sync"
 	"testing"
@@ -80,6 +81,51 @@ func TestSystemStopReturnsCloserError(t *testing.T) {
 	err = sys.Stop()
 	if err == nil {
 		t.Error("expected error from Stop, got nil")
+	}
+}
+
+// TestSystemStopBeforeServeClosesListener verifies that Stop closes the
+// pre-allocated listener even when Serve was never called, so no file
+// descriptor is leaked.
+func TestSystemStopBeforeServeClosesListener(t *testing.T) {
+	sys, err := gorums.NewSystem("127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("NewSystem: %v", err)
+	}
+	addr := sys.Addr()
+	if err := sys.Stop(); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	// The listener should be closed now; re-binding to the same address must succeed.
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Errorf("expected to re-bind to %s after Stop (without Serve), got: %v", addr, err)
+		return
+	}
+	_ = lis.Close()
+}
+
+// TestNewLocalSystemsStopBeforeServeClosesListeners verifies that the stop function
+// returned by NewLocalSystems closes all pre-allocated listeners even when none of
+// the systems has had Serve called yet, so no file descriptors are leaked.
+func TestNewLocalSystemsStopBeforeServeClosesListeners(t *testing.T) {
+	systems, stop, err := gorums.NewLocalSystems(3, gorums.InsecureDialOptions(t))
+	if err != nil {
+		t.Fatalf("NewLocalSystems: %v", err)
+	}
+	addrs := make([]string, len(systems))
+	for i, sys := range systems {
+		addrs[i] = sys.Addr()
+	}
+	stop() // called before any Serve()
+	// Every pre-allocated listener must be closed; re-binding must succeed.
+	for _, addr := range addrs {
+		lis, err := net.Listen("tcp", addr)
+		if err != nil {
+			t.Errorf("expected to re-bind to %s after stop (without Serve), got: %v", addr, err)
+			continue
+		}
+		_ = lis.Close()
 	}
 }
 
