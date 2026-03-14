@@ -90,8 +90,7 @@ const clientIDStart = 1 << 20
 // If opt is non-nil, the inboundManager is configured with the given NodeListOption
 // defining the set of known peers. If myID is present in the NodeListOption it is
 // immediately included in the Config as the self-node, so that quorum thresholds
-// account for the local replica from the moment of construction. If clientPeers is
-// true, unknown clients are accepted with auto-assigned IDs. The selfHandler is
+// account for the local replica from the moment of construction. The selfHandler is
 // installed on the self-node (if present) to enable in-process dispatch without
 // a network round-trip. Panics on configuration errors (invalid addresses,
 // duplicate nodes, etc.)
