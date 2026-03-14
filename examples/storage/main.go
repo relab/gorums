@@ -20,12 +20,12 @@ func main() {
 	ic := flag.String("interceptors", "", "Comma-separated list of interceptors to enable (logging, nofoo, metadata, delayed).")
 	flag.Parse()
 
+	srvOpts := parseInterceptors(*ic)
+
 	if *server != "" {
-		runServer(*server)
+		runServer(*server, srvOpts)
 		return
 	}
-
-	srvOpts := parseInterceptors(*ic)
 
 	addrs := strings.Split(*remotes, ",")
 	// start local servers if no remote servers were specified
