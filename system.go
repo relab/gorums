@@ -22,13 +22,12 @@ type System struct {
 // automatically and can be accessed via [System.OutboundConfig].
 // Returns an error if more than one [NodeListOption] is provided.
 func NewSystem(addr string, opts ...Option) (*System, error) {
-	lis, err := net.Listen("tcp", addr)
+	srvOpts, mgrOpts, nodeListOpt, err := splitOptions(opts)
 	if err != nil {
 		return nil, err
 	}
-	srvOpts, mgrOpts, nodeListOpt, err := splitOptions(opts)
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		_ = lis.Close()
 		return nil, err
 	}
 	sys := &System{
@@ -68,7 +67,8 @@ func NewLocalSystems(n int, opts ...Option) ([]*System, func(), error) {
 		return nil, nil, err
 	}
 	if nodeListOpt != nil {
-		return nil, nil, fmt.Errorf("gorums: NodeListOption not valid for NewLocalSystems; it computes its own node list")
+		// NewLocalSystems computes its own node list, so we disallow passing one in.
+		return nil, nil, fmt.Errorf("gorums: unexpected NodeListOption passed to NewLocalSystems")
 	}
 	listeners, nodeList, err := allocateListeners(n)
 	if err != nil {
@@ -85,7 +85,7 @@ func NewLocalSystems(n int, opts ...Option) ([]*System, func(), error) {
 		cfg, err := sys.newOutboundConfig(nodeList, mgrOpts...)
 		if err != nil {
 			for j := range i {
-				systems[j].Stop()
+				_ = systems[j].Stop()
 			}
 			return nil, nil, fmt.Errorf("gorums: failed to create outbound config for system %d: %w", i+1, err)
 		}
@@ -112,7 +112,7 @@ func allocateListeners(n int) ([]net.Listener, NodeListOption, error) {
 		lis, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			for j := range i {
-				listeners[j].Close()
+				_ = listeners[j].Close()
 			}
 			return nil, nil, err
 		}
@@ -186,11 +186,15 @@ func (s *System) Serve() error {
 // It immediately closes all open connections and listeners. It cancels
 // all active RPCs on the server side and the corresponding pending RPCs
 // on the client side will get notified by connection errors.
+// It is safe to call Stop before [System.Serve] to avoid resource leaks.
 func (s *System) Stop() (errs error) {
 	// We cannot use graceful stop here since multicast methods does not
 	// respond to the client, and thus would block indefinitely.
-	// The server's listener is closed by s.srv.Stop().
 	s.srv.Stop()
+	// Always close the listener explicitly. If Serve was called, gRPC
+	// already closed it and the second Close is a no-op error we discard.
+	// If Serve was never called, this is the only place that closes it.
+	_ = s.lis.Close()
 	for _, closer := range s.closers {
 		errs = errors.Join(errs, closer.Close())
 	}
