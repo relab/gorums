@@ -500,11 +500,13 @@ func splitQuoted(s string) ([]string, error) {
 	var currentArg strings.Builder
 	var quote rune
 	escaped := false
+	inArg := false
 
 	flush := func() {
-		if currentArg.Len() > 0 {
+		if inArg {
 			args = append(args, currentArg.String())
 			currentArg.Reset()
+			inArg = false
 		}
 	}
 
@@ -513,8 +515,10 @@ func splitQuoted(s string) ([]string, error) {
 		case escaped:
 			currentArg.WriteRune(r)
 			escaped = false
+			inArg = true
 
 		case quote != 0:
+			inArg = true
 			switch r {
 			case '\\':
 				escaped = true
@@ -526,15 +530,18 @@ func splitQuoted(s string) ([]string, error) {
 
 		case r == '\'' || r == '"':
 			quote = r
+			inArg = true
 
 		case unicode.IsSpace(r):
 			flush()
 
 		case r == '\\':
 			escaped = true
+			inArg = true
 
 		default:
 			currentArg.WriteRune(r)
+			inArg = true
 		}
 	}
 
