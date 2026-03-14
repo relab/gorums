@@ -55,7 +55,7 @@ The command performs the write quorum call on node 1 and 2
 The command performs the write quorum call on node 0 and 2
 `
 
-var delayOutput = 200 * time.Millisecond
+const delayOutput = 200 * time.Millisecond
 
 type repl struct {
 	mgr  *pb.Manager
