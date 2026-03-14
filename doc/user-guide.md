@@ -1442,37 +1442,62 @@ When the server's handler is later invoked — for example, by an external coord
 
 ### Setting Up the Server
 
-Enable anonymous client tracking at server construction time with `gorums.WithClientConfig()`:
+Every `gorums.NewServer()` automatically tracks anonymous client peers that specify node ID 0 in their connection metadata.
+No additional option is needed:
 
 ```go
-gorumsSrv := gorums.NewServer(gorums.WithClientConfig())
+gorumsSrv := gorums.NewServer()
 ```
 
-`WithClientConfig` can be combined with `WithConfig` (mixed mode):
+`ClientConfig()` is always available and reflects currently connected clients.
+If you also need to track known peers with static node IDs, combine with `WithConfig` (mixed mode):
 
 ```go
 gorumsSrv := gorums.NewServer(
     gorums.WithConfig(myNodeID, gorums.WithNodeList(knownPeers)),  // static known peers
-    gorums.WithClientConfig(),                                     // dynamic unknown clients
+    // anonymous clients are tracked automatically
 )
 ```
 
-For example, to enable this in a local test cluster:
+For example, a local test cluster:
 
 ```go
-systems, stop, err := gorums.NewLocalSystems(4, gorums.WithClientConfig())
+systems, stop, err := gorums.NewLocalSystems(4)
 ```
 
 > **Note:** The `nread` and `nwrite` commands in the storage REPL example use `ctx.Config()` (the static server-to-server direction) rather than `ctx.ClientConfig()`.
 > Reverse direction calls require every participant to act as both a Gorums server *and* to expose its own server method handlers so that peers can call back to it.
 > The REPL client in the storage example does not implement any server method handlers, so calling back to it via `ClientConfig()` is not supported in that example.
 
+### Setting Up the Client
+
+For the server to call back to a client, the client must expose its own method handlers over the same bidirectional stream it opens to the server.
+Create a `*gorums.Server`, register any handler methods the server may invoke, and then call `NewConfig` on that server object to establish the outbound connection:
+
+```go
+// Create a server to host the client-side handlers.
+clientSrv := gorums.NewServer()
+
+// Register the methods the remote server is allowed to call back on this client.
+clientSrv.RegisterHandler(pb.MyMethod, myHandler)
+
+// Connect to the server; NewConfig wires up the back-channel dispatcher automatically.
+cfg, err := clientSrv.NewConfig(
+    gorums.WithNodeList(serverAddrs),
+    gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+)
+```
+
+Calling `clientSrv.NewConfig` instead of the standalone `gorums.NewConfig` is what installs the server as the back-channel request handler.
+When the remote server dispatches a reverse-direction call via `ctx.ClientConfig()`, the call arrives on the same gRPC stream the client opened and is routed to `clientSrv` for dispatch.
+
+The client does **not** need to open a separate listening socket — the handler is served entirely over the existing outbound connection.
+
 ### Connecting as an Anonymous Client
 
-A node appears in `ClientConfig()` only when it connects without a recognized node ID.
-Clients behind a firewall typically have no pre-configured `myID`, so they connect as anonymous clients.
-
-A client connecting without a node ID announces `NodeID=0`.
+A client must announce `NodeID=0` in its connection metadata to be assigned a dynamic node ID by the server and to appear in `ClientConfig()` for reverse-direction calls.
+Clients behind a firewall typically have no pre-configured node ID, so they connect as anonymous clients.
+Connecting via `clientSrv.NewConfig` without `WithConfig` sends `NodeID=0` automatically.
 The server assigns it a dynamic ID and includes it in `ClientConfig()`.
 The client can then call `Register` (a unicast) to signal that it is ready to receive calls:
 
@@ -1485,11 +1510,10 @@ In contrast, a client with a pre-configured node ID (created with `WithConfig`) 
 
 ### Writing the Handler
 
-In a `WithClientConfig()`-only setup, the handler reads `ctx.ClientConfig()` to reach all currently connected peers:
+The handler reads `ctx.ClientConfig()` to reach all currently connected client peers:
 
 ```go
-// ReadNestedQC fans out a ReadQC to all clients that have registered.
-// The server must be started with WithClientConfig() to track inbound client connections.
+// ReadNestedQC fans out a ReadQC to all clients that have connected.
 func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (*pb.ReadResponse, error) {
     cfg := ctx.ClientConfig()
     if len(cfg) == 0 {
