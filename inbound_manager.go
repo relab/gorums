@@ -124,7 +124,7 @@ func (im *inboundManager) Nodes() []*Node {
 	})
 }
 
-// Config returns a [Configuration] of all connected known peers, including this node.
+// Config returns a [Configuration] of all connected known peer servers, including this node.
 // An empty (non-nil) Configuration is returned if no known peers are connected.
 // The returned slice is replaced atomically on each connect/disconnect;
 // thus, retaining a reference to an old configuration is safe.
@@ -137,8 +137,8 @@ func (im *inboundManager) Config() Configuration {
 	return im.config
 }
 
-// ClientConfig returns a [Configuration] of all connected client peers
-// that can accept server-initiated requests.
+// ClientConfig returns a [Configuration] of all connected clients capable of
+// receiving reverse-direction calls from the server.
 // An empty (non-nil) Configuration is returned if no client peers are connected.
 // The returned slice is replaced atomically on each connect/disconnect;
 // thus, retaining a reference to an old configuration is safe.

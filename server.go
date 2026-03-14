@@ -65,15 +65,17 @@ func WithInterceptors(i ...Interceptor) ServerOption {
 	}
 }
 
-// WithConfig configures the server to track known peer servers identified by their
-// NodeID metadata. When a server connects as a client with a recognized NodeID, the
-// server registers the node and includes it in the [Configuration] returned by [Config].
-// The myID parameter is this server's own NodeID; it is always present in the [Config]
-// so that quorum thresholds account for the local replica.
-// The optional onChange callback is called after each change to the known peer [Configuration]
-// (server peer connect or disconnect). It is invoked while the manager's lock is held,
-// so it must not call [Config] or other blocking methods.
-// Use it only to signal or copy; do not perform long work inside the callback.
+// WithConfig configures the server to track a fixed set of peer servers.
+// When a recognized peer connects, it is included in the [Configuration]
+// returned by [Config]. The myID parameter is this server's own NodeID;
+// it is always present in the [Config] so that quorum thresholds account
+// for the local replica.
+//
+// The optional onChange callback is called after each change to the known
+// peer [Configuration] (server peer connect or disconnect). It is invoked
+// while any internal locks are held, so it must not call [Config] or other
+// blocking methods. Use it only to signal or copy; do not perform long
+// work inside the callback.
 func WithConfig(myID uint32, opt NodeListOption, onChange ...func(Configuration)) ServerOption {
 	return func(o *serverOptions) {
 		o.myID = myID
@@ -104,10 +106,12 @@ type Server struct {
 
 // NewServer returns a new instance of [Server].
 //
-// The server tracks connected clients that specify their node IDs; their
-// configurations are accessible via [ServerCtx.ClientConfig] and [Server.ClientConfig].
-// If [WithConfig] is also provided, the server additionally tracks known peers
-// with static node IDs, accessible via [ServerCtx.Config] and [Server.Config].
+// The server tracks connected clients that are capable of receiving reverse-direction
+// calls from the server; these clients are accessible via [ServerCtx.ClientConfig]
+// and [Server.ClientConfig]. If [WithConfig] is provided, the server additionally
+// tracks a fixed set of peer servers, which are accessible via [ServerCtx.Config]
+// and [Server.Config].
+//
 // Panics on configuration errors (invalid addresses, duplicate nodes, etc.)
 // since these are programmer errors detectable at startup.
 func NewServer(opts ...ServerOption) *Server {
