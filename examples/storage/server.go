@@ -21,7 +21,7 @@ func runServer(address string, opts ...gorums.Option) {
 	if err != nil {
 		log.Fatalf("Failed to create system on '%s': %v", address, err)
 	}
-	storage := newStorageServer(os.Stderr, address)
+	storage := newStorageServer(os.Stderr, sys.Addr())
 	sys.RegisterService(nil, func(srv *gorums.Server) {
 		pb.RegisterStorageServer(srv, storage)
 	})
@@ -32,11 +32,11 @@ func runServer(address string, opts ...gorums.Option) {
 
 	go func() {
 		if err := sys.Serve(); err != nil {
-			log.Fatalf("Server error: %v", err)
+			log.Printf("Server error: %v", err)
 		}
 	}()
 
-	log.Printf("Started storage server on %s\n", address)
+	log.Printf("Started storage server on %s\n", sys.Addr())
 
 	<-signals
 	_ = sys.Stop()
