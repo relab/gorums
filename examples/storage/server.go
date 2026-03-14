@@ -69,9 +69,21 @@ type rawWriter struct {
 
 func (rw rawWriter) Write(p []byte) (n int, err error) {
 	replaced := bytes.ReplaceAll(p, []byte("\n"), []byte("\r\n"))
-	_, err = rw.w.Write(replaced)
-	// Return original length to satisfy the io.Writer contract.
-	return len(p), err
+	wn, err := rw.w.Write(replaced)
+
+	// Treat a short write to the underlying writer as an error
+	if err == nil && wn < len(replaced) {
+		err = io.ErrShortWrite
+	}
+
+	// If an error occurred, conservatively report 0 bytes written to
+	// prevent the caller from assuming data was fully processed.
+	if err != nil {
+		return 0, err
+	}
+
+	// Success: satisfy the io.Writer contract by returning the original length
+	return len(p), nil
 }
 
 // ReadRPC is an RPC handler
