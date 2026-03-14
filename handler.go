@@ -65,10 +65,10 @@ func (ctx *ServerCtx) SendMessage(out *Message) error {
 	return nil
 }
 
-// Config returns a [Configuration] of all connected known peers, plus this node.
+// Config returns a [Configuration] of all connected known peer servers, including this node.
+// An empty (non-nil) Configuration is returned if no known peers are connected.
 // The returned slice is replaced atomically on each connect/disconnect;
-// retaining a reference to an old configuration is safe.
-// Returns nil if no peer tracking is configured.
+// thus, retaining a reference to an old configuration is safe.
 func (ctx *ServerCtx) Config() Configuration {
 	if ctx.srv == nil {
 		return nil
@@ -76,10 +76,11 @@ func (ctx *ServerCtx) Config() Configuration {
 	return ctx.srv.Config()
 }
 
-// ClientConfig returns a [Configuration] of all connected client peers.
+// ClientConfig returns a [Configuration] of all connected clients capable of
+// receiving reverse-direction calls from the server.
+// An empty (non-nil) Configuration is returned if no client peers are connected.
 // The returned slice is replaced atomically on each connect/disconnect;
-// retaining a reference to an old value is safe.
-// Returns nil if no peer tracking is configured.
+// thus, retaining a reference to an old configuration is safe.
 func (ctx *ServerCtx) ClientConfig() Configuration {
 	if ctx.srv == nil {
 		return nil
@@ -88,8 +89,7 @@ func (ctx *ServerCtx) ClientConfig() Configuration {
 }
 
 // ConfigContext returns a [ConfigContext] encapsulating the [Configuration] of
-// all connected known peers, plus this node.
-// Returns nil if no peer tracking is configured.
+// all connected known peer servers, including this node.
 func (ctx *ServerCtx) ConfigContext() *ConfigContext {
 	if ctx.srv == nil {
 		return nil
@@ -101,8 +101,7 @@ func (ctx *ServerCtx) ConfigContext() *ConfigContext {
 }
 
 // ClientConfigContext returns a [ConfigContext] encapsulating the [Configuration] of
-// all connected client peers.
-// Returns nil if no peer tracking is configured or if no clients are connected.
+// all connected clients capable of receiving reverse-direction calls from the server.
 func (ctx *ServerCtx) ClientConfigContext() *ConfigContext {
 	if ctx.srv == nil {
 		return nil
