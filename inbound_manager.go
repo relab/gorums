@@ -55,22 +55,23 @@ func metadataWithNodeID(id uint32) metadata.MD {
 	return metadata.Pairs(gorumsNodeIDKey, strconv.Format(id, 10))
 }
 
-// inboundManager manages server-side awareness of connected peers.
-// It is configured at construction time with a fixed set of known peers,
-// registers them as they connect, and maintains an auto-updated Configuration
-// that can be used for server-initiated quorum calls, multicast, and other
-// call types.
+// inboundManager manages server-side awareness of connected peers. It is
+// configured at construction time with a fixed set of known peers, registers
+// them as they connect, and maintains an auto-updated [Configuration] that
+// can be used for server-initiated quorum calls, multicast, and other call types.
 //
-// When clientPeers is enabled, unknown clients (those without a recognized
-// NodeID) are accepted and assigned auto-generated IDs. Client nodes are
-// removed from the nodes map when they disconnect.
+// Clients that specify node ID 0 in their metadata are assumed to be capable
+// of receiving reverse-direction calls from the server. These clients are
+// accepted with auto-generated IDs and included in the ClientConfig.
+// Client nodes are removed from the nodes map when they disconnect, while
+// known peer nodes persist in the map to allow for reconnection.
 //
 // inboundManager is safe for concurrent use.
 type inboundManager struct {
 	mu             sync.RWMutex
 	myID           uint32                // this server's own NodeID; always present in inboundCfg
 	nodes          map[uint32]*Node      // pre-created for known peers; client peers added on connect
-	config         Configuration         // auto-updated slice of known peers, sorted by ID
+	config         Configuration         // auto-updated slice of known peer servers, sorted by ID
 	clientConfig   Configuration         // auto-updated slice of client peers, sorted by ID
 	nextMsgID      atomic.Uint64         // counter for server-initiated message IDs
 	sendBufferSize uint                  // send buffer size for inbound channels
