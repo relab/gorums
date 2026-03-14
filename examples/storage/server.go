@@ -137,7 +137,7 @@ func (s *storageServer) ReadCorrectable(_ gorums.ServerCtx, req *pb.ReadRequest,
 func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
 	cfg := ctx.Config()
 	if len(cfg) == 0 {
-		return nil, fmt.Errorf("nested quorum call requires server peer configuration")
+		return nil, fmt.Errorf("read_nested_qc: requires server peer configuration")
 	}
 	// Release before nested outbound calls to avoid blocking inbound recv processing.
 	ctx.Release()
@@ -149,12 +149,12 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) 
 func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerCtx, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
 	cfg := ctx.Config()
 	if len(cfg) == 0 {
-		return pb.WriteResponse_builder{New: false}.Build(), fmt.Errorf("nested multicast requires server peer configuration")
+		return nil, fmt.Errorf("write_nested_multicast: requires server peer configuration")
 	}
 	// Release before nested outbound calls to avoid blocking inbound recv processing.
 	ctx.Release()
 	if err := pb.WriteMulticast(cfg.Context(ctx), req); err != nil {
-		return pb.WriteResponse_builder{New: false}.Build(), err
+		return nil, fmt.Errorf("write_nested_multicast: %w", err)
 	}
 	return pb.WriteResponse_builder{New: true}.Build(), nil
 }
