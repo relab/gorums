@@ -357,11 +357,24 @@ func (c *Channel) cancelPendingMsgs(err error) {
 // with ErrStreamDown because they cannot be safely retried.
 func (c *Channel) requeuePendingMsgs() {
 	requeue, cancel := c.router.RequeuePending()
-	for _, req := range requeue {
-		c.Enqueue(req)
-	}
 	for _, req := range cancel {
 		c.replyError(req, ErrStreamDown)
+	}
+	// The requeue is performed in a separate goroutine because this method is called
+	// from sender(), which is the sole reader of sendQ. Calling Enqueue directly from
+	// the sender would deadlock: Enqueue writes to the unbuffered sendQ, but no one
+	// is reading it because the sender itself is blocked in the Enqueue call.
+	// The goroutine writes to sendQ while the sender returns to its read loop.
+	//
+	// If connCtx is cancelled before the goroutine finishes, each Enqueue call will
+	// take the connCtx.Done() branch and replyError with ErrNodeClosed, and
+	// drainSendQ (deferred in sender) will drain any items that made it to sendQ.
+	if len(requeue) > 0 {
+		go func() {
+			for _, req := range requeue {
+				c.Enqueue(req)
+			}
+		}()
 	}
 }
 
