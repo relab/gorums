@@ -70,18 +70,18 @@ func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, er
 // creates a new manager; if a manager already exists, use [NewConfiguration]
 // instead, and provide the existing manager as the first argument.
 func NewConfig(opts ...Option) (Configuration, error) {
-	srvOpts, mgrOpts, nodeListOpt, err := splitOptions(opts)
+	serverOptions, managerOptions, nodeListOption, err := splitOptions(opts)
 	if err != nil {
 		return nil, err
 	}
-	if len(srvOpts) > 0 {
+	if len(serverOptions) > 0 {
 		return nil, fmt.Errorf("gorums: ServerOption not valid for NewConfig; pass it to NewSystem or NewLocalSystems instead")
 	}
-	if nodeListOpt == nil {
+	if nodeListOption == nil {
 		return nil, fmt.Errorf("gorums: missing required NodeListOption")
 	}
-	mgr := NewManager(mgrOpts...)
-	return NewConfiguration(mgr, nodeListOpt)
+	mgr := NewManager(managerOptions...)
+	return NewConfiguration(mgr, nodeListOption)
 }
 
 // Extend returns a new Configuration combining c with new nodes from the provided NodeListOption.
