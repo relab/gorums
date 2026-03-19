@@ -229,18 +229,20 @@ func (c *Channel) getStream() BidiStream {
 // the receiver calls clearStream on a stale stream after ensureStream has already
 // replaced it with a new one, which would otherwise cancel the new stream's context
 // and spuriously cancel requests that belong to the new stream.
+// It returns true if stale was still current and was cleared, false otherwise.
 // This triggers reconnection on the next send attempt.
-func (c *Channel) clearStream(stale BidiStream) {
+func (c *Channel) clearStream(stale BidiStream) bool {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
 	if c.stream != stale {
 		// stale is already gone; a new stream has been established — do not cancel it
-		return
+		return false
 	}
 	if c.streamCancel != nil {
 		c.streamCancel()
 	}
 	c.stream = nil
+	return true
 }
 
 // isConnected returns true if the channel has an active stream.
@@ -497,8 +499,12 @@ func (c *Channel) receiver() {
 		msg, e := stream.Recv()
 		if e != nil {
 			c.setLastErr(e)
-			c.clearStream(stream)
-			c.requeuePendingMsgs()
+			// A stale receiver may observe an error after a newer stream has already
+			// replaced this one. Only the goroutine that actually clears the current
+			// stream may requeue pending requests.
+			if c.clearStream(stream) {
+				c.requeuePendingMsgs()
+			}
 			// Check for shutdown before attempting reconnection
 			if c.connCtx.Err() != nil {
 				// the node's close() method was called: exit receiver goroutine
