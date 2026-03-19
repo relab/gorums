@@ -1,8 +1,11 @@
 package gorums_test
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -565,4 +568,181 @@ func TestSystemHandlerCanMulticastViaClientConfig(t *testing.T) {
 	}
 
 	waitWithTimeout(t, &wg)
+}
+
+// TestSystemLocalDispatchContention verifies that sequential quorum calls remain
+// correct when an earlier call returns before all replicas have replied and the
+// next call starts immediately on the same configuration.
+//
+// Gorums only guarantees FIFO ordering for sequentially issued quorum calls.
+// Concurrent quorum calls (from separate goroutines) violate the FIFO ordering
+// contract (see doc/ordering.md) and are therefore not tested.
+//
+// Each subtest creates its own isolated systems so that goroutines left over
+// from one subtest cannot contaminate the next.
+func TestSystemLocalDispatchContention(t *testing.T) {
+	startSystems := func(t *testing.T) gorums.Configuration {
+		t.Helper()
+		systems := gorums.TestSystems(t, 3)
+		for _, sys := range systems {
+			sys.RegisterService(nil, func(srv *gorums.Server) {
+				srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+					req := gorums.AsProto[*pb.StringValue](in)
+					return gorums.NewResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
+				})
+			})
+		}
+		awaitSystemReady(t, systems)
+		return systems[0].OutboundConfig()
+	}
+
+	const delay = 2000 * time.Millisecond
+
+	// SequentialMajorityThenAll exercises the common case where a quorum-sized
+	// result is returned first and a full-result call follows immediately after.
+	t.Run("SequentialMajorityThenAll", func(t *testing.T) {
+		cfg := startSystems(t)
+		const iterations = 500
+		for i := range iterations {
+			ctx, cancel := context.WithTimeout(t.Context(), delay)
+			responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				cfg.Context(ctx),
+				pb.String(fmt.Sprintf("m-%d", i)),
+				mock.TestMethod,
+			)
+			if _, err := responses.Majority(); err != nil {
+				cancel()
+				t.Fatalf("iteration %d: Majority: %v", i, err)
+			}
+			cancel()
+
+			ctx, cancel = context.WithTimeout(t.Context(), delay)
+			responses = gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				cfg.Context(ctx),
+				pb.String(fmt.Sprintf("a-%d", i)),
+				mock.TestMethod,
+			)
+			if _, err := responses.All(); err != nil {
+				cancel()
+				t.Fatalf("iteration %d: All: %v", i, err)
+			}
+			cancel()
+		}
+	})
+
+	// GOMAXPROCS1 uses the earliest-returning terminal method first and then
+	// immediately requires all replies, while constraining scheduling to
+	// amplify timing-sensitive ordering bugs.
+	t.Run("GOMAXPROCS1", func(t *testing.T) {
+		prev := runtime.GOMAXPROCS(1)
+		defer runtime.GOMAXPROCS(prev)
+
+		cfg := startSystems(t)
+		const iterations = 500
+		for i := range iterations {
+			ctx, cancel := context.WithTimeout(t.Context(), delay)
+			responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				cfg.Context(ctx),
+				pb.String(fmt.Sprintf("g-%d", i)),
+				mock.TestMethod,
+			)
+			if _, err := responses.First(); err != nil {
+				cancel()
+				t.Fatalf("iteration %d: First: %v", i, err)
+			}
+			cancel()
+
+			ctx, cancel = context.WithTimeout(t.Context(), delay)
+			responses = gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				cfg.Context(ctx),
+				pb.String(fmt.Sprintf("ga-%d", i)),
+				mock.TestMethod,
+			)
+			if _, err := responses.All(); err != nil {
+				cancel()
+				t.Fatalf("iteration %d: All: %v", i, err)
+			}
+			cancel()
+		}
+	})
+}
+
+// TestSystemLocalDispatchContentionSlowReplica verifies that a slow local
+// replica does not prevent a new quorum call from making progress on replies
+// from the remote replicas.
+//
+// The test first lets a remote reply satisfy an early-returning call while the
+// local replica is intentionally delayed, then immediately issues an All call.
+// The All call must observe remote progress right away and complete once the
+// delayed local reply is finally allowed through.
+func TestSystemLocalDispatchContentionSlowReplica(t *testing.T) {
+	systems := gorums.TestSystems(t, 3)
+
+	// blocker delays system 0's handler so its reply is intentionally late.
+	blocker := make(chan struct{})
+	closeBlocker := sync.OnceFunc(func() { close(blocker) })
+	t.Cleanup(closeBlocker) // safety net: unblock handler goroutines on test exit
+
+	for i, sys := range systems {
+		if i == 0 {
+			// System 0 (self-node): block until signaled.
+			sys.RegisterService(nil, func(srv *gorums.Server) {
+				srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+					<-blocker
+					req := gorums.AsProto[*pb.StringValue](in)
+					return gorums.NewResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
+				})
+			})
+		} else {
+			// Systems 1, 2 (remote): respond immediately.
+			sys.RegisterService(nil, func(srv *gorums.Server) {
+				srv.RegisterHandler(mock.TestMethod, stringEchoHandler("echo"))
+			})
+		}
+	}
+
+	awaitSystemReady(t, systems)
+	cfg := systems[0].OutboundConfig()
+
+	// Step 1: First(1) succeeds from a remote response while the local reply is
+	// still blocked.
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+		cfg.Context(ctx),
+		pb.String("first-call"),
+		mock.TestMethod,
+	)
+	result, err := responses.First()
+	cancel()
+	if err != nil {
+		closeBlocker()
+		t.Fatalf("First: %v", err)
+	}
+	if result.GetValue() != "echo: first-call" {
+		closeBlocker()
+		t.Fatalf("First: got %q, want %q", result.GetValue(), "echo: first-call")
+	}
+
+	// Step 2: Release the delayed local reply after a short pause.
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		closeBlocker()
+	}()
+
+	// Step 3: All(3) should succeed. The remote replies are expected promptly,
+	// and the delayed local reply should arrive once the blocker releases.
+	ctx, cancel = context.WithTimeout(t.Context(), 2*time.Second)
+	responses = gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+		cfg.Context(ctx),
+		pb.String("all-call"),
+		mock.TestMethod,
+	)
+	result, err = responses.All()
+	cancel()
+	if err != nil {
+		t.Fatalf("All: %v", err)
+	}
+	if result.GetValue() != "echo: all-call" {
+		t.Errorf("All: got %q, want %q", result.GetValue(), "echo: all-call")
+	}
 }
