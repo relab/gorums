@@ -706,6 +706,91 @@ func TestChannelConcurrentStreamReconnect(t *testing.T) {
 	}
 }
 
+type recvStartedStream struct {
+	*mockBidiStream
+	started chan struct{}
+	once    sync.Once
+}
+
+func newRecvStartedStream() *recvStartedStream {
+	return &recvStartedStream{
+		mockBidiStream: newMockBidiStream(),
+		started:        make(chan struct{}),
+	}
+}
+
+func (s *recvStartedStream) Recv() (*Message, error) {
+	s.once.Do(func() { close(s.started) })
+	return s.mockBidiStream.Recv()
+}
+
+// TestChannelStaleReceiverDoesNotRequeueCurrentPending verifies that a receiver
+// blocked on an old stream instance cannot requeue requests that were already
+// registered on a newer stream.
+func TestChannelStaleReceiverDoesNotRequeueCurrentPending(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stale := newRecvStartedStream()
+	current := newMockBidiStream()
+	c := NewInboundChannel(ctx, 1, 1, stale, NewMessageRouter())
+	t.Cleanup(func() {
+		_ = c.Close()
+	})
+
+	done := make(chan struct{})
+	go func() {
+		c.receiver()
+		close(done)
+	}()
+
+	select {
+	case <-stale.started:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("receiver did not start reading from stale stream")
+	}
+
+	c.streamMut.Lock()
+	c.stream = current
+	c.streamMut.Unlock()
+
+	const msgID = 42
+	msg := Message_builder{
+		MessageSeqNo: msgID,
+		Method:       mock.TestMethod,
+	}.Build()
+	c.router.Register(msgID, Request{
+		Ctx:          ctx,
+		Msg:          msg,
+		ResponseChan: make(chan response, 1),
+	})
+
+	stale.close()
+
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if len(c.sendQ) > 0 || !routerExists(c, msgID) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	if got := len(c.sendQ); got != 0 {
+		t.Fatalf("stale receiver requeued current-stream request: sendQ len = %d, want 0", got)
+	}
+	if !routerExists(c, msgID) {
+		t.Fatal("stale receiver removed pending request for the current stream")
+	}
+
+	current.close()
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("receiver did not exit after context cancellation")
+	}
+}
+
 func TestChannelRouterLifecycle(t *testing.T) {
 	tc := setupChannel(t, echoServer)
 
