@@ -156,17 +156,20 @@ func (n *Node) IsInbound() bool {
 // attachStream attaches a new inbound channel to the node when a peer connects.
 // If the node already has an active channel (e.g., a stale stream from a previous
 // connection), it is atomically replaced and the old channel is closed.
-func (n *Node) attachStream(streamCtx context.Context, inboundStream stream.BidiStream, sendBufferSize uint) {
+// The returned detach function closes and removes the channel, but only if it
+// is still the active one. This prevents stale cleanup from an older stream
+// from detaching a replacement channel that has already taken over.
+func (n *Node) attachStream(streamCtx context.Context, inboundStream stream.BidiStream, sendBufferSize uint) (detach func() bool) {
 	newCh := stream.NewInboundChannel(streamCtx, n.id, sendBufferSize, inboundStream, n.router)
 	if old := n.channel.Swap(newCh); old != nil {
 		old.Close()
 	}
-}
-
-// detachStream closes and removes the node's inbound channel when the peer disconnects.
-func (n *Node) detachStream() {
-	if ch := n.channel.Swap(nil); ch != nil {
-		ch.Close()
+	return func() bool {
+		if n.channel.CompareAndSwap(newCh, nil) {
+			newCh.Close()
+			return true
+		}
+		return false
 	}
 }
 
