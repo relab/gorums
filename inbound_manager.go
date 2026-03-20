@@ -242,18 +242,19 @@ func (im *inboundManager) registerPeer(streamCtx context.Context, inboundStream 
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	node := im.nodes[id]
-	node.attachStream(streamCtx, inboundStream, im.sendBufferSize)
+	detach := node.attachStream(streamCtx, inboundStream, im.sendBufferSize)
 	im.rebuildConfig()
 
 	return node, func() {
 		im.mu.Lock()
 		defer im.mu.Unlock()
-		node, ok := im.nodes[id]
+		_, ok := im.nodes[id]
 		if !ok {
 			return
 		}
-		node.detachStream()
-		im.rebuildConfig()
+		if detach() {
+			im.rebuildConfig()
+		}
 	}, nil
 }
 
@@ -270,20 +271,21 @@ func (im *inboundManager) acceptClient(streamCtx context.Context, inboundStream 
 	id := im.nextClientID
 	im.nextClientID++
 	node := newInboundNode(id, "client", im.getMsgID)
-	node.attachStream(streamCtx, inboundStream, im.sendBufferSize)
+	detach := node.attachStream(streamCtx, inboundStream, im.sendBufferSize)
 	im.nodes[id] = node
 	im.rebuildConfig()
 
 	return node, func() {
 		im.mu.Lock()
 		defer im.mu.Unlock()
-		node, ok := im.nodes[id]
+		_, ok := im.nodes[id]
 		if !ok {
 			return
 		}
-		node.detachStream()
-		delete(im.nodes, id)
-		im.rebuildConfig()
+		if detach() {
+			delete(im.nodes, id)
+			im.rebuildConfig()
+		}
 	}, nil
 }
 
