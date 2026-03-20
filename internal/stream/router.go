@@ -97,7 +97,7 @@ func (r *MessageRouter) RouteResponse(msgID uint64, resp response) bool {
 		if resp.Err == nil {
 			r.updateLatency(time.Since(req.SendTime))
 		}
-		req.ResponseChan <- resp
+		req.deliver(resp)
 	}
 	return ok
 }

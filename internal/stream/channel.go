@@ -33,6 +33,23 @@ type Request struct {
 	SendTime     time.Time
 }
 
+// deliver sends the response on request's ResponseChan, preferring delivery
+// even if request's context is already canceled. If the channel is full,
+// it falls back to respecting context cancellation to avoid blocking forever.
+func (r Request) deliver(resp response) bool {
+	select {
+	case r.ResponseChan <- resp:
+		return true
+	default:
+	}
+	select {
+	case r.ResponseChan <- resp:
+		return true
+	case <-r.Ctx.Done():
+		return false
+	}
+}
+
 type Channel struct {
 	sendQ chan Request
 	id    uint32
@@ -319,9 +336,7 @@ func (c *Channel) dispatchLocalRequest(req Request) {
 	}
 
 	if req.WaitSendDone && req.ResponseChan != nil {
-		select {
-		case req.ResponseChan <- response{NodeID: c.id}:
-		case <-req.Ctx.Done():
+		if !req.deliver(response{NodeID: c.id}) {
 			return
 		}
 	}
@@ -333,10 +348,7 @@ func (c *Channel) dispatchLocalRequest(req Request) {
 		if req.WaitSendDone || req.ResponseChan == nil {
 			return
 		}
-		select {
-		case req.ResponseChan <- response{NodeID: c.id, Value: msg, Err: msg.ErrorStatus()}:
-		case <-req.Ctx.Done():
-		}
+		req.deliver(response{NodeID: c.id, Value: msg, Err: msg.ErrorStatus()})
 	}
 
 	c.localMu.Lock()
@@ -385,7 +397,7 @@ func (c *Channel) requeuePendingMsgs() {
 // and therefore cannot be reached via routeResponse.
 func (c *Channel) replyError(req Request, err error) {
 	if req.ResponseChan != nil {
-		req.ResponseChan <- response{NodeID: c.id, Err: err}
+		req.deliver(response{NodeID: c.id, Err: err})
 	}
 }
 
