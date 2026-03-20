@@ -468,11 +468,16 @@ func (c *Channel) sender() {
 
 		// Watch for per-request cancellation while Send is in-flight.
 		// If req.Ctx is done before Send returns, clearStream unblocks
-		// the blocked Send by cancelling the stream context.
-		// stop() disarms the watcher after Send returns, preventing a
-		// spurious clearStream on a still-valid stream.
+		// the blocked Send by cancelling the stream context and the
+		// goroutine that wins the clear is also responsible for
+		// requeueing/canceling pending requests.
+		//
+		// stop() is advisory only: it may return false if the callback
+		// already started around the same time Send returned.
 		stop := context.AfterFunc(req.Ctx, func() {
-			c.clearStream(stream)
+			if c.clearStream(stream) {
+				c.requeuePendingMsgs()
+			}
 		})
 		if err := stream.Send(req.Msg); err != nil {
 			stop()
