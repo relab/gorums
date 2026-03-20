@@ -160,18 +160,12 @@ func (im *inboundManager) NodeID() uint32 {
 	return im.myID
 }
 
-// serverIDMask is the high bit of a uint64, used to partition message ID spaces.
-// Server-initiated call IDs always have this bit set; client-initiated IDs never do.
-// This prevents message ID collisions when requests flow in both directions over the
-// same bidirectional gRPC stream (e.g., server handler calling back to a client peer).
-const serverIDMask = uint64(1) << 63
-
 // getMsgID returns the next unique message ID for server-initiated calls.
 // The high bit is always set to avoid collision with client-initiated IDs.
 // Exhausting the remaining 63-bit counter space requires approximately
 // 292,000 years at one million calls per second.
 func (im *inboundManager) getMsgID() uint64 {
-	return im.nextMsgID.Add(1) | serverIDMask
+	return stream.ServerSequenceNumber(im.nextMsgID.Add(1))
 }
 
 // newNode creates a peer node for the given id and normalized addr and
