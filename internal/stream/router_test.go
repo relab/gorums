@@ -2,7 +2,9 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/relab/gorums/internal/testutils/mock"
 )
@@ -180,4 +182,105 @@ func TestRouterRequestHandler(t *testing.T) {
 			t.Error("handler was not called")
 		}
 	})
+}
+
+func TestRouterRouteResponseDoesNotBlockOnCanceledRequest(t *testing.T) {
+	r := NewMessageRouter()
+	ctx, cancel := context.WithCancel(context.Background())
+	replyChan := make(chan response, 1)
+	replyChan <- response{NodeID: 99} // fill the channel
+	r.Register(42, Request{
+		Ctx:          ctx,
+		Msg:          &Message{},
+		ResponseChan: replyChan,
+	})
+	cancel()
+
+	done := make(chan struct{})
+	go func() {
+		if !r.RouteResponse(42, response{NodeID: 1}) {
+			t.Error("RouteResponse should return true for registered msgID")
+		}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("RouteResponse blocked on a canceled request with a full reply channel")
+	}
+}
+
+func TestRouterRouteResponsePrefersDeliveryWhenCanceledAndReplyChanReady(t *testing.T) {
+	r := NewMessageRouter()
+	ctx, cancel := context.WithCancel(context.Background())
+	replyChan := make(chan response, 1)
+	r.Register(42, Request{
+		Ctx:          ctx,
+		Msg:          &Message{},
+		ResponseChan: replyChan,
+	})
+	cancel()
+
+	if !r.RouteResponse(42, response{NodeID: 1, Err: ErrStreamDown}) {
+		t.Fatal("RouteResponse should return true for registered msgID")
+	}
+
+	select {
+	case got := <-replyChan:
+		if got.NodeID != 1 {
+			t.Fatalf("NodeID = %d, want 1", got.NodeID)
+		}
+		if !errors.Is(got.Err, ErrStreamDown) {
+			t.Fatalf("reply error = %v, want ErrStreamDown", got.Err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("RouteResponse dropped a ready delivery on canceled context")
+	}
+}
+
+func TestReplyErrorDoesNotBlockOnCanceledRequest(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	replyChan := make(chan response, 1)
+	replyChan <- response{NodeID: 99} // fill the channel
+	req := Request{
+		Ctx:          ctx,
+		ResponseChan: replyChan,
+	}
+	cancel()
+
+	done := make(chan struct{})
+	go func() {
+		c := &Channel{id: 7}
+		c.replyError(req, ErrStreamDown)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("replyError blocked on a canceled request with a full reply channel")
+	}
+}
+
+func TestReplyErrorPrefersDeliveryWhenCanceledAndReplyChanReady(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	replyChan := make(chan response, 1)
+	req := Request{
+		Ctx:          ctx,
+		ResponseChan: replyChan,
+	}
+	cancel()
+
+	c := &Channel{id: 7}
+	c.replyError(req, ErrStreamDown)
+
+	select {
+	case got := <-replyChan:
+		if !errors.Is(got.Err, ErrStreamDown) {
+			t.Fatalf("reply error = %v, want ErrStreamDown", got.Err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("replyError dropped a ready delivery on canceled context")
+	}
 }
