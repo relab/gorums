@@ -79,10 +79,8 @@ func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 		if err != nil {
 			return err
 		}
-		// Route response to a pending server-initiated call.
-		// This must be checked before handler dispatch: a message with a
-		// matching msgID in the router's pending map is a response, not
-		// a new request, even if it has a method field set.
+		// Route responses to pending server-initiated calls; stale calls are discarded.
+		// Client-initiated calls will fall through to the handler below.
 		if peerNode != nil && peerNode.RouteResponse(streamIn) {
 			continue
 		}

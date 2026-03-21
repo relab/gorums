@@ -173,9 +173,9 @@ func (n *Node) attachStream(streamCtx context.Context, inboundStream stream.Bidi
 	}
 }
 
-// RouteResponse routes an incoming message as a response to a pending
-// server-initiated call. Returns true if the message matched a pending
-// call and was handled; false if it should be dispatched as a new request.
+// RouteResponse returns true if the response was routed to a pending
+// server-initiated call, or absorbed as stale. It returns false for
+// client-initiated calls, which the caller should dispatch to a handler.
 // This implements the [stream.PeerNode] interface.
 func (n *Node) RouteResponse(msg *stream.Message) bool {
 	return n.router.RouteResponse(msg.GetMessageSeqNo(), NodeResponse[*stream.Message]{
