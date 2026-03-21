@@ -304,7 +304,7 @@ func TestRouterRouteMessage(t *testing.T) {
 		r := NewMessageRouter(handler)
 
 		enqueueCalled := false
-		enqueue := func(req Request) { enqueueCalled = true }
+		enqueue := func(Request) { enqueueCalled = true }
 
 		msg := Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build()
 		r.RouteMessage(nodeID, msg, connCtx, enqueue)
@@ -319,13 +319,13 @@ func TestRouterRouteMessage(t *testing.T) {
 		}
 	})
 
-	t.Run("ServerInitiatedNoHandlerIsSilentlyDropped", func(t *testing.T) {
+	t.Run("ServerInitiatedNoHandlerIsSilentlyDropped", func(_ *testing.T) {
 		r := NewMessageRouter()
 		msg := Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build()
 		r.RouteMessage(nodeID, msg, connCtx, nil) // must not panic
 	})
 
-	t.Run("ClientInitiatedUnknownIsSilentlyDropped", func(t *testing.T) {
+	t.Run("ClientInitiatedUnknownIsSilentlyDropped", func(_ *testing.T) {
 		r := NewMessageRouter()
 		msg := Message_builder{MessageSeqNo: 999, Method: mock.TestMethod}.Build()
 		r.RouteMessage(nodeID, msg, connCtx, nil) // must not panic
