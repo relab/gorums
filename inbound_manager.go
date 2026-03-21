@@ -199,12 +199,14 @@ func (im *inboundManager) isKnown(id uint32) bool {
 // AcceptPeer accepts an inbound stream and returns the associated peer node
 // and a cleanup function. It currently never returns an error, but the signature
 // supports error handling to allow for authenticated peer connections in the future.
+// The returned [stream.PeerNode] is always non-nil, when err is nil.
 //
 // If the stream identifies a known peer, AcceptPeer registers it and returns
 // that peer's node.
 // If the stream includes peer metadata with node ID 0, AcceptPeer creates a
 // client peer node with an assigned ID.
-// Otherwise, AcceptPeer returns (nil, noop, nil).
+// Otherwise, AcceptPeer returns a nilPeerNode that accepts the connection
+// without tracking it in the configuration.
 func (im *inboundManager) AcceptPeer(streamCtx context.Context, inboundStream stream.BidiStream) (stream.PeerNode, func(), error) {
 	noop := func() {}
 	if im == nil {
