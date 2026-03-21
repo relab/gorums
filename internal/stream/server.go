@@ -14,12 +14,14 @@ type PeerAcceptor interface {
 // PeerNode represents a peer from the perspective of stream dispatch.
 // It is implemented by Node and nilPeerNode in the gorums package.
 type PeerNode interface {
-	// RouteInbound routes an inbound message on a server-side stream.
-	// Returns true if the message was handled (routed to a pending
-	// server-initiated call or silently absorbed as stale).
-	// Returns false if the message is a new client-initiated request
-	// that the caller must dispatch to a handler.
-	RouteInbound(msg *Message) bool
+	// RouteInbound handles a message received from the peer.
+	// Messages with a server-initiated ID (high bit set) are responses to
+	// calls this server made; they are delivered to the matching pending call.
+	// Messages with a client-initiated ID (low bit) are new requests from
+	// the peer; they are dispatched to the registered handler in a new goroutine.
+	// release is always called — immediately for server-initiated messages,
+	// or by the handler for client-initiated requests.
+	RouteInbound(ctx context.Context, msg *Message, release func(), send func(*Message))
 	Enqueue(req Request)
 }
 
@@ -28,17 +30,15 @@ type Server struct {
 	buffer    uint
 	onConnect func(context.Context)
 	acceptor  PeerAcceptor
-	handler   RequestHandler
 	UnimplementedGorumsServer
 }
 
 // NewServer creates a new Server.
-func NewServer(buffer uint, onConnect func(context.Context), acceptor PeerAcceptor, handler RequestHandler) *Server {
+func NewServer(buffer uint, onConnect func(context.Context), acceptor PeerAcceptor) *Server {
 	return &Server{
 		buffer:    buffer,
 		onConnect: onConnect,
 		acceptor:  acceptor,
-		handler:   handler,
 	}
 }
 
@@ -79,11 +79,6 @@ func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 		if err != nil {
 			return err
 		}
-		// Route responses to pending server-initiated calls; stale calls are discarded.
-		// Client-initiated calls will fall through to the handler below.
-		if peerNode.RouteInbound(streamIn) {
-			continue
-		}
 
 		// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 		// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
@@ -97,7 +92,7 @@ func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 			}
 		}
 
-		go s.handler.HandleRequest(streamIn.AppendToIncomingContext(ctx), streamIn, release, send)
+		peerNode.RouteInbound(ctx, streamIn, release, send)
 
 		// Wait until the handler releases the mutex.
 		mut.Lock()

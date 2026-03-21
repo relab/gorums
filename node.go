@@ -118,12 +118,14 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 // newInboundNode creates a Node for a known peer or self without an active
 // channel. Used by inboundManager at construction time for all configured
 // peers; the channel is attached when the peer's stream arrives.
-func newInboundNode(id uint32, addr string, msgIDGen func() uint64) *Node {
+// The handler, if non-nil, is stored in the router and used to dispatch
+// client-initiated requests received on the inbound stream.
+func newInboundNode(id uint32, addr string, msgIDGen func() uint64, handler stream.RequestHandler) *Node {
 	return &Node{
 		id:       id,
 		addr:     addr,
 		msgIDGen: msgIDGen,
-		router:   stream.NewMessageRouter(),
+		router:   stream.NewMessageRouter(handler),
 	}
 }
 
@@ -173,14 +175,12 @@ func (n *Node) attachStream(streamCtx context.Context, inboundStream stream.Bidi
 	}
 }
 
-// RouteInbound routes an inbound message on a server-side stream, delegating
-// to the node's router to check if it is a response to a pending
-// server-initiated call. Returns true if the message was handled (delivered
-// or silently absorbed as stale), false if it is a new client-initiated request
-// that the caller must dispatch to a handler.
+// RouteInbound delivers a response to a pending call or dispatches a
+// client-initiated request to the registered handler. The release
+// function is always called.
 // This implements the [stream.PeerNode] interface.
-func (n *Node) RouteInbound(msg *stream.Message) bool {
-	return n.router.RouteInboundMessage(n.id, msg)
+func (n *Node) RouteInbound(ctx context.Context, msg *stream.Message, release func(), send func(*stream.Message)) {
+	n.router.RouteInboundMessage(ctx, n.id, msg, release, send)
 }
 
 // Enqueue enqueues a request to this node's channel.
