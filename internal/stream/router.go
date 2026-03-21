@@ -154,6 +154,42 @@ func (r *MessageRouter) Register(msgID uint64, req Request) {
 	r.mu.Unlock()
 }
 
+// RouteInboundMessage routes an inbound message on a server-side stream.
+// It is the symmetric counterpart of [RouteMessage] for the inbound direction.
+//
+// On the server, the high bit identifies messages sent by this server that
+// the connected peer is responding to; they are routed to the pending call map.
+// Low-bit IDs identify new requests initiated by the connected client, which
+// the caller (NodeStream) is responsible for dispatching to a handler.
+//
+// Returns true if the message was handled (routed to a pending call or silently
+// absorbed as a stale server-initiated response), false if the caller should
+// dispatch the message as a new incoming client request.
+func (r *MessageRouter) RouteInboundMessage(nodeID uint32, msg *Message) bool {
+	msgID := msg.GetMessageSeqNo()
+	if !isServerSequenceNumber(msgID) {
+		// New client-initiated request; caller must dispatch to handler.
+		return false
+	}
+	// Server-initiated response: look up pending call and deliver if found;
+	// silently absorb if not found (stale response from a cancelled call).
+	r.mu.Lock()
+	req, ok := r.pending[msgID]
+	if ok && !req.Streaming {
+		delete(r.pending, msgID)
+	}
+	r.mu.Unlock()
+
+	if ok {
+		resp := response{NodeID: nodeID, Value: msg, Err: msg.ErrorStatus()}
+		if resp.Err == nil {
+			r.updateLatency(time.Since(req.SendTime))
+		}
+		req.deliver(resp)
+	}
+	return true
+}
+
 // RouteResponse delivers a response to a pending call registered via [Register].
 // For non-streaming calls, the entry is removed after delivery.
 // For streaming calls (correctable), the entry remains for subsequent responses.

@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -165,13 +166,71 @@ func TestRouterRequeuePending(t *testing.T) {
 	}
 }
 
+// TestRouterRouteInboundMessage verifies RouteInboundMessage demultiplexes
+// inbound server-side messages: server-initiated IDs (high bit set) are routed
+// to the pending map; client-initiated IDs (low bit) are passed to the caller.
+func TestRouterRouteInboundMessage(t *testing.T) {
+	t.Run("ClientInitiatedReturnsFalse", func(t *testing.T) {
+		r := NewMessageRouter()
+		msg := Message_builder{MessageSeqNo: 1}.Build() // low-bit ID
+		if r.RouteInboundMessage(1, msg) {
+			t.Error("RouteInboundMessage should return false for client-initiated ID")
+		}
+	})
+
+	t.Run("ServerInitiatedPendingDelivered", func(t *testing.T) {
+		r := NewMessageRouter()
+		replyChan := make(chan response, 1)
+		msgID := ServerSequenceNumber(5)
+		r.Register(msgID, Request{
+			Ctx:          context.Background(),
+			Msg:          &Message{},
+			ResponseChan: replyChan,
+		})
+		msg := Message_builder{MessageSeqNo: msgID}.Build()
+		if !r.RouteInboundMessage(42, msg) {
+			t.Fatal("RouteInboundMessage should return true for server-initiated ID")
+		}
+		select {
+		case got := <-replyChan:
+			if got.NodeID != 42 {
+				t.Errorf("NodeID = %d, want 42", got.NodeID)
+			}
+		default:
+			t.Fatal("expected response on channel")
+		}
+		// Entry consumed — routing again returns true (silently absorbed).
+		if !r.RouteInboundMessage(42, msg) {
+			t.Error("RouteInboundMessage should return true (absorbed) for stale server-initiated ID")
+		}
+	})
+
+	t.Run("ServerInitiatedStaleAbsorbed", func(t *testing.T) {
+		r := NewMessageRouter()
+		msgID := ServerSequenceNumber(7)
+		msg := Message_builder{MessageSeqNo: msgID}.Build()
+		// No pending entry — should still return true (silently absorbed).
+		if !r.RouteInboundMessage(1, msg) {
+			t.Error("RouteInboundMessage should return true (absorbed) for unmatched server-initiated ID")
+		}
+	})
+}
+
 type mockRequestHandler struct {
-	called bool
+	called atomic.Bool
+	done   chan struct{}
+}
+
+func newMockRequestHandler() *mockRequestHandler {
+	return &mockRequestHandler{done: make(chan struct{})}
 }
 
 func (m *mockRequestHandler) HandleRequest(_ context.Context, _ *Message, release func(), _ func(*Message)) {
-	m.called = true
+	m.called.Store(true)
 	release()
+	if m.done != nil {
+		close(m.done)
+	}
 }
 
 func TestRouterRouteResponseDoesNotBlockOnCanceledRequest(t *testing.T) {
@@ -300,7 +359,7 @@ func TestRouterRouteMessage(t *testing.T) {
 	})
 
 	t.Run("ServerInitiatedDispatchesHandler", func(t *testing.T) {
-		handler := &mockRequestHandler{}
+		handler := newMockRequestHandler()
 		r := NewMessageRouter(handler)
 
 		enqueueCalled := false
@@ -308,9 +367,13 @@ func TestRouterRouteMessage(t *testing.T) {
 
 		msg := Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build()
 		r.RouteMessage(connCtx, nodeID, msg, enqueue)
-		// handler is called in a goroutine; give it a moment.
-		time.Sleep(10 * time.Millisecond)
-		if !handler.called {
+		// Wait for the handler goroutine to complete before reading handler.called.
+		select {
+		case <-handler.done:
+		case <-time.After(time.Second):
+			t.Fatal("handler was not called within timeout")
+		}
+		if !handler.called.Load() {
 			t.Error("handler was not called for server-initiated message")
 		}
 		// enqueue should not be triggered by the dispatch itself (only by send closure).
