@@ -809,7 +809,7 @@ func newLateAfterFuncContext() *lateAfterFuncContext {
 	}
 }
 
-func (c *lateAfterFuncContext) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (*lateAfterFuncContext) Deadline() (time.Time, bool) { return time.Time{}, false }
 
 func (c *lateAfterFuncContext) Done() <-chan struct{} { return c.done }
 
@@ -819,7 +819,7 @@ func (c *lateAfterFuncContext) Err() error {
 	return c.err
 }
 
-func (c *lateAfterFuncContext) Value(any) any { return nil }
+func (*lateAfterFuncContext) Value(any) any { return nil }
 
 func (c *lateAfterFuncContext) AfterFunc(f func()) func() bool {
 	c.mu.Lock()
