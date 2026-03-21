@@ -47,33 +47,13 @@ func TestRouterRouteUnknown(t *testing.T) {
 	}
 }
 
-// TestRouterRouteResponseServerInitiated verifies the three dispatch branches
-// for server-initiated sequence numbers in RouteResponse.
+// TestRouterRouteResponseServerInitiated verifies that RouteResponse absorbs
+// unmatched server-initiated IDs and rejects unmatched client-initiated IDs.
 func TestRouterRouteResponseServerInitiated(t *testing.T) {
-	t.Run("DispatchCalledAndReturnsTrue", func(t *testing.T) {
-		r := NewMessageRouter()
-		dispatched := false
-		if !r.RouteResponse(ServerSequenceNumber(1), response{NodeID: 1}, func() {
-			dispatched = true
-		}) {
-			t.Error("RouteResponse should return true for server-initiated msgID")
-		}
-		if !dispatched {
-			t.Error("dispatch function should be called for server-initiated msgID")
-		}
-	})
-
-	t.Run("NoDispatchArgReturnsTrue", func(t *testing.T) {
+	t.Run("ServerInitiatedReturnsTrue", func(t *testing.T) {
 		r := NewMessageRouter()
 		if !r.RouteResponse(ServerSequenceNumber(1), response{NodeID: 1}) {
-			t.Error("RouteResponse should return true for server-initiated msgID with no dispatch arg")
-		}
-	})
-
-	t.Run("NilDispatchArgReturnsTrue", func(t *testing.T) {
-		r := NewMessageRouter()
-		if !r.RouteResponse(ServerSequenceNumber(1), response{NodeID: 1}, nil) {
-			t.Error("RouteResponse should return true for server-initiated msgID with nil dispatch")
+			t.Error("RouteResponse should return true for server-initiated msgID")
 		}
 	})
 
@@ -321,4 +301,63 @@ func TestReplyErrorPrefersDeliveryWhenCanceledAndReplyChanReady(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("replyError dropped a ready delivery on canceled context")
 	}
+}
+
+// TestRouterRouteMessage verifies the three dispatch branches of RouteMessage.
+func TestRouterRouteMessage(t *testing.T) {
+	const nodeID = uint32(1)
+	connCtx := context.Background()
+
+	t.Run("RoutesToPendingCall", func(t *testing.T) {
+		r := NewMessageRouter()
+		replyChan := make(chan response, 1)
+		r.Register(42, Request{
+			Ctx:          connCtx,
+			Msg:          &Message{},
+			ResponseChan: replyChan,
+		})
+
+		msg := Message_builder{MessageSeqNo: 42, Method: mock.TestMethod}.Build()
+		r.RouteMessage(nodeID, msg, connCtx, nil)
+		select {
+		case got := <-replyChan:
+			if got.NodeID != nodeID {
+				t.Errorf("NodeID = %d, want %d", got.NodeID, nodeID)
+			}
+		default:
+			t.Fatal("expected response on channel")
+		}
+	})
+
+	t.Run("ServerInitiatedDispatchesHandler", func(t *testing.T) {
+		handler := &mockRequestHandler{}
+		r := NewMessageRouter(handler)
+
+		enqueueCalled := false
+		enqueue := func(req Request) { enqueueCalled = true }
+
+		msg := Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build()
+		r.RouteMessage(nodeID, msg, connCtx, enqueue)
+		// handler is called in a goroutine; give it a moment.
+		time.Sleep(10 * time.Millisecond)
+		if !handler.called {
+			t.Error("handler was not called for server-initiated message")
+		}
+		// enqueue should not be triggered by the dispatch itself (only by send closure).
+		if enqueueCalled {
+			t.Error("enqueue should not be called during request dispatch")
+		}
+	})
+
+	t.Run("ServerInitiatedNoHandlerIsSilentlyDropped", func(t *testing.T) {
+		r := NewMessageRouter()
+		msg := Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build()
+		r.RouteMessage(nodeID, msg, connCtx, nil) // must not panic
+	})
+
+	t.Run("ClientInitiatedUnknownIsSilentlyDropped", func(t *testing.T) {
+		r := NewMessageRouter()
+		msg := Message_builder{MessageSeqNo: 999, Method: mock.TestMethod}.Build()
+		r.RouteMessage(nodeID, msg, connCtx, nil) // must not panic
+	})
 }

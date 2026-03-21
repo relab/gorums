@@ -528,29 +528,11 @@ func (c *Channel) receiver() {
 				return
 			}
 		} else {
-			err := msg.ErrorStatus()
-			// Route to a pending call, or dispatch server-initiated back-channel
-			// requests. Only unmatched client-initiated IDs (stale) fall through.
-			if c.router.RouteResponse(msg.GetMessageSeqNo(), response{NodeID: c.id, Value: msg, Err: err}, func() {
-				if rh, ok := c.router.RequestHandler(); ok {
-					go c.dispatchRequest(rh, msg)
-				}
-			}) {
-				continue
-			}
+			// Route to a pending call or dispatch server-initiated back-channel
+			// requests. Stale (cancelled) calls are silently dropped.
+			c.router.RouteMessage(c.id, msg, c.connCtx, c.Enqueue)
 		}
 	}
-}
-
-// dispatchRequest handles a server-initiated request on the client side.
-// It uses the RequestHandler to process the request and enqueues the response
-// back through this channel.
-func (c *Channel) dispatchRequest(rh RequestHandler, reqMsg *Message) {
-	send := func(msg *Message) {
-		c.Enqueue(Request{Ctx: c.connCtx, Msg: msg})
-	}
-	// We pass an empty release function since there is no server-side mutex on the client side.
-	rh.HandleRequest(c.connCtx, reqMsg, func() {}, send)
 }
 
 func (c *Channel) setLastErr(err error) {

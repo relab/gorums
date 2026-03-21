@@ -48,10 +48,10 @@ type MessageRouter struct {
 
 // NewMessageRouter creates a new MessageRouter with an optional RequestHandler.
 // The handler, if provided, is used to dispatch server-initiated requests that
-// arrive on the bidirectional back-channel: when the client receives a message
-// that does not match a pending outbound call, the Channel passes it to the
-// handler via RequestHandler(). Passing nil (or omitting the argument) disables
-// server-initiated dispatch on this router.
+// arrive on the bidirectional back-channel: when RouteMessage encounters an
+// unmatched server-initiated message ID, it invokes HandleRequest directly.
+// Passing nil (or omitting the argument) disables server-initiated dispatch
+// on this router.
 func NewMessageRouter(handler ...RequestHandler) *MessageRouter {
 	handler = append(handler, nil) // ensure handler[0] is always valid
 	return &MessageRouter{
@@ -70,6 +70,44 @@ func (r *MessageRouter) RequestHandler() (RequestHandler, bool) {
 	return r.handler, true
 }
 
+// RouteMessage routes an incoming message to either a pending call or the
+// back-channel handler. It is the primary entry point for messages received
+// on the bidirectional stream.
+//
+// Server-initiated calls are dispatched to the registered request handler (if any)
+// in a new goroutine. Client-initiated calls are routed to the caller's pending
+// response channel; stale responses from cancelled calls are silently dropped.
+func (r *MessageRouter) RouteMessage(nodeID uint32, msg *Message, connCtx context.Context, enqueue func(Request)) {
+	msgID := msg.GetMessageSeqNo()
+
+	// Server-initiated IDs are never registered in the pending map.
+	// Short-circuit before acquiring the lock and before constructing a response.
+	if isServerSequenceNumber(msgID) {
+		if r.handler != nil {
+			send := func(reply *Message) {
+				enqueue(Request{Ctx: connCtx, Msg: reply})
+			}
+			go r.handler.HandleRequest(connCtx, msg, func() {}, send)
+		}
+		return
+	}
+
+	r.mu.Lock()
+	req, ok := r.pending[msgID]
+	if ok && !req.Streaming {
+		delete(r.pending, msgID)
+	}
+	r.mu.Unlock()
+
+	if ok {
+		resp := response{NodeID: nodeID, Value: msg, Err: msg.ErrorStatus()}
+		if resp.Err == nil {
+			r.updateLatency(time.Since(req.SendTime))
+		}
+		req.deliver(resp)
+	}
+}
+
 // Register registers a pending call awaiting a response.
 // Called by Channel.sender() after all pre-send checks pass.
 func (r *MessageRouter) Register(msgID uint64, req Request) {
@@ -83,10 +121,10 @@ func (r *MessageRouter) Register(msgID uint64, req Request) {
 // For non-streaming calls, the entry is removed after delivery.
 // For streaming calls (correctable), the entry remains for subsequent responses.
 //
-// If no pending client-initiated call matches, unmatched server-initiated calls are absorbed
-// (optionally dispatching the provided function), and the method returns true.
-// Returns false only for unmatched client-initiated calls (stale responses).
-func (r *MessageRouter) RouteResponse(msgID uint64, resp response, dispatch ...func()) bool {
+// Unmatched server-initiated calls (back-channel responses) are absorbed and
+// the method returns true. Returns false only for unmatched client-initiated
+// calls (stale responses).
+func (r *MessageRouter) RouteResponse(msgID uint64, resp response) bool {
 	r.mu.Lock()
 	req, ok := r.pending[msgID]
 	if ok && !req.Streaming {
@@ -101,13 +139,7 @@ func (r *MessageRouter) RouteResponse(msgID uint64, resp response, dispatch ...f
 		req.deliver(resp)
 		return true
 	}
-	if isServerSequenceNumber(msgID) {
-		if len(dispatch) > 0 && dispatch[0] != nil {
-			dispatch[0]()
-		}
-		return true
-	}
-	return false
+	return isServerSequenceNumber(msgID)
 }
 
 // Latency returns the estimated round-trip latency based on recent responses.
