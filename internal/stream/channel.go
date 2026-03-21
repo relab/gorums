@@ -33,7 +33,7 @@ type Request struct {
 	SendTime     time.Time
 }
 
-// deliver sends the response on request's ResponseChan, preferring delivery
+// deliver sends the response on request's response channel, preferring delivery
 // even if request's context is already canceled. If the channel is full,
 // it falls back to respecting context cancellation to avoid blocking forever.
 func (r Request) deliver(resp response) bool {
@@ -47,6 +47,13 @@ func (r Request) deliver(resp response) bool {
 		return true
 	case <-r.Ctx.Done():
 		return false
+	}
+}
+
+// replyError sends err to the request's response channel if one is set.
+func (r Request) replyError(nodeID uint32, err error) {
+	if r.ResponseChan != nil {
+		r.deliver(response{NodeID: nodeID, Err: err})
 	}
 }
 
@@ -302,12 +309,12 @@ func (c *Channel) Enqueue(req Request) {
 	select {
 	case <-c.connCtx.Done():
 		// the node's close() method was called: respond with error instead of enqueueing
-		c.replyError(req, ErrNodeClosed)
+		req.replyError(c.id, ErrNodeClosed)
 	default:
 		select {
 		case <-c.connCtx.Done():
 			// the node's close() method was called: respond with error instead of enqueueing
-			c.replyError(req, ErrNodeClosed)
+			req.replyError(c.id, ErrNodeClosed)
 		case c.sendQ <- req:
 			// enqueued successfully
 		}
@@ -326,12 +333,12 @@ func (c *Channel) Enqueue(req Request) {
 // the response directly to the request's ResponseChan.
 func (c *Channel) dispatchLocalRequest(req Request) {
 	if req.Ctx.Err() != nil {
-		c.replyError(req, req.Ctx.Err())
+		req.replyError(c.id, req.Ctx.Err())
 		return
 	}
 	rh, ok := c.router.RequestHandler()
 	if !ok {
-		c.replyError(req, status.Error(codes.Unimplemented, "no request handler registered"))
+		req.replyError(c.id, status.Error(codes.Unimplemented, "no request handler registered"))
 		return
 	}
 
@@ -362,7 +369,7 @@ func (c *Channel) dispatchLocalRequest(req Request) {
 // This is called during node shutdown to notify all waiting calls.
 func (c *Channel) cancelPendingMsgs(err error) {
 	for _, req := range c.router.CancelPending() {
-		c.replyError(req, err)
+		req.replyError(c.id, err)
 	}
 }
 
@@ -372,7 +379,7 @@ func (c *Channel) cancelPendingMsgs(err error) {
 func (c *Channel) requeuePendingMsgs() {
 	requeue, cancel := c.router.RequeuePending()
 	for _, req := range cancel {
-		c.replyError(req, ErrStreamDown)
+		req.replyError(c.id, ErrStreamDown)
 	}
 	// The requeue is performed in a separate goroutine because this method is called
 	// from sender(), which is the sole reader of sendQ. Calling Enqueue directly from
@@ -392,15 +399,6 @@ func (c *Channel) requeuePendingMsgs() {
 	}
 }
 
-// replyError sends err to the request's response channel if one is set.
-// This is used for requests that have not yet been registered in responseRouters
-// and therefore cannot be reached via routeResponse.
-func (c *Channel) replyError(req Request, err error) {
-	if req.ResponseChan != nil {
-		req.deliver(response{NodeID: c.id, Err: err})
-	}
-}
-
 // drainSendQ is deferred in sender() and drains any remaining requests from
 // sendQ when the sender goroutine exits, replying to each with ErrNodeClosed.
 // This handles both requests already in the queue and any that slip through
@@ -411,7 +409,7 @@ func (c *Channel) drainSendQ() {
 	for {
 		select {
 		case req := <-c.sendQ:
-			c.replyError(req, ErrNodeClosed)
+			req.replyError(c.id, ErrNodeClosed)
 		default:
 			// sendQ is empty
 			return
@@ -447,16 +445,16 @@ func (c *Channel) sender() {
 		}
 
 		if err := c.ensureStream(); err != nil {
-			c.replyError(req, err)
+			req.replyError(c.id, err)
 			continue
 		}
 		if req.Ctx.Err() != nil {
-			c.replyError(req, req.Ctx.Err())
+			req.replyError(c.id, req.Ctx.Err())
 			continue
 		}
 		stream := c.getStream()
 		if stream == nil {
-			c.replyError(req, ErrStreamDown)
+			req.replyError(c.id, ErrStreamDown)
 			continue
 		}
 
