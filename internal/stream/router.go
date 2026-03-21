@@ -120,13 +120,13 @@ func (r *MessageRouter) RouteMessage(nodeID uint32, msg *Message, connCtx contex
 	// Server-initiated IDs are never registered in the pending map.
 	// Short-circuit before acquiring the lock and before constructing a response.
 	if isServerSequenceNumber(msgID) {
-		if r.handler == nil {
-			return
+		if r.handler != nil {
+			send := func(reply *Message) {
+				enqueue(Request{Ctx: connCtx, Msg: reply})
+			}
+			go r.handler.HandleRequest(connCtx, msg, func() {}, send)
 		}
-		send := func(reply *Message) {
-			enqueue(Request{Ctx: connCtx, Msg: reply})
-		}
-		go r.handler.HandleRequest(connCtx, msg, func() {}, send)
+		return
 	}
 
 	r.mu.Lock()
