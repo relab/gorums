@@ -269,8 +269,7 @@ func TestReplyErrorDoesNotBlockOnCanceledRequest(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		c := &Channel{id: 7}
-		c.replyError(req, ErrStreamDown)
+		req.replyError(7, ErrStreamDown)
 		close(done)
 	}()
 
@@ -290,8 +289,7 @@ func TestReplyErrorPrefersDeliveryWhenCanceledAndReplyChanReady(t *testing.T) {
 	}
 	cancel()
 
-	c := &Channel{id: 7}
-	c.replyError(req, ErrStreamDown)
+	req.replyError(7, ErrStreamDown)
 
 	select {
 	case got := <-replyChan:
