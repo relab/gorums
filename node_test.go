@@ -55,25 +55,26 @@ func printNodes(t *testing.T, nodes []*Node) {
 	}
 }
 
-// TestNodeRouteResponse verifies that Node.RouteResponse correctly routes
+// TestNodeRouteInbound verifies that Node.RouteInbound correctly routes
 // an incoming response message to a pending server-initiated call.
-func TestNodeRouteResponse(t *testing.T) {
+func TestNodeRouteInbound(t *testing.T) {
 	n := newInboundNode(42, "127.0.0.1:9000", func() uint64 { return 0 })
 	replyChan := make(chan NodeResponse[*stream.Message], 1)
 
-	// Register a pending call with msgID=7 on the node's router.
-	n.router.Register(7, stream.Request{
+	// Register a pending call with a server-initiated msgID on the node's router.
+	msgID := stream.ServerSequenceNumber(7)
+	n.router.Register(msgID, stream.Request{
 		Ctx:          context.Background(),
 		Msg:          &stream.Message{},
 		ResponseChan: replyChan,
 	})
 
 	// Build a response message with matching msgID.
-	respMsg := stream.Message_builder{MessageSeqNo: 7}.Build()
+	respMsg := stream.Message_builder{MessageSeqNo: msgID}.Build()
 
-	// RouteResponse should find and deliver the pending call.
-	if !n.RouteResponse(respMsg) {
-		t.Fatal("RouteResponse should return true for a pending msgID")
+	// RouteInbound should find and deliver the pending call.
+	if !n.RouteInbound(respMsg) {
+		t.Fatal("RouteInbound should return true for a pending server-initiated msgID")
 	}
 
 	// Verify the response was delivered.
@@ -86,15 +87,15 @@ func TestNodeRouteResponse(t *testing.T) {
 		t.Fatal("expected response on channel")
 	}
 
-	// Routing the same msgID again should return false (already consumed).
-	if n.RouteResponse(respMsg) {
-		t.Error("RouteResponse should return false for consumed msgID")
+	// Routing the same msgID again should return true (absorbed as stale).
+	if !n.RouteInbound(respMsg) {
+		t.Error("RouteInbound should return true (absorbed) for consumed server-initiated msgID")
 	}
 
-	// Unknown msgID should return false.
-	unknownMsg := stream.Message_builder{MessageSeqNo: 999}.Build()
-	if n.RouteResponse(unknownMsg) {
-		t.Error("RouteResponse should return false for unknown msgID")
+	// A client-initiated msgID (low bit) should return false.
+	clientMsg := stream.Message_builder{MessageSeqNo: 1}.Build()
+	if n.RouteInbound(clientMsg) {
+		t.Error("RouteInbound should return false for client-initiated msgID")
 	}
 }
 

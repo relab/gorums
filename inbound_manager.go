@@ -206,9 +206,10 @@ func (im *inboundManager) isKnown(id uint32) bool {
 // client peer node with an assigned ID.
 // Otherwise, AcceptPeer returns (nil, noop, nil).
 func (im *inboundManager) AcceptPeer(streamCtx context.Context, inboundStream stream.BidiStream) (stream.PeerNode, func(), error) {
+	nilNode := &nilPeerNode{stream: inboundStream}
 	noop := func() {}
 	if im == nil {
-		return nil, noop, nil
+		return nilNode, noop, nil
 	}
 	id := nodeID(streamCtx)
 	if im.isKnown(id) {
@@ -217,12 +218,12 @@ func (im *inboundManager) AcceptPeer(streamCtx context.Context, inboundStream st
 	}
 	if id != 0 {
 		// Unknown positive ID: misconfigured or unrecognized peer — reject quietly.
-		return nil, noop, nil
+		return nilNode, noop, nil
 	}
 	if !hasPeerMetadata(streamCtx) {
 		// Regular client (no gorums-node-id key): accept the connection but do not
 		// track it in ClientConfig — the client cannot receive back-channel calls.
-		return nil, noop, nil
+		return nilNode, noop, nil
 	}
 	// Peer-capable anonymous client (gorums-node-id: 0) — create new node with auto-assigned ID.
 	return im.acceptClient(streamCtx, inboundStream)
@@ -310,8 +311,22 @@ func (im *inboundManager) rebuildConfig() {
 	}
 }
 
+// nilPeerNode implements stream.PeerNode for regular clients that have no
+// back-channel capability. RouteInbound always returns false because regular
+// clients never send server-initiated messages. Enqueue sends the message
+// directly on the inbound stream; send errors are absorbed because gRPC
+// cancels the stream context on failure, which causes NodeStream to exit.
+type nilPeerNode struct {
+	stream stream.BidiStream
+}
+
+func (p *nilPeerNode) RouteInbound(_ *stream.Message) bool { return false }
+
+func (p *nilPeerNode) Enqueue(req stream.Request) { _ = p.stream.Send(req.Msg) }
+
 // compile-time assertion for interface compliance.
 var (
 	_ stream.PeerAcceptor = (*inboundManager)(nil)
 	_ nodeRegistry        = (*inboundManager)(nil)
+	_ stream.PeerNode     = (*nilPeerNode)(nil)
 )

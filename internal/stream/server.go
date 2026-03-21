@@ -12,9 +12,14 @@ type PeerAcceptor interface {
 }
 
 // PeerNode represents a peer from the perspective of stream dispatch.
-// It is implemented by Node in the gorums package.
+// It is implemented by Node and nilPeerNode in the gorums package.
 type PeerNode interface {
-	RouteResponse(msg *Message) bool
+	// RouteInbound routes an inbound message on a server-side stream.
+	// Returns true if the message was handled (routed to a pending
+	// server-initiated call or silently absorbed as stale).
+	// Returns false if the message is a new client-initiated request
+	// that the caller must dispatch to a handler.
+	RouteInbound(msg *Message) bool
 	Enqueue(req Request)
 }
 
@@ -60,12 +65,7 @@ func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 			case <-ctx.Done():
 				return
 			case streamOut := <-finished:
-				if peerNode != nil {
-					// Route through Channel.sender() — sole writer on inbound stream.
-					peerNode.Enqueue(Request{Ctx: ctx, Msg: streamOut})
-				} else if err := srv.Send(streamOut); err != nil {
-					return
-				}
+				peerNode.Enqueue(Request{Ctx: ctx, Msg: streamOut})
 			}
 		}
 	}()
@@ -81,7 +81,7 @@ func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 		}
 		// Route responses to pending server-initiated calls; stale calls are discarded.
 		// Client-initiated calls will fall through to the handler below.
-		if peerNode != nil && peerNode.RouteResponse(streamIn) {
+		if peerNode.RouteInbound(streamIn) {
 			continue
 		}
 
