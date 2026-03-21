@@ -4,6 +4,9 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // RequestHandler is the interface that wraps the HandleRequest method.
@@ -44,6 +47,9 @@ type MessageRouter struct {
 	pending map[uint64]Request
 	latency time.Duration
 	handler RequestHandler // shared by reference; may be nil
+	// localMu serializes in-process handler dispatch, mirroring NodeStream's
+	// lock+release pattern so local and remote nodes behave identically.
+	localMu sync.Mutex
 }
 
 // NewMessageRouter creates a new MessageRouter with an optional RequestHandler.
@@ -61,13 +67,44 @@ func NewMessageRouter(handler ...RequestHandler) *MessageRouter {
 	}
 }
 
-// RequestHandler returns the RequestHandler if set.
-// Returns the handler and true if found, or nil and false otherwise.
-func (r *MessageRouter) RequestHandler() (RequestHandler, bool) {
-	if r.handler == nil {
-		return nil, false
+// DispatchLocalRequest handles the request in-process for the local node,
+// bypassing the network. It delivers the request to the registered handler,
+// serializing execution the same way remote nodes do: the next dispatch is
+// blocked until the handler returns or calls [ServerCtx.Release].
+//
+// For one-way calls, send-completion is confirmed before the handler runs
+// if WaitSendDone is true. For two-way calls, the response is delivered
+// directly to the caller's response channel via the send closure.
+func (r *MessageRouter) DispatchLocalRequest(nodeID uint32, req Request) {
+	if req.Ctx.Err() != nil {
+		req.replyError(nodeID, req.Ctx.Err())
+		return
 	}
-	return r.handler, true
+	if r.handler == nil {
+		req.replyError(nodeID, status.Error(codes.Unimplemented, "no request handler registered"))
+		return
+	}
+	if req.WaitSendDone && req.ResponseChan != nil {
+		if !req.deliver(response{NodeID: nodeID}) {
+			return
+		}
+	}
+	// For two-way calls, deliver the response via the send closure.
+	// For one-way calls (WaitSendDone=true or ResponseChan==nil), send is a no-op:
+	// the confirmation was already delivered above, and a second write would either
+	// race with the caller consuming the channel or block on a full response channel.
+	send := func(msg *Message) {
+		if req.WaitSendDone || req.ResponseChan == nil {
+			return
+		}
+		req.deliver(response{NodeID: nodeID, Value: msg, Err: msg.ErrorStatus()})
+	}
+
+	r.localMu.Lock()
+	var once sync.Once
+	release := func() { once.Do(r.localMu.Unlock) }
+
+	go r.handler.HandleRequest(req.Msg.AppendToIncomingContext(req.Ctx), req.Msg, release, send)
 }
 
 // RouteMessage routes an incoming message to either a pending call or the
@@ -83,13 +120,13 @@ func (r *MessageRouter) RouteMessage(nodeID uint32, msg *Message, connCtx contex
 	// Server-initiated IDs are never registered in the pending map.
 	// Short-circuit before acquiring the lock and before constructing a response.
 	if isServerSequenceNumber(msgID) {
-		if r.handler != nil {
-			send := func(reply *Message) {
-				enqueue(Request{Ctx: connCtx, Msg: reply})
-			}
-			go r.handler.HandleRequest(connCtx, msg, func() {}, send)
+		if r.handler == nil {
+			return
 		}
-		return
+		send := func(reply *Message) {
+			enqueue(Request{Ctx: connCtx, Msg: reply})
+		}
+		go r.handler.HandleRequest(connCtx, msg, func() {}, send)
 	}
 
 	r.mu.Lock()

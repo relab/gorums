@@ -84,10 +84,6 @@ type Channel struct {
 	// Node and injected into the Channel, so it survives channel replacement.
 	router        *MessageRouter
 	closeOnceFunc func() error
-
-	// localMu is the serialization gate for local dispatch, mirroring
-	// NodeStream's lock+release pattern to ensure handlers are serialized.
-	localMu sync.Mutex
 }
 
 // NewOutboundChannel creates a new channel for the given node and starts
@@ -294,7 +290,7 @@ func (c *Channel) Enqueue(req Request) {
 		panic("stream: WaitSendDone and Streaming are mutually exclusive")
 	}
 	if c.isLocal() {
-		c.dispatchLocalRequest(req)
+		c.router.DispatchLocalRequest(c.id, req)
 		return
 	}
 	// Two-stage select: the outer non-blocking check catches the already-closed
@@ -319,50 +315,6 @@ func (c *Channel) Enqueue(req Request) {
 			// enqueued successfully
 		}
 	}
-}
-
-// dispatchLocalRequest handles a request in-process for the self-node,
-// bypassing the network. It explicitly acquires the channel's localMu to ensure
-// identical sequential execution semantics as remote nodes, where execution
-// is serialized until the handler returns or explicitly calls ServerCtx.Release().
-//
-// For one-way calls (WaitSendDone=true), the send completion confirmation
-// is delivered before HandleRequest runs, matching remote-node semantics
-// where confirmation is sent after stream.Send() completes, but decoupled
-// from the handler runtime. For two-way calls, the send closure delivers
-// the response directly to the request's ResponseChan.
-func (c *Channel) dispatchLocalRequest(req Request) {
-	if req.Ctx.Err() != nil {
-		req.replyError(c.id, req.Ctx.Err())
-		return
-	}
-	rh, ok := c.router.RequestHandler()
-	if !ok {
-		req.replyError(c.id, status.Error(codes.Unimplemented, "no request handler registered"))
-		return
-	}
-
-	if req.WaitSendDone && req.ResponseChan != nil {
-		if !req.deliver(response{NodeID: c.id}) {
-			return
-		}
-	}
-	// For two-way calls, deliver the response via the send closure.
-	// For one-way calls (WaitSendDone=true or ResponseChan==nil), send is a no-op:
-	// the confirmation was already delivered above, and a second write would either
-	// race with the caller consuming the channel or block on a full response channel.
-	send := func(msg *Message) {
-		if req.WaitSendDone || req.ResponseChan == nil {
-			return
-		}
-		req.deliver(response{NodeID: c.id, Value: msg, Err: msg.ErrorStatus()})
-	}
-
-	c.localMu.Lock()
-	var once sync.Once
-	release := func() { once.Do(c.localMu.Unlock) }
-
-	go rh.HandleRequest(req.Msg.AppendToIncomingContext(req.Ctx), req.Msg, release, send)
 }
 
 // cancelPendingMsgs cancels all pending messages by sending an error response to each.
