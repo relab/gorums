@@ -47,6 +47,44 @@ func TestRouterRouteUnknown(t *testing.T) {
 	}
 }
 
+// TestRouterRouteResponseServerInitiated verifies the three dispatch branches
+// for server-initiated sequence numbers in RouteResponse.
+func TestRouterRouteResponseServerInitiated(t *testing.T) {
+	t.Run("DispatchCalledAndReturnsTrue", func(t *testing.T) {
+		r := NewMessageRouter()
+		dispatched := false
+		if !r.RouteResponse(ServerSequenceNumber(1), response{NodeID: 1}, func() {
+			dispatched = true
+		}) {
+			t.Error("RouteResponse should return true for server-initiated msgID")
+		}
+		if !dispatched {
+			t.Error("dispatch function should be called for server-initiated msgID")
+		}
+	})
+
+	t.Run("NoDispatchArgReturnsTrue", func(t *testing.T) {
+		r := NewMessageRouter()
+		if !r.RouteResponse(ServerSequenceNumber(1), response{NodeID: 1}) {
+			t.Error("RouteResponse should return true for server-initiated msgID with no dispatch arg")
+		}
+	})
+
+	t.Run("NilDispatchArgReturnsTrue", func(t *testing.T) {
+		r := NewMessageRouter()
+		if !r.RouteResponse(ServerSequenceNumber(1), response{NodeID: 1}, nil) {
+			t.Error("RouteResponse should return true for server-initiated msgID with nil dispatch")
+		}
+	})
+
+	t.Run("ClientInitiatedUnknownReturnsFalse", func(t *testing.T) {
+		r := NewMessageRouter()
+		if r.RouteResponse(1, response{NodeID: 1}) {
+			t.Error("RouteResponse should return false for unmatched client-initiated msgID")
+		}
+	})
+}
+
 func TestRouterStreamingKeepsEntry(t *testing.T) {
 	r := NewMessageRouter()
 	replyChan := make(chan response, 3)

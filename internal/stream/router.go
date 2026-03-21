@@ -79,13 +79,14 @@ func (r *MessageRouter) Register(msgID uint64, req Request) {
 	r.mu.Unlock()
 }
 
-// RouteResponse routes a response to a pending call by message sequence number.
-// If a matching request is found, the response is delivered on the request's
-// ResponseChan, and the method returns true. For successful (non-error) responses,
-// the router also updates its latency estimate from the request's SendTime.
-// For non-streaming calls, the entry is removed from the map. For streaming
-// calls (correctable), the entry remains for subsequent responses.
-func (r *MessageRouter) RouteResponse(msgID uint64, resp response) bool {
+// RouteResponse delivers a response to a pending call registered via [Register].
+// For non-streaming calls, the entry is removed after delivery.
+// For streaming calls (correctable), the entry remains for subsequent responses.
+//
+// If no pending client-initiated call matches, unmatched server-initiated calls are absorbed
+// (optionally dispatching the provided function), and the method returns true.
+// Returns false only for unmatched client-initiated calls (stale responses).
+func (r *MessageRouter) RouteResponse(msgID uint64, resp response, dispatch ...func()) bool {
 	r.mu.Lock()
 	req, ok := r.pending[msgID]
 	if ok && !req.Streaming {
@@ -98,8 +99,15 @@ func (r *MessageRouter) RouteResponse(msgID uint64, resp response) bool {
 			r.updateLatency(time.Since(req.SendTime))
 		}
 		req.deliver(resp)
+		return true
 	}
-	return ok
+	if isServerSequenceNumber(msgID) {
+		if len(dispatch) > 0 && dispatch[0] != nil {
+			dispatch[0]()
+		}
+		return true
+	}
+	return false
 }
 
 // Latency returns the estimated round-trip latency based on recent responses.
