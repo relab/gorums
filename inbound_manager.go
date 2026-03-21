@@ -318,6 +318,7 @@ func (im *inboundManager) rebuildConfig() {
 type nilPeerNode struct {
 	stream  stream.BidiStream
 	handler stream.RequestHandler
+	failed  atomic.Bool
 }
 
 // RouteInbound dispatches all messages as client-initiated requests to the
@@ -330,10 +331,18 @@ func (p *nilPeerNode) RouteInbound(ctx context.Context, msg *stream.Message, rel
 	}
 }
 
-// Enqueue sends the message directly on the inbound stream; send errors are
-// absorbed because gRPC cancels the stream context on failure, which causes
-// NodeStream to exit.
-func (p *nilPeerNode) Enqueue(req stream.Request) { _ = p.stream.Send(req.Msg) }
+// Enqueue sends the message directly on the inbound stream. On the first send
+// error the failure is latched and subsequent calls become no-ops, preventing
+// wasted sends while gRPC propagates the stream-context cancellation that
+// causes NodeStream to exit.
+func (p *nilPeerNode) Enqueue(req stream.Request) {
+	if p.failed.Load() {
+		return
+	}
+	if err := p.stream.Send(req.Msg); err != nil {
+		p.failed.Store(true)
+	}
+}
 
 // compile-time assertion for interface compliance.
 var (
