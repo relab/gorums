@@ -288,7 +288,7 @@ func TestRouterRouteMessage(t *testing.T) {
 		})
 
 		msg := Message_builder{MessageSeqNo: 42, Method: mock.TestMethod}.Build()
-		r.RouteMessage(nodeID, msg, connCtx, nil)
+		r.RouteMessage(connCtx, nodeID, msg, nil)
 		select {
 		case got := <-replyChan:
 			if got.NodeID != nodeID {
@@ -307,7 +307,7 @@ func TestRouterRouteMessage(t *testing.T) {
 		enqueue := func(Request) { enqueueCalled = true }
 
 		msg := Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build()
-		r.RouteMessage(nodeID, msg, connCtx, enqueue)
+		r.RouteMessage(connCtx, nodeID, msg, enqueue)
 		// handler is called in a goroutine; give it a moment.
 		time.Sleep(10 * time.Millisecond)
 		if !handler.called {
@@ -322,12 +322,12 @@ func TestRouterRouteMessage(t *testing.T) {
 	t.Run("ServerInitiatedNoHandlerIsSilentlyDropped", func(_ *testing.T) {
 		r := NewMessageRouter()
 		msg := Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build()
-		r.RouteMessage(nodeID, msg, connCtx, nil) // must not panic
+		r.RouteMessage(connCtx, nodeID, msg, nil) // must not panic
 	})
 
 	t.Run("ClientInitiatedUnknownIsSilentlyDropped", func(_ *testing.T) {
 		r := NewMessageRouter()
 		msg := Message_builder{MessageSeqNo: 999, Method: mock.TestMethod}.Build()
-		r.RouteMessage(nodeID, msg, connCtx, nil) // must not panic
+		r.RouteMessage(connCtx, nodeID, msg, nil) // must not panic
 	})
 }

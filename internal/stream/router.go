@@ -114,7 +114,7 @@ func (r *MessageRouter) DispatchLocalRequest(nodeID uint32, req Request) {
 // Server-initiated calls are dispatched to the registered request handler (if any)
 // in a new goroutine. Client-initiated calls are routed to the caller's pending
 // response channel; stale responses from cancelled calls are silently dropped.
-func (r *MessageRouter) RouteMessage(nodeID uint32, msg *Message, connCtx context.Context, enqueue func(Request)) {
+func (r *MessageRouter) RouteMessage(ctx context.Context, nodeID uint32, msg *Message, enqueue func(Request)) {
 	msgID := msg.GetMessageSeqNo()
 
 	// Server-initiated IDs are never registered in the pending map.
@@ -122,9 +122,9 @@ func (r *MessageRouter) RouteMessage(nodeID uint32, msg *Message, connCtx contex
 	if isServerSequenceNumber(msgID) {
 		if r.handler != nil {
 			send := func(reply *Message) {
-				enqueue(Request{Ctx: connCtx, Msg: reply})
+				enqueue(Request{Ctx: ctx, Msg: reply})
 			}
-			go r.handler.HandleRequest(connCtx, msg, func() {}, send)
+			go r.handler.HandleRequest(ctx, msg, func() {}, send)
 		}
 		return
 	}

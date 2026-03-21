@@ -480,7 +480,7 @@ func (c *Channel) receiver() {
 		} else {
 			// Route to a pending call or dispatch server-initiated back-channel
 			// requests. Stale (cancelled) calls are silently dropped.
-			c.router.RouteMessage(c.id, msg, c.connCtx, c.Enqueue)
+			c.router.RouteMessage(c.connCtx, c.id, msg, c.Enqueue)
 		}
 	}
 }
