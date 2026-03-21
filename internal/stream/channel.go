@@ -529,13 +529,14 @@ func (c *Channel) receiver() {
 			}
 		} else {
 			err := msg.ErrorStatus()
-			// Two-way calls (RPCCall/QuorumCall) deliver server response.
-			if c.router.RouteResponse(msg.GetMessageSeqNo(), response{NodeID: c.id, Value: msg, Err: err}) {
+			// Route to a pending call, or dispatch server-initiated back-channel
+			// requests. Only unmatched client-initiated IDs (stale) fall through.
+			if c.router.RouteResponse(msg.GetMessageSeqNo(), response{NodeID: c.id, Value: msg, Err: err}, func() {
+				if rh, ok := c.router.RequestHandler(); ok {
+					go c.dispatchRequest(rh, msg)
+				}
+			}) {
 				continue
-			}
-			// Server-initiated request — dispatch via registered handler.
-			if rh, ok := c.router.RequestHandler(); ok {
-				go c.dispatchRequest(rh, msg)
 			}
 		}
 	}
