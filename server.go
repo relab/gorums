@@ -134,7 +134,7 @@ func NewServer(opts ...ServerOption) *Server {
 		serverOpts.onConfigChange,
 		s,
 	)
-	s.srv = stream.NewServer(serverOpts.buffer, serverOpts.connectCallback, s.inboundManager, s)
+	s.srv = stream.NewServer(serverOpts.buffer, serverOpts.connectCallback, s.inboundManager)
 	stream.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
 }

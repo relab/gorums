@@ -168,13 +168,30 @@ func TestRouterRequeuePending(t *testing.T) {
 
 // TestRouterRouteInboundMessage verifies RouteInboundMessage demultiplexes
 // inbound server-side messages: server-initiated IDs (high bit set) are routed
-// to the pending map; client-initiated IDs (low bit) are passed to the caller.
+// to the pending map; client-initiated IDs (low bit) are dispatched to the handler.
+// release is always called regardless of message type.
 func TestRouterRouteInboundMessage(t *testing.T) {
-	t.Run("ClientInitiatedReturnsFalse", func(t *testing.T) {
+	t.Run("ClientInitiatedNilHandlerCallsRelease", func(t *testing.T) {
 		r := NewMessageRouter()
 		msg := Message_builder{MessageSeqNo: 1}.Build() // low-bit ID
-		if r.RouteInboundMessage(1, msg) {
-			t.Error("RouteInboundMessage should return false for client-initiated ID")
+		released := make(chan struct{}, 1)
+		r.RouteInboundMessage(t.Context(), 1, msg, func() { released <- struct{}{} }, func(*Message) {})
+		select {
+		case <-released:
+		default:
+			t.Error("release should be called when no handler is registered for client-initiated ID")
+		}
+	})
+
+	t.Run("ClientInitiatedDispatchesToHandler", func(t *testing.T) {
+		h := newMockRequestHandler()
+		r := NewMessageRouter(h)
+		msg := Message_builder{MessageSeqNo: 1}.Build()
+		r.RouteInboundMessage(t.Context(), 1, msg, func() {}, func(*Message) {})
+		select {
+		case <-h.done:
+		case <-time.After(time.Second):
+			t.Fatal("handler should have been called for client-initiated request")
 		}
 	})
 
@@ -188,9 +205,8 @@ func TestRouterRouteInboundMessage(t *testing.T) {
 			ResponseChan: replyChan,
 		})
 		msg := Message_builder{MessageSeqNo: msgID}.Build()
-		if !r.RouteInboundMessage(42, msg) {
-			t.Fatal("RouteInboundMessage should return true for server-initiated ID")
-		}
+		released := make(chan struct{}, 1)
+		r.RouteInboundMessage(t.Context(), 42, msg, func() { released <- struct{}{} }, func(*Message) {})
 		select {
 		case got := <-replyChan:
 			if got.NodeID != 42 {
@@ -199,9 +215,18 @@ func TestRouterRouteInboundMessage(t *testing.T) {
 		default:
 			t.Fatal("expected response on channel")
 		}
-		// Entry consumed — routing again returns true (silently absorbed).
-		if !r.RouteInboundMessage(42, msg) {
-			t.Error("RouteInboundMessage should return true (absorbed) for stale server-initiated ID")
+		select {
+		case <-released:
+		default:
+			t.Fatal("release should be called after server-initiated response delivery")
+		}
+		// Entry consumed — routing again should still call release (silently absorbed).
+		released2 := make(chan struct{}, 1)
+		r.RouteInboundMessage(t.Context(), 42, msg, func() { released2 <- struct{}{} }, func(*Message) {})
+		select {
+		case <-released2:
+		default:
+			t.Error("release should be called for stale server-initiated ID")
 		}
 	})
 
@@ -209,9 +234,13 @@ func TestRouterRouteInboundMessage(t *testing.T) {
 		r := NewMessageRouter()
 		msgID := ServerSequenceNumber(7)
 		msg := Message_builder{MessageSeqNo: msgID}.Build()
-		// No pending entry — should still return true (silently absorbed).
-		if !r.RouteInboundMessage(1, msg) {
-			t.Error("RouteInboundMessage should return true (absorbed) for unmatched server-initiated ID")
+		released := make(chan struct{}, 1)
+		// No pending entry — release should still be called (silently absorbed).
+		r.RouteInboundMessage(t.Context(), 1, msg, func() { released <- struct{}{} }, func(*Message) {})
+		select {
+		case <-released:
+		default:
+			t.Error("release should be called for unmatched server-initiated ID")
 		}
 	})
 }
