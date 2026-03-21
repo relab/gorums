@@ -1,8 +1,6 @@
 package stream
 
-import (
-	"errors"
-)
+import "errors"
 
 // NodeResponse wraps a response value from node ID, and an error if any.
 type NodeResponse[T any] struct {
