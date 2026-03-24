@@ -423,19 +423,19 @@ func peerNodes() NodeListOption {
 	})
 }
 
-// connectAsPeer creates a Manager that identifies itself as peerID by sending
-// gorumsNodeIDKey metadata, connects to addrs, and returns the manager.
-// Manager cleanup is registered via t.Cleanup; callers may also close it
+// connectAsPeer creates a Configuration that identifies itself as peerID by sending
+// gorumsNodeIDKey metadata, connects to addrs, and returns the configuration.
+// Configuration cleanup is registered via t.Cleanup; callers may also close it
 // explicitly (e.g., to test disconnect) — Close is idempotent.
-func connectAsPeer(t *testing.T, peerID uint32, addrs []string) *outboundManager {
+func connectAsPeer(t *testing.T, peerID uint32, addrs []string) Configuration {
 	t.Helper()
 	peerMD := metadata.Pairs(gorumsNodeIDKey, strconv.FormatUint(uint64(peerID), 10))
-	mgr := TestManager(t, WithMetadata(peerMD))
-	_, err := NewConfiguration(mgr, WithNodeList(addrs))
+	cfg, err := NewConfig(WithNodeList(addrs), TestDialOptions(t), WithMetadata(peerMD))
 	if err != nil {
-		t.Fatalf("NewConfiguration() error: %v", err)
+		t.Fatalf("NewConfig() error: %v", err)
 	}
-	return mgr
+	t.Cleanup(Closer(t, cfg))
+	return cfg
 }
 
 // TestKnownPeerConnects verifies the end-to-end path:
@@ -459,13 +459,13 @@ func TestKnownPeerConnects(t *testing.T) {
 func TestKnownPeerDisconnects(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
-	mgr := connectAsPeer(t, 2, addrs)
+	cfg := connectAsPeer(t, 2, addrs)
 	WaitForConfigCondition(t, srv.Config, equalNodeIDs([]uint32{1, 2}))
 
-	// Close the peer manager to trigger disconnect; Close is idempotent so
-	// t.Cleanup (registered by connectAsPeer via TestManager) is harmless.
-	if err := mgr.Close(); err != nil {
-		t.Fatalf("mgr.Close() error: %v", err)
+	// Close the configuration to trigger disconnect; Close is idempotent so
+	// t.Cleanup (registered by connectAsPeer) is harmless.
+	if err := cfg.Close(); err != nil {
+		t.Fatalf("cfg.Close() error: %v", err)
 	}
 	WaitForConfigCondition(t, srv.Config, equalNodeIDs([]uint32{1}))
 	checkIDs(t, srv.Config(), []uint32{1}, "after disconnect")
@@ -477,11 +477,11 @@ func TestUnknownPeerIgnored(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
 	// Connect without metadata (external client) and with an unknown ID.
-	external := TestManager(t)
-	_, err := NewConfiguration(external, WithNodeList(addrs))
+	cfg, err := NewConfig(WithNodeList(addrs), TestDialOptions(t))
 	if err != nil {
-		t.Fatalf("NewConfiguration() error: %v", err)
+		t.Fatalf("NewConfig() error: %v", err)
 	}
+	t.Cleanup(Closer(t, cfg))
 
 	connectAsPeer(t, 99, addrs) // ID 99 not in known set
 
@@ -601,18 +601,18 @@ func testClientServer(t *testing.T) (*Server, []string) {
 	return srv, addrs
 }
 
-// connectAsPeerClient creates a Manager that advertises back-channel
-// capability by sending the gorums-node-id key (via [withRequestHandler]),
-// connects to addrs, and returns the manager. The server will include it in
+// connectAsPeerClient creates a Configuration that advertises back-channel
+// capability by sending the gorums-node-id key (via [WithServer]),
+// connects to addrs, and returns the configuration. The server will include it in
 // ClientConfig and may dispatch server-initiated calls to it.
-func connectAsPeerClient(t *testing.T, addrs []string) *outboundManager {
+func connectAsPeerClient(t *testing.T, addrs []string) Configuration {
 	t.Helper()
-	mgr := TestManager(t, withRequestHandler(NewServer(), 0))
-	_, err := NewConfiguration(mgr, WithNodeList(addrs))
+	cfg, err := NewConfig(WithNodeList(addrs), TestDialOptions(t), WithServer(NewServer()))
 	if err != nil {
-		t.Fatalf("NewConfiguration() error: %v", err)
+		t.Fatalf("NewConfig() error: %v", err)
 	}
-	return mgr
+	t.Cleanup(Closer(t, cfg))
+	return cfg
 }
 
 // TestClientConfigConnects verifies that a server accepts a peer-capable
@@ -641,7 +641,7 @@ func TestClientConfigConnects(t *testing.T) {
 func TestClientConfigDisconnects(t *testing.T) {
 	srv, addrs := testClientServer(t)
 
-	mgr := connectAsPeerClient(t, addrs)
+	cfg := connectAsPeerClient(t, addrs)
 
 	// Wait for the client peer to appear.
 	WaitForConfigCondition(t, srv.ClientConfig, func(cfg Configuration) bool { return len(cfg) > 0 })
@@ -650,8 +650,8 @@ func TestClientConfigDisconnects(t *testing.T) {
 	}
 
 	// Disconnect the client peer.
-	if err := mgr.Close(); err != nil {
-		t.Fatalf("mgr.Close() error: %v", err)
+	if err := cfg.Close(); err != nil {
+		t.Fatalf("cfg.Close() error: %v", err)
 	}
 
 	// Wait for config to become empty.
