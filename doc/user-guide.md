@@ -324,13 +324,11 @@ func ExampleStorageServer(port int) {
 ## Implementing the StorageClient
 
 Next, we write client code to call RPCs on our servers.
-The first thing we need to do is to create an instance of the `Manager` type.
-The manager maintains a pool of connections to nodes.
-Nodes are added to the connection pool via new configurations, as shown below.
+The first thing we need to do is to create a `Configuration` using `gorums.NewConfig`.
+`NewConfig` establishes connections to the given nodes and returns a configuration
+ready for making RPC calls.
 
-The manager takes as arguments a set of optional manager options.
-We can forward gRPC dial options to the manager if needed.
-The manager will use these options when connecting to nodes.
+We can forward gRPC dial options to `NewConfig` if needed.
 Below we use only a simple insecure connection option.
 
 ```go
@@ -345,32 +343,28 @@ import (
 )
 
 func ExampleStorageClient() {
-  mgr := NewManager(
-    gorums.WithDialOptions(
-      grpc.WithTransportCredentials(insecure.NewCredentials()),
-    ),
-  )
-```
-
-A configuration is a set of nodes on which our RPC calls can be invoked.
-Using the `WithNodeList` option, the manager assigns a unique identifier to each node.
-The code below shows how to create a configuration:
-
-```go
-  // Get all all available node ids, 3 nodes
   addrs := []string{
     "127.0.0.1:8080",
     "127.0.0.1:8081",
     "127.0.0.1:8082",
   }
   // Create a configuration including all nodes
-  allNodesConfig, err := NewConfiguration(mgr, gorums.WithNodeList(addrs))
+  allNodesConfig, err := gorums.NewConfig(
+    gorums.WithNodeList(addrs),
+    gorums.WithDialOptions(
+      grpc.WithTransportCredentials(insecure.NewCredentials()),
+    ),
+  )
   if err != nil {
     log.Fatalln("error creating read config:", err)
   }
+  defer allNodesConfig.Close()
 ```
 
-The `Manager` and `Configuration` types also have a few other available methods.
+A configuration is a set of nodes on which RPC calls can be invoked.
+`WithNodeList` assigns a unique identifier to each node by address.
+
+The `Configuration` type has several useful methods for combining and filtering configurations.
 Inspect the package documentation or source code for details.
 
 We can now invoke the WriteUnicast RPC on each `node` in the configuration:
@@ -597,17 +591,17 @@ func ExampleStorageClient() {
     "127.0.0.1:8082",
   }
 
-  mgr := gorums.NewManager(
+  // Create a configuration with all nodes
+  cfg, err := gorums.NewConfig(
+    gorums.WithNodeList(addrs),
     gorums.WithDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
   )
-
-  // Create a configuration with all nodes
-  cfg, err := NewConfiguration(mgr, gorums.WithNodeList(addrs))
   if err != nil {
     log.Fatalln("error creating configuration:", err)
   }
+  defer cfg.Close()
 
   ctx := context.Background()
   cfgCtx := config.Context(ctx)
@@ -1168,18 +1162,17 @@ if err != nil {
   var qcErr gorums.QuorumCallError
   if errors.As(err, &qcErr) {
     // Option 1: Exclude all failed nodes
-	  newConfig, err := NewConfiguration(mgr, config.WithoutErrors(qcErr))
+    newConfig := config.WithoutErrors(qcErr)
 
     // Option 2: Exclude only nodes with specific error types
     // For example, exclude only nodes that timed out
-    newConfig, err := NewConfiguration(mgr, config.WithoutErrors(qcErr, context.DeadlineExceeded))
+    newConfig = config.WithoutErrors(qcErr, context.DeadlineExceeded)
 
     // Option 3: Exclude nodes with multiple specific error types
-    newConfig, err := NewConfiguration(mgr, config.WithoutErrors(qcErr,
-        context.DeadlineExceeded,
-        context.Canceled,
-        io.EOF,
-      ),
+    newConfig = config.WithoutErrors(qcErr,
+      context.DeadlineExceeded,
+      context.Canceled,
+      io.EOF,
     )
 
     // Retry the operation with the new configuration
@@ -1196,7 +1189,7 @@ This allows you to filter nodes based on the underlying cause of their failures,
 
 Below is an example demonstrating how to work with configurations.
 These configurations are viewed from the client's perspective, and to actually make quorum calls on these configurations, there must be server endpoints to connect to.
-We ignore the construction of `mgr` and error handling (except for the last configuration).
+Error handling is omitted for brevity except where the result is used.
 
 In the example below, we simply use fixed quorum sizes.
 
@@ -1207,56 +1200,49 @@ func ExampleConfigClient() {
     "127.0.0.1:8081",
     "127.0.0.1:8082",
   }
-  // Make configuration c1 from addrs, giving |c1| = |addrs| = 3
-  c1, _ := NewConfiguration(mgr,
+  // Create base configuration c1 from addrs, giving |c1| = 3.
+  c1, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
+    gorums.WithDialOptions(
+      grpc.WithTransportCredentials(insecure.NewCredentials()),
+    ),
   )
+  if err != nil {
+    log.Fatalln("error creating configuration:", err)
+  }
+  defer c1.Close()
 
   newAddrs := []string{
     "127.0.0.1:9080",
     "127.0.0.1:9081",
   }
-  // Make configuration c2 from newAddrs, giving |c2| = |newAddrs| = 2
-  c2, _ := NewConfiguration(mgr,
-    gorums.WithNodeList(newAddrs),
-  )
+  // Extend c1 with newAddrs; c2 shares c1's connection pool, |c2| = |c1| + |newAddrs| = 5.
+  c2, _ := c1.Extend(gorums.WithNodeList(newAddrs))
 
-  // Make new configuration c3 from c1 and newAddrs, giving |c3| = |c1| + |newAddrs| = 3+2=5
-  c3, _ := NewConfiguration(mgr,
-    c1.WithNewNodes(gorums.WithNodeList(newAddrs)),
-  )
+  // c3 = nodes in c2 not in c1, giving |c3| = |newAddrs| = 2.
+  c3 := c2.Difference(c1)
 
-  // Make new configuration c4 from c1 and c2, giving |c4| = |c1| + |c2| = 3+2=5
-  c4, _ := NewConfiguration(mgr,
-    c1.And(c2),
-  )
+  // c4 = union of c1 and c3, giving |c4| = |c1| + |c3| = 3+2 = 5.
+  c4 := c1.Union(c3)
 
-  // Make new configuration c5 from c1 except the first node from c1, giving |c5| = |c1| - 1 = 3-1 = 2
-  c5, _ := NewConfiguration(mgr,
-    c1.WithoutNodes(c1.NodeIDs()[0]),
-  )
+  // c5 = c1 without its first node, giving |c5| = |c1| - 1 = 2.
+  c5 := c1.Remove(c1.NodeIDs()[0])
 
-  // Make new configuration c6 from c3 except c1, giving |c6| = |c3| - |c1| = 5-3 = 2
-  c6, _ := NewConfiguration(mgr,
-    c3.Except(c1),
-  )
+  // c6 = c2 without c1, giving |c6| = |c2| - |c1| = 5-3 = 2.
+  c6 := c2.Difference(c1)
 
   // Example: Handling quorum call failures and creating a new configuration
-  // without failed nodes
+  // without failed nodes.
   cfgCtx := c1.Context(ctx)
   state, err := ReadQC(cfgCtx, &ReadRequest{}).Majority()
   if err != nil {
     var qcErr gorums.QuorumCallError
     if errors.As(err, &qcErr) {
-      // Create a new configuration excluding all nodes that failed
-      c7, _ := NewConfiguration(mgr,
-        c1.WithoutErrors(qcErr),
-      )
+      // Create a new configuration excluding all nodes that failed.
+      c7 := c1.WithoutErrors(qcErr)
 
-      // Or exclude only nodes with specific error types (e.g., timeout errors)
-      c8, _ := NewConfiguration(mgr,
-        c1.WithoutErrors(qcErr, context.DeadlineExceeded),
-      )
+      // Or exclude only nodes with specific error types (e.g., timeout errors).
+      c8 := c1.WithoutErrors(qcErr, context.DeadlineExceeded)
     }
   }
 }
@@ -1411,11 +1397,11 @@ The same pattern applies to nested multicast:
 func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerCtx, req *pb.WriteRequest) (*pb.WriteResponse, error) {
     cfg := ctx.Config()
     if len(cfg) == 0 {
-        return pb.WriteResponse_builder{New: false}.Build(), fmt.Errorf("WriteNestedMulticast requires a server peer configuration")
+        return nil, fmt.Errorf("write_nested_multicast: requires server peer configuration")
     }
     ctx.Release()
     if err := pb.WriteMulticast(cfg.Context(ctx), req); err != nil {
-        return pb.WriteResponse_builder{New: false}.Build(), err
+        return nil, fmt.Errorf("write_nested_multicast: %w", err)
     }
     return pb.WriteResponse_builder{New: true}.Build(), nil
 }
