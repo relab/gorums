@@ -490,30 +490,6 @@ func TestUnknownPeerIgnored(t *testing.T) {
 	checkIDs(t, srv.Config(), []uint32{1}, "external and unknown peers must not appear")
 }
 
-type mockRequestHandler struct {
-	handlers map[string]Handler
-}
-
-func (m mockRequestHandler) HandleRequest(ctx context.Context, msg *stream.Message, release func(), send func(*stream.Message)) {
-	srvCtx := ServerCtx{Context: ctx, release: release, send: send}
-	handler, ok := m.handlers[msg.GetMethod()]
-	if !ok {
-		release()
-		return
-	}
-	defer release()
-	inMsg, err := unmarshalRequest(msg)
-	in := &Message{Msg: inMsg, Message: msg}
-	if err != nil {
-		_ = srvCtx.SendMessage(MessageWithError(in, nil, err))
-		return
-	}
-	out, err := handler(srvCtx, in)
-	if out != nil || err != nil {
-		_ = srvCtx.SendMessage(MessageWithError(in, out, err))
-	}
-}
-
 // TestKnownPeerServerCallsClient verifies the full symmetric communication path:
 // server sends a request to a connected client via an inbound channel,
 // the client's Channel.receiver dispatches to a registered handler,
@@ -521,19 +497,18 @@ func (m mockRequestHandler) HandleRequest(ctx context.Context, msg *stream.Messa
 func TestKnownPeerServerCallsClient(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
-	// Client connects as peer 2 with a handler injected via withRequestHandler.
-	clientHandlers := map[string]Handler{
-		mock.TestMethod: func(_ ServerCtx, in *Message) (*Message, error) {
-			req := AsProto[*pb.StringValue](in)
-			return NewResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
-		},
-	}
+	// Client connects as peer 2 with handlers registered on a server via WithServer.
+	clientSrv := NewServer()
+	clientSrv.RegisterHandler(mock.TestMethod, func(_ ServerCtx, in *Message) (*Message, error) {
+		req := AsProto[*pb.StringValue](in)
+		return NewResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
+	})
 	peerMD := metadata.Pairs(gorumsNodeIDKey, "2")
-	mgr := TestManager(t, WithMetadata(peerMD), withRequestHandler(mockRequestHandler{handlers: clientHandlers}, 0))
-	_, err := NewConfiguration(mgr, WithNodeList(addrs))
+	cfg, err := NewConfig(WithNodeList(addrs), TestDialOptions(t), WithMetadata(peerMD), WithServer(clientSrv))
 	if err != nil {
-		t.Fatalf("NewConfiguration() error: %v", err)
+		t.Fatalf("NewConfig() error: %v", err)
 	}
+	t.Cleanup(Closer(t, cfg))
 
 	// Wait for the peer to appear in the inbound config.
 	WaitForConfigCondition(t, srv.Config, equalNodeIDs([]uint32{1, 2}))
@@ -709,17 +684,17 @@ func TestClientConfigServerCallsClient(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	// Client: a Server whose reverse-direction mock.Stream handler is wired in via withRequestHandler.
+	// Client: a Server whose reverse-direction mock.Stream handler is wired in via WithServer.
 	clientSrv := NewServer()
 	clientSrv.RegisterHandler(mock.Stream, func(_ ServerCtx, _ *Message) (*Message, error) {
 		wg.Done()
 		return nil, nil
 	})
-	mgr := TestManager(t, withRequestHandler(clientSrv, 0))
-	clientConfig, err := NewConfiguration(mgr, WithNodeList(addrs))
+	clientConfig, err := NewConfig(WithNodeList(addrs), TestDialOptions(t), WithServer(clientSrv))
 	if err != nil {
-		t.Fatalf("NewConfiguration() error: %v", err)
+		t.Fatalf("NewConfig() error: %v", err)
 	}
+	t.Cleanup(Closer(t, clientConfig))
 
 	// Wait for the client to appear in the server's ClientConfig.
 	WaitForConfigCondition(t, srv.ClientConfig, func(cfg Configuration) bool { return len(cfg) > 0 })
