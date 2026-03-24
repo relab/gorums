@@ -40,22 +40,22 @@ func TestConfig(t *testing.T) {
 		}
 	}
 
-	c1 := gorums.TestConfiguration(t, 4, serverFn)
+	c1 := gorums.TestConfiguration(t, 6, serverFn)
 	fmt.Println("--- c1 ", c1.Nodes())
 	callRPC(c1)
 
-	// Create a new configuration c2 with 2 new nodes not in c1, using the same manager as c1.
-	c2 := gorums.TestConfiguration(t, 2, serverFn, gorums.WithManager(t, c1))
+	// Create c2 by removing 2 nodes from c1.
+	c2 := c1.Remove(1, 2)
 	fmt.Println("--- c2 ", c2.Nodes())
 	callRPC(c2)
 
-	// Create c3 = c1 ∪ c2, using the same manager as c1 (and c2).
+	// Create c3 = c1 ∪ c2
 	c3 := c1.Union(c2)
 	fmt.Println("--- c3 ", c3.Nodes())
 	callRPC(c3)
 
-	// Create c4 = c3 \ c1, using the same manager as c1 (and c2, c3).
-	c4 := c3.Difference(c1)
+	// Create c4 = c3 \ c2
+	c4 := c3.Difference(c2)
 	fmt.Println("--- c4 ", c4.Nodes())
 	callRPC(c4)
 }
