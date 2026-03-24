@@ -72,15 +72,6 @@ func TestQuorumCallError(_ testing.TB, nodeErrors map[uint32]error) QuorumCallEr
 	return QuorumCallError{cause: ErrIncomplete, errors: errs}
 }
 
-// TestManager creates a new outbound manager with appropriate dial options for
-// the current test mode and any additional DialOptions, e.g., [WithMetadata].
-// The manager is automatically closed via t.Cleanup.
-func TestManager(t testing.TB, opts ...DialOption) *outboundManager {
-	t.Helper()
-	to := &testOptions{managerOpts: opts}
-	return to.getOrCreateManager(t)
-}
-
 // getOrCreateManager returns the existing manager from an existing configuration, or
 // creates a new one using [TestDialOptions] with any additional options from to.managerOpts.
 // If a new manager is created, its cleanup is registered via t.Cleanup.
