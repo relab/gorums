@@ -22,16 +22,7 @@ func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIfac
 	return setupServers(t, numServers, srvFn, listenFn)
 }
 
-// getOrCreateManager returns the existing manager or creates a new one with real network dialing.
-// If a new manager is created, its cleanup is registered via t.Cleanup.
-func (to *testOptions) getOrCreateManager(t testing.TB) *outboundManager {
-	if to.existingCfg != nil {
-		// Don't register cleanup - caller is responsible for closing the configuration
-		return to.existingCfg.mgr()
-	}
-	// Create manager and register its cleanup LAST so it runs FIRST (LIFO)
-	mgrOpts := append([]DialOption{InsecureDialOptions(t)}, to.managerOpts...)
-	mgr := newOutboundManager(mgrOpts...)
-	t.Cleanup(Closer(t, mgr))
-	return mgr
+// TestDialOptions returns a [DialOption] with insecure TCP credentials for integration tests.
+func TestDialOptions(t testing.TB) DialOption {
+	return InsecureDialOptions(t)
 }

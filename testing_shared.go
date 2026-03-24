@@ -72,12 +72,28 @@ func TestQuorumCallError(_ testing.TB, nodeErrors map[uint32]error) QuorumCallEr
 	return QuorumCallError{cause: ErrIncomplete, errors: errs}
 }
 
-// TestManager creates a new Manager with real network dial support and any additional
-// DialOption (e.g., WithMetadata). The manager is automatically closed via t.Cleanup.
+// TestManager creates a new outbound manager with appropriate dial options for
+// the current test mode and any additional DialOptions, e.g., [WithMetadata].
+// The manager is automatically closed via t.Cleanup.
 func TestManager(t testing.TB, opts ...DialOption) *outboundManager {
 	t.Helper()
 	to := &testOptions{managerOpts: opts}
 	return to.getOrCreateManager(t)
+}
+
+// getOrCreateManager returns the existing manager from an existing configuration, or
+// creates a new one using [TestDialOptions] with any additional options from to.managerOpts.
+// If a new manager is created, its cleanup is registered via t.Cleanup.
+func (to *testOptions) getOrCreateManager(t testing.TB) *outboundManager {
+	if to.existingCfg != nil {
+		// Don't register cleanup - caller is responsible for closing the configuration
+		return to.existingCfg.mgr()
+	}
+	// Create manager and register its cleanup LAST so it runs FIRST (LIFO)
+	mgrOpts := append([]DialOption{TestDialOptions(t)}, to.managerOpts...)
+	mgr := newOutboundManager(mgrOpts...)
+	t.Cleanup(Closer(t, mgr))
+	return mgr
 }
 
 // TestConfiguration creates servers and a configuration for testing.
@@ -122,7 +138,7 @@ func TestConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIfa
 	}
 
 	mgr := testOpts.getOrCreateManager(t)
-	cfg, err := NewConfiguration(mgr, testOpts.nodeListOption(addrs))
+	cfg, err := testOpts.nodeListOption(addrs).newConfig(mgr)
 	if err != nil {
 		t.Fatal(err)
 	}
