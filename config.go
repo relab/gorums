@@ -42,7 +42,10 @@ func (c Configuration) Context(parent context.Context) *ConfigContext {
 	return &ConfigContext{Context: parent, cfg: c}
 }
 
-// Deprecated: Use [NewConfig] instead.
+// NewConfiguration returns a configuration based on the provided list of nodes.
+// Nodes can be supplied using WithNodes or WithNodeList.
+// A new configuration can also be created from an existing configuration
+// using the Add, Union, Remove, Difference, Extend, and WithoutErrors methods.
 func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, err error) {
 	if opt == nil {
 		return nil, fmt.Errorf("config: missing required node list")
@@ -50,7 +53,9 @@ func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, er
 	return opt.newConfig(mgr)
 }
 
-// NewConfig returns a new [Configuration] based on the provided nodes and dial options.
+// NewConfig returns a new [Configuration] based on the provided [gorums.Option]s.
+// It accepts exactly one [gorums.NodeListOption] and multiple [gorums.DialOption]s.
+// You may use this function to create the initial configuration for a new manager.
 //
 // Example:
 //
@@ -80,7 +85,7 @@ func (c Configuration) Extend(opt NodeListOption) (Configuration, error) {
 	if opt == nil {
 		return slices.Clone(c), nil
 	}
-	mgr := c.mgr()
+	mgr := c.Manager()
 	newNodes, err := opt.newConfig(mgr)
 	if err != nil {
 		return nil, err
@@ -122,26 +127,11 @@ func (c Configuration) Equal(b Configuration) bool {
 
 // Manager returns the Manager that manages this configuration's nodes.
 // Returns nil if the configuration is empty.
-//
-// Deprecated: Use [Configuration.Close] to close the configuration instead.
 func (c Configuration) Manager() *Manager {
-	return c.mgr()
-}
-
-// mgr returns the outboundManager for this configuration's nodes.
-func (c Configuration) mgr() *outboundManager {
 	if len(c) == 0 {
 		return nil
 	}
 	return c[0].mgr
-}
-
-// Close closes all node connections managed by this configuration.
-func (c Configuration) Close() error {
-	if mgr := c.mgr(); mgr != nil {
-		return mgr.Close()
-	}
-	return nil
 }
 
 // nextMsgID returns the next message ID from this client's manager.
@@ -160,7 +150,7 @@ func (c Configuration) Add(ids ...uint32) Configuration {
 	if len(c) == 0 {
 		return nil
 	}
-	mgr := c.mgr()
+	mgr := c.Manager()
 	nodes := slices.Clone(c)
 	// seenIDs is used to filter duplicate IDs and IDs already added
 	seenIDs := newSet(c.NodeIDs()...)

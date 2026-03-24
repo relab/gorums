@@ -127,7 +127,11 @@ func allocateListeners(n int) ([]net.Listener, NodeListOption, error) {
 // server-initiated requests back through the bidirectional connection, regardless of
 // whether this system has peer tracking configured.
 func (s *System) newOutboundConfig(nodeList NodeListOption, dialOpts ...DialOption) (Configuration, error) {
-	return NewConfig(nodeList, append([]DialOption{WithServer(s.srv)}, dialOpts...)...)
+	opts := []Option{WithServer(s.srv), nodeList}
+	for _, o := range dialOpts {
+		opts = append(opts, o)
+	}
+	return NewConfig(opts...)
 }
 
 // OutboundConfig returns the auto-created outbound [Configuration], or nil if none was created.

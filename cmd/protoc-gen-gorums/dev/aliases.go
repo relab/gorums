@@ -6,6 +6,7 @@ import gorums "github.com/relab/gorums"
 // from user code already interacting with the generated code.
 type (
 	Configuration = gorums.Configuration
+	Manager       = gorums.Manager
 	Node          = gorums.Node
 	NodeContext   = gorums.NodeContext
 	ConfigContext = gorums.ConfigContext
@@ -15,12 +16,30 @@ type (
 // This prevents users from defining message types with these names.
 var (
 	_ = (*Configuration)(nil)
+	_ = (*Manager)(nil)
 	_ = (*Node)(nil)
 	_ = (*NodeContext)(nil)
 	_ = (*ConfigContext)(nil)
 )
 
-// NewConfig returns a new [Configuration] based on the provided nodes and dial options.
+// NewManager returns a new Manager for managing connection to nodes added
+// to the manager. This function accepts dial options used to configure
+// various aspects of the manager.
+func NewManager(opts ...gorums.DialOption) *Manager {
+	return gorums.NewManager(opts...)
+}
+
+// NewConfiguration returns a configuration based on the provided list of nodes.
+// Nodes can be supplied using WithNodes or WithNodeList.
+// A new configuration can also be created from an existing configuration
+// using the Add, Union, Remove, Difference, Extend, and WithoutErrors methods.
+func NewConfiguration(mgr *Manager, opt gorums.NodeListOption) (Configuration, error) {
+	return gorums.NewConfiguration(mgr, opt)
+}
+
+// NewConfig returns a new [Configuration] based on the provided [gorums.Option]s.
+// It accepts exactly one [gorums.NodeListOption] and multiple [gorums.DialOption]s.
+// You may use this function to create the initial configuration for a new manager.
 //
 // Example:
 //
