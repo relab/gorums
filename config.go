@@ -7,8 +7,8 @@ import (
 	"slices"
 )
 
-// ConfigContext is a context that carries a configuration for quorum calls.
-// It embeds context.Context and provides access to the Configuration.
+// ConfigContext is a context that carries a configuration for multicast or
+// quorum calls. It embeds context.Context and provides access to the configuration.
 //
 // Use [Configuration.Context] to create a ConfigContext from an existing context.
 type ConfigContext struct {
@@ -16,23 +16,12 @@ type ConfigContext struct {
 	cfg Configuration
 }
 
-// Configuration returns the Configuration associated with this context.
-func (c ConfigContext) Configuration() Configuration {
-	return c.cfg
-}
-
-// Configuration represents a static set of nodes on which quorum calls may be invoked.
-// A configuration is created using [NewConfiguration] or [NewConfig]. A configuration
-// should be treated as immutable. Therefore, methods that operate on a configuration
-// always return a new Configuration instance.
-type Configuration []*Node
-
 // Context creates a new ConfigContext from the given parent context
 // and this configuration.
 //
 // Example:
 //
-//	config, _ := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
+//	config, _ := gorums.NewConfig(gorums.WithNodeList(addrs), dialOpts...)
 //	cfgCtx := config.Context(context.Background())
 //	resp, err := paxos.Prepare(cfgCtx, req)
 func (c Configuration) Context(parent context.Context) *ConfigContext {
@@ -41,6 +30,17 @@ func (c Configuration) Context(parent context.Context) *ConfigContext {
 	}
 	return &ConfigContext{Context: parent, cfg: c}
 }
+
+// Configuration returns the configuration associated with this context.
+func (c ConfigContext) Configuration() Configuration {
+	return c.cfg
+}
+
+// Configuration represents a static set of nodes on which multicast or
+// quorum calls may be invoked. A configuration is created using [NewConfig].
+// A configuration should be treated as immutable. Therefore, methods that
+// operate on a configuration always return a new Configuration instance.
+type Configuration []*Node
 
 // Deprecated: Use [NewConfig] instead.
 func NewConfiguration(mgr *outboundManager, opt NodeListOption) (nodes Configuration, err error) {
@@ -63,7 +63,7 @@ func NewConfig(nodes NodeListOption, opts ...DialOption) (Configuration, error) 
 		return nil, fmt.Errorf("config: missing required node list")
 	}
 	mgr := newOutboundManager(opts...)
-	cfg, err := NewConfiguration(mgr, nodes)
+	cfg, err := nodes.newConfig(mgr)
 	if err != nil {
 		_ = mgr.Close()
 		return nil, err
@@ -72,7 +72,6 @@ func NewConfig(nodes NodeListOption, opts ...DialOption) (Configuration, error) 
 }
 
 // Extend returns a new Configuration combining c with new nodes from the provided NodeListOption.
-// This is the only way to add nodes that are not yet registered with the manager.
 func (c Configuration) Extend(opt NodeListOption) (Configuration, error) {
 	if len(c) == 0 {
 		return nil, fmt.Errorf("config: cannot extend empty configuration")
