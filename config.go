@@ -60,7 +60,7 @@ func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, er
 //	)
 func NewConfig(nodes NodeListOption, opts ...DialOption) (Configuration, error) {
 	if nodes == nil {
-		return nil, fmt.Errorf("gorums: missing required NodeListOption")
+		return nil, fmt.Errorf("config: missing required node list")
 	}
 	mgr := newOutboundManager(opts...)
 	cfg, err := NewConfiguration(mgr, nodes)
