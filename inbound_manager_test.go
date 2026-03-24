@@ -427,7 +427,7 @@ func peerNodes() NodeListOption {
 // gorumsNodeIDKey metadata, connects to addrs, and returns the manager.
 // Manager cleanup is registered via t.Cleanup; callers may also close it
 // explicitly (e.g., to test disconnect) — Close is idempotent.
-func connectAsPeer(t *testing.T, peerID uint32, addrs []string) *Manager {
+func connectAsPeer(t *testing.T, peerID uint32, addrs []string) *outboundManager {
 	t.Helper()
 	peerMD := metadata.Pairs(gorumsNodeIDKey, strconv.FormatUint(uint64(peerID), 10))
 	mgr := TestManager(t, WithMetadata(peerMD))
@@ -605,7 +605,7 @@ func testClientServer(t *testing.T) (*Server, []string) {
 // capability by sending the gorums-node-id key (via [withRequestHandler]),
 // connects to addrs, and returns the manager. The server will include it in
 // ClientConfig and may dispatch server-initiated calls to it.
-func connectAsPeerClient(t *testing.T, addrs []string) *Manager {
+func connectAsPeerClient(t *testing.T, addrs []string) *outboundManager {
 	t.Helper()
 	mgr := TestManager(t, withRequestHandler(NewServer(), 0))
 	_, err := NewConfiguration(mgr, WithNodeList(addrs))

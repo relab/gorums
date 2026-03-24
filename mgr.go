@@ -23,10 +23,6 @@ type outboundManager struct {
 	nextMsgID uint64
 }
 
-// Deprecated: Manager is an alias for outboundManager and will be removed in a
-// future release. Use [Configuration] instead.
-type Manager = outboundManager
-
 // newOutboundManager returns a new outboundManager for managing connection to
 // nodes added to the manager.
 func newOutboundManager(opts ...DialOption) *outboundManager {
