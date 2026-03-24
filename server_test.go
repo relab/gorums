@@ -122,13 +122,11 @@ func TestTCPReconnection(t *testing.T) {
 		_ = srv.Serve(lis)
 	}()
 
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(gorums.Closer(t, mgr))
-
-	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList([]string{addr}))
+	cfg, err := gorums.NewConfig(gorums.WithNodeList([]string{addr}), gorums.InsecureDialOptions(t))
 	if err != nil {
-		t.Fatalf("NewConfiguration failed: %v", err)
+		t.Fatalf("NewConfig failed: %v", err)
 	}
+	t.Cleanup(gorums.Closer(t, cfg))
 	node := cfg.Nodes()[0]
 
 	// Send first message

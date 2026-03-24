@@ -95,10 +95,10 @@ func TestNewConfiguration(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-			t.Cleanup(gorums.Closer(t, mgr))
-
-			cfg, err := gorums.NewConfiguration(mgr, tt.opt)
+			cfg, err := gorums.NewConfig(tt.opt, gorums.InsecureDialOptions(t))
+			if err == nil {
+				t.Cleanup(gorums.Closer(t, cfg))
+			}
 			if tt.wantErr != "" {
 				if err == nil {
 					t.Fatalf("Error = nil, want %q", tt.wantErr)
@@ -113,9 +113,6 @@ func TestNewConfiguration(t *testing.T) {
 			}
 			if cfg.Size() != tt.wantSize {
 				t.Errorf("cfg.Size() = %d, want %d", cfg.Size(), tt.wantSize)
-			}
-			if mgr.Size() != tt.wantSize {
-				t.Errorf("mgr.Size() = %d, want %d", mgr.Size(), tt.wantSize)
 			}
 		})
 	}
@@ -187,13 +184,11 @@ func TestConfigurationExtend(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-			t.Cleanup(gorums.Closer(t, mgr))
-
-			c, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(tt.initialNodes))
+			c, err := gorums.NewConfig(gorums.WithNodeList(tt.initialNodes), gorums.InsecureDialOptions(t))
 			if err != nil {
 				t.Fatal(err)
 			}
+			t.Cleanup(gorums.Closer(t, c))
 
 			c2, err := c.Extend(tt.extendOpt)
 			if tt.wantErr != "" {
@@ -211,21 +206,16 @@ func TestConfigurationExtend(t *testing.T) {
 			if c2.Size() != tt.wantSize {
 				t.Errorf("c2.Size() = %d, want %d", c2.Size(), tt.wantSize)
 			}
-			if mgr.Size() != tt.wantSize {
-				t.Errorf("mgr.Size() = %d, want %d", mgr.Size(), tt.wantSize)
-			}
 		})
 	}
 }
 
 func TestConfigurationAdd(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(gorums.Closer(t, mgr))
-
-	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes)) // c1 = {1, 2, 3}
+	c1, err := gorums.NewConfig(gorums.WithNodeList(nodes), gorums.InsecureDialOptions(t)) // c1 = {1, 2, 3}
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(gorums.Closer(t, c1))
 	if c1.Size() != len(nodes) {
 		t.Errorf("c1.Size() = %d, want %d", c1.Size(), len(nodes))
 	}
@@ -248,13 +238,11 @@ func TestConfigurationAdd(t *testing.T) {
 }
 
 func TestConfigurationUnion(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(gorums.Closer(t, mgr))
-
-	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes)) // c1 = {1, 2, 3}
+	c1, err := gorums.NewConfig(gorums.WithNodeList(nodes), gorums.InsecureDialOptions(t)) // c1 = {1, 2, 3}
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(gorums.Closer(t, c1))
 
 	// Add newNodes to c1 using Extend (gets IDs 4, 5)
 	newNodes := []string{"127.0.0.1:9084", "127.0.0.1:9085"}
@@ -292,13 +280,11 @@ func TestConfigurationUnion(t *testing.T) {
 }
 
 func TestConfigurationRemove(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(gorums.Closer(t, mgr))
-
-	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes)) // c1 = {1, 2, 3}
+	c1, err := gorums.NewConfig(gorums.WithNodeList(nodes), gorums.InsecureDialOptions(t)) // c1 = {1, 2, 3}
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(gorums.Closer(t, c1))
 
 	// Remove one node using Remove
 	c2 := c1.Remove(c1[0].ID()) // c2 = {2, 3}
@@ -308,13 +294,11 @@ func TestConfigurationRemove(t *testing.T) {
 }
 
 func TestConfigurationDifference(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(gorums.Closer(t, mgr))
-
-	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes)) // c1 = {1, 2, 3}
+	c1, err := gorums.NewConfig(gorums.WithNodeList(nodes), gorums.InsecureDialOptions(t)) // c1 = {1, 2, 3}
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(gorums.Closer(t, c1))
 
 	newNodes := []string{"127.0.0.1:9084", "127.0.0.1:9085"}
 	c3, err := c1.Extend(gorums.WithNodeList(newNodes)) // c3 = {1, 2, 3, 4, 5}
@@ -330,14 +314,12 @@ func TestConfigurationDifference(t *testing.T) {
 }
 
 func TestConfigurationAddDuplicateIDs(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(gorums.Closer(t, mgr))
-
 	// Create configuration with all three nodes
-	c2, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes)) // c2 = {1, 2, 3}
+	c2, err := gorums.NewConfig(gorums.WithNodeList(nodes), gorums.InsecureDialOptions(t)) // c2 = {1, 2, 3}
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(gorums.Closer(t, c2))
 	// Create c1 by removing node 3
 	c1 := c2.Remove(3) // c1 = {1, 2}
 
@@ -355,14 +337,12 @@ func TestConfigurationAddDuplicateIDs(t *testing.T) {
 }
 
 func TestConfigurationUnionDuplicateNodes(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(gorums.Closer(t, mgr))
-
 	// Create configuration with nodes 1, 2, 3
-	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
+	c1, err := gorums.NewConfig(gorums.WithNodeList(nodes), gorums.InsecureDialOptions(t))
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(gorums.Closer(t, c1))
 
 	// Create subset configurations
 	c2 := c1.Remove(2, 3) // c2 = {1}
@@ -386,13 +366,11 @@ func TestConfigurationUnionDuplicateNodes(t *testing.T) {
 }
 
 func TestConfigurationImmutability(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(gorums.Closer(t, mgr))
-
-	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
+	c1, err := gorums.NewConfig(gorums.WithNodeList(nodes), gorums.InsecureDialOptions(t))
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(gorums.Closer(t, c1))
 
 	// Test Union with empty returns a clone, not the original
 	var emptyConfig gorums.Configuration
@@ -425,13 +403,11 @@ func TestConfigurationImmutability(t *testing.T) {
 }
 
 func TestConfigurationWithoutErrors(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(gorums.Closer(t, mgr))
-
-	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodes(nodeMap))
+	cfg, err := gorums.NewConfig(gorums.WithNodes(nodeMap), gorums.InsecureDialOptions(t))
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(gorums.Closer(t, cfg))
 
 	timeoutErr := errors.New("timeout")
 	connRefusedErr := errors.New("connection refused")

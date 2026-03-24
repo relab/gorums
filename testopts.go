@@ -22,17 +22,17 @@ type testOptions struct {
 	managerOpts    []DialOption
 	serverOpts     []ServerOption
 	nodeListOpts   []NodeListOption
-	existingMgr    *outboundManager
+	existingCfg    Configuration
 	stopFuncPtr    *func(...int)       // pointer to capture the variadic stop function
 	preConnectHook func(stopFn func()) // called before connecting to servers
 	skipGoleak     bool                // skip goleak checks (useful for synctest)
 }
 
 // shouldSkipGoleak returns true if goleak checks should be skipped.
-// This includes cases where an existing manager is reused (since it may
+// This includes cases where an existing configuration is reused (since it may
 // already have its own goleak checks) or when SkipGoleak option is set.
 func (to *testOptions) shouldSkipGoleak() bool {
-	return to.existingMgr != nil || to.skipGoleak
+	return to.existingCfg != nil || to.skipGoleak
 }
 
 // serverFunc returns a server creation function based on the server options.
@@ -76,8 +76,8 @@ func extractTestOptions(opts []TestOption) testOptions {
 			result.serverOpts = append(result.serverOpts, o)
 		case NodeListOption:
 			result.nodeListOpts = append(result.nodeListOpts, o)
-		case *outboundManager:
-			result.existingMgr = o
+		case Configuration:
+			result.existingCfg = o
 		case stopFuncProvider:
 			result.stopFuncPtr = o.stopFunc
 		case preConnectProvider:
@@ -89,19 +89,19 @@ func extractTestOptions(opts []TestOption) testOptions {
 	return result
 }
 
-// WithManager returns a TestOption that provides an existing manager to use
-// instead of creating a new one. This is useful when creating multiple
-// configurations that should share the same manager.
+// WithManager returns a TestOption that provides an existing configuration whose
+// manager will be reused instead of creating a new one. This is useful when
+// creating multiple configurations that should share the same manager.
 //
-// When using WithManager, the caller is responsible for closing the manager.
-// SetupConfiguration will NOT register a cleanup function for the manager.
+// When using WithManager, the caller is responsible for closing the original
+// configuration. SetupConfiguration will NOT register a cleanup function for the manager.
 //
 // This option is intended for testing purposes only.
-func WithManager(_ testing.TB, mgr *Manager) TestOption {
-	if mgr == nil {
-		panic("gorums: WithManager called with nil manager")
+func WithManager(_ testing.TB, cfg Configuration) TestOption {
+	if cfg == nil {
+		panic("gorums: WithManager called with nil configuration")
 	}
-	return mgr
+	return cfg
 }
 
 // stopFuncProvider is a TestOption that captures the server stop function.
