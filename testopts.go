@@ -5,7 +5,7 @@ import "testing"
 // TestOption is a marker interface that can hold DialOption,
 // ServerOption, or NodeListOption. This allows test helpers to accept
 // a single variadic parameter that can be filtered and passed to the
-// appropriate constructors (NewManager, NewServer, NewConfiguration).
+// appropriate constructors: NewServer or NewConfig.
 //
 // Each option type (DialOption, ServerOption, NodeListOption) embeds
 // this interface, so they can be passed directly without wrapping:
