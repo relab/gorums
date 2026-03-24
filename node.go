@@ -48,7 +48,7 @@ type Node struct {
 	// Only assigned at creation.
 	id   uint32
 	addr string
-	mgr  *outboundManager // only used for backward compatibility to allow Configuration.Manager()
+	mgr  *outboundManager // owning manager for this node
 
 	msgIDGen func() uint64
 	router   *stream.MessageRouter
@@ -78,7 +78,7 @@ type nodeOptions struct {
 	PerNodeMD      func(uint32) metadata.MD
 	DialOpts       []grpc.DialOption
 	RequestHandler stream.RequestHandler
-	Manager        *outboundManager // only used for backward compatibility to allow Configuration.Manager()
+	Manager        *outboundManager // owning manager
 }
 
 // newOutboundNode creates a new node using the provided options. It establishes
