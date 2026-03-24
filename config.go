@@ -42,14 +42,6 @@ func (c ConfigContext) Configuration() Configuration {
 // operate on a configuration always return a new Configuration instance.
 type Configuration []*Node
 
-// Deprecated: Use [NewConfig] instead.
-func NewConfiguration(mgr *outboundManager, opt NodeListOption) (nodes Configuration, err error) {
-	if opt == nil {
-		return nil, fmt.Errorf("config: missing required node list")
-	}
-	return opt.newConfig(mgr)
-}
-
 // NewConfig returns a new [Configuration] based on the provided nodes and dial options.
 //
 // Example:
