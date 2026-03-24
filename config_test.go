@@ -25,7 +25,7 @@ func (n testNode) Addr() string {
 	return n.addr
 }
 
-func TestNewConfiguration(t *testing.T) {
+func TestNewConfig(t *testing.T) {
 	tests := []struct {
 		name     string
 		opt      gorums.NodeListOption
