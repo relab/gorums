@@ -43,7 +43,7 @@ func (c Configuration) Context(parent context.Context) *ConfigContext {
 }
 
 // Deprecated: Use [NewConfig] instead.
-func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, err error) {
+func NewConfiguration(mgr *outboundManager, opt NodeListOption) (nodes Configuration, err error) {
 	if opt == nil {
 		return nil, fmt.Errorf("config: missing required node list")
 	}
