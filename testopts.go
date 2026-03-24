@@ -22,7 +22,7 @@ type testOptions struct {
 	managerOpts    []DialOption
 	serverOpts     []ServerOption
 	nodeListOpts   []NodeListOption
-	existingMgr    *Manager
+	existingMgr    *outboundManager
 	stopFuncPtr    *func(...int)       // pointer to capture the variadic stop function
 	preConnectHook func(stopFn func()) // called before connecting to servers
 	skipGoleak     bool                // skip goleak checks (useful for synctest)
@@ -76,7 +76,7 @@ func extractTestOptions(opts []TestOption) testOptions {
 			result.serverOpts = append(result.serverOpts, o)
 		case NodeListOption:
 			result.nodeListOpts = append(result.nodeListOpts, o)
-		case *Manager:
+		case *outboundManager:
 			result.existingMgr = o
 		case stopFuncProvider:
 			result.stopFuncPtr = o.stopFunc
