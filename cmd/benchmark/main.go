@@ -189,14 +189,14 @@ func main() {
 		options.QuorumSize = *qSize
 	}
 
-	mgrOpts := []gorums.ManagerOption{
+	dialOpts := []gorums.DialOption{
 		gorums.WithDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 		gorums.WithSendBufferSize(*sendBuffer),
 	}
 
-	mgr := benchmark.NewManager(mgrOpts...)
+	mgr := benchmark.NewManager(dialOpts...)
 	defer mgr.Close()
 
 	cfg, err := benchmark.NewConfiguration(mgr, gorums.WithNodeList(remotes[:options.NumNodes]))

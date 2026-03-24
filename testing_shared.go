@@ -40,8 +40,9 @@ func TestContext(t testing.TB, timeout time.Duration) context.Context {
 	return ctx
 }
 
-// InsecureDialOptions returns the default insecure gRPC dial options for testing.
-func InsecureDialOptions(_ testing.TB) ManagerOption {
+// InsecureDialOptions returns a DialOption with insecure transport credentials
+// for testing.
+func InsecureDialOptions(_ testing.TB) DialOption {
 	return WithDialOptions(
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
@@ -72,8 +73,8 @@ func TestQuorumCallError(_ testing.TB, nodeErrors map[uint32]error) QuorumCallEr
 }
 
 // TestManager creates a new Manager with real network dial support and any additional
-// ManagerOptions (e.g., WithMetadata). The manager is automatically closed via t.Cleanup.
-func TestManager(t testing.TB, opts ...ManagerOption) *Manager {
+// DialOption (e.g., WithMetadata). The manager is automatically closed via t.Cleanup.
+func TestManager(t testing.TB, opts ...DialOption) *Manager {
 	t.Helper()
 	to := &testOptions{managerOpts: opts}
 	return to.getOrCreateManager(t)
