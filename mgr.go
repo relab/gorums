@@ -51,11 +51,6 @@ func newOutboundManager(opts ...DialOption) *outboundManager {
 	return m
 }
 
-// Deprecated: Use [NewConfig] instead.
-func NewManager(opts ...DialOption) *Manager {
-	return newOutboundManager(opts...)
-}
-
 // Close closes all node connections and any client streams.
 func (m *outboundManager) Close() error {
 	var err error
