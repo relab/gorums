@@ -215,7 +215,7 @@ func createClientServerSystems(t *testing.T) (*gorums.System, *gorums.Server, go
 	go func() { _ = sys.Serve() }()
 
 	t.Cleanup(func() {
-		_ = cfg.Manager().Close()
+		_ = cfg.Close()
 		_ = sys.Stop()
 	})
 

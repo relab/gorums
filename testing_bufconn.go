@@ -119,9 +119,9 @@ func testSetupServers(t testing.TB, numServers int, srvFn func(int) ServerIface)
 // getOrCreateManager returns the existing manager or creates a new one with bufconn dialing.
 // If a new manager is created, its cleanup is registered via t.Cleanup.
 func (to *testOptions) getOrCreateManager(t testing.TB) *outboundManager {
-	if to.existingMgr != nil {
-		// Don't register cleanup - caller is responsible for closing the manager
-		return to.existingMgr
+	if to.existingCfg != nil {
+		// Don't register cleanup - caller is responsible for closing the configuration
+		return to.existingCfg.mgr()
 	}
 
 	// Create an indirect dialer that looks up from the registry at dial time.
