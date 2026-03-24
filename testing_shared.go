@@ -81,8 +81,8 @@ func (to *testOptions) getOrCreateManager(t testing.TB) *outboundManager {
 		return to.existingCfg.mgr()
 	}
 	// Create manager and register its cleanup LAST so it runs FIRST (LIFO)
-	mgrOpts := append([]DialOption{TestDialOptions(t)}, to.managerOpts...)
-	mgr := newOutboundManager(mgrOpts...)
+	dialOptions := append([]DialOption{TestDialOptions(t)}, to.managerOpts...)
+	mgr := newOutboundManager(dialOptions...)
 	t.Cleanup(Closer(t, mgr))
 	return mgr
 }
@@ -165,8 +165,8 @@ func TestNode(t testing.TB, srvFn func(i int) ServerIface, opts ...TestOption) *
 // Example usage:
 //
 //	addrs := gorums.TestServers(t, 3, serverFn)
-//	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-//	t.Cleanup(gorums.Closer(t, mgr))
+//	cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs), gorums.TestDialOptions(t))
+//	t.Cleanup(gorums.Closer(t, cfg))
 //	...
 //
 // This function can be used by other packages for testing purposes, as long as

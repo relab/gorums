@@ -438,9 +438,9 @@ func (r repl) parseConfiguration(cfgStr string) (pb.Configuration, error) {
 	}
 
 	nodes := make([]*pb.Node, 0, len(indices))
-	mgrNodes := r.cfg.Nodes()
+	cfgNodes := r.cfg.Nodes()
 	for _, i := range indices {
-		nodes = append(nodes, mgrNodes[i])
+		nodes = append(nodes, cfgNodes[i])
 	}
 	gorums.OrderedBy(gorums.ID).Sort(nodes)
 	return pb.Configuration(nodes), nil

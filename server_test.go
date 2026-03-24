@@ -24,9 +24,9 @@ func TestServerCallback(t *testing.T) {
 		message = m.Get("message")[0]
 		signal <- struct{}{}
 	})
-	mgrOption := gorums.WithMetadata(metadata.New(map[string]string{"message": "hello"}))
+	dialOption := gorums.WithMetadata(metadata.New(map[string]string{"message": "hello"}))
 
-	gorums.TestNode(t, nil, srvOption, mgrOption)
+	gorums.TestNode(t, nil, srvOption, dialOption)
 
 	select {
 	case <-time.After(100 * time.Millisecond):
