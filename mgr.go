@@ -19,17 +19,17 @@ type Manager struct {
 	lookup    map[uint32]*Node
 	closeOnce sync.Once
 	logger    *log.Logger
-	opts      managerOptions
+	opts      dialOptions
 	nextMsgID uint64
 }
 
 // NewManager returns a new Manager for managing connection to nodes added
-// to the manager. This function accepts manager options used to configure
+// to the manager. This function accepts dial options used to configure
 // various aspects of the manager.
-func NewManager(opts ...ManagerOption) *Manager {
+func NewManager(opts ...DialOption) *Manager {
 	m := &Manager{
 		lookup: make(map[uint32]*Node),
-		opts:   newManagerOptions(),
+		opts:   newDialOptions(),
 	}
 	for _, opt := range opts {
 		opt(&m.opts)

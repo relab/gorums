@@ -54,7 +54,7 @@ func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, er
 }
 
 // NewConfig returns a new [Configuration] based on the provided [gorums.Option]s.
-// It accepts exactly one [gorums.NodeListOption] and multiple [gorums.ManagerOption]s.
+// It accepts exactly one [gorums.NodeListOption] and multiple [gorums.DialOption]s.
 // You may use this function to create the initial configuration for a new manager.
 //
 // Example:
@@ -70,7 +70,7 @@ func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, er
 // creates a new manager; if a manager already exists, use [NewConfiguration]
 // instead, and provide the existing manager as the first argument.
 func NewConfig(opts ...Option) (Configuration, error) {
-	serverOptions, managerOptions, nodeListOption, err := splitOptions(opts)
+	serverOptions, dialOpts, nodeListOption, err := splitOptions(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func NewConfig(opts ...Option) (Configuration, error) {
 	if nodeListOption == nil {
 		return nil, fmt.Errorf("gorums: missing required NodeListOption")
 	}
-	mgr := NewManager(managerOptions...)
+	mgr := NewManager(dialOpts...)
 	return NewConfiguration(mgr, nodeListOption)
 }
 

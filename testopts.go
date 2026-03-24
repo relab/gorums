@@ -2,16 +2,16 @@ package gorums
 
 import "testing"
 
-// TestOption is a marker interface that can hold ManagerOption,
+// TestOption is a marker interface that can hold DialOption,
 // ServerOption, or NodeListOption. This allows test helpers to accept
 // a single variadic parameter that can be filtered and passed to the
 // appropriate constructors (NewManager, NewServer, NewConfiguration).
 //
-// Each option type (ManagerOption, ServerOption, NodeListOption) embeds
+// Each option type (DialOption, ServerOption, NodeListOption) embeds
 // this interface, so they can be passed directly without wrapping:
 //
 //	SetupConfiguration(t, 3, nil,
-//		WithBackoff(...),           // ManagerOption
+//		WithBackoff(...),           // DialOption
 //		WithReceiveBufferSize(10),  // ServerOption
 //		WithNodeMap(...),           // NodeListOption
 //	)
@@ -19,7 +19,7 @@ type TestOption any
 
 // testOptions holds extracted options from a slice of TestOption.
 type testOptions struct {
-	managerOpts    []ManagerOption
+	managerOpts    []DialOption
 	serverOpts     []ServerOption
 	nodeListOpts   []NodeListOption
 	existingMgr    *Manager
@@ -70,7 +70,7 @@ func extractTestOptions(opts []TestOption) testOptions {
 	var result testOptions
 	for _, opt := range opts {
 		switch o := opt.(type) {
-		case ManagerOption:
+		case DialOption:
 			result.managerOpts = append(result.managerOpts, o)
 		case ServerOption:
 			result.serverOpts = append(result.serverOpts, o)

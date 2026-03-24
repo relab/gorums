@@ -139,7 +139,7 @@ func (to *testOptions) getOrCreateManager(t testing.TB) *Manager {
 		grpc.WithContextDialer(bufconnDialer),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
-	mgrOpts := append([]ManagerOption{WithDialOptions(dialOpts...)}, to.managerOpts...)
+	mgrOpts := append([]DialOption{WithDialOptions(dialOpts...)}, to.managerOpts...)
 	mgr := NewManager(mgrOpts...)
 	t.Cleanup(func() { Closer(t, mgr)() })
 	return mgr

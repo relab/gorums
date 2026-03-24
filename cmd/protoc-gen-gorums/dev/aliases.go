@@ -23,9 +23,9 @@ var (
 )
 
 // NewManager returns a new Manager for managing connection to nodes added
-// to the manager. This function accepts manager options used to configure
+// to the manager. This function accepts dial options used to configure
 // various aspects of the manager.
-func NewManager(opts ...gorums.ManagerOption) *Manager {
+func NewManager(opts ...gorums.DialOption) *Manager {
 	return gorums.NewManager(opts...)
 }
 
@@ -38,7 +38,7 @@ func NewConfiguration(mgr *Manager, opt gorums.NodeListOption) (Configuration, e
 }
 
 // NewConfig returns a new [Configuration] based on the provided [gorums.Option]s.
-// It accepts exactly one [gorums.NodeListOption] and multiple [gorums.ManagerOption]s.
+// It accepts exactly one [gorums.NodeListOption] and multiple [gorums.DialOption]s.
 // You may use this function to create the initial configuration for a new manager.
 //
 // Example:
