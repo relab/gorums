@@ -67,18 +67,6 @@ func (m *outboundManager) Close() error {
 	return err
 }
 
-// NodeIDs returns the identifier of each available node. IDs are returned in
-// the same order as they were provided in the creation of the Manager.
-func (m *outboundManager) NodeIDs() []uint32 {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	ids := make([]uint32, 0, len(m.nodes))
-	for _, node := range m.nodes {
-		ids = append(ids, node.ID())
-	}
-	return ids
-}
-
 // Node returns the node with the given identifier if present.
 func (m *outboundManager) Node(id uint32) (node *Node, found bool) {
 	m.mu.Lock()
@@ -93,13 +81,6 @@ func (m *outboundManager) Nodes() []*Node {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.nodes
-}
-
-// Size returns the number of nodes in the Manager.
-func (m *outboundManager) Size() (nodes int) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return len(m.nodes)
 }
 
 func (m *outboundManager) addNode(node *Node) {
