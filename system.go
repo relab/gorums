@@ -123,11 +123,11 @@ func allocateListeners(n int) ([]net.Listener, NodeListOption, error) {
 }
 
 // newOutboundConfig creates an outbound [Configuration] for connecting to peers.
-// It always prepends a [withRequestHandler] so that the remote server can dispatch
+// It always prepends a [WithServer] option so that the remote server can dispatch
 // server-initiated requests back through the bidirectional connection, regardless of
 // whether this system has peer tracking configured.
 func (s *System) newOutboundConfig(nodeList NodeListOption, dialOpts ...DialOption) (Configuration, error) {
-	opts := []Option{withRequestHandler(s.srv, s.srv.NodeID()), nodeList}
+	opts := []Option{WithServer(s.srv), nodeList}
 	for _, o := range dialOpts {
 		opts = append(opts, o)
 	}

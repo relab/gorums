@@ -139,26 +139,6 @@ func NewServer(opts ...ServerOption) *Server {
 	return s
 }
 
-// NewConfig creates a new outbound [Configuration] connecting to the given nodes,
-// with this server installed as the back-channel request handler.
-// Use this method when creating a client-side configuration that must receive
-// reverse-direction calls from the server via [ServerCtx.ClientConfig].
-//
-// The client advertises no node ID; the remote server assigns it a dynamic ID
-// and includes it in [ClientConfig].
-//
-// Example:
-//
-//	clientSrv := gorums.NewServer()
-//	clientSrv.RegisterHandler(pb.MyMethod, myHandler)
-//	cfg, err := clientSrv.NewConfig(
-//	    gorums.WithNodeList(serverAddrs),
-//	    gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
-//	)
-func (s *Server) NewConfig(opts ...Option) (Configuration, error) {
-	return NewConfig(append([]Option{withRequestHandler(s, 0)}, opts...)...)
-}
-
 // RegisterHandler registers a request handler for the specified method name.
 //
 // This function should only be used by generated code.

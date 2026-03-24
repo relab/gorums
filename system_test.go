@@ -205,9 +205,9 @@ func createClientServerSystems(t *testing.T) (*gorums.System, *gorums.Server, go
 	// No listener is required — dispatch is over the client's outbound gRPC stream.
 	clientSrv := gorums.NewServer()
 
-	// The client dials the server; NewConfig on the server wires up the back-channel dispatcher.
+	// The client dials the server; WithServer wires up the back-channel dispatcher.
 	nodeList := gorums.WithNodeList([]string{sys.Addr()})
-	cfg, err := clientSrv.NewConfig(nodeList, gorums.InsecureDialOptions(t))
+	cfg, err := gorums.NewConfig(nodeList, gorums.WithServer(clientSrv), gorums.InsecureDialOptions(t))
 	if err != nil {
 		t.Fatal(err)
 	}
