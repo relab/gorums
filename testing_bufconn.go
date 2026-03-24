@@ -118,7 +118,7 @@ func testSetupServers(t testing.TB, numServers int, srvFn func(int) ServerIface)
 
 // getOrCreateManager returns the existing manager or creates a new one with bufconn dialing.
 // If a new manager is created, its cleanup is registered via t.Cleanup.
-func (to *testOptions) getOrCreateManager(t testing.TB) *Manager {
+func (to *testOptions) getOrCreateManager(t testing.TB) *outboundManager {
 	if to.existingMgr != nil {
 		// Don't register cleanup - caller is responsible for closing the manager
 		return to.existingMgr
@@ -140,7 +140,7 @@ func (to *testOptions) getOrCreateManager(t testing.TB) *Manager {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 	mgrOpts := append([]DialOption{WithDialOptions(dialOpts...)}, to.managerOpts...)
-	mgr := NewManager(mgrOpts...)
+	mgr := newOutboundManager(mgrOpts...)
 	t.Cleanup(func() { Closer(t, mgr)() })
 	return mgr
 }
