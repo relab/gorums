@@ -22,11 +22,6 @@ type DialOption func(*dialOptions)
 
 func (DialOption) isOption() {}
 
-// ManagerOption is a deprecated alias for [DialOption].
-//
-// Deprecated: Use [DialOption] instead.
-type ManagerOption = DialOption
-
 type dialOptions struct {
 	grpcDialOpts []grpc.DialOption
 	logger       *log.Logger

@@ -120,14 +120,6 @@ func (c Configuration) Equal(b Configuration) bool {
 	return true
 }
 
-// Manager returns the Manager that manages this configuration's nodes.
-// Returns nil if the configuration is empty.
-//
-// Deprecated: Use [Configuration.Close] to close the configuration instead.
-func (c Configuration) Manager() *Manager {
-	return c.mgr()
-}
-
 // mgr returns the outboundManager for this configuration's nodes.
 func (c Configuration) mgr() *outboundManager {
 	if len(c) == 0 {
