@@ -108,6 +108,15 @@ func withRequestHandler(handler stream.RequestHandler, localID uint32) DialOptio
 	}
 }
 
+// WithServer returns a [DialOption] that installs srv as the back-channel request
+// handler with srv's own node ID, so that the remote peer can dispatch server-
+// initiated requests back through the bidirectional connection. Use this option
+// when creating a [Configuration] that must receive reverse-direction calls from
+// the server via [ServerCtx.ClientConfig].
+func WithServer(srv *Server) DialOption {
+	return withRequestHandler(srv, srv.NodeID())
+}
+
 // splitOptions separates a slice of [Option]s into [ServerOption]s, [DialOption]s,
 // and a single [NodeListOption]. It returns an error if more than one [NodeListOption]
 // is provided or if an unsupported option type is encountered.
