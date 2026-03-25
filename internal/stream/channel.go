@@ -287,7 +287,7 @@ func (c *Channel) isConnected() bool {
 // Combining them would cause double delivery on the response channel.
 func (c *Channel) Enqueue(req Request) {
 	if req.WaitSendDone && req.Streaming {
-		panic("stream: WaitSendDone and Streaming are mutually exclusive")
+		panic("gorums: WaitSendDone and Streaming are mutually exclusive")
 	}
 	if c.isLocal() {
 		c.router.DispatchLocalRequest(c.id, req)
