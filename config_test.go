@@ -45,12 +45,12 @@ func TestNewConfig(t *testing.T) {
 		{
 			name:    "WithNodeList/Reject/EmptyNodeList",
 			opt:     gorums.WithNodeList([]string{}),
-			wantErr: "config: missing required node addresses",
+			wantErr: "gorums: missing required node addresses",
 		},
 		{
 			name:    "WithNodes/Reject/EmptyNodeMap",
 			opt:     gorums.WithNodes(map[uint32]testNode{}),
-			wantErr: "config: missing required node map",
+			wantErr: "gorums: missing required node map",
 		},
 		{
 			name: "WithNodes/Reject/ZeroID",
@@ -58,7 +58,7 @@ func TestNewConfig(t *testing.T) {
 				0: {addr: "127.0.0.1:9080"}, // ID 0 should be rejected
 				1: {addr: "127.0.0.1:9081"},
 			}),
-			wantErr: "config: node 0 is reserved",
+			wantErr: "gorums: node 0 is reserved",
 		},
 		{
 			name: "WithNodes/Reject/DuplicateAddress",
@@ -66,7 +66,7 @@ func TestNewConfig(t *testing.T) {
 				1: {addr: "127.0.0.1:9081"},
 				2: {addr: "127.0.0.1:9081"}, // Duplicate address
 			}),
-			wantErr: `config: address "127.0.0.1:9081" already in use by node 1`,
+			wantErr: `gorums: address "127.0.0.1:9081" already in use by node 1`,
 		},
 		{
 			name: "WithNodeList/Reject/DuplicateAddress",
@@ -74,7 +74,7 @@ func TestNewConfig(t *testing.T) {
 				"127.0.0.1:9081",
 				"127.0.0.1:9081", // Duplicate address
 			}),
-			wantErr: `config: address "127.0.0.1:9081" already in use by node 1`,
+			wantErr: `gorums: address "127.0.0.1:9081" already in use by node 1`,
 		},
 		{
 			name: "WithNodes/Reject/NormalizedDuplicateAddress",
@@ -82,7 +82,7 @@ func TestNewConfig(t *testing.T) {
 				1: {addr: "localhost:9081"},
 				2: {addr: "127.0.0.1:9081"}, // Same resolved address
 			}),
-			wantErr: `config: address "127.0.0.1:9081" already in use by node 1`,
+			wantErr: `gorums: address "127.0.0.1:9081" already in use by node 1`,
 		},
 		{
 			name: "WithNodeList/Reject/NormalizedDuplicateAddress",
@@ -90,7 +90,7 @@ func TestNewConfig(t *testing.T) {
 				"localhost:9081",
 				"127.0.0.1:9081", // Same resolved address
 			}),
-			wantErr: `config: address "127.0.0.1:9081" already in use by node 1`,
+			wantErr: `gorums: address "127.0.0.1:9081" already in use by node 1`,
 		},
 	}
 	for _, tt := range tests {
@@ -155,7 +155,7 @@ func TestConfigurationExtend(t *testing.T) {
 			extendOpt: gorums.WithNodes(map[uint32]testNode{
 				0: {addr: "127.0.0.1:9090"}, // ID 0 should be rejected
 			}),
-			wantErr: "config: node 0 is reserved",
+			wantErr: "gorums: node 0 is reserved",
 		},
 		{
 			name:         "WithNodes/Reject/IDConflict",
@@ -163,7 +163,7 @@ func TestConfigurationExtend(t *testing.T) {
 			extendOpt: gorums.WithNodes(map[uint32]testNode{
 				2: {addr: "127.0.0.1:9090"}, // ID 2 already exists, rejected
 			}),
-			wantErr: `config: node 2 already in use by "127.0.0.1:9082"`,
+			wantErr: `gorums: node 2 already in use by "127.0.0.1:9082"`,
 		},
 		{
 			name:         "WithNodes/Reject/AddressConflict",
@@ -171,7 +171,7 @@ func TestConfigurationExtend(t *testing.T) {
 			extendOpt: gorums.WithNodes(map[uint32]testNode{
 				3: {addr: "127.0.0.1:9081"}, // Same address as ID 1
 			}),
-			wantErr: `config: address "127.0.0.1:9081" already in use by node 1`,
+			wantErr: `gorums: address "127.0.0.1:9081" already in use by node 1`,
 		},
 		{
 			name:         "WithNodes/Reject/NormalizedAddressConflict",
@@ -179,7 +179,7 @@ func TestConfigurationExtend(t *testing.T) {
 			extendOpt: gorums.WithNodes(map[uint32]testNode{
 				3: {addr: "localhost:9081"}, // Resolves to same as existing node 1
 			}),
-			wantErr: `config: address "127.0.0.1:9081" already in use by node 1`,
+			wantErr: `gorums: address "127.0.0.1:9081" already in use by node 1`,
 		},
 	}
 	for _, tt := range tests {

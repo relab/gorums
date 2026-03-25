@@ -3,7 +3,7 @@ package gorums
 import (
 	"cmp"
 	"context"
-	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"sync"
@@ -263,7 +263,7 @@ func (im *inboundManager) acceptClient(streamCtx context.Context, inboundStream 
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	if im.nextClientID == ^uint32(0) {
-		return nil, func() {}, errors.New("gorums: dynamic client ID space exhausted")
+		return nil, func() {}, fmt.Errorf("gorums: dynamic client ID space exhausted")
 	}
 	id := im.nextClientID
 	im.nextClientID++

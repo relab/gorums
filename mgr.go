@@ -83,7 +83,7 @@ func (m *outboundManager) addNode(node *Node) {
 
 func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 	if _, found := m.Node(id); found {
-		return nil, fmt.Errorf("node %d already exists", id)
+		return nil, fmt.Errorf("gorums: node %d already exists", id)
 	}
 	// Use a local (in-process) node when this ID is our own local node
 	// and a handler is configured (symmetric peer configuration).

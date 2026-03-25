@@ -1382,7 +1382,7 @@ Without `Release()`, the server would block all other inbound messages until the
 func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (*pb.ReadResponse, error) {
     config := ctx.Config()
     if len(config) == 0 {
-        return nil, fmt.Errorf("ReadNestedQC requires a server peer configuration")
+        return nil, fmt.Errorf("read_nested_qc: requires a server peer configuration")
     }
     // Release the handler lock before making nested outbound calls to avoid
     // blocking inbound message processing on this server.
@@ -1520,7 +1520,7 @@ The handler reads `ctx.ClientConfig()` to reach all currently connected client p
 func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (*pb.ReadResponse, error) {
     config := ctx.ClientConfig()
     if len(config) == 0 {
-        return nil, fmt.Errorf("ReadNestedQC: no client peers connected")
+        return nil, fmt.Errorf("read_nested_qc: no client peers connected")
     }
     ctx.Release()
     return newestValue(pb.ReadQC(config.Context(ctx), req))
