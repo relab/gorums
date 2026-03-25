@@ -21,6 +21,7 @@ func runClient(addresses []string) error {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer cfg.Close()
 	return Repl(cfg)
 }
 
