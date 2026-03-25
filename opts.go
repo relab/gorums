@@ -90,23 +90,11 @@ func WithPerNodeMetadata(f func(uint32) metadata.MD) DialOption {
 	}
 }
 
-// withRequestHandler returns a DialOption that sets the RequestHandler used to
-// dispatch server-initiated requests arriving on the bidirectional back-channel,
-// and records localID as this node's own NodeID. The localID is included in this
-// node's outgoing metadata for each connection, enabling the server to identify
-// this replica. The handler is not installed for the self-connection (if any) to
-// avoid deadlocks in symmetric configurations.
-func withRequestHandler(handler stream.RequestHandler, localID uint32) DialOption {
-	return func(o *dialOptions) {
-		o.handler = handler
-		o.localNodeID = localID
-		o.metadata = metadata.Join(o.metadata, metadataWithNodeID(localID))
-	}
-}
-
 // WithServer returns a [DialOption] that installs srv as the back-channel request
 // handler and includes srv.NodeID() in the outgoing metadata, allowing the remote
 // endpoint to route server-initiated requests back over the bidirectional connection.
+// This option is intended for use in symmetric peer configurations, where each node
+// is both a client and a server. It will panic if srv is nil.
 //
 // NodeID semantics:
 //   - If srv.NodeID() == 0, the remote will typically treat this connection as an
@@ -118,7 +106,11 @@ func WithServer(srv *Server) DialOption {
 	if srv == nil {
 		panic("gorums: WithServer called with nil server")
 	}
-	return withRequestHandler(srv, srv.NodeID())
+	return func(o *dialOptions) {
+		o.handler = srv
+		o.localNodeID = srv.NodeID()
+		o.metadata = metadata.Join(o.metadata, metadataWithNodeID(srv.NodeID()))
+	}
 }
 
 // splitOptions separates a slice of [Option]s into [ServerOption]s, [DialOption]s,
