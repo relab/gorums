@@ -13,27 +13,27 @@ import (
 // a panic when the caller invokes the nil function.
 func TestSplitOptionsTypedNil(t *testing.T) {
 	tests := []struct {
-		name       string
-		opts       []Option
-		wantSrvLen int
+		name        string
+		opts        []Option
+		wantSrvLen  int
 		wantDialLen int
 	}{
 		{
-			name:       "UntypedNil",
-			opts:       []Option{nil},
-			wantSrvLen: 0,
+			name:        "UntypedNil",
+			opts:        []Option{nil},
+			wantSrvLen:  0,
 			wantDialLen: 0,
 		},
 		{
-			name:       "NilDialOption",
-			opts:       []Option{DialOption(nil)},
-			wantSrvLen: 0,
+			name:        "NilDialOption",
+			opts:        []Option{DialOption(nil)},
+			wantSrvLen:  0,
 			wantDialLen: 0,
 		},
 		{
-			name:       "NilServerOption",
-			opts:       []Option{ServerOption(nil)},
-			wantSrvLen: 0,
+			name:        "NilServerOption",
+			opts:        []Option{ServerOption(nil)},
+			wantSrvLen:  0,
 			wantDialLen: 0,
 		},
 		{
@@ -44,7 +44,7 @@ func TestSplitOptionsTypedNil(t *testing.T) {
 				ServerOption(nil),
 				WithReceiveBufferSize(0),
 			},
-			wantSrvLen: 1,
+			wantSrvLen:  1,
 			wantDialLen: 1,
 		},
 	}

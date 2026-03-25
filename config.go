@@ -52,7 +52,7 @@ func (c Configuration) Context(parent context.Context) *ConfigContext {
 //	)
 func NewConfig(nodes NodeListOption, opts ...DialOption) (Configuration, error) {
 	if nodes == nil {
-		return nil, fmt.Errorf("config: missing required node list")
+		return nil, fmt.Errorf("gorums: missing required node list")
 	}
 	mgr := newOutboundManager(opts...)
 	cfg, err := nodes.newConfig(mgr)
@@ -66,7 +66,7 @@ func NewConfig(nodes NodeListOption, opts ...DialOption) (Configuration, error) 
 // Extend returns a new Configuration combining c with new nodes from the provided NodeListOption.
 func (c Configuration) Extend(opt NodeListOption) (Configuration, error) {
 	if len(c) == 0 {
-		return nil, fmt.Errorf("config: cannot extend empty configuration")
+		return nil, fmt.Errorf("gorums: cannot extend empty configuration")
 	}
 	if opt == nil {
 		return slices.Clone(c), nil
