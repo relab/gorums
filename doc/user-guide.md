@@ -592,7 +592,7 @@ func ExampleStorageClient() {
   }
 
   // Create a configuration with all nodes
-  cfg, err := gorums.NewConfig(
+  config, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
     gorums.WithDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -601,7 +601,7 @@ func ExampleStorageClient() {
   if err != nil {
     log.Fatalln("error creating configuration:", err)
   }
-  defer cfg.Close()
+  defer config.Close()
 
   ctx := context.Background()
   cfgCtx := config.Context(ctx)
@@ -1084,7 +1084,7 @@ Gorums defines several sentinel errors that commonly appear as the cause of a `Q
 Here's how to properly handle errors from a quorum call:
 
 ```go
-func handleQuorumCall(cfg *gorums.Configuration, req *ReadRequest) {
+func handleQuorumCall(config *gorums.Configuration, req *ReadRequest) {
   ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
   defer cancel()
 
@@ -1380,14 +1380,14 @@ Without `Release()`, the server would block all other inbound messages until the
 // ReadNestedQC is a quorum-call handler that fans out a nested ReadQC
 // to all known connected peers and returns the most recent value.
 func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (*pb.ReadResponse, error) {
-    cfg := ctx.Config()
-    if len(cfg) == 0 {
+    config := ctx.Config()
+    if len(config) == 0 {
         return nil, fmt.Errorf("ReadNestedQC requires a server peer configuration")
     }
     // Release the handler lock before making nested outbound calls to avoid
     // blocking inbound message processing on this server.
     ctx.Release()
-    return newestValue(pb.ReadQC(cfg.Context(ctx), req))
+    return newestValue(pb.ReadQC(config.Context(ctx), req))
 }
 ```
 
@@ -1395,12 +1395,12 @@ The same pattern applies to nested multicast:
 
 ```go
 func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerCtx, req *pb.WriteRequest) (*pb.WriteResponse, error) {
-    cfg := ctx.Config()
-    if len(cfg) == 0 {
+    config := ctx.Config()
+    if len(config) == 0 {
         return nil, fmt.Errorf("write_nested_multicast: requires server peer configuration")
     }
     ctx.Release()
-    if err := pb.WriteMulticast(cfg.Context(ctx), req); err != nil {
+    if err := pb.WriteMulticast(config.Context(ctx), req); err != nil {
         return nil, fmt.Errorf("write_nested_multicast: %w", err)
     }
     return pb.WriteResponse_builder{New: true}.Build(), nil
@@ -1485,7 +1485,7 @@ clientSrv := gorums.NewServer()
 clientSrv.RegisterHandler(pb.MyMethod, myHandler)
 
 // Connect to the server; NewConfig wires up the back-channel dispatcher automatically.
-cfg, err := clientSrv.NewConfig(
+config, err := clientSrv.NewConfig(
     gorums.WithNodeList(serverAddrs),
     gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 )
@@ -1518,12 +1518,12 @@ The handler reads `ctx.ClientConfig()` to reach all currently connected client p
 ```go
 // ReadNestedQC fans out a ReadQC to all clients that have connected.
 func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (*pb.ReadResponse, error) {
-    cfg := ctx.ClientConfig()
-    if len(cfg) == 0 {
+    config := ctx.ClientConfig()
+    if len(config) == 0 {
         return nil, fmt.Errorf("ReadNestedQC: no client peers connected")
     }
     ctx.Release()
-    return newestValue(pb.ReadQC(cfg.Context(ctx), req))
+    return newestValue(pb.ReadQC(config.Context(ctx), req))
 }
 ```
 
