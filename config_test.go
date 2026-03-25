@@ -2,6 +2,8 @@ package gorums_test
 
 import (
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/relab/gorums"
@@ -207,6 +209,49 @@ func TestConfigurationExtend(t *testing.T) {
 				t.Errorf("c2.Size() = %d, want %d", c2.Size(), tt.wantSize)
 			}
 		})
+	}
+}
+
+func TestConfigurationExtendConcurrent(t *testing.T) {
+	addrs := gorums.TestServers(t, 6, func(_ int) gorums.ServerIface { return gorums.NewServer() })
+
+	// Create base configuration so that concurrent Extend operations share the same node registry.
+	cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs[0:1]), gorums.TestDialOptions(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gorums.Closer(t, cfg))
+
+	// Create multiple node maps to extend with, each containing a unique new node.
+	// These maps will be used concurrently to verify that Extend can safely mutate
+	// the shared node registry under concurrent use (race-free configuration creation).
+	nodeMaps := []map[uint32]testNode{
+		{2: {addr: addrs[1]}},
+		{3: {addr: addrs[2]}},
+		{4: {addr: addrs[3]}},
+		{5: {addr: addrs[4]}},
+		{6: {addr: addrs[5]}},
+	}
+
+	errCh := make(chan error, len(nodeMaps))
+	var wg sync.WaitGroup
+	for i := range nodeMaps {
+		wg.Go(func() {
+			// Exercise concurrent configuration creation against the same node registry.
+			c, err := cfg.Extend(gorums.WithNodes(nodeMaps[i]))
+			if err != nil {
+				errCh <- err
+				return
+			}
+			if c.Size() != 2 {
+				errCh <- fmt.Errorf("c.Size() = %d, want 2", c.Size())
+			}
+		})
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Error(err)
 	}
 }
 
