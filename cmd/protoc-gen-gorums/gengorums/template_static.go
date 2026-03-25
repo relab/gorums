@@ -33,10 +33,10 @@ var (
 //
 // Example:
 //
-//		cfg, err := NewConfig(
-//		    gorums.WithNodeList([]string{"localhost:8080", "localhost:8081", "localhost:8082"}),
-//		    gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
-//		)
+//	cfg, err := NewConfig(
+//	    gorums.WithNodeList([]string{"localhost:8080", "localhost:8081", "localhost:8082"}),
+//	    gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+//	)
 func NewConfig(nodes gorums.NodeListOption, opts ...gorums.DialOption) (Configuration, error) {
 	return gorums.NewConfig(nodes, opts...)
 }
