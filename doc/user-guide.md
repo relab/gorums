@@ -1233,7 +1233,7 @@ func ExampleConfigClient() {
 
   // Example: Handling quorum call failures and creating a new configuration
   // without failed nodes.
-  cfgCtx := c1.Context(ctx)
+  cfgCtx := c1.Context(context.Background())
   state, err := ReadQC(cfgCtx, &ReadRequest{}).Majority()
   if err != nil {
     var qcErr gorums.QuorumCallError
