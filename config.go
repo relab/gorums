@@ -7,6 +7,12 @@ import (
 	"slices"
 )
 
+// Configuration represents a static set of nodes on which multicast or
+// quorum calls may be invoked. A configuration is created using [NewConfig].
+// A configuration should be treated as immutable. Therefore, methods that
+// operate on a configuration always return a new Configuration instance.
+type Configuration []*Node
+
 // ConfigContext is a context that carries a configuration for multicast or
 // quorum calls. It embeds context.Context and provides access to the configuration.
 //
@@ -14,6 +20,11 @@ import (
 type ConfigContext struct {
 	context.Context
 	cfg Configuration
+}
+
+// Configuration returns the configuration associated with this context.
+func (c ConfigContext) Configuration() Configuration {
+	return c.cfg
 }
 
 // Context creates a new ConfigContext from the given parent context
@@ -30,17 +41,6 @@ func (c Configuration) Context(parent context.Context) *ConfigContext {
 	}
 	return &ConfigContext{Context: parent, cfg: c}
 }
-
-// Configuration returns the configuration associated with this context.
-func (c ConfigContext) Configuration() Configuration {
-	return c.cfg
-}
-
-// Configuration represents a static set of nodes on which multicast or
-// quorum calls may be invoked. A configuration is created using [NewConfig].
-// A configuration should be treated as immutable. Therefore, methods that
-// operate on a configuration always return a new Configuration instance.
-type Configuration []*Node
 
 // NewConfig returns a new [Configuration] based on the provided nodes and dial options.
 //
