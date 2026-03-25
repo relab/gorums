@@ -1,6 +1,10 @@
 package gorums
 
-import "testing"
+import (
+	"testing"
+
+	"google.golang.org/grpc/metadata"
+)
 
 // TestSplitOptionsTypedNil verifies that splitOptions correctly handles typed
 // nils. In Go, an interface can be non-nil while wrapping a nil concrete value
@@ -60,5 +64,29 @@ func TestSplitOptionsTypedNil(t *testing.T) {
 				t.Errorf("len(dialOpts) = %d, want %d", got, tt.wantDialLen)
 			}
 		})
+	}
+}
+
+// TestWithMetadataJoinsInsteadOfOverwrites verifies that WithMetadata joins its
+// argument with any previously set metadata rather than overwriting it. This is
+// important when WithServer (or withRequestHandler) is applied before a
+// user-supplied WithMetadata, because the node-id key set by WithServer must
+// survive the subsequent WithMetadata call.
+func TestWithMetadataJoinsInsteadOfOverwrites(t *testing.T) {
+	const nodeIDKey = "x-gorums-node-id"
+
+	opts := newDialOptions()
+
+	// Simulate what withRequestHandler does: set node-id metadata first.
+	opts.metadata = metadata.Join(opts.metadata, metadata.Pairs(nodeIDKey, "42"))
+
+	// Now apply a user-supplied WithMetadata; it must not clobber the node-id.
+	WithMetadata(metadata.Pairs("x-custom", "hello"))(&opts)
+
+	if vals := opts.metadata.Get(nodeIDKey); len(vals) == 0 {
+		t.Errorf("WithMetadata overwrote %q metadata set by withRequestHandler; got none", nodeIDKey)
+	}
+	if vals := opts.metadata.Get("x-custom"); len(vals) == 0 {
+		t.Errorf("WithMetadata did not retain user-supplied key %q", "x-custom")
 	}
 }

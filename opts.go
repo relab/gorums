@@ -77,17 +77,18 @@ func WithSendBufferSize(size uint) DialOption {
 	}
 }
 
-// WithMetadata returns a DialOption that sets the metadata that is sent to each node
-// when the connection is initially established. This metadata can be retrieved from the
-// server-side method handlers.
+// WithMetadata returns a DialOption that merges md with any other metadata sent to
+// each node during connection establishment.
+// This metadata can be retrieved from the server-side method handlers.
 func WithMetadata(md metadata.MD) DialOption {
 	return func(o *dialOptions) {
-		o.metadata = md
+		o.metadata = metadata.Join(o.metadata, md)
 	}
 }
 
 // WithPerNodeMetadata returns a DialOption that allows you to set metadata for each
 // node individually.
+// This metadata can be retrieved from the server-side method handlers.
 func WithPerNodeMetadata(f func(uint32) metadata.MD) DialOption {
 	return func(o *dialOptions) {
 		o.perNodeMD = f
