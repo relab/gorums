@@ -109,11 +109,19 @@ func withRequestHandler(handler stream.RequestHandler, localID uint32) DialOptio
 }
 
 // WithServer returns a [DialOption] that installs srv as the back-channel request
-// handler with srv's own node ID, so that the remote peer can dispatch server-
-// initiated requests back through the bidirectional connection. Use this option
-// when creating a [Configuration] that must receive reverse-direction calls from
-// the server via [ServerCtx.ClientConfig].
+// handler and includes srv.NodeID() in the outgoing metadata, allowing the remote
+// endpoint to route server-initiated requests back over the bidirectional connection.
+//
+// NodeID semantics:
+//   - If srv.NodeID() == 0, the remote will typically treat this connection as an
+//     anonymous client and track reverse-direction calls via [ServerCtx.ClientConfig].
+//   - If srv.NodeID() > 0, the remote will treat this connection as a known peer
+//     and route requests via [ServerCtx.Config], as in symmetric peer configurations
+//     (e.g., outbound configs between replicas).
 func WithServer(srv *Server) DialOption {
+	if srv == nil {
+		panic("gorums: WithServer called with nil server")
+	}
 	return withRequestHandler(srv, srv.NodeID())
 }
 
