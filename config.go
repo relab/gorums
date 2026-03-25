@@ -37,7 +37,7 @@ func (c ConfigContext) Configuration() Configuration {
 //	resp, err := paxos.Prepare(cfgCtx, req)
 func (c Configuration) Context(parent context.Context) *ConfigContext {
 	if len(c) == 0 {
-		panic("gorums: Context called with empty configuration")
+		panic("gorums: Context called on an empty configuration")
 	}
 	return &ConfigContext{Context: parent, cfg: c}
 }

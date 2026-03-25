@@ -46,7 +46,7 @@ func (to *testOptions) serverFunc(srvFn func(i int) ServerIface) func(i int) Ser
 	}
 	if len(to.serverOpts) > 0 {
 		// You need to pass nil as the server function to use server options with the default server
-		panic("gorums: cannot use server options with a custom server function; use nil to use the default test server")
+		panic("gorums: cannot use server options with a custom server function")
 	}
 	return srvFn
 }
@@ -107,7 +107,7 @@ type stopFuncProvider struct {
 // This option is intended for testing purposes only.
 func WithStopFunc(_ testing.TB, fn *func(...int)) TestOption {
 	if fn == nil {
-		panic("gorums: WithStopFunc called with nil pointer")
+		panic("gorums: WithStopFunc called with nil function pointer")
 	}
 	return stopFuncProvider{stopFunc: fn}
 }

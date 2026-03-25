@@ -64,7 +64,7 @@ type Node struct {
 //	resp, err := service.GRPCCall(nodeCtx, req)
 func (n *Node) Context(parent context.Context) *NodeContext {
 	if n == nil {
-		panic("gorums: Context called with nil node")
+		panic("gorums: Context called on nil node")
 	}
 	return &NodeContext{Context: parent, node: n}
 }

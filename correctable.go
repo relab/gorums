@@ -68,7 +68,7 @@ func (c *Correctable[Resp]) update(reply Resp, level int, done bool, err error) 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.done {
-		panic("update(...) called on a done correctable")
+		panic("gorums: update(...) called on a completed correctable")
 	}
 	c.reply, c.level, c.err, c.done = reply, level, err, done
 	if done {
