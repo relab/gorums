@@ -13,16 +13,15 @@ func runClient(addresses []string) error {
 	if len(addresses) < 1 {
 		log.Fatalln("No addresses provided!")
 	}
-	mgr := proto.NewManager(
+	cfg, err := proto.NewConfig(gorums.WithNodeList(addresses),
 		gorums.WithDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()), // disable TLS
 		),
 	)
-	cfg, err := proto.NewConfiguration(mgr, gorums.WithNodeList(addresses))
 	if err != nil {
 		log.Fatal(err)
 	}
-	return Repl(mgr, cfg)
+	return Repl(cfg)
 }
 
 // newestValue processes responses from a ReadQC call and returns the reply
