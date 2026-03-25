@@ -90,7 +90,7 @@ func (r repl) ReadLine() (string, error) {
 }
 
 // Repl runs an interactive Read-eval-print loop, that allows users to run commands that perform
-// RPCs and quorum calls using the manager and configuration.
+// RPCs and quorum calls using the configuration.
 func Repl(defaultCfg pb.Configuration) error {
 	r := newRepl(defaultCfg)
 
