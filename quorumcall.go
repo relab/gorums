@@ -8,8 +8,8 @@ package gorums
 //   - Resp: The response message type from individual nodes
 //
 // The opts parameter accepts CallOption values such as Interceptors.
-// Interceptors are applied in the order they are provided via Interceptors,
-// modifying the clientCtx before the user calls a terminal method.
+// Interceptors are applied in the order they are provided via Interceptors
+// while the client context is being constructed, before the user calls a terminal method.
 //
 // Note: Messages are not sent to nodes until a terminal method (like Majority, First)
 // or iterator method (like Seq) is called, applying any registered request transformations.
@@ -50,12 +50,10 @@ func invokeQuorumCall[Req, Resp msg](
 	opts ...CallOption,
 ) *Responses[Resp] {
 	callOpts := getCallOptions(E_Quorumcall, opts...)
-	builder := newClientCtxBuilder[Req, Resp](ctx, req, method)
-	if streaming {
-		builder = builder.WithStreaming()
-	}
-	clientCtx := builder.Build()
-	clientCtx.applyInterceptors(callOpts.interceptors)
+	clientCtx := newClientCtx[Req, Resp](ctx, req, method, clientCtxOptions{
+		streaming:    streaming,
+		interceptors: callOpts.interceptors,
+	})
 
 	return NewResponses(clientCtx)
 }

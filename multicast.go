@@ -24,8 +24,10 @@ func Multicast[Req msg](ctx *ConfigContext, req Req, method string, opts ...Call
 	callOpts := getCallOptions(E_Multicast, opts...)
 	waitSendDone := callOpts.mustWaitSendDone()
 
-	clientCtx := newClientCtxBuilder[Req, *emptypb.Empty](ctx, req, method).WithWaitSendDone(waitSendDone).Build()
-	clientCtx.applyInterceptors(callOpts.interceptors)
+	clientCtx := newClientCtx[Req, *emptypb.Empty](ctx, req, method, clientCtxOptions{
+		waitSendDone: waitSendDone,
+		interceptors: callOpts.interceptors,
+	})
 
 	// Send messages immediately (multicast doesn't use lazy sending)
 	clientCtx.sendNow()
