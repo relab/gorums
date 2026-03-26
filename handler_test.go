@@ -79,7 +79,6 @@ func TestNewResponseMessage(t *testing.T) {
 			if got == nil {
 				t.Fatalf("NewResponseMessage returned nil, want non-nil")
 			}
-			// Compare Msg field - handle nil specially
 			if (tt.want.Msg == nil) != (got.Msg == nil) {
 				t.Errorf("Msg field: want nil=%v, got nil=%v", tt.want.Msg == nil, got.Msg == nil)
 			} else if tt.want.Msg != nil && got.Msg != nil {
@@ -87,7 +86,6 @@ func TestNewResponseMessage(t *testing.T) {
 					t.Errorf("Msg field mismatch (-want, +got):\n%s", diff)
 				}
 			}
-			// Compare the stream.Message field
 			if diff := cmp.Diff(tt.want.Message, got.Message, protocmp.Transform()); diff != "" {
 				t.Errorf("Message field mismatch (-want, +got):\n%s", diff)
 			}

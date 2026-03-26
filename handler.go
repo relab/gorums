@@ -17,6 +17,12 @@ type Message struct {
 	*stream.Message
 }
 
+// MetadataEntry is a type alias for [stream.MetadataEntry].
+type MetadataEntry = stream.MetadataEntry
+
+// MetadataEntry_builder is a type alias for [stream.MetadataEntry_builder].
+type MetadataEntry_builder = stream.MetadataEntry_builder
+
 type (
 	// Handler processes a request and returns a response.
 	Handler func(ServerCtx, *Message) (*Message, error)
