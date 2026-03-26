@@ -149,15 +149,19 @@ func (seq ResponseSeq[Resp]) CollectAll() map[uint32]Resp {
 //   - Resp: The response message type
 type Responses[Resp msg] struct {
 	ResponseSeq[Resp]
-	size    int
-	sendNow func() // sendNow triggers immediate sending of requests
+	size  int
+	start starter
+}
+
+type starter interface {
+	sendNow()
 }
 
 func NewResponses[Req, Resp msg](ctx *ClientCtx[Req, Resp]) *Responses[Resp] {
 	return &Responses[Resp]{
 		ResponseSeq: ctx.responseSeq,
 		size:        ctx.Size(),
-		sendNow:     func() { ctx.sendOnce.Do(ctx.send) },
+		start:       ctx,
 	}
 }
 
@@ -186,6 +190,11 @@ func (r *Responses[Resp]) Size() int {
 //	}
 func (r *Responses[Resp]) Seq() ResponseSeq[Resp] {
 	return r.ResponseSeq
+}
+
+// sendNow triggers immediate sending of requests.
+func (r *Responses[Resp]) sendNow() {
+	r.start.sendNow()
 }
 
 // -------------------------------------------------------------------------

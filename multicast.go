@@ -28,7 +28,7 @@ func Multicast[Req msg](ctx *ConfigContext, req Req, method string, opts ...Call
 	clientCtx.applyInterceptors(callOpts.interceptors)
 
 	// Send messages immediately (multicast doesn't use lazy sending)
-	clientCtx.sendOnce.Do(clientCtx.send)
+	clientCtx.sendNow()
 
 	// If waiting for send completion, drain the reply channel and return the first error.
 	if waitSendDone {

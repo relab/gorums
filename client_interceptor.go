@@ -64,6 +64,11 @@ type ClientCtx[Req, Resp msg] struct {
 	sendOnce sync.Once
 }
 
+// sendNow triggers request dispatch exactly once.
+func (c *ClientCtx[Req, Resp]) sendNow() {
+	c.sendOnce.Do(c.send)
+}
+
 // clientCtxBuilder provides an interface for constructing ClientCtx instances.
 type clientCtxBuilder[Req, Resp msg] struct {
 	c *ClientCtx[Req, Resp]
@@ -237,7 +242,7 @@ func (c *ClientCtx[Req, Resp]) transformAndMarshal(n *Node) *stream.Message {
 func (c *ClientCtx[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		// Trigger sending on first iteration
-		c.sendOnce.Do(c.send)
+		c.sendNow()
 		for range c.Size() {
 			select {
 			case r := <-c.replyChan:
@@ -257,7 +262,7 @@ func (c *ClientCtx[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 func (c *ClientCtx[Req, Resp]) streamingResponseSeq() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		// Trigger sending on first iteration
-		c.sendOnce.Do(c.send)
+		c.sendNow()
 		for {
 			select {
 			case r := <-c.replyChan:
