@@ -142,7 +142,7 @@ type StorageServer interface {
 	WriteQC(ctx gorums.ServerCtx, request *WriteRequest) (response *WriteResponse, err error)
 	ReadNestedQC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
 	WriteNestedMulticast(ctx gorums.ServerCtx, request *WriteRequest) (response *WriteResponse, err error)
-	ReadCorrectable(ctx gorums.ServerCtx, request *ReadRequest, send func(response *ReadResponse) error) error
+	ReadCorrectable(ctx gorums.ServerCtx, request *ReadRequest, send func(response *ReadResponse))
 }
 
 func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
@@ -206,10 +206,10 @@ func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
 	})
 	srv.RegisterHandler("proto.Storage.ReadCorrectable", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*ReadRequest](in)
-		err := impl.ReadCorrectable(ctx, req, func(resp *ReadResponse) error {
+		impl.ReadCorrectable(ctx, req, func(resp *ReadResponse) {
 			out := gorums.NewResponseMessage(in, resp)
-			return ctx.SendMessage(out)
+			ctx.SendMessage(out)
 		})
-		return nil, err
+		return nil, nil
 	})
 }

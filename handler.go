@@ -45,24 +45,25 @@ func (ctx *ServerCtx) Release() {
 	}
 }
 
-// SendMessage attempts to send the given message to the client.
-// This may fail if the stream was closed or the stream context got canceled.
+// SendMessage sends the given message to the client.
+// If marshaling fails, the error is encoded into the response envelope
+// and sent to the client; the stream is not closed.
 //
 // This function should only be used by generated code.
-func (ctx *ServerCtx) SendMessage(out *Message) error {
+func (ctx *ServerCtx) SendMessage(out *Message) {
 	// If Msg is set, marshal it to payload before sending.
 	if out.Msg != nil && len(out.GetPayload()) == 0 {
 		payload, err := proto.Marshal(out.Msg)
 		if err == nil {
 			out.SetPayload(payload)
+		} else {
+			// Encode the marshal error into the response envelope; don't close the stream.
+			out = MessageWithError(nil, out, err)
 		}
-		// Return an error to the client if marshaling failed on the server side; don't close the stream.
-		out = MessageWithError(nil, out, err)
 	}
 	if ctx.send != nil {
 		ctx.send(out.Message)
 	}
-	return nil
 }
 
 // Config returns a [Configuration] of all connected known peer servers, including this node.

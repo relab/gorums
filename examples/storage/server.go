@@ -122,14 +122,15 @@ func (s *storageServer) WriteQC(_ gorums.ServerCtx, req *pb.WriteRequest) (resp 
 }
 
 // ReadCorrectable is an RPC handler for a correctable quorum call. It sends multiple responses.
-func (s *storageServer) ReadCorrectable(_ gorums.ServerCtx, req *pb.ReadRequest, send func(response *pb.ReadResponse) error) error {
+func (s *storageServer) ReadCorrectable(_ gorums.ServerCtx, req *pb.ReadRequest, send func(response *pb.ReadResponse)) {
 	resp, err := s.Read(req)
 	if err != nil {
-		return err
+		s.logger.Printf("ReadCorrectable error: %v", err)
+		return
 	}
 	// Note: in a real application, the server might send multiple updates.
 	// For this storage example, we just send the current state once.
-	return send(resp)
+	send(resp)
 }
 
 // ReadNestedQC is a quorum-call handler that performs a nested quorum call

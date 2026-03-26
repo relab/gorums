@@ -104,12 +104,8 @@ func (testSrv) Correctable(_ gorums.ServerCtx, _ *Request) (*Response, error) {
 	return Response_builder{Level: 1}.Build(), nil
 }
 
-func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, _ *Request, send func(response *Response) error) error {
+func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, _ *Request, send func(response *Response)) {
 	for i := range srv.n {
-		err := send(Response_builder{Level: int32(i + 1)}.Build())
-		if err != nil {
-			return err
-		}
+		send(Response_builder{Level: int32(i + 1)}.Build())
 	}
-	return nil
 }

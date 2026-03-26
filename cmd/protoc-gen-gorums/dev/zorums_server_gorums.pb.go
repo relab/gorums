@@ -28,9 +28,9 @@ type ZorumsServiceServer interface {
 	Multicast2(ctx gorums.ServerCtx, request *Request)
 	Multicast3(ctx gorums.ServerCtx, request *Request)
 	Multicast4(ctx gorums.ServerCtx, request *emptypb.Empty)
-	QuorumCallStream(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error
-	QuorumCallStreamWithEmpty(ctx gorums.ServerCtx, request *Request, send func(response *emptypb.Empty) error) error
-	QuorumCallStreamWithEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty, send func(response *Response) error) error
+	QuorumCallStream(ctx gorums.ServerCtx, request *Request, send func(response *Response))
+	QuorumCallStreamWithEmpty(ctx gorums.ServerCtx, request *Request, send func(response *emptypb.Empty))
+	QuorumCallStreamWithEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty, send func(response *Response))
 	Unicast(ctx gorums.ServerCtx, request *Request)
 	Unicast2(ctx gorums.ServerCtx, request *Request)
 }
@@ -90,27 +90,27 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsServiceServer) {
 	})
 	srv.RegisterHandler("dev.ZorumsService.QuorumCallStream", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		err := impl.QuorumCallStream(ctx, req, func(resp *Response) error {
+		impl.QuorumCallStream(ctx, req, func(resp *Response) {
 			out := gorums.NewResponseMessage(in, resp)
-			return ctx.SendMessage(out)
+			ctx.SendMessage(out)
 		})
-		return nil, err
+		return nil, nil
 	})
 	srv.RegisterHandler("dev.ZorumsService.QuorumCallStreamWithEmpty", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		err := impl.QuorumCallStreamWithEmpty(ctx, req, func(resp *emptypb.Empty) error {
+		impl.QuorumCallStreamWithEmpty(ctx, req, func(resp *emptypb.Empty) {
 			out := gorums.NewResponseMessage(in, resp)
-			return ctx.SendMessage(out)
+			ctx.SendMessage(out)
 		})
-		return nil, err
+		return nil, nil
 	})
 	srv.RegisterHandler("dev.ZorumsService.QuorumCallStreamWithEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*emptypb.Empty](in)
-		err := impl.QuorumCallStreamWithEmpty2(ctx, req, func(resp *Response) error {
+		impl.QuorumCallStreamWithEmpty2(ctx, req, func(resp *Response) {
 			out := gorums.NewResponseMessage(in, resp)
-			return ctx.SendMessage(out)
+			ctx.SendMessage(out)
 		})
-		return nil, err
+		return nil, nil
 	})
 	srv.RegisterHandler("dev.ZorumsService.Unicast", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)

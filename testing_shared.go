@@ -364,9 +364,7 @@ func StreamServerFn(_ int) ServerIface {
 		for i := 1; i <= 3; i++ {
 			resp := pb.String(fmt.Sprintf("echo: %s-%d", val, i))
 			out := NewResponseMessage(in, resp)
-			if err := ctx.SendMessage(out); err != nil {
-				return nil, err
-			}
+			ctx.SendMessage(out)
 			time.Sleep(10 * time.Millisecond)
 		}
 		return nil, nil
@@ -384,9 +382,7 @@ func StreamBenchmarkServerFn(_ int) ServerIface {
 		for i := 1; i <= 3; i++ {
 			resp := pb.String(fmt.Sprintf("echo: %s-%d", val, i))
 			out := NewResponseMessage(in, resp)
-			if err := ctx.SendMessage(out); err != nil {
-				return nil, err
-			}
+			ctx.SendMessage(out)
 		}
 		return nil, nil
 	})

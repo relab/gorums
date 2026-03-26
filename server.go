@@ -170,14 +170,14 @@ func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, rele
 	handler, ok := s.handlers[reqMsg.GetMethod()]
 	if !ok {
 		in := &Message{Message: reqMsg}
-		_ = srvCtx.SendMessage(MessageWithError(in, nil, status.Errorf(codes.Unimplemented, "no handler registered for method %s", reqMsg.GetMethod())))
+		srvCtx.SendMessage(MessageWithError(in, nil, status.Errorf(codes.Unimplemented, "no handler registered for method %s", reqMsg.GetMethod())))
 		return
 	}
 
 	msg, err := unmarshalRequest(reqMsg)
 	in := &Message{Msg: msg, Message: reqMsg}
 	if err != nil {
-		_ = srvCtx.SendMessage(MessageWithError(in, nil, err))
+		srvCtx.SendMessage(MessageWithError(in, nil, err))
 		return
 	}
 
@@ -188,7 +188,7 @@ func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, rele
 	if out == nil && err == nil {
 		return
 	}
-	_ = srvCtx.SendMessage(MessageWithError(in, out, err))
+	srvCtx.SendMessage(MessageWithError(in, out, err))
 }
 
 // Serve starts serving on the listener.

@@ -85,7 +85,7 @@ func CorrectableStream(ctx *ConfigContext, in *Request, opts ...gorums.CallOptio
 // CorrectableTest is the server-side API for the CorrectableTest Service
 type CorrectableTestServer interface {
 	Correctable(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
-	CorrectableStream(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error
+	CorrectableStream(ctx gorums.ServerCtx, request *Request, send func(response *Response))
 }
 
 func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTestServer) {
@@ -99,10 +99,10 @@ func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTestServe
 	})
 	srv.RegisterHandler("correctable.CorrectableTest.CorrectableStream", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		err := impl.CorrectableStream(ctx, req, func(resp *Response) error {
+		impl.CorrectableStream(ctx, req, func(resp *Response) {
 			out := gorums.NewResponseMessage(in, resp)
-			return ctx.SendMessage(out)
+			ctx.SendMessage(out)
 		})
-		return nil, err
+		return nil, nil
 	})
 }
