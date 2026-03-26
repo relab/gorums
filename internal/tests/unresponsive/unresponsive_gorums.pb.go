@@ -54,7 +54,7 @@ func TestUnresponsive(ctx *NodeContext, in *Empty) (*Empty, error) {
 
 // Unresponsive is the server-side API for the Unresponsive Service
 type UnresponsiveServer interface {
-	TestUnresponsive(ctx gorums.ServerCtx, request *Empty) (response *Empty, err error)
+	TestUnresponsive(gorums.ServerCtx, *Empty) (*Empty, error)
 }
 
 func RegisterUnresponsiveServer(srv *gorums.Server, impl UnresponsiveServer) {

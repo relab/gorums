@@ -134,15 +134,15 @@ func ReadCorrectable(ctx *ConfigContext, in *ReadRequest, opts ...gorums.CallOpt
 
 // Storage is the server-side API for the Storage Service
 type StorageServer interface {
-	ReadRPC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
-	WriteRPC(ctx gorums.ServerCtx, request *WriteRequest) (response *WriteResponse, err error)
-	WriteUnicast(ctx gorums.ServerCtx, request *WriteRequest)
-	WriteMulticast(ctx gorums.ServerCtx, request *WriteRequest)
-	ReadQC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
-	WriteQC(ctx gorums.ServerCtx, request *WriteRequest) (response *WriteResponse, err error)
-	ReadNestedQC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
-	WriteNestedMulticast(ctx gorums.ServerCtx, request *WriteRequest) (response *WriteResponse, err error)
-	ReadCorrectable(ctx gorums.ServerCtx, request *ReadRequest, send func(response *ReadResponse))
+	ReadRPC(gorums.ServerCtx, *ReadRequest) (*ReadResponse, error)
+	WriteRPC(gorums.ServerCtx, *WriteRequest) (*WriteResponse, error)
+	WriteUnicast(gorums.ServerCtx, *WriteRequest)
+	WriteMulticast(gorums.ServerCtx, *WriteRequest)
+	ReadQC(gorums.ServerCtx, *ReadRequest) (*ReadResponse, error)
+	WriteQC(gorums.ServerCtx, *WriteRequest) (*WriteResponse, error)
+	ReadNestedQC(gorums.ServerCtx, *ReadRequest) (*ReadResponse, error)
+	WriteNestedMulticast(gorums.ServerCtx, *WriteRequest) (*WriteResponse, error)
+	ReadCorrectable(gorums.ServerCtx, *ReadRequest, func(*ReadResponse))
 }
 
 func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {

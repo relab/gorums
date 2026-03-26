@@ -74,8 +74,8 @@ func UnaryRPC(ctx *NodeContext, in *Request) (*Response, error) {
 
 // GorumsTest is the server-side API for the GorumsTest Service
 type GorumsTestServer interface {
-	QuorumCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
-	UnaryRPC(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	QuorumCall(gorums.ServerCtx, *Request) (*Response, error)
+	UnaryRPC(gorums.ServerCtx, *Request) (*Response, error)
 }
 
 func RegisterGorumsTestServer(srv *gorums.Server, impl GorumsTestServer) {

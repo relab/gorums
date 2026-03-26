@@ -69,7 +69,7 @@ func Config(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.
 
 // ConfigTest is the server-side API for the ConfigTest Service
 type ConfigTestServer interface {
-	Config(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	Config(gorums.ServerCtx, *Request) (*Response, error)
 }
 
 func RegisterConfigTestServer(srv *gorums.Server, impl ConfigTestServer) {

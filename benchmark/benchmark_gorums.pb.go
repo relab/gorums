@@ -130,13 +130,13 @@ func Multicast(ctx *ConfigContext, in *TimedMsg, opts ...gorums.CallOption) erro
 
 // Benchmark is the server-side API for the Benchmark Service
 type BenchmarkServer interface {
-	StartServerBenchmark(ctx gorums.ServerCtx, request *StartRequest) (response *StartResponse, err error)
-	StopServerBenchmark(ctx gorums.ServerCtx, request *StopRequest) (response *Result, err error)
-	StartBenchmark(ctx gorums.ServerCtx, request *StartRequest) (response *StartResponse, err error)
-	StopBenchmark(ctx gorums.ServerCtx, request *StopRequest) (response *MemoryStat, err error)
-	QuorumCall(ctx gorums.ServerCtx, request *Echo) (response *Echo, err error)
-	SlowServer(ctx gorums.ServerCtx, request *Echo) (response *Echo, err error)
-	Multicast(ctx gorums.ServerCtx, request *TimedMsg)
+	StartServerBenchmark(gorums.ServerCtx, *StartRequest) (*StartResponse, error)
+	StopServerBenchmark(gorums.ServerCtx, *StopRequest) (*Result, error)
+	StartBenchmark(gorums.ServerCtx, *StartRequest) (*StartResponse, error)
+	StopBenchmark(gorums.ServerCtx, *StopRequest) (*MemoryStat, error)
+	QuorumCall(gorums.ServerCtx, *Echo) (*Echo, error)
+	SlowServer(gorums.ServerCtx, *Echo) (*Echo, error)
+	Multicast(gorums.ServerCtx, *TimedMsg)
 }
 
 func RegisterBenchmarkServer(srv *gorums.Server, impl BenchmarkServer) {

@@ -61,8 +61,8 @@ func Multicast(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) error
 
 // OnewayTest is the server-side API for the OnewayTest Service
 type OnewayTestServer interface {
-	Unicast(ctx gorums.ServerCtx, request *Request)
-	Multicast(ctx gorums.ServerCtx, request *Request)
+	Unicast(gorums.ServerCtx, *Request)
+	Multicast(gorums.ServerCtx, *Request)
 }
 
 func RegisterOnewayTestServer(srv *gorums.Server, impl OnewayTestServer) {

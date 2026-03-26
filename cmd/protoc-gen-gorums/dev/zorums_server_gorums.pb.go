@@ -20,19 +20,19 @@ const (
 
 // ZorumsService is the server-side API for the ZorumsService Service
 type ZorumsServiceServer interface {
-	GRPCCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
-	QuorumCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
-	QuorumCallEmpty(ctx gorums.ServerCtx, request *emptypb.Empty) (response *Response, err error)
-	QuorumCallEmpty2(ctx gorums.ServerCtx, request *Request) (response *emptypb.Empty, err error)
-	Multicast(ctx gorums.ServerCtx, request *Request)
-	Multicast2(ctx gorums.ServerCtx, request *Request)
-	Multicast3(ctx gorums.ServerCtx, request *Request)
-	Multicast4(ctx gorums.ServerCtx, request *emptypb.Empty)
-	QuorumCallStream(ctx gorums.ServerCtx, request *Request, send func(response *Response))
-	QuorumCallStreamWithEmpty(ctx gorums.ServerCtx, request *Request, send func(response *emptypb.Empty))
-	QuorumCallStreamWithEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty, send func(response *Response))
-	Unicast(ctx gorums.ServerCtx, request *Request)
-	Unicast2(ctx gorums.ServerCtx, request *Request)
+	GRPCCall(gorums.ServerCtx, *Request) (*Response, error)
+	QuorumCall(gorums.ServerCtx, *Request) (*Response, error)
+	QuorumCallEmpty(gorums.ServerCtx, *emptypb.Empty) (*Response, error)
+	QuorumCallEmpty2(gorums.ServerCtx, *Request) (*emptypb.Empty, error)
+	Multicast(gorums.ServerCtx, *Request)
+	Multicast2(gorums.ServerCtx, *Request)
+	Multicast3(gorums.ServerCtx, *Request)
+	Multicast4(gorums.ServerCtx, *emptypb.Empty)
+	QuorumCallStream(gorums.ServerCtx, *Request, func(*Response))
+	QuorumCallStreamWithEmpty(gorums.ServerCtx, *Request, func(*emptypb.Empty))
+	QuorumCallStreamWithEmpty2(gorums.ServerCtx, *emptypb.Empty, func(*Response))
+	Unicast(gorums.ServerCtx, *Request)
+	Unicast2(gorums.ServerCtx, *Request)
 }
 
 func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsServiceServer) {

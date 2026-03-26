@@ -60,8 +60,8 @@ func WhatIP(ctx *NodeContext, in *emptypb.Empty) (*IPAddr, error) {
 
 // MetadataTest is the server-side API for the MetadataTest Service
 type MetadataTestServer interface {
-	IDFromMD(ctx gorums.ServerCtx, request *emptypb.Empty) (response *NodeID, err error)
-	WhatIP(ctx gorums.ServerCtx, request *emptypb.Empty) (response *IPAddr, err error)
+	IDFromMD(gorums.ServerCtx, *emptypb.Empty) (*NodeID, error)
+	WhatIP(gorums.ServerCtx, *emptypb.Empty) (*IPAddr, error)
 }
 
 func RegisterMetadataTestServer(srv *gorums.Server, impl MetadataTestServer) {

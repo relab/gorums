@@ -54,7 +54,7 @@ func TestTLS(ctx *NodeContext, in *Request) (*Response, error) {
 
 // TLS is the server-side API for the TLS Service
 type TLSServer interface {
-	TestTLS(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	TestTLS(gorums.ServerCtx, *Request) (*Response, error)
 }
 
 func RegisterTLSServer(srv *gorums.Server, impl TLSServer) {
