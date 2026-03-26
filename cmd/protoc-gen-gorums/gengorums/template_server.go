@@ -12,11 +12,11 @@ var serverInterface = `
 type {{$service}}Server interface {
 	{{- range .Methods}}
 	{{- if isOneway .}}
-	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}})
+	{{.GoName}}({{$context}}, *{{in $genFile .}})
 	{{- else if isStreamingServer .}}
-	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, send func(response *{{out $genFile .}}))
+	{{.GoName}}({{$context}}, *{{in $genFile .}}, func(*{{out $genFile .}}))
 	{{- else}}
-	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) (response *{{out $genFile .}}, err error)
+	{{.GoName}}({{$context}}, *{{in $genFile .}}) (*{{out $genFile .}}, error)
 	{{- end}}
 	{{- end}}
 }
