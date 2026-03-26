@@ -28,7 +28,6 @@ type dialOptions struct {
 	backoff      backoff.Config
 	sendBuffer   uint
 	metadata     metadata.MD
-	perNodeMD    func(uint32) metadata.MD
 	handler      stream.RequestHandler
 	localNodeID  uint32 // if non-zero, skip setting handler on this node ID
 }
@@ -78,15 +77,6 @@ func WithSendBufferSize(size uint) DialOption {
 func WithMetadata(md metadata.MD) DialOption {
 	return func(o *dialOptions) {
 		o.metadata = metadata.Join(o.metadata, md)
-	}
-}
-
-// WithPerNodeMetadata returns a DialOption that allows you to set metadata for each
-// node individually.
-// This metadata can be retrieved from the server-side method handlers.
-func WithPerNodeMetadata(f func(uint32) metadata.MD) DialOption {
-	return func(o *dialOptions) {
-		o.perNodeMD = f
 	}
 }
 

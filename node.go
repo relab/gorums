@@ -75,7 +75,6 @@ type nodeOptions struct {
 	SendBufferSize uint
 	MsgIDGen       func() uint64
 	Metadata       metadata.MD
-	PerNodeMD      func(uint32) metadata.MD
 	DialOpts       []grpc.DialOption
 	RequestHandler stream.RequestHandler
 	Manager        *outboundManager // owning manager
@@ -105,9 +104,6 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 
 	// Create outgoing context with metadata for this node's stream.
 	md := opts.Metadata.Copy()
-	if opts.PerNodeMD != nil {
-		md = metadata.Join(md, opts.PerNodeMD(n.id))
-	}
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Create new outbound channel and establish gRPC node stream

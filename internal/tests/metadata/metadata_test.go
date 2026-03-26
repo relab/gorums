@@ -82,28 +82,6 @@ func TestPerMessageMetadata(t *testing.T) {
 	}
 }
 
-func TestPerNodeMetadata(t *testing.T) {
-	perNodeMD := func(nid uint32) metadata.MD {
-		return metadata.New(map[string]string{
-			"id": fmt.Sprintf("%d", nid),
-		})
-	}
-
-	cfg := gorums.TestConfiguration(t, 2, serverFn, gorums.WithPerNodeMetadata(perNodeMD))
-
-	for _, node := range cfg {
-		nodeCtx := node.Context(t.Context())
-		resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
-		if err != nil {
-			t.Fatalf("RPC error: %v", err)
-		}
-
-		if resp.GetID() != node.ID() {
-			t.Fatalf("IDFromMD() == %d, want %d", resp.GetID(), node.ID())
-		}
-	}
-}
-
 func TestCanGetPeerInfo(t *testing.T) {
 	node := gorums.TestNode(t, serverFn)
 	nodeCtx := node.Context(t.Context())

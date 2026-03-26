@@ -97,7 +97,6 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 		SendBufferSize: m.opts.sendBuffer,
 		MsgIDGen:       m.getMsgID,
 		Metadata:       m.opts.metadata,
-		PerNodeMD:      m.opts.perNodeMD,
 		DialOpts:       m.opts.grpcDialOpts,
 		RequestHandler: m.opts.handler,
 		Manager:        m,
