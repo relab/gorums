@@ -4,8 +4,8 @@ import (
 	"sync"
 )
 
-// LevelNotSet is the zero value level used to indicate that no level (and
-// thereby no reply) has been set for a correctable quorum call.
+// LevelNotSet is the zero value level used to indicate that no level
+// (and thereby no reply) has been set for a correctable quorum call.
 const LevelNotSet = -1
 
 type watcher struct {
@@ -26,14 +26,6 @@ type Correctable[Resp any] struct {
 	done     bool
 	watchers []*watcher
 	donech   chan struct{}
-}
-
-// NewCorrectable creates a new Correctable object.
-func NewCorrectable[Resp any]() *Correctable[Resp] {
-	return &Correctable[Resp]{
-		level:  LevelNotSet,
-		donech: make(chan struct{}, 1),
-	}
 }
 
 // Get returns the latest response, the current level, and the last error.
@@ -59,33 +51,6 @@ func (c *Correctable[Resp]) Watch(level int) <-chan struct{} {
 	}
 	c.watchers = append(c.watchers, &watcher{level, ch})
 	return ch
-}
-
-// update updates the current state of the correctable call.
-// It updates the response, level, and error, and notifies any watchers.
-// If done is true, the call is considered complete and the Done channel is closed.
-func (c *Correctable[Resp]) update(reply Resp, level int, done bool, err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.done {
-		panic("gorums: update(...) called on a completed correctable")
-	}
-	c.reply, c.level, c.err, c.done = reply, level, err, done
-	if done {
-		close(c.donech)
-		for _, watcher := range c.watchers {
-			if watcher != nil {
-				close(watcher.ch)
-			}
-		}
-		return
-	}
-	for i := range c.watchers {
-		if c.watchers[i] != nil && c.watchers[i].level <= level {
-			close(c.watchers[i].ch)
-			c.watchers[i] = nil
-		}
-	}
 }
 
 // Correctable returns a Correctable that provides progressive updates
@@ -134,4 +99,31 @@ func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
 	}()
 
 	return corr
+}
+
+// update updates the current state of the correctable call.
+// It updates the response, level, and error, and notifies any watchers.
+// If done is true, the call is considered complete and the Done channel is closed.
+func (c *Correctable[Resp]) update(reply Resp, level int, done bool, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.done {
+		panic("gorums: update(...) called on a completed correctable")
+	}
+	c.reply, c.level, c.err, c.done = reply, level, err, done
+	if done {
+		close(c.donech)
+		for _, watcher := range c.watchers {
+			if watcher != nil {
+				close(watcher.ch)
+			}
+		}
+		return
+	}
+	for i := range c.watchers {
+		if c.watchers[i] != nil && c.watchers[i].level <= level {
+			close(c.watchers[i].ch)
+			c.watchers[i] = nil
+		}
+	}
 }
