@@ -28,18 +28,18 @@ func (f *Async[Resp]) Done() bool {
 	}
 }
 
+// AsyncFirst returns an Async future that resolves when the first response is received.
+// Messages are sent immediately (synchronously) to preserve ordering.
+func (r *Responses[Resp]) AsyncFirst() *Async[Resp] {
+	return r.AsyncThreshold(1)
+}
+
 // AsyncMajority returns an Async future that resolves when a majority quorum is reached.
 // Messages are sent immediately (synchronously) to preserve ordering when multiple
 // async calls are created in sequence.
 func (r *Responses[Resp]) AsyncMajority() *Async[Resp] {
 	quorumSize := r.size/2 + 1
 	return r.AsyncThreshold(quorumSize)
-}
-
-// AsyncFirst returns an Async future that resolves when the first response is received.
-// Messages are sent immediately (synchronously) to preserve ordering.
-func (r *Responses[Resp]) AsyncFirst() *Async[Resp] {
-	return r.AsyncThreshold(1)
 }
 
 // AsyncAll returns an Async future that resolves when all nodes have responded.
