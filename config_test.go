@@ -120,6 +120,141 @@ func TestNewConfig(t *testing.T) {
 	}
 }
 
+func TestEmptyConfiguration(t *testing.T) {
+	var empty gorums.Configuration
+
+	populated, err := gorums.NewConfig(gorums.WithNodeList(nodes), gorums.InsecureDialOptions(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gorums.Closer(t, populated))
+
+	t.Run("ContextPanics", func(t *testing.T) {
+		assertPanicMessage(t, "gorums: Context called on an empty configuration", func() {
+			_ = empty.Context(t.Context())
+		})
+	})
+
+	t.Run("ExtendReturnsError", func(t *testing.T) {
+		got, err := empty.Extend(nil)
+		if err == nil {
+			t.Fatal("empty.Extend(nil) error = nil, want non-nil")
+		}
+		wantErr := "gorums: cannot extend empty configuration"
+		if err.Error() != wantErr {
+			t.Fatalf("empty.Extend(nil) error = %q, want %q", err.Error(), wantErr)
+		}
+		if got != nil {
+			t.Fatalf("empty.Extend(nil) cfg = %v, want nil", got)
+		}
+	})
+
+	t.Run("NodeIDsEmpty", func(t *testing.T) {
+		got := empty.NodeIDs()
+		if len(got) != 0 {
+			t.Fatalf("len(empty.NodeIDs()) = %d, want 0", len(got))
+		}
+		if got == nil {
+			t.Fatal("empty.NodeIDs() = nil, want empty slice")
+		}
+	})
+
+	t.Run("NodesNil", func(t *testing.T) {
+		if got := empty.Nodes(); got != nil {
+			t.Fatalf("empty.Nodes() = %v, want nil", got)
+		}
+	})
+
+	t.Run("SizeZero", func(t *testing.T) {
+		if got := empty.Size(); got != 0 {
+			t.Fatalf("empty.Size() = %d, want 0", got)
+		}
+	})
+
+	t.Run("Equal", func(t *testing.T) {
+		var otherEmpty gorums.Configuration
+		if !empty.Equal(otherEmpty) {
+			t.Fatal("empty.Equal(otherEmpty) = false, want true")
+		}
+		if empty.Equal(populated) {
+			t.Fatal("empty.Equal(populated) = true, want false")
+		}
+	})
+
+	t.Run("CloseNil", func(t *testing.T) {
+		if err := empty.Close(); err != nil {
+			t.Fatalf("empty.Close() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("ContainsFalse", func(t *testing.T) {
+		if empty.Contains(1) {
+			t.Fatal("empty.Contains(1) = true, want false")
+		}
+	})
+
+	t.Run("AddNil", func(t *testing.T) {
+		if got := empty.Add(1, 2, 3); got != nil {
+			t.Fatalf("empty.Add(...) = %v, want nil", got)
+		}
+	})
+
+	t.Run("UnionWithEmptyNil", func(t *testing.T) {
+		var otherEmpty gorums.Configuration
+		if got := empty.Union(otherEmpty); got != nil {
+			t.Fatalf("empty.Union(otherEmpty) = %v, want nil", got)
+		}
+	})
+
+	t.Run("UnionWithNonEmptyClonesOther", func(t *testing.T) {
+		got := empty.Union(populated)
+		if !got.Equal(populated) {
+			t.Fatal("empty.Union(populated) != populated")
+		}
+		gotNodes := got.Nodes()
+		populatedNodes := populated.Nodes()
+		if len(gotNodes) == 0 {
+			t.Fatal("empty.Union(populated) returned empty configuration")
+		}
+		if &gotNodes[0] == &populatedNodes[0] {
+			t.Fatal("empty.Union(populated) shares backing array with populated")
+		}
+	})
+
+	t.Run("RemoveNil", func(t *testing.T) {
+		if got := empty.Remove(1, 2, 3); got != nil {
+			t.Fatalf("empty.Remove(...) = %v, want nil", got)
+		}
+	})
+
+	t.Run("DifferenceNil", func(t *testing.T) {
+		if got := empty.Difference(populated); got != nil {
+			t.Fatalf("empty.Difference(populated) = %v, want nil", got)
+		}
+	})
+
+	t.Run("WithoutErrorsNil", func(t *testing.T) {
+		qcErr := gorums.TestQuorumCallError(t, map[uint32]error{1: errors.New("boom")})
+		if got := empty.WithoutErrors(qcErr); got != nil {
+			t.Fatalf("empty.WithoutErrors(...) = %v, want nil", got)
+		}
+	})
+}
+
+func assertPanicMessage(t *testing.T, want string, fn func()) {
+	t.Helper()
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatalf("expected panic %q, got no panic", want)
+		}
+		if got := fmt.Sprint(r); got != want {
+			t.Fatalf("panic = %q, want %q", got, want)
+		}
+	}()
+	fn()
+}
+
 func TestConfigurationExtend(t *testing.T) {
 	nodes12 := nodes[:2] // {1,2}
 
