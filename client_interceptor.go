@@ -168,28 +168,44 @@ func (c *ClientCtx[Req, Resp]) applyInterceptors(interceptors []any) {
 	c.responseSeq = responseSeq
 }
 
-// send dispatches requests to all nodes, applying any registered transformations.
-// It ensures that exactly one response (success or error) is sent per node on replyChan.
+// send dispatches requests to all nodes. It delegates to sendWithPerNodeTransformation
+// if any per-node request transformations are registered. Otherwise, it uses sendShared
+// to marshal the request once and send the same message to all nodes.
 func (c *ClientCtx[Req, Resp]) send() {
-	var sharedMsg *stream.Message
 	if len(c.reqTransforms) == 0 {
-		// Fast path: marshal once when no per-node transforms are registered.
-		var err error
-		sharedMsg, err = stream.NewMessage(c.Context, c.msgID, c.method, c.request)
-		if err != nil {
-			// Marshaling fails identically for all nodes; report and return.
-			for _, n := range c.config {
-				c.replyChan <- NodeResponse[*stream.Message]{NodeID: n.ID(), Err: err}
-			}
-			return
+		c.sendShared()
+	} else {
+		c.sendWithPerNodeTransformation()
+	}
+}
+
+// sendShared marshals the request once and enqueues the shared message to all nodes.
+// On marshal error, it reports the error to every node and returns early.
+func (c *ClientCtx[Req, Resp]) sendShared() {
+	sharedMsg, err := stream.NewMessage(c.Context, c.msgID, c.method, c.request)
+	if err != nil {
+		// Marshaling fails identically for all nodes; report and return.
+		for _, n := range c.config {
+			c.replyChan <- NodeResponse[*stream.Message]{NodeID: n.ID(), Err: err}
 		}
+		return
 	}
 	for _, n := range c.config {
-		// transform only if there are registered transforms; otherwise reuse the shared message
-		streamMsg := sharedMsg
-		if streamMsg == nil {
-			streamMsg = c.transformAndMarshal(n)
-		}
+		n.Enqueue(stream.Request{
+			Ctx:          c.Context,
+			Msg:          sharedMsg,
+			Streaming:    c.streaming,
+			WaitSendDone: c.waitSendDone,
+			ResponseChan: c.replyChan,
+		})
+	}
+}
+
+// sendWithPerNodeTransformation applies per-node request transformations before
+// marshaling and enqueues each individually transformed message to its node.
+func (c *ClientCtx[Req, Resp]) sendWithPerNodeTransformation() {
+	for _, n := range c.config {
+		streamMsg := c.transformAndMarshal(n)
 		if streamMsg == nil {
 			continue // Skip node: transformAndMarshal already sent ErrSkipNode
 		}
@@ -207,16 +223,16 @@ func (c *ClientCtx[Req, Resp]) send() {
 // then marshals it into a stream.Message. Returns nil if transformation fails
 // or marshaling fails (in which case the error is sent on replyChan).
 func (c *ClientCtx[Req, Resp]) transformAndMarshal(n *Node) *stream.Message {
-	result := c.request
+	transformedRequest := c.request
 	for _, transform := range c.reqTransforms {
-		result = transform(result, n)
+		transformedRequest = transform(transformedRequest, n)
 	}
 	// Check if the result is valid
-	if protoReq, ok := any(result).(proto.Message); !ok || protoReq == nil || !protoReq.ProtoReflect().IsValid() {
+	if protoReq, ok := any(transformedRequest).(proto.Message); !ok || protoReq == nil || !protoReq.ProtoReflect().IsValid() {
 		c.replyChan <- NodeResponse[*stream.Message]{NodeID: n.ID(), Err: ErrSkipNode}
 		return nil
 	}
-	streamMsg, err := stream.NewMessage(c.Context, c.msgID, c.method, result)
+	streamMsg, err := stream.NewMessage(c.Context, c.msgID, c.method, transformedRequest)
 	if err != nil {
 		c.replyChan <- NodeResponse[*stream.Message]{NodeID: n.ID(), Err: err}
 		return nil
