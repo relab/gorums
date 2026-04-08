@@ -84,13 +84,47 @@ func loadPackage(pkgPath string) *packages.Package {
 // The returned map is used by the Gorums protoc plugin to generate import statements.
 func findIdentifiers(pkgInfo *packages.Package) (map[string]string, []string) {
 	pkgIdents := make(map[string][]string)
+
+	// Use Defs to find exported package-level identifiers defined in the dev package.
+	// These become reservedIdents: proto message names that match these identifiers
+	// would collide with generated type aliases and cause a compile error.
+	pkgScope := pkgInfo.Types.Scope()
+	for id, obj := range pkgInfo.TypesInfo.Defs {
+		if obj == nil {
+			// blank identifiers (_) map to nil in Defs
+			continue
+		}
+		pos := pkgInfo.Fset.Position(id.Pos())
+		if ignore(pos.Filename) || !obj.Exported() {
+			continue
+		}
+		if pkg := obj.Pkg(); pkg == nil || pkg.Path() != pkgInfo.PkgPath {
+			continue
+		}
+		if obj.Parent() != pkgScope {
+			// skip function parameters, local variables, and struct fields
+			continue
+		}
+		switch obj := obj.(type) {
+		case *types.TypeName, *types.Func, *types.Const:
+			addUniqueIdentifier(pkgIdents, pkgInfo.PkgPath, obj.Name())
+		case *types.Var:
+			if !obj.IsField() {
+				addUniqueIdentifier(pkgIdents, pkgInfo.PkgPath, obj.Name())
+			}
+		}
+	}
+
+	// Use Uses to find exported identifiers from imported packages.
+	// These drive pkgIdentMap: one identifier per import path, used to
+	// force import statements in generated files.
 	for id, obj := range pkgInfo.TypesInfo.Uses {
 		pos := pkgInfo.Fset.Position(id.Pos())
 		if ignore(pos.Filename) || !obj.Exported() {
 			// ignore identifiers in zorums generated files and unexported identifiers
 			continue
 		}
-		if pkg := obj.Pkg(); pkg != nil {
+		if pkg := obj.Pkg(); pkg != nil && pkg.Path() != pkgInfo.PkgPath {
 			switch obj := obj.(type) {
 			case *types.Func:
 				if typ := obj.Type(); typ != nil {
@@ -113,6 +147,7 @@ func findIdentifiers(pkgInfo *packages.Package) (map[string]string, []string) {
 			}
 		}
 	}
+
 	// Only need to store one identifier for each imported package.
 	// However, to ensure stable output, we sort the identifiers
 	// and use the first element.
