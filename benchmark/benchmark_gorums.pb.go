@@ -20,33 +20,16 @@ const (
 
 // Type aliases for important Gorums types to make them more accessible
 // from user code already interacting with the generated code.
+// These names are also registered as reserved Gorums identifiers: proto
+// message types with these names would collide with the generated aliases
+// and cause a compile error. The bundler (gorums_bundle.go) discovers
+// them via TypesInfo.Defs, so no blank-var declarations are needed.
 type (
 	Configuration = gorums.Configuration
 	Node          = gorums.Node
 	NodeContext   = gorums.NodeContext
 	ConfigContext = gorums.ConfigContext
 )
-
-// Use the aliased types to add them to the reserved identifiers list.
-// This prevents users from defining message types with these names.
-var (
-	_ = (*Configuration)(nil)
-	_ = (*Node)(nil)
-	_ = (*NodeContext)(nil)
-	_ = (*ConfigContext)(nil)
-)
-
-// NewConfig returns a new [Configuration] based on the provided nodes and dial options.
-//
-// Example:
-//
-//	cfg, err := NewConfig(
-//	    gorums.WithNodeList([]string{"localhost:8080", "localhost:8081", "localhost:8082"}),
-//	    gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
-//	)
-func NewConfig(nodes gorums.NodeListOption, opts ...gorums.DialOption) (Configuration, error) {
-	return gorums.NewConfig(nodes, opts...)
-}
 
 // AsyncEcho is a future for async quorum calls returning *Echo.
 type AsyncEcho = *gorums.Async[*Echo]
