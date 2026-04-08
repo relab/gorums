@@ -38,3 +38,5 @@ branch-compare-*
 tmp/*
 doc/task-*.md
 doc/issue-*.md
+.claude/settings.local.json
+.superset/config.json
