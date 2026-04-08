@@ -195,7 +195,7 @@ func main() {
 		),
 		gorums.WithSendBufferSize(*sendBuffer),
 	}
-	cfg, err := benchmark.NewConfig(gorums.WithNodeList(remotes[:options.NumNodes]), dialOpts...)
+	cfg, err := gorums.NewConfig(gorums.WithNodeList(remotes[:options.NumNodes]), dialOpts...)
 	checkf("Failed to create configuration: %v", err)
 	defer cfg.Close()
 
