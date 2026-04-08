@@ -16,6 +16,31 @@ The repository contains two main components located in `cmd/protoc-gen-gorums`:
 2. **Static Code File Changes:** Any `.go` file in `dev/` that is not prefixed by `zorums_` and does not end in `_test.go` is treated as static code and bundled into `template_static.go`.
    Currently, `aliases.go` is the only such file, but additional files can be added to the `dev/` directory and they will be included automatically.
 
+### Generated Static Surface and Reserved Identifiers
+
+Every generated `_gorums.pb.go` file embeds a small block of static code taken verbatim from `dev/aliases.go`.
+That block currently consists of four type aliases:
+
+```go
+type (
+    Configuration = gorums.Configuration
+    Node          = gorums.Node
+    NodeContext   = gorums.NodeContext
+    ConfigContext = gorums.ConfigContext
+)
+```
+
+These aliases make the most commonly used Gorums types available without requiring an explicit `gorums` import in user code.
+
+Each name declared in `aliases.go` (and any other non-ignored file in `dev/`) is also added to the **reserved identifier list**.
+The Gorums generator rejects proto files that define a message type whose name matches a reserved identifier, because such a name would collide with the generated alias and cause a compile error.
+
+The bundler (`gorums_bundle.go`) discovers reserved identifiers by inspecting `TypesInfo.Defs` for all exported, package-scope declarations in the dev package.
+This means that simply declaring a type alias (or any other exported top-level name) in `aliases.go` is sufficient to reserve that name — no extra annotation is needed.
+
+The `TestReservedIdentifiers` test in `gengorums/gorums_bundle_test.go` pins the expected set.
+If you add or remove an alias, update that test to match.
+
 Any changes to templates or static code requires the invocation of `make` in order to:
 
 * Bundle the static code into `template_static.go`.
