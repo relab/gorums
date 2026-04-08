@@ -10,7 +10,6 @@ import (
 // NodeListOption must be implemented by node providers. It is used by both the
 // Manager (outbound) and by inboundManager (inbound) via newConfig.
 type NodeListOption interface {
-	Option
 	newConfig(nodeRegistry) (Configuration, error)
 }
 
@@ -34,8 +33,6 @@ func WithNodes[T NodeAddress](nodes map[uint32]T) NodeListOption {
 }
 
 type nodeMap[T NodeAddress] map[uint32]T
-
-func (nodeMap[T]) isOption() {}
 
 func (nm nodeMap[T]) newConfig(registry nodeRegistry) (Configuration, error) {
 	if len(nm) == 0 {
@@ -61,8 +58,6 @@ func WithNodeList(addrsList []string) NodeListOption {
 }
 
 type nodeList []string
-
-func (nodeList) isOption() {}
 
 func (nl nodeList) newConfig(registry nodeRegistry) (Configuration, error) {
 	if len(nl) == 0 {

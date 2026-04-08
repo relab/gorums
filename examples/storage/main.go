@@ -34,7 +34,7 @@ func main() {
 		// with WithConfig (node IDs 1..n). Passing dial options auto-creates an
 		// outbound Configuration for each system (accessible via sys.OutboundConfig).
 		dialOpts := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
-		systems, stop, err := gorums.NewLocalSystems(4, srvOpts, dialOpts)
+		systems, stop, err := gorums.NewLocalSystems(4, gorums.WithServerOptions(srvOpts), dialOpts)
 		if err != nil {
 			log.Fatalf("Failed to create local systems: %v", err)
 		}

@@ -16,8 +16,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func runServer(address string, opts ...gorums.Option) {
-	sys, err := gorums.NewSystem(address, opts...)
+func runServer(address string, srvOpt gorums.ServerOption) {
+	sys, err := gorums.NewSystem(address, gorums.WithServerOptions(srvOpt))
 	if err != nil {
 		log.Fatalf("Failed to create system on '%s': %v", address, err)
 	}

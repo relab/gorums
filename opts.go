@@ -1,9 +1,7 @@
 package gorums
 
 import (
-	"fmt"
 	"log"
-	"reflect"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -12,24 +10,19 @@ import (
 	"github.com/relab/gorums/internal/stream"
 )
 
-// Option is a marker interface for options to NewConfig.
-type Option interface {
-	isOption()
-}
-
 // DialOption provides a way to set different options on a new configuration.
 type DialOption func(*dialOptions)
 
-func (DialOption) isOption() {}
-
 type dialOptions struct {
-	grpcDialOpts []grpc.DialOption
-	logger       *log.Logger
-	backoff      backoff.Config
-	sendBuffer   uint
-	metadata     metadata.MD
-	handler      stream.RequestHandler
-	localNodeID  uint32 // if non-zero, skip setting handler on this node ID
+	grpcDialOpts  []grpc.DialOption
+	logger        *log.Logger
+	backoff       backoff.Config
+	sendBuffer    uint
+	metadata      metadata.MD
+	handler       stream.RequestHandler
+	localNodeID   uint32         // if non-zero, skip setting handler on this node ID
+	srvOpts       []ServerOption // applied only by NewSystem / NewLocalSystems
+	outboundNodes NodeListOption // applied only by NewSystem
 }
 
 func newDialOptions() dialOptions {
@@ -103,29 +96,27 @@ func WithServer(srv *Server) DialOption {
 	}
 }
 
-// splitOptions separates a slice of [Option]s into [ServerOption]s, [DialOption]s,
-// and a single [NodeListOption]. It returns an error if more than one [NodeListOption]
-// is provided or if an unsupported option type is encountered.
-func splitOptions(opts []Option) (srvOpts []ServerOption, dialOpts []DialOption, nodeListOpt NodeListOption, err error) {
-	for _, opt := range opts {
-		// A typed interface value (e.g. DialOption(nil)) is not equal to nil, so we need
-		// to also check if the underlying value is actually nil to avoid panics.
-		if opt == nil || reflect.ValueOf(opt).IsNil() {
-			continue
-		}
-		switch o := opt.(type) {
-		case ServerOption:
-			srvOpts = append(srvOpts, o)
-		case DialOption:
-			dialOpts = append(dialOpts, o)
-		case NodeListOption:
-			if nodeListOpt != nil {
-				return nil, nil, nil, fmt.Errorf("gorums: multiple NodeListOptions provided")
+// WithServerOptions bundles [ServerOption]s into a [DialOption] for use with
+// [NewSystem] and [NewLocalSystems]. It has no effect when passed to [NewConfig].
+// Nil options are silently ignored.
+func WithServerOptions(opts ...ServerOption) DialOption {
+	return func(o *dialOptions) {
+		for _, opt := range opts {
+			if opt != nil {
+				o.srvOpts = append(o.srvOpts, opt)
 			}
-			nodeListOpt = o
-		default:
-			return nil, nil, nil, fmt.Errorf("gorums: unsupported option type: %T", opt)
 		}
 	}
-	return srvOpts, dialOpts, nodeListOpt, nil
+}
+
+// WithOutboundNodes wraps a [NodeListOption] as a [DialOption] for use with
+// [NewSystem], instructing it to create an outbound [Configuration] for the given
+// peers. It has no effect when passed to [NewConfig] or [NewLocalSystems].
+// A nil opt is a no-op.
+func WithOutboundNodes(opt NodeListOption) DialOption {
+	return func(o *dialOptions) {
+		if opt != nil {
+			o.outboundNodes = opt
+		}
+	}
 }
