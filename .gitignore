@@ -35,3 +35,6 @@ cmd/protoc-gen-gorums/gengorums/template_static.go.bak
 
 go.work.sum
 branch-compare-*
+tmp/*
+doc/task-*.md
+doc/issue-*.md
