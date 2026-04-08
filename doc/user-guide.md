@@ -485,6 +485,34 @@ reply, level, err := corr.Get()
 reply, level, err = corr.Get()
 ```
 
+### Send-Timing Model
+
+Understanding when messages are actually sent matters for ordering and for reasoning about concurrent calls.
+
+**Quorum calls are lazy.** Messages are not sent to nodes until the caller consumes the `*Responses[T]` object by calling a terminal method (`First`, `Majority`, `All`, `Threshold`) or by calling `.Seq()` to begin iterating.
+This gives interceptors a chance to register per-node request transformations before any bytes go on the wire.
+
+**Async variants send immediately.** `AsyncFirst`, `AsyncMajority`, `AsyncAll`, and `AsyncThreshold` call `sendNow` synchronously before spawning the goroutine that awaits the threshold.
+This preserves message ordering when multiple async calls are issued in sequence:
+
+```go
+// Messages for both calls are enqueued in order before either goroutine runs.
+futA := WriteQC(cfgCtx, reqA).AsyncMajority()
+futB := WriteQC(cfgCtx, reqB).AsyncMajority()
+_, _ = futA.Get()
+_, _ = futB.Get()
+```
+
+**Multicast and unicast send immediately.** One-way calls do not return a `*Responses[T]` object, so there is no deferred consumption step; messages are enqueued as soon as the call is made.
+
+Summary:
+
+| Call type           | When messages are sent        |
+| ------------------- | ----------------------------- |
+| Quorum call (sync)  | On first consumption (lazy)   |
+| Quorum call (async) | Immediately, before goroutine |
+| Multicast / unicast | Immediately                   |
+
 ## Iterator-Based Custom Aggregation
 
 For complex aggregation logic beyond the built-in terminal methods, use the iterator API provided by `responses.Seq()`.
@@ -573,17 +601,42 @@ func majorityWrite(responses *gorums.Responses[*WriteResponse]) (*WriteResponse,
   return aggregateWrites(replies), nil
 }
 
-// CollectAll collects all successful responses; errored nodes are skipped.
+// allSuccessful collects all successful responses; errored nodes are skipped.
 func allSuccessful(responses *gorums.Responses[*Response]) map[uint32]*Response {
   return responses.Seq().IgnoreErrors().CollectAll()
 }
 
-// CollectAll without IgnoreErrors stores a zero value for nodes with errors.
+// allResponses collects all responses; errored nodes are included with a zero value.
 // Only use this when you know all nodes will succeed or you handle zero values.
 func allResponses(responses *gorums.Responses[*Response]) map[uint32]*Response {
   return responses.Seq().CollectAll()
 }
 ```
+
+#### Per-Node Error Inspection
+
+`CollectN` and `CollectAll` return `map[uint32]Resp` and do not preserve errors.
+When you need the actual error from a specific node, range over the sequence directly:
+
+```go
+func inspectPerNodeErrors(responses *gorums.Responses[*Response]) {
+  var errs []error
+  replies := make(map[uint32]*Response)
+
+  for result := range responses.Seq() {
+    if result.Err != nil {
+      // result.NodeID identifies which node failed
+      errs = append(errs, fmt.Errorf("node %d: %w", result.NodeID, result.Err))
+      continue
+    }
+    replies[result.NodeID] = result.Value
+  }
+
+  // errs holds per-node failures; replies holds successful values
+}
+```
+
+Use `Seq().IgnoreErrors()` or `Seq().CollectAll()` when you do not need per-node error details.
 
 ### Complete Example: Storage Client with Custom Aggregation
 
