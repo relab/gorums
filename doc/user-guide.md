@@ -573,14 +573,15 @@ func majorityWrite(responses *gorums.Responses[*WriteResponse]) (*WriteResponse,
   return aggregateWrites(replies), nil
 }
 
-// CollectAll waits for all responses
-func allResponses(responses *gorums.Responses[*Response]) map[uint32]*Response {
-  return responses.Seq().CollectAll()
-}
-
-// Combine with IgnoreErrors to collect only successful responses
+// CollectAll collects all successful responses; errored nodes are skipped.
 func allSuccessful(responses *gorums.Responses[*Response]) map[uint32]*Response {
   return responses.Seq().IgnoreErrors().CollectAll()
+}
+
+// CollectAll without IgnoreErrors stores a zero value for nodes with errors.
+// Only use this when you know all nodes will succeed or you handle zero values.
+func allResponses(responses *gorums.Responses[*Response]) map[uint32]*Response {
+  return responses.Seq().CollectAll()
 }
 ```
 

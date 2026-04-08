@@ -92,17 +92,19 @@ func (seq ResponseSeq[Resp]) Filter(keep func(NodeResponse[Resp]) bool) Response
 	}
 }
 
-// CollectN collects up to n responses, including errors, from the iterator
-// into a map by node ID. It returns early if n responses are collected or
-// the iterator is exhausted.
+// CollectN collects up to n values from the iterator into a map by node ID.
+// It returns early if n entries are collected or the iterator is exhausted.
+// When a node response carries an error, the zero value of Resp is stored for
+// that node ID; use IgnoreErrors first if you want to skip errored nodes
+// entirely.
 //
 // Example:
 //
 //	responses := QuorumCall(ctx, req)
-//	// Collect the first 2 responses (including errors)
-//	replies := responses.CollectN(2)
-//	// or collect 2 successful responses
-//	replies = responses.IgnoreErrors().CollectN(2)
+//	// Collect 2 successful responses only
+//	replies := responses.IgnoreErrors().CollectN(2)
+//	// or collect the first 2 responses regardless of error
+//	replies = responses.CollectN(2)
 func (seq ResponseSeq[Resp]) CollectN(n int) map[uint32]Resp {
 	replies := make(map[uint32]Resp, n)
 	for result := range seq {
@@ -114,16 +116,18 @@ func (seq ResponseSeq[Resp]) CollectN(n int) map[uint32]Resp {
 	return replies
 }
 
-// CollectAll collects all responses, including errors, from the iterator
-// into a map by node ID.
+// CollectAll collects all values from the iterator into a map by node ID.
+// When a node response carries an error, the zero value of Resp is stored for
+// that node ID; use IgnoreErrors first if you want to skip errored nodes
+// entirely.
 //
 // Example:
 //
 //	responses := QuorumCall(ctx, req)
-//	// Collect all responses (including errors)
-//	replies := responses.CollectAll()
-//	// or collect all successful responses
-//	replies = responses.IgnoreErrors().CollectAll()
+//	// Collect all successful responses only
+//	replies := responses.IgnoreErrors().CollectAll()
+//	// or collect all responses regardless of error (zero value stored on error)
+//	replies = responses.CollectAll()
 func (seq ResponseSeq[Resp]) CollectAll() map[uint32]Resp {
 	replies := make(map[uint32]Resp)
 	for result := range seq {
