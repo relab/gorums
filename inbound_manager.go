@@ -306,9 +306,10 @@ func (im *inboundManager) rebuildConfig() {
 	}
 	slices.SortFunc(cfg, ID)
 	slices.SortFunc(clientCfg, ID)
+	cfgChanged := !slices.Equal(im.config, cfg)
 	im.config = cfg
 	im.clientConfig = clientCfg
-	if im.onConfigChange != nil {
+	if cfgChanged && im.onConfigChange != nil {
 		im.onConfigChange(cfg)
 	}
 }
