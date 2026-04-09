@@ -12,25 +12,30 @@ import (
 
 // serverOptions contains configuration options for creating a new Server.
 type serverOptions struct {
-	buffer          uint
+	recvBufferSize  uint
+	sendBufferSize  uint
 	grpcOpts        []grpc.ServerOption
 	connectCallback func(context.Context)
 	interceptors    []Interceptor
 	// Peer management options
 	myID           uint32
 	peerOpt        NodeListOption
-	peerSendBuffer uint
 	onConfigChange func(Configuration)
 }
 
 // ServerOption is used to change settings for the GorumsServer
 type ServerOption func(*serverOptions)
 
-// WithReceiveBufferSize sets the buffer size for the server.
-// A larger buffer may result in higher throughput at the cost of higher latency.
-func WithReceiveBufferSize(size uint) ServerOption {
+// WithBufferSizes configures the send and receive buffer sizes for the server.
+// The receiveSize controls how many messages the server queues before applying
+// backpressure. Similarly, sendSize controls how many messages the server queues
+// on its per-node channel for outgoing peer messages in the reverse direction.
+// Larger values may increase throughput at the cost of higher latency.
+// The default for both is 0 (unbuffered).
+func WithBufferSizes(receiveSize, sendSize uint) ServerOption {
 	return func(o *serverOptions) {
-		o.buffer = size
+		o.recvBufferSize = receiveSize
+		o.sendBufferSize = sendSize
 	}
 }
 
@@ -84,15 +89,6 @@ func WithConfig(myID uint32, opt NodeListOption, onChange ...func(Configuration)
 	}
 }
 
-// WithPeerSendBufferSize sets the size of the per-node send buffer for channels
-// created when inbound peers connect. A larger buffer may increase throughput
-// for asynchronous call types at the cost of latency. The default is 0 (unbuffered).
-func WithPeerSendBufferSize(size uint) ServerOption {
-	return func(o *serverOptions) {
-		o.peerSendBuffer = size
-	}
-}
-
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
 	srv          *stream.Server
@@ -128,11 +124,11 @@ func NewServer(opts ...ServerOption) *Server {
 	s.inboundManager = newInboundManager(
 		serverOpts.myID,
 		serverOpts.peerOpt,
-		serverOpts.peerSendBuffer,
+		serverOpts.sendBufferSize,
 		serverOpts.onConfigChange,
 		s,
 	)
-	s.srv = stream.NewServer(serverOpts.buffer, serverOpts.connectCallback, s.inboundManager)
+	s.srv = stream.NewServer(serverOpts.recvBufferSize, serverOpts.connectCallback, s.inboundManager)
 	stream.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
 }

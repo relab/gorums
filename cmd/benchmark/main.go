@@ -65,14 +65,14 @@ func listBenchmarks() {
 	tw.Flush()
 }
 
-func runServer(server string, serverBuffer uint) {
+func runServer(server string, recvSize, sendSize uint) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
 	lis, err := net.Listen("tcp", server)
 	checkf("Failed to listen on '%s': %v", server, err)
 
-	srv := benchmark.NewBenchServer(gorums.WithReceiveBufferSize(serverBuffer))
+	srv := benchmark.NewBenchServer(gorums.WithBufferSizes(recvSize, sendSize))
 	go func() { checkf("serve failed: %v", srv.Serve(lis)) }()
 
 	fmt.Printf("Running benchmark server on '%s'\n", server)
@@ -127,8 +127,8 @@ func main() {
 		serverStats    = flag.Bool("server-stats", false, "Show server statistics separately")
 		cfgSize        = flag.Int("config-size", 4, "Size of the configuration to use. If < 1, all nodes will be used.")
 		qSize          = flag.Int("quorum-size", 0, "Number of replies to wait for before completing a quorum call.")
-		sendBuffer     = flag.Uint("send-buffer", 0, "The size of the send buffer.")
-		serverBuffer   = flag.Uint("server-buffer", 0, "The size of the server buffers.")
+		sendBuffer     = flag.Uint("send-buffer", 0, "The size of the client's (and server's reverse channel) send buffer.")
+		recvBuffer     = flag.Uint("recv-buffer", 0, "The size of the server's receive buffer.")
 		list           = flag.Bool("list", false, "List all available benchmarks")
 	)
 	flag.Var(&benchmarksFlag, "benchmarks", "A `regexp` matching the benchmarks to run.")
@@ -150,7 +150,7 @@ func main() {
 	}()
 
 	if *server != "" {
-		runServer(*server, *serverBuffer)
+		runServer(*server, *recvBuffer, *sendBuffer)
 		return
 	}
 
@@ -167,7 +167,7 @@ func main() {
 		options.Remote = false
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		remotes = benchmark.StartLocalServers(ctx, *cfgSize, gorums.WithReceiveBufferSize(*serverBuffer))
+		remotes = benchmark.StartLocalServers(ctx, *cfgSize, gorums.WithBufferSizes(*recvBuffer, *sendBuffer))
 	}
 
 	numNodes := len(remotes)

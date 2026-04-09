@@ -11,7 +11,7 @@ import (
 // NewSystem or NewLocalSystems later calls NewServer with the collected options.
 func TestWithServerOptionsFiltersNil(t *testing.T) {
 	opts := newDialOptions()
-	WithServerOptions(nil, WithReceiveBufferSize(8), nil)(&opts)
+	WithServerOptions(nil, WithBufferSizes(8, 8), nil)(&opts)
 	if got := len(opts.srvOpts); got != 1 {
 		t.Errorf("WithServerOptions: got %d srvOpts, want 1 (nil options must be dropped)", got)
 	}

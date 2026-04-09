@@ -12,7 +12,7 @@ import "testing"
 //
 //	SetupConfiguration(t, 3, nil,
 //		WithBackoff(...),           // DialOption
-//		WithReceiveBufferSize(10),  // ServerOption
+//		WithBufferSizes(10, 10),    // ServerOption
 //		WithNodeMap(...),           // NodeListOption
 //	)
 type TestOption any
