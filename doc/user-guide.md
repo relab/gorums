@@ -1177,22 +1177,23 @@ The callback is called after every change to the known-peer configuration — th
 gorums.WithConfig(myNodeID, nodeListOption, func(cfg gorums.Configuration) { ... })
 ```
 
-**When it runs:** inside the server's internal configuration lock, immediately after the configuration slice has been replaced.
-The callback also fires once during `NewServer` construction (with the initial configuration, which contains only the self-node when no peers have connected yet).
+**When it runs:** after every change to the known-peer configuration.
+For peer connect/disconnect events, the callback runs inside the server's internal configuration lock, immediately after the configuration slice has been replaced.
+The callback also fires once during `NewServer` construction (with the initial configuration, which contains only the self-node when no peers have connected yet)); that initial construction-time call does **not** run under the internal configuration lock.
 
 **What is available:** a configuration of connected known peers, sorted by node ID.
 The self-node (this server's own ID) is always included regardless of connectivity.
 
 **Safe side effects:** signaling a channel, writing to an atomic, or copying the slice.
-The callback is invoked while holding the internal lock, so it must **not** call `srv.Config()`, `ctx.Config()`, or any other method that acquires the same lock.
-Do not perform blocking or long-running work inside the callback.
+For connect/disconnect-triggered callbacks, the callback is invoked while holding the internal lock, so it must **not** call `srv.Config()`, `ctx.Config()`, or any other method that acquires the same lock.
+Do not perform blocking or long-running work inside the callback, including during the initial construction-time call.
 
 #### Example: Reacting to Peer Membership Changes
 
 The following example shows how a server can wait until a quorum of peers is connected before beginning to serve requests.
 
 ```go
-const quorumSize = 3 // f+1 for a cluster of size 2f+1
+const quorumSize = 2 // majority for a three-node cluster, including self
 
 ready := make(chan struct{}, 1)
 
