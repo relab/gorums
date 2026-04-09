@@ -155,7 +155,7 @@ func (c Configuration) Add(ids ...uint32) Configuration {
 			}
 		}
 	}
-	OrderedBy(ID).Sort(nodes)
+	slices.SortFunc(nodes, ID)
 	return nodes
 }
 

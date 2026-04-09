@@ -1,11 +1,10 @@
 package gorums
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net"
-	"sort"
-	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -260,85 +259,24 @@ func (n *Node) Latency() time.Duration {
 	return n.router.Latency()
 }
 
-type lessFunc func(n1, n2 *Node) bool
-
-// MultiSorter implements the Sort interface, sorting the nodes within.
-type MultiSorter struct {
-	nodes []*Node
-	less  []lessFunc
+// ID compares nodes by their identifier in increasing order.
+// It is compatible with [slices.SortFunc] and related helpers.
+var ID = func(a, b *Node) int {
+	return cmp.Compare(a.id, b.id)
 }
 
-// Sort sorts the argument slice according to the less functions passed to
-// OrderedBy.
-func (ms *MultiSorter) Sort(nodes []*Node) {
-	ms.nodes = nodes
-	sort.Sort(ms)
-}
-
-// OrderedBy returns a Sorter that sorts using the less functions, in order.
-// Call its Sort method to sort the data.
-func OrderedBy(less ...lessFunc) *MultiSorter {
-	return &MultiSorter{
-		less: less,
+// LastNodeError compares nodes by their LastErr() status.
+// Nodes with no error sort before nodes with an error.
+// It is compatible with [slices.SortFunc] and related helpers.
+var LastNodeError = func(a, b *Node) int {
+	switch {
+	case a.LastErr() != nil && b.LastErr() == nil:
+		return 1
+	case a.LastErr() == nil && b.LastErr() != nil:
+		return -1
+	default:
+		return 0
 	}
-}
-
-// Len is part of sort.Interface.
-func (ms *MultiSorter) Len() int {
-	return len(ms.nodes)
-}
-
-// Swap is part of sort.Interface.
-func (ms *MultiSorter) Swap(i, j int) {
-	ms.nodes[i], ms.nodes[j] = ms.nodes[j], ms.nodes[i]
-}
-
-// Less is part of sort.Interface. It is implemented by looping along the
-// less functions until it finds a comparison that is either Less or not
-// Less. Note that it can call the less functions twice per call. We
-// could change the functions to return -1, 0, 1 and reduce the
-// number of calls for greater efficiency: an exercise for the reader.
-func (ms *MultiSorter) Less(i, j int) bool {
-	p, q := ms.nodes[i], ms.nodes[j]
-	// Try all but the last comparison.
-	var k int
-	for k = range len(ms.less) - 1 {
-		less := ms.less[k]
-		switch {
-		case less(p, q):
-			// p < q, so we have a decision.
-			return true
-		case less(q, p):
-			// p > q, so we have a decision.
-			return false
-		}
-		// p == q; try the next comparison.
-	}
-	// All comparisons to here said "equal", so just return whatever
-	// the final comparison reports.
-	return ms.less[k](p, q)
-}
-
-// ID sorts nodes by their identifier in increasing order.
-var ID = func(n1, n2 *Node) bool {
-	return n1.id < n2.id
-}
-
-// Port sorts nodes by their port number in increasing order.
-// Warning: This function may be removed in the future.
-var Port = func(n1, n2 *Node) bool {
-	p1, _ := strconv.Atoi(n1.Port())
-	p2, _ := strconv.Atoi(n2.Port())
-	return p1 < p2
-}
-
-// LastNodeError sorts nodes by their LastErr() status in increasing order. A
-// node with LastErr() != nil is larger than a node with LastErr() == nil.
-var LastNodeError = func(n1, n2 *Node) bool {
-	if n1.LastErr() != nil && n2.LastErr() == nil {
-		return false
-	}
-	return true
 }
 
 // compile-time assertion for interface compliance.
