@@ -3,6 +3,7 @@ package gorums_test
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -100,6 +101,45 @@ func TestServerInterceptorsChain(t *testing.T) {
 	want := "client-i1in-i2in-server-i2out-i1out"
 	if res.GetValue() != want {
 		t.Fatalf("unexpected response value: got %q, want %q", res.GetValue(), want)
+	}
+}
+
+// TestWithBufferSizesProcessesRequests verifies that WithBufferSizes is accepted by
+// NewServer and that the server correctly processes concurrent requests for each
+// combination of receive and send buffer sizes, including the zero (unbuffered) case.
+func TestWithBufferSizesProcessesRequests(t *testing.T) {
+	const concurrency = 16
+	tests := []struct {
+		name     string
+		recvSize uint
+		sendSize uint
+	}{
+		{name: "unbuffered", recvSize: 0, sendSize: 0},
+		{name: "recv-only", recvSize: 1, sendSize: 0},
+		{name: "send-only", recvSize: 0, sendSize: 1},
+		{name: "both-buffered", recvSize: concurrency, sendSize: concurrency},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node := gorums.TestNode(t, nil, gorums.WithBufferSizes(tt.recvSize, tt.sendSize))
+			ctx := gorums.TestContext(t, 5*time.Second)
+
+			var wg sync.WaitGroup
+			errs := make([]error, concurrency)
+			for i := range concurrency {
+				wg.Go(func() {
+					nodeCtx := node.Context(ctx)
+					_, errs[i] = gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
+				})
+			}
+			wg.Wait()
+
+			for i, err := range errs {
+				if err != nil {
+					t.Errorf("request %d failed: %v", i, err)
+				}
+			}
+		})
 	}
 }
 
