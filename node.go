@@ -269,10 +269,12 @@ var ID = func(a, b *Node) int {
 // Nodes with no error sort before nodes with an error.
 // It is compatible with [slices.SortFunc] and related helpers.
 var LastNodeError = func(a, b *Node) int {
+	aErr := a.LastErr()
+	bErr := b.LastErr()
 	switch {
-	case a.LastErr() != nil && b.LastErr() == nil:
+	case aErr != nil && bErr == nil:
 		return 1
-	case a.LastErr() == nil && b.LastErr() != nil:
+	case aErr == nil && bErr != nil:
 		return -1
 	default:
 		return 0
