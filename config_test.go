@@ -241,6 +241,72 @@ func TestEmptyConfiguration(t *testing.T) {
 	})
 }
 
+func TestConfigurationSortBy(t *testing.T) {
+	cfg, err := gorums.NewConfig(gorums.WithNodeList(nodes), gorums.InsecureDialOptions(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gorums.Closer(t, cfg))
+
+	t.Run("SortByID", func(t *testing.T) {
+		sorted := cfg.SortBy(gorums.ID)
+		if sorted.Size() != cfg.Size() {
+			t.Fatalf("sorted.Size() = %d, want %d", sorted.Size(), cfg.Size())
+		}
+		for i := 1; i < sorted.Size(); i++ {
+			if sorted[i].ID() < sorted[i-1].ID() {
+				t.Errorf("SortBy(ID): not sorted at position %d (id %d < id %d)",
+					i, sorted[i].ID(), sorted[i-1].ID())
+			}
+		}
+	})
+
+	t.Run("SortByLatency/AllUnmeasured", func(t *testing.T) {
+		// Fresh config: no calls yet, so all nodes report latency < 0.
+		for _, n := range cfg.Nodes() {
+			if n.Latency() >= 0 {
+				t.Fatalf("expected no latency measurement on fresh node, got %v", n.Latency())
+			}
+		}
+		sorted := cfg.SortBy(gorums.Latency)
+		if sorted.Size() != cfg.Size() {
+			t.Fatalf("sorted.Size() = %d, want %d", sorted.Size(), cfg.Size())
+		}
+	})
+
+	t.Run("ReturnsNewConfiguration", func(t *testing.T) {
+		sorted := cfg.SortBy(gorums.ID)
+		cfgSlice := cfg.Nodes()
+		sortedSlice := sorted.Nodes()
+		if len(cfgSlice) > 0 && len(sortedSlice) > 0 && &cfgSlice[0] == &sortedSlice[0] {
+			t.Error("SortBy returned same backing array — violates immutability")
+		}
+	})
+
+	t.Run("Empty/ReturnsNil", func(t *testing.T) {
+		var empty gorums.Configuration
+		if got := empty.SortBy(gorums.ID); got != nil {
+			t.Fatalf("empty.SortBy(ID) = %v, want nil", got)
+		}
+		if got := empty.SortBy(gorums.Latency); got != nil {
+			t.Fatalf("empty.SortBy(Latency) = %v, want nil", got)
+		}
+	})
+
+	t.Run("SortByLastNodeErrorThenLatency", func(t *testing.T) {
+		// Composing two comparators should not panic and must return a valid config.
+		sorted := cfg.SortBy(func(a, b *gorums.Node) int {
+			if r := gorums.LastNodeError(a, b); r != 0 {
+				return r
+			}
+			return gorums.Latency(a, b)
+		})
+		if sorted.Size() != cfg.Size() {
+			t.Fatalf("composed sort size = %d, want %d", sorted.Size(), cfg.Size())
+		}
+	})
+}
+
 func assertPanicMessage(t *testing.T, want string, fn func()) {
 	t.Helper()
 	defer func() {

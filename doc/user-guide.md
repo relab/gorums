@@ -1409,6 +1409,143 @@ func ExampleConfigClient() {
 }
 ```
 
+## Latency-Based Node Selection
+
+Gorums tracks the round-trip latency to each node as an exponentially weighted
+moving average, accessible via `node.Latency()`.
+This section explains how to use that information to construct faster
+sub-configurations, and what to watch out for when doing so.
+
+### The Latency Comparator
+
+`gorums.Latency` is a comparator function compatible with `slices.SortFunc` and `Configuration.SortBy`.
+The comparator orders nodes ascending by their current latency estimates;
+nodes without any measurements (freshly created, never sent traffic) are sorted last.
+
+```go
+// Sort all nodes by ascending latency.
+sorted := cfg.SortBy(gorums.Latency)
+
+// Pick the two fastest nodes.
+fast2 := cfg.SortBy(gorums.Latency)[:2]
+```
+
+Comparators can be chained for multi-key ordering.
+For example, healthy nodes first, then by latency within each group:
+
+```go
+sorted := cfg.SortBy(func(a, b *gorums.Node) int {
+    if r := gorums.LastNodeError(a, b); r != 0 {
+        return r
+    }
+    return gorums.Latency(a, b)
+})
+```
+
+### Using a Smaller Fast Configuration
+
+The most practical use of latency-based selection is reducing the quorum size to the fastest subset of nodes.
+Sending to fewer nodes lowers tail latency without weakening correctness, as long as the subset still meets your quorum threshold.
+
+```go
+const n = 5  // total nodes
+const f = 1  // tolerated failures
+quorumSize := (n+f)/2 + 1  // simple majority for crash-fault tolerance = 3
+
+// Re-derive the fast sub-configuration periodically (see guidance below).
+fastCfg := allNodesCfg.SortBy(gorums.Latency)[:quorumSize]
+fastCfgCtx := fastCfg.Context(ctx)
+
+reply, err := ReadQC(fastCfgCtx, &ReadRequest{Key: "x"}).Majority()
+```
+
+Combining with error-based filtering is straightforward: drop failed nodes
+first, then pick the fastest of those that remain:
+
+```go
+var qcErr gorums.QuorumCallError
+if errors.As(err, &qcErr) {
+    fastCfg = cfg.WithoutErrors(qcErr).SortBy(gorums.Latency)[:quorumSize]
+}
+```
+
+> **Note:** For quorum calls, all nodes in the configuration are contacted —
+> the ordering only matters when you slice the result to a subset.
+> Sorting a full configuration without slicing has no effect on call latency.
+
+### How Often to Re-Sort
+
+`SortBy` returns a snapshot of the ordering at one point in time.
+Latency measurements change as network conditions shift; the snapshot does not
+auto-update.
+
+As a rule of thumb:
+
+* **Every few seconds** is a reasonable re-sort interval for most deployments.
+  A periodic goroutine or a lazy re-sort at the start of each request batch
+  both work well.
+* **On every single call** is usually unnecessary and wastes allocations.
+  Each `SortBy` clones the node slice.
+* **After a failed quorum call**, always re-evaluate: a node that caused the
+  failure should be excluded via `WithoutErrors` before re-sorting.
+* **After a topology change** (node added or removed), derive the sub-configuration
+  from the new full configuration rather than sorting an outdated one.
+
+A simple periodic refresh pattern:
+
+```go
+var (
+    mu      sync.Mutex
+    fastCfg gorums.Configuration
+)
+
+// Refresh the fast sub-configuration every 5 seconds.
+go func() {
+    for range time.Tick(5 * time.Second) {
+        fresh := allNodesCfg.SortBy(gorums.Latency)[:quorumSize]
+        mu.Lock()
+        fastCfg = fresh
+        mu.Unlock()
+    }
+}()
+
+// Callers read the most recently refreshed configuration.
+mu.Lock()
+cfg := fastCfg
+mu.Unlock()
+cfgCtx := cfg.Context(ctx)
+```
+
+### Measurement Limits
+
+`Node.Latency()` has several limits that are worth understanding before building
+on it:
+
+* **No traffic → no measurement.** The estimate is only updated on successful
+  responses. A freshly created node, or a node that has been idle for a long
+  time, returns a negative value.  `SortBy(gorums.Latency)` pushes such nodes
+  to the end of the slice, so you will not accidentally pick an unmeasured node
+  when slicing the front.
+
+* **Staleness.** If traffic to a node stops, the estimate freezes at the last
+  observed value.  A node that was fast yesterday but degraded overnight will
+  still look fast until new responses arrive and update the average.
+
+* **Slow convergence.** The moving average uses a smoothing factor of 0.2, so
+  a sudden step-change in latency takes roughly five round trips to be reflected
+  in the estimate.  Short-lived spikes are smoothed away, which is usually
+  desirable but means the estimate lags behind rapid fluctuations.
+
+* **No variance information.** A single average cannot distinguish a stable
+  low-latency node from a high-variance node whose average happens to look good.
+  If jitter matters for your workload, the built-in estimate is not sufficient
+  on its own.
+
+* **Quorum calls contact all nodes.** Latency-based ordering only improves
+  performance when you slice the sorted configuration to a smaller subset.
+  Passing a full-size sorted configuration to a quorum call provides no speedup
+  because every node in the configuration is contacted regardless of order.
+
 ## Interactive REPL
 
 The storage example (`examples/storage`) includes an interactive Read-Eval-Print Loop (REPL) that lets you send RPCs and quorum calls against live storage servers.

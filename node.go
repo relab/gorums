@@ -254,20 +254,34 @@ func (n *Node) LastErr() error {
 	return nil
 }
 
-// Latency returns the latency between the client and this node.
+// Latency returns the current round-trip latency estimate for this node,
+// computed as an exponentially weighted moving average with a
+// smoothing factor of 0.2 (roughly a 5-sample window).
+//
+// The returned value has several important limits:
+//   - It returns -1s until the first successful response is received; treat
+//     negative values as "no data" rather than a real measurement.
+//   - The estimate is only updated when there is active traffic. On an idle
+//     node the value may be arbitrarily stale and will not reflect recent
+//     changes in network conditions.
+//   - A step-change in latency takes several round trips to settle because
+//     each new sample contributes only 20% of the new value.
+//
+// Use [Latency] as a comparator with [Configuration.SortBy] to order nodes
+// by their current observed latency.
 func (n *Node) Latency() time.Duration {
 	return n.router.Latency()
 }
 
 // ID compares nodes by their identifier in increasing order.
-// It is compatible with [slices.SortFunc] and related helpers.
+// It is compatible with [slices.SortFunc] and [Configuration.SortBy].
 var ID = func(a, b *Node) int {
 	return cmp.Compare(a.id, b.id)
 }
 
 // LastNodeError compares nodes by their LastErr() status.
 // Nodes with no error sort before nodes with an error.
-// It is compatible with [slices.SortFunc] and related helpers.
+// It is compatible with [slices.SortFunc] and [Configuration.SortBy].
 var LastNodeError = func(a, b *Node) int {
 	aErr := a.LastErr()
 	bErr := b.LastErr()
@@ -279,6 +293,22 @@ var LastNodeError = func(a, b *Node) int {
 	default:
 		return 0
 	}
+}
+
+// Latency compares nodes by their current latency estimate in ascending order.
+// Nodes with no measurement yet (negative latency value) sort after nodes with a
+// measurement. It is compatible with [slices.SortFunc] and [Configuration.SortBy].
+var Latency = func(a, b *Node) int {
+	la, lb := a.Latency(), b.Latency()
+	switch {
+	case la < 0 && lb < 0:
+		return 0
+	case la < 0:
+		return 1
+	case lb < 0:
+		return -1
+	}
+	return cmp.Compare(la, lb)
 }
 
 // compile-time assertion for interface compliance.

@@ -66,6 +66,16 @@ func NewMessageRouter(handler ...RequestHandler) *MessageRouter {
 	}
 }
 
+// NewMessageRouterWithLatency creates a new MessageRouter with an initial latency
+// for testing. The latency may be updated by subsequent message routing operations.
+// This function should only be used in tests.
+func NewMessageRouterWithLatency(latency time.Duration) *MessageRouter {
+	return &MessageRouter{
+		pending: make(map[uint64]Request),
+		latency: latency,
+	}
+}
+
 // DispatchLocalRequest handles the request in-process for the local node,
 // bypassing the network. It delivers the request to the registered handler,
 // serializing execution the same way remote nodes do: the next dispatch is

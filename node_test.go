@@ -21,6 +21,9 @@ func TestNodeSort(t *testing.T) {
 		n.channel.Store(stream.NewChannelWithState(err))
 		return n
 	}
+	makeNodeWithLatency := func(id uint32, lat time.Duration) *Node {
+		return &Node{id: id, router: stream.NewMessageRouterWithLatency(lat)}
+	}
 	someErr := errors.New("some error")
 	nodes := []*Node{
 		makeNode(100, nil),
@@ -64,6 +67,65 @@ func TestNodeSort(t *testing.T) {
 		for i, n := range ns {
 			if n.id != wantIDs[i] {
 				t.Errorf("by error then id: position %d: got id %d, want %d", i, n.id, wantIDs[i])
+				printNodes(t, ns)
+			}
+		}
+	})
+
+	t.Run("ByLatency", func(t *testing.T) {
+		// Node 3 has no measurement (-1s): should sort last.
+		// Remaining nodes sort ascending by latency.
+		ns := []*Node{
+			makeNodeWithLatency(1, 30*time.Millisecond),
+			makeNodeWithLatency(2, 10*time.Millisecond),
+			makeNodeWithLatency(3, -1*time.Second), // no measurement
+			makeNodeWithLatency(4, 20*time.Millisecond),
+		}
+		slices.SortFunc(ns, Latency)
+		// Expected: 2 (10ms), 4 (20ms), 1 (30ms), 3 (no data).
+		wantIDs := []uint32{2, 4, 1, 3}
+		for i, n := range ns {
+			if n.id != wantIDs[i] {
+				t.Errorf("by latency: position %d: got id %d, want %d", i, n.id, wantIDs[i])
+				printNodes(t, ns)
+			}
+		}
+	})
+
+	t.Run("ByLatency/AllUnmeasured", func(t *testing.T) {
+		// All nodes without measurements: stable order must be preserved.
+		ns := []*Node{
+			makeNodeWithLatency(1, -1*time.Second),
+			makeNodeWithLatency(2, -1*time.Second),
+			makeNodeWithLatency(3, -1*time.Second),
+		}
+		slices.SortStableFunc(ns, Latency)
+		wantIDs := []uint32{1, 2, 3}
+		for i, n := range ns {
+			if n.id != wantIDs[i] {
+				t.Errorf("by latency (all unmeasured): position %d: got id %d, want %d", i, n.id, wantIDs[i])
+			}
+		}
+	})
+
+	t.Run("ByLatencyThenID", func(t *testing.T) {
+		// Two nodes with the same latency: secondary sort by ID breaks ties.
+		ns := []*Node{
+			makeNodeWithLatency(10, 20*time.Millisecond),
+			makeNodeWithLatency(5, 10*time.Millisecond),
+			makeNodeWithLatency(7, 20*time.Millisecond),
+		}
+		slices.SortFunc(ns, func(a, b *Node) int {
+			if r := Latency(a, b); r != 0 {
+				return r
+			}
+			return ID(a, b)
+		})
+		// Expected: 5 (10ms), 7 (20ms, lower id), 10 (20ms, higher id).
+		wantIDs := []uint32{5, 7, 10}
+		for i, n := range ns {
+			if n.id != wantIDs[i] {
+				t.Errorf("by latency then id: position %d: got id %d, want %d", i, n.id, wantIDs[i])
 				printNodes(t, ns)
 			}
 		}

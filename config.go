@@ -197,6 +197,41 @@ func (c Configuration) Difference(other Configuration) Configuration {
 	return c.Remove(other.NodeIDs()...)
 }
 
+// SortBy returns a new Configuration with nodes ordered by the given comparator.
+// The original configuration is not modified.
+//
+// Use this with the built-in node comparator functions [ID], [LastNodeError],
+// and [Latency]:
+//
+//	fastest := cfg.SortBy(gorums.Latency)           // ascending by latency
+//	healthy := cfg.SortBy(gorums.LastNodeError)     // no-error nodes first
+//
+// Comparators can be combined for multi-key ordering:
+//
+//	cfg.SortBy(func(a, b *Node) int {
+//	    if r := gorums.LastNodeError(a, b); r != 0 {
+//	        return r
+//	    }
+//	    return gorums.Latency(a, b)
+//	})
+//
+// SortBy uses a stable sort, so nodes with equal comparator values retain
+// their original relative order.
+//
+// Note: quorum calls contact every node in the configuration regardless of
+// order. Sorting only affects which nodes are selected when the result is
+// sliced to a smaller subset, e.g., cfg.SortBy(gorums.Latency)[:quorumSize].
+// See the "Latency-Based Node Selection" section of the user guide for
+// guidance on sub-configuration sizing and re-sort frequency.
+func (c Configuration) SortBy(cmp func(*Node, *Node) int) Configuration {
+	if len(c) == 0 {
+		return nil
+	}
+	sorted := slices.Clone(c)
+	slices.SortStableFunc(sorted, cmp)
+	return sorted
+}
+
 // WithoutErrors returns a new Configuration excluding nodes that failed in the
 // given QuorumCallError. If specific error types are provided, only nodes whose
 // errors match one of those types (using errors.Is) will be excluded.
