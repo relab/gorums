@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -442,7 +443,7 @@ func (r repl) parseConfiguration(cfgStr string) (pb.Configuration, error) {
 	for _, i := range indices {
 		nodes = append(nodes, cfgNodes[i])
 	}
-	gorums.OrderedBy(gorums.ID).Sort(nodes)
+	slices.SortFunc(nodes, gorums.ID)
 	return pb.Configuration(nodes), nil
 }
 

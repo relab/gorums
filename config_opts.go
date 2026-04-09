@@ -140,7 +140,7 @@ func (b *nodeBuilder) add(id uint32, addr string) error {
 
 // configuration returns the built Configuration, sorted by ID.
 func (b *nodeBuilder) configuration() Configuration {
-	OrderedBy(ID).Sort(b.nodes)
+	slices.SortFunc(b.nodes, ID)
 	return b.nodes
 }
 

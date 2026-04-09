@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"testing"
 	"time"
 
@@ -20,30 +21,53 @@ func TestNodeSort(t *testing.T) {
 		n.channel.Store(stream.NewChannelWithState(err))
 		return n
 	}
+	someErr := errors.New("some error")
 	nodes := []*Node{
 		makeNode(100, nil),
-		makeNode(101, errors.New("some error")),
+		makeNode(101, someErr),
 		makeNode(42, nil),
-		makeNode(99, errors.New("some error")),
+		makeNode(99, someErr),
 	}
 
-	n := len(nodes)
-
-	OrderedBy(ID).Sort(nodes)
-	for i := n - 1; i > 0; i-- {
-		if nodes[i].id < nodes[i-1].id {
-			t.Error("by id: not sorted")
-			printNodes(t, nodes)
+	t.Run("ByID", func(t *testing.T) {
+		ns := slices.Clone(nodes)
+		slices.SortFunc(ns, ID)
+		for i := 1; i < len(ns); i++ {
+			if ns[i].id < ns[i-1].id {
+				t.Error("by id: not sorted")
+				printNodes(t, ns)
+			}
 		}
-	}
+	})
 
-	OrderedBy(LastNodeError).Sort(nodes)
-	for i := n - 1; i > 0; i-- {
-		if nodes[i].LastErr() == nil && nodes[i-1].LastErr() != nil {
-			t.Error("by error: not sorted")
-			printNodes(t, nodes)
+	t.Run("ByLastNodeError", func(t *testing.T) {
+		ns := slices.Clone(nodes)
+		slices.SortFunc(ns, LastNodeError)
+		for i := 1; i < len(ns); i++ {
+			if ns[i].LastErr() == nil && ns[i-1].LastErr() != nil {
+				t.Error("by error: not sorted")
+				printNodes(t, ns)
+			}
 		}
-	}
+	})
+
+	t.Run("ByLastNodeErrorThenID", func(t *testing.T) {
+		ns := slices.Clone(nodes)
+		slices.SortFunc(ns, func(a, b *Node) int {
+			if c := LastNodeError(a, b); c != 0 {
+				return c
+			}
+			return ID(a, b)
+		})
+		// Expect: 42 (no err), 100 (no err), 99 (err), 101 (err).
+		wantIDs := []uint32{42, 100, 99, 101}
+		for i, n := range ns {
+			if n.id != wantIDs[i] {
+				t.Errorf("by error then id: position %d: got id %d, want %d", i, n.id, wantIDs[i])
+				printNodes(t, ns)
+			}
+		}
+	})
 }
 
 func printNodes(t *testing.T, nodes []*Node) {
