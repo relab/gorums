@@ -1113,6 +1113,109 @@ func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCt
 }
 ```
 
+## Server Configuration Callbacks
+
+Two server options expose hooks that fire at connection or configuration change time.
+Both are passed to `gorums.NewServer` as `ServerOption` values.
+
+### WithConnectCallback
+
+`WithConnectCallback` registers a function called each time a node opens or reopens a stream to this server.
+
+**Signature:**
+
+```go
+gorums.WithConnectCallback(func(ctx context.Context))
+```
+
+**When it runs:** immediately after a new stream is accepted by the server, before any messages are processed on that stream.
+
+**What is available:** the `context.Context` is the gRPC stream context.
+`metadata.FromIncomingContext(ctx)` returns all key/value metadata pairs sent by the connecting client.
+`peer.FromContext(ctx)` (from `google.golang.org/grpc/peer`) returns the remote network address.
+
+**Safe side effects:** reading metadata, logging, writing to atomics, or signaling a channel.
+The callback runs synchronously during stream setup — keep it fast and do not call back into the `*gorums.Server`.
+
+#### Example: Logging Incoming Metadata
+
+The following example shows how a server can extract a custom `client-id` metadata value sent by each connecting node.
+This pattern is exercised in `server_test.go`.
+
+```go
+gorumsSrv := gorums.NewServer(
+    gorums.WithConnectCallback(func(ctx context.Context) {
+        md, ok := metadata.FromIncomingContext(ctx)
+        if !ok {
+            return
+        }
+        if vals := md.Get("client-id"); len(vals) > 0 {
+            log.Printf("peer connected, client-id=%s", vals[0])
+        }
+    }),
+)
+```
+
+The connecting client attaches the metadata with `WithMetadata`:
+
+```go
+config, err := gorums.NewConfig(
+    gorums.WithNodeList(addrs),
+    gorums.WithMetadata(metadata.New(map[string]string{"client-id": "replica-3"})),
+    gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+)
+```
+
+### WithConfig onChange Callback
+
+`WithConfig` accepts an optional `onChange func(gorums.Configuration)` variadic argument.
+The callback is called after every change to the known-peer configuration — that is, each time a pre-configured peer connects or disconnects.
+
+**Signature:**
+
+```go
+gorums.WithConfig(myNodeID, nodeListOption, func(cfg gorums.Configuration) { ... })
+```
+
+**When it runs:** inside the server's internal configuration lock, immediately after the configuration slice has been replaced.
+The callback also fires once during `NewServer` construction (with the initial configuration, which contains only the self-node when no peers have connected yet).
+
+**What is available:** a configuration of connected known peers, sorted by node ID.
+The self-node (this server's own ID) is always included regardless of connectivity.
+
+**Safe side effects:** signaling a channel, writing to an atomic, or copying the slice.
+The callback is invoked while holding the internal lock, so it must **not** call `srv.Config()`, `ctx.Config()`, or any other method that acquires the same lock.
+Do not perform blocking or long-running work inside the callback.
+
+#### Example: Reacting to Peer Membership Changes
+
+The following example shows how a server can wait until a quorum of peers is connected before beginning to serve requests.
+
+```go
+const quorumSize = 3 // f+1 for a cluster of size 2f+1
+
+ready := make(chan struct{}, 1)
+
+gorumsSrv := gorums.NewServer(
+    gorums.WithConfig(myNodeID, gorums.WithNodeList(peerAddrs),
+        func(cfg gorums.Configuration) {
+            if len(cfg) >= quorumSize {
+                select {
+                case ready <- struct{}{}:
+                default:
+                }
+            }
+        },
+    ),
+)
+
+// Block until a quorum connects before accepting client requests.
+<-ready
+log.Println("quorum ready, starting to serve")
+```
+
+The self-node is always present in `cfg`, so a three-node cluster (`quorumSize = 2`) will fire the signal as soon as a single remote peer connects.
+
 ## Error Handling
 
 Gorums provides structured error types to help you understand and handle failures in quorum calls.
@@ -1426,6 +1529,9 @@ Each node in `peerAddrs` that connects sends its node ID in connection metadata.
 When the peer connects, `Config()` starts returning that node as an available target.
 
 The storage example uses `gorums.NewLocalSystems`, which calls `WithConfig` automatically for each system and stores the node list for outbound configuration.
+
+`WithConfig` also accepts an optional `onChange` callback that is called each time the peer configuration changes.
+See [Server Configuration Callbacks](#server-configuration-callbacks) for details and an example.
 
 ### Writing the Handler
 
