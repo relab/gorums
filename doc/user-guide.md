@@ -1125,7 +1125,7 @@ Both are passed to `gorums.NewServer` as `ServerOption` values.
 **Signature:**
 
 ```go
-gorums.WithConnectCallback(func(ctx context.Context))
+gorums.WithConnectCallback(func(ctx context.Context) {})
 ```
 
 **When it runs:** immediately after a new stream is accepted by the server, before any messages are processed on that stream.
