@@ -152,7 +152,7 @@ func (seq ResponseSeq[Resp]) CollectAll() map[uint32]Resp {
 // Type parameter:
 //   - Resp: The response message type
 type Responses[Resp msg] struct {
-	ResponseSeq[Resp]
+	seq   ResponseSeq[Resp]
 	size  int
 	start starter
 }
@@ -163,9 +163,9 @@ type starter interface {
 
 func NewResponses[Req, Resp msg](ctx *ClientCtx[Req, Resp]) *Responses[Resp] {
 	return &Responses[Resp]{
-		ResponseSeq: ctx.responseSeq,
-		size:        ctx.Size(),
-		start:       ctx,
+		seq:   ctx.responseSeq,
+		size:  ctx.Size(),
+		start: ctx,
 	}
 }
 
@@ -174,7 +174,7 @@ func (r *Responses[Resp]) Size() int {
 	return r.size
 }
 
-// Seq returns the underlying response iterator that yields node responses as they arrive.
+// Results returns the underlying response iterator that yields node responses as they arrive.
 // It returns a single-use iterator. Users can use this to implement custom aggregation logic.
 // This method triggers lazy sending of requests.
 //
@@ -185,15 +185,15 @@ func (r *Responses[Resp]) Size() int {
 //
 // Example usage:
 //
-//	for result := range ReadQuorumCall(ctx, req).Seq() {
+//	for result := range ReadQuorumCall(ctx, req).Results() {
 //	    if result.Err != nil {
 //	        // Handle node error
 //	        continue
 //	    }
 //	    // Process result.Value
 //	}
-func (r *Responses[Resp]) Seq() ResponseSeq[Resp] {
-	return r.ResponseSeq
+func (r *Responses[Resp]) Results() ResponseSeq[Resp] {
+	return r.seq
 }
 
 // sendNow triggers immediate sending of requests.
@@ -231,7 +231,7 @@ func (r *Responses[Resp]) Threshold(threshold int) (resp Resp, err error) {
 		count int
 		errs  []nodeError
 	)
-	for result := range r.ResponseSeq {
+	for result := range r.seq {
 		if result.Err != nil && !errors.Is(result.Err, ErrSkipNode) {
 			errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
 			continue

@@ -104,7 +104,7 @@ func TestQuorumCallOrdering(t *testing.T) {
 	for i := range iterations() {
 		// Use CollectAll to get all responses and check for ordering
 		responses := QuorumCall(cfgCtx, Request_builder{Num: uint64(i)}.Build())
-		replies := responses.CollectAll()
+		replies := responses.Results().CollectAll()
 		if len(replies) < config.Size() {
 			t.Fatalf("incomplete call: %d replies", len(replies))
 		}
@@ -150,7 +150,7 @@ func TestMixedOrdering(t *testing.T) {
 	for i := range iterations() {
 		// Use CollectAll to get all responses and check for ordering
 		responses := QuorumCall(cfgCtx, Request_builder{Num: uint64(2*i - 1)}.Build())
-		replies := responses.CollectAll()
+		replies := responses.Results().CollectAll()
 		if len(replies) < config.Size() {
 			t.Fatalf("incomplete call: %d replies", len(replies))
 		}

@@ -56,7 +56,7 @@ reply, err := cfg.Read(ctx, &ReadRequest{})
 // Standalone aggregation function
 func newestValue(responses *gorums.Responses[*ReadResponse]) (*ReadResponse, error) {
     var newest *ReadResponse
-    for resp := range responses.Seq() {
+    for resp := range responses.Results() {
         if resp.Err != nil {
             continue
         }
@@ -158,7 +158,7 @@ func (qs *QSpec) ReadQF(_ *ReadRequest, replies map[uint32]*State) (*State, bool
 ```go
 func newestState(responses *gorums.Responses[*State]) (*State, error) {
     var newest *State
-    for resp := range responses.Seq() {
+    for resp := range responses.Results() {
         if resp.Err != nil {
             continue  // Skip failed responses
         }
@@ -178,7 +178,7 @@ func newestState(responses *gorums.Responses[*State]) (*State, error) {
 - No longer a method on a struct
 - Takes `*gorums.Responses[T]` instead of `map[uint32]T`
 - Returns `(T, error)` instead of `(T, bool)`
-- Uses iterator: `for resp := range responses.Seq()`
+- Uses iterator: `for resp := range responses.Results()`
 - Each response has `.Value` and `.Err` fields
 - Return `gorums.ErrIncomplete` instead of `false`
 
@@ -251,13 +251,13 @@ Terminal methods return `gorums.ErrIncomplete` when:
 
 ## Iterator-Based Custom Aggregation
 
-For complex aggregation logic, use the iterator API with `responses.Seq()`.
+For complex aggregation logic, use the iterator API with `responses.Results()`.
 
 ### Basic Iterator Pattern
 
 ```go
 func customAggregation(responses *gorums.Responses[*Response]) (*Response, error) {
-    for resp := range responses.Seq() {
+    for resp := range responses.Results() {
         // resp.Value contains the response message
         // resp.Err contains any error from that node
         // resp.NodeID contains the node identifier
@@ -282,7 +282,7 @@ Gorums provides helper methods for common iterator operations:
 ```go
 func countSuccessful(responses *gorums.Responses[*Response]) int {
     count := 0
-    for resp := range responses.Seq().IgnoreErrors() {
+    for resp := range responses.Results().IgnoreErrors() {
         count++
         // resp.Value is guaranteed to be non-nil
         // resp.Err is guaranteed to be nil
@@ -298,7 +298,7 @@ func newestValue(responses *gorums.Responses[*ReadResponse]) (*ReadResponse, err
     var newest *ReadResponse
 
     // Filter for responses with non-zero timestamps
-    filtered := responses.Seq().Filter(func(nr gorums.NodeResponse[*ReadResponse]) bool {
+    filtered := responses.Results().Filter(func(nr gorums.NodeResponse[*ReadResponse]) bool {
         return nr.Err == nil && nr.Value.GetTimestamp() > 0
     })
 
@@ -320,7 +320,7 @@ func newestValue(responses *gorums.Responses[*ReadResponse]) (*ReadResponse, err
 ```go
 func majorityWrite(responses *gorums.Responses[*WriteResponse]) (*WriteResponse, error) {
     majority := (responses.Size() + 1) / 2
-    replies := responses.Seq().IgnoreErrors().CollectN(majority)
+    replies := responses.Results().IgnoreErrors().CollectN(majority)
 
     if len(replies) < majority {
         return nil, gorums.ErrIncomplete
@@ -335,11 +335,11 @@ func majorityWrite(responses *gorums.Responses[*WriteResponse]) (*WriteResponse,
 
 ```go
 // Collect all responses into a map
-replies := responses.Seq().CollectAll()
+replies := responses.Results().CollectAll()
 // Returns map[uint32]*Response (may include failed nodes with nil values)
 
 // Collect only successful responses
-replies := responses.Seq().IgnoreErrors().CollectAll()
+replies := responses.Results().IgnoreErrors().CollectAll()
 // Returns map[uint32]*Response (only successful responses)
 ```
 
@@ -350,7 +350,7 @@ func verifiedQuorum(responses *gorums.Responses[*SignedResponse]) (*SignedRespon
     const quorumSize = 3
     var verified []*SignedResponse
 
-    for resp := range responses.Seq() {
+    for resp := range responses.Results() {
         if resp.Err != nil {
             continue
         }
@@ -526,7 +526,7 @@ func StopBenchmarkQF(replies map[uint32]*MemoryStat) (*MemoryStatList, error) {
 
 // Usage:
 responses := StopBenchmark(cfgCtx, &StopRequest{})
-replies := responses.Seq().IgnoreErrors().CollectAll()  // map[uint32]*MemoryStat
+replies := responses.Results().IgnoreErrors().CollectAll()  // map[uint32]*MemoryStat
 memStats, err := StopBenchmarkQF(replies)  // Returns *MemoryStatList
 ```
 
@@ -578,7 +578,7 @@ For custom return types, follow this pattern:
 ```go
 // Step 1: Collect responses
 responses := CustomQC(cfgCtx, req)
-replies := responses.Seq().IgnoreErrors().CollectAll()  // map[uint32]*ProtoResponse
+replies := responses.Results().IgnoreErrors().CollectAll()  // map[uint32]*ProtoResponse
 
 // Step 2: Apply custom aggregation
 result, err := CustomAggregationQF(replies)  // Returns *CustomType
@@ -661,7 +661,7 @@ if err != nil {
 - [ ] Remove all `QuorumSpec` interface implementations
 - [ ] Convert QuorumSpec methods to standalone aggregation functions
   - [ ] Change signature from `(req *Req, replies map[uint32]*Resp) (*Resp, bool)` to `(responses *gorums.Responses[*Resp]) (*Resp, error)`
-  - [ ] Use iterator: `for resp := range responses.Seq()`
+  - [ ] Use iterator: `for resp := range responses.Results()`
   - [ ] Return `gorums.ErrIncomplete` instead of `false`
 - [ ] Update configuration creation
   - [ ] Remove QuorumSpec from `NewConfiguration()` calls
@@ -733,7 +733,7 @@ func (qs *QSpec) ReadQF(_ *ReadRequest, replies map[uint32]*State) (*State, bool
 ```go
 func newestState(responses *gorums.Responses[*State]) (*State, error) {
     var newest *State
-    for resp := range responses.Seq() {
+    for resp := range responses.Results() {
         if resp.Err != nil {
             continue
         }
@@ -777,7 +777,7 @@ func countSuccessful(responses *gorums.Responses[*WriteResponse]) (*WriteRespons
     count := 0
     quorumSize := (responses.Size() + 1) / 2
 
-    for resp := range responses.Seq().IgnoreErrors() {
+    for resp := range responses.Results().IgnoreErrors() {
         if resp.Value.Success {
             count++
         }
@@ -816,7 +816,7 @@ reply, err := ReadQC(cfgCtx, req).First()
 
 // Or custom implementation
 func firstValid(responses *gorums.Responses[*State]) (*State, error) {
-    for resp := range responses.Seq() {
+    for resp := range responses.Results() {
         if resp.Err != nil {
             continue
         }
@@ -847,14 +847,14 @@ reply, err := ReadQC(cfgCtx, req).Majority()
 
 **Solution:** Remove QuorumSpec implementation and convert methods to standalone functions.
 
-### "responses.Seq() not working as expected"
+### "responses.Results() not working as expected"
 
 **Problem:** Iterator might be exhausted if used multiple times.
 
 **Solution:** Iterators can only be consumed once. Collect into a map if you need multiple passes:
 
 ```go
-replies := responses.Seq().CollectAll()
+replies := responses.Results().CollectAll()
 // Now you can iterate over replies multiple times
 ```
 
@@ -872,7 +872,7 @@ reply, err := ReadQC(cfgCtx, req).All()
 
 ```go
 func earlyTermination(responses *gorums.Responses[*Response]) (*Response, error) {
-    for resp := range responses.Seq() {
+    for resp := range responses.Results() {
         if resp.Err == nil && condition(resp.Value) {
             return resp.Value, nil  // Early return
         }

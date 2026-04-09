@@ -253,7 +253,7 @@ func TestIteratorMethods(t *testing.T) {
 		r := NewResponses(clientCtx)
 
 		var count int
-		for range r.Seq().IgnoreErrors() {
+		for range r.Results().IgnoreErrors() {
 			count++
 		}
 		if count != 2 {
@@ -272,7 +272,7 @@ func TestIteratorMethods(t *testing.T) {
 
 		// Filter to only node 2
 		var count int
-		for resp := range r.Seq().Filter(func(resp NodeResponse[*pb.StringValue]) bool {
+		for resp := range r.Results().Filter(func(resp NodeResponse[*pb.StringValue]) bool {
 			return resp.NodeID == 2
 		}) {
 			count++
@@ -294,7 +294,7 @@ func TestIteratorMethods(t *testing.T) {
 		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
 		r := NewResponses(clientCtx)
 
-		collected := r.CollectN(2)
+		collected := r.Results().CollectN(2)
 		if len(collected) != 2 {
 			t.Errorf("Expected 2 collected responses, got %d", len(collected))
 		}
@@ -309,7 +309,7 @@ func TestIteratorMethods(t *testing.T) {
 		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
 		r := NewResponses(clientCtx)
 
-		collected := r.CollectAll()
+		collected := r.Results().CollectAll()
 		if len(collected) != 3 {
 			t.Errorf("Expected 3 collected responses, got %d", len(collected))
 		}
@@ -326,7 +326,7 @@ func TestCustomAggregation(t *testing.T) {
 	t.Run("SameTypeAggregation", func(t *testing.T) {
 		// Aggregation function that returns the same type (Resp -> Resp)
 		majorityQF := func(resp *Responses[*pb.StringValue]) (*pb.StringValue, error) {
-			replies := resp.IgnoreErrors().CollectN(2)
+			replies := resp.Results().IgnoreErrors().CollectN(2)
 			if len(replies) < 2 {
 				return nil, ErrIncomplete
 			}
@@ -358,7 +358,7 @@ func TestCustomAggregation(t *testing.T) {
 		// Aggregation function that returns a different type (Resp -> []string)
 		// This demonstrates the key benefit: Out can differ from In
 		collectAllValues := func(resp *Responses[*pb.StringValue]) ([]string, error) {
-			replies := resp.IgnoreErrors().CollectAll()
+			replies := resp.Results().IgnoreErrors().CollectAll()
 			if len(replies) == 0 {
 				return nil, ErrIncomplete
 			}
@@ -391,7 +391,7 @@ func TestCustomAggregation(t *testing.T) {
 		// Aggregation function that uses filtering and custom logic
 		filterAndCount := func(resp *Responses[*pb.StringValue]) (int, error) {
 			count := 0
-			for range resp.IgnoreErrors().Filter(func(r NodeResponse[*pb.StringValue]) bool {
+			for range resp.Results().IgnoreErrors().Filter(func(r NodeResponse[*pb.StringValue]) bool {
 				return r.NodeID > 1 // Only nodes 2 and 3
 			}) {
 				count++
@@ -424,7 +424,7 @@ func TestCustomAggregation(t *testing.T) {
 		// Aggregation function that handles errors explicitly
 		requireAllSuccess := func(resp *Responses[*pb.StringValue]) (*pb.StringValue, error) {
 			var first *pb.StringValue
-			for r := range resp.Seq() {
+			for r := range resp.Results() {
 				if r.Err != nil {
 					return nil, r.Err
 				}

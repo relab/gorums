@@ -489,7 +489,7 @@ reply, level, err = corr.Get()
 
 Understanding when messages are actually sent matters for ordering and for reasoning about concurrent calls.
 
-**Quorum calls are lazy.** Messages are not sent to nodes until the caller consumes the `*Responses[T]` object by calling a terminal method (`First`, `Majority`, `All`, `Threshold`) or by calling `.Seq()` to begin iterating.
+**Quorum calls are lazy.** Messages are not sent to nodes until the caller consumes the `*Responses[T]` object by calling a terminal method (`First`, `Majority`, `All`, `Threshold`) or by calling `.Results()` to begin iterating.
 This gives interceptors a chance to register per-node request transformations before any bytes go on the wire.
 
 **Async variants send immediately.** `AsyncFirst`, `AsyncMajority`, `AsyncAll`, and `AsyncThreshold` call `sendNow` synchronously before spawning the goroutine that awaits the threshold.
@@ -515,7 +515,7 @@ Summary:
 
 ## Iterator-Based Custom Aggregation
 
-For complex aggregation logic beyond the built-in terminal methods, use the iterator API provided by `responses.Seq()`.
+For complex aggregation logic beyond the built-in terminal methods, use the iterator API provided by `responses.Results()`.
 The iterator yields responses progressively as they arrive, allowing custom decision-making logic.
 
 ### Basic Iterator Pattern
@@ -523,7 +523,7 @@ The iterator yields responses progressively as they arrive, allowing custom deci
 ```go
 func newestValue(responses *gorums.Responses[*ReadResponse]) (*ReadResponse, error) {
   var newest *ReadResponse
-  for resp := range responses.Seq() {
+  for resp := range responses.Results() {
     // resp.Value contains the response message (may be nil if resp.Err is set)
     // resp.Err contains any error from that node (nil if successful)
     // resp.NodeID contains the node identifier
@@ -550,14 +550,14 @@ reply, err := newestValue(ReadQC(cfgCtx, &ReadRequest{}))
 
 ### Iterator Helper Methods
 
-The `ResponseSeq[T]` type provides helper methods for common operations:
+The iterator returned by `.Results()` provides helper methods that can be chained before consuming the sequence:
 
 #### `IgnoreErrors()` - Skip Failed Responses
 
 ```go
 func countSuccessful(responses *gorums.Responses[*Response]) int {
   count := 0
-  for resp := range responses.Seq().IgnoreErrors() {
+  for resp := range responses.Results().IgnoreErrors() {
     count++
     // resp.Value is guaranteed to be non-nil
     // resp.Err is guaranteed to be nil
@@ -573,7 +573,7 @@ func validResponses(responses *gorums.Responses[*Response]) []*Response {
   var valid []*Response
 
   // Only include responses that pass validation
-  filtered := responses.Seq().Filter(func(nr gorums.NodeResponse[*Response]) bool {
+  filtered := responses.Results().Filter(func(nr gorums.NodeResponse[*Response]) bool {
     return nr.Err == nil && isValid(nr.Value)
   })
 
@@ -591,7 +591,7 @@ func majorityWrite(responses *gorums.Responses[*WriteResponse]) (*WriteResponse,
   majority := (responses.Size() + 1) / 2
 
   // Collect first 'majority' successful responses
-  replies := responses.Seq().IgnoreErrors().CollectN(majority)
+  replies := responses.Results().IgnoreErrors().CollectN(majority)
 
   if len(replies) < majority {
     return nil, gorums.ErrIncomplete
@@ -603,27 +603,27 @@ func majorityWrite(responses *gorums.Responses[*WriteResponse]) (*WriteResponse,
 
 // allSuccessful collects all successful responses; errored nodes are skipped.
 func allSuccessful(responses *gorums.Responses[*Response]) map[uint32]*Response {
-  return responses.Seq().IgnoreErrors().CollectAll()
+  return responses.Results().IgnoreErrors().CollectAll()
 }
 
 // allResponses collects all responses; errored nodes are included with a zero value.
 // Only use this when you know all nodes will succeed or you handle zero values.
 func allResponses(responses *gorums.Responses[*Response]) map[uint32]*Response {
-  return responses.Seq().CollectAll()
+  return responses.Results().CollectAll()
 }
 ```
 
 #### Per-Node Error Inspection
 
 `CollectN` and `CollectAll` return `map[uint32]Resp` and do not preserve errors.
-When you need the actual error from a specific node, range over the sequence directly:
+When you need the actual error from a specific node, range over the results sequence directly:
 
 ```go
 func inspectPerNodeErrors(responses *gorums.Responses[*Response]) {
   var errs []error
   replies := make(map[uint32]*Response)
 
-  for result := range responses.Seq() {
+  for result := range responses.Results() {
     if result.Err != nil {
       // result.NodeID identifies which node failed
       errs = append(errs, fmt.Errorf("node %d: %w", result.NodeID, result.Err))
@@ -636,7 +636,7 @@ func inspectPerNodeErrors(responses *gorums.Responses[*Response]) {
 }
 ```
 
-Use `Seq().IgnoreErrors()` or `Seq().CollectAll()` when you do not need per-node error details.
+Use `Results().IgnoreErrors()` or `Results().CollectAll()` when you do not need per-node error details.
 
 ### Complete Example: Storage Client with Custom Aggregation
 
@@ -681,7 +681,7 @@ func ExampleStorageClient() {
 // newestValue returns the response with the most recent timestamp
 func newestValue(responses *gorums.Responses[*ReadResponse]) (*ReadResponse, error) {
   var newest *ReadResponse
-  for resp := range responses.Seq() {
+  for resp := range responses.Results() {
     if resp.Err != nil {
       continue
     }
@@ -705,7 +705,7 @@ func fastQuorum(responses *gorums.Responses[*Response]) (*Response, error) {
   const threshold = 2
   count := 0
 
-  for resp := range responses.Seq().IgnoreErrors() {
+  for resp := range responses.Results().IgnoreErrors() {
     count++
     if count >= threshold {
       return resp.Value, nil  // Return immediately after threshold
@@ -842,7 +842,7 @@ When you need to handle errors from individual nodes explicitly:
 // Require all nodes to succeed
 func RequireAllSuccess(resp *gorums.Responses[*Response]) (*Response, error) {
   var first *Response
-  for r := range resp.Seq() {
+  for r := range resp.Results() {
     if r.Err != nil {
       return nil, r.Err  // Fail fast on any error
     }

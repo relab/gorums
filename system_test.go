@@ -428,19 +428,19 @@ func TestSystemHandlerCanMulticastViaConfig(t *testing.T) {
 func TestSystemHandlerCanChainQuorumCallViaConfig(t *testing.T) {
 	type respType = *gorums.Responses[*pb.StringValue]
 
-	// seqAll drains the Seq iterator to exhaustion and returns the last value.
-	// This is the regression path for the self-node dispatch bug where .Seq()
+	// seqAll drains the Results iterator to exhaustion and returns the last value.
+	// This is the regression path for the self-node dispatch bug where .Results()
 	// and .All() would time out when self was included in the quorum.
 	seqAll := func(r respType) (*pb.StringValue, error) {
 		var last *pb.StringValue
-		for result := range r.Seq() {
+		for result := range r.Results() {
 			if result.Err != nil {
 				return nil, result.Err
 			}
 			last = result.Value
 		}
 		if last == nil {
-			return nil, errors.New("Seq: no responses received")
+			return nil, errors.New("Results: no responses received")
 		}
 		return last, nil
 	}
@@ -452,7 +452,7 @@ func TestSystemHandlerCanChainQuorumCallViaConfig(t *testing.T) {
 	}{
 		{name: "Majority", innerFn: respType.Majority, outerFn: respType.Majority},
 		{name: "All", innerFn: respType.All, outerFn: respType.All}, // Regression: .All() must not time out when self-node is included.
-		{name: "Seq", innerFn: seqAll, outerFn: respType.All},       // Regression: draining .Seq() to exhaustion must not time out when self-node is included.
+		{name: "Results", innerFn: seqAll, outerFn: respType.All},   // Regression: draining .Results() to exhaustion must not time out when self-node is included.
 	}
 
 	for _, tt := range tests {

@@ -96,7 +96,7 @@ func TestQuorumCallWithCustomAggregation(t *testing.T) {
 
 	// Use CollectAll for custom aggregation (sum all results)
 	responses := dev.QuorumCall(ctx, req)
-	results := responses.CollectAll()
+	results := responses.Results().CollectAll()
 
 	var total int64
 	for _, resp := range results {

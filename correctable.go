@@ -77,7 +77,7 @@ func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
 			errs     []nodeError
 		)
 
-		for result := range r.ResponseSeq {
+		for result := range r.seq {
 			if result.Err != nil {
 				errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
 				continue

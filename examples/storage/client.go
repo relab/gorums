@@ -29,7 +29,7 @@ func runClient(addresses []string) error {
 // with the most recent timestamp.
 func newestValue(responses *gorums.Responses[*proto.ReadResponse]) (*proto.ReadResponse, error) {
 	var newest *proto.ReadResponse
-	for resp := range responses.Seq() {
+	for resp := range responses.Results() {
 		if resp.Err != nil {
 			continue
 		}
@@ -48,7 +48,7 @@ func newestValue(responses *gorums.Responses[*proto.ReadResponse]) (*proto.ReadR
 func numUpdated(responses *gorums.Responses[*proto.WriteResponse]) (*proto.WriteResponse, error) {
 	var count int
 	size := responses.Size()
-	for resp := range responses.Seq() {
+	for resp := range responses.Results() {
 		if resp.Err != nil {
 			continue
 		}

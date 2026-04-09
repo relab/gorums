@@ -219,7 +219,7 @@ func TestQuorumCallCustomAggregation(t *testing.T) {
 	// Custom aggregation: sum all responses
 	// Default server returns 10, 20, 30 for nodes 0, 1, 2
 	var sum int32
-	for r := range responses.Seq().IgnoreErrors() {
+	for r := range responses.Results().IgnoreErrors() {
 		sum += r.Value.GetValue()
 	}
 
@@ -239,7 +239,7 @@ func TestQuorumCallCollectAll(t *testing.T) {
 		mock.TestMethod,
 	)
 
-	collected := responses.CollectAll()
+	collected := responses.Results().CollectAll()
 	if len(collected) != 3 {
 		t.Errorf("Expected 3 responses, got %d", len(collected))
 	}
@@ -397,7 +397,7 @@ func BenchmarkQuorumCall(b *testing.B) {
 					pb.String("test"),
 					mock.TestMethod,
 				)
-				replies := responses.CollectAll()
+				replies := responses.Results().CollectAll()
 				if len(replies) < quorum {
 					b.Fatalf("not enough replies: %d < %d", len(replies), quorum)
 				}
@@ -419,7 +419,7 @@ func BenchmarkQuorumCall(b *testing.B) {
 					pb.String("test"),
 					mock.TestMethod,
 				)
-				replies := responses.CollectN(quorum)
+				replies := responses.Results().CollectN(quorum)
 				if len(replies) < quorum {
 					b.Fatalf("not enough replies: %d < %d", len(replies), quorum)
 				}
@@ -443,7 +443,7 @@ func BenchmarkQuorumCall(b *testing.B) {
 				)
 				var firstResp *pb.StringValue
 				var count int
-				for result := range responses.Seq() {
+				for result := range responses.Results() {
 					if result.Err == nil {
 						count++
 						if firstResp == nil {

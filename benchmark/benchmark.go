@@ -93,7 +93,7 @@ func runQCBenchmark(opts Options, config Configuration, f qcFunc) (*Result, erro
 
 	result := s.GetResult()
 	if opts.Remote {
-		replies := StopBenchmark(cfgCtx, &StopRequest{}).CollectAll()
+		replies := StopBenchmark(cfgCtx, &StopRequest{}).Results().CollectAll()
 		result.SetServerStats(slices.Collect(maps.Values(replies)))
 	}
 
@@ -173,7 +173,7 @@ func runAsyncQCBenchmark(opts Options, config Configuration, f asyncQCFunc) (*Re
 
 	result := s.GetResult()
 	if opts.Remote {
-		replies := StopBenchmark(cfgCtx, &StopRequest{}).CollectAll()
+		replies := StopBenchmark(cfgCtx, &StopRequest{}).Results().CollectAll()
 		result.SetServerStats(slices.Collect(maps.Values(replies)))
 	}
 
@@ -212,7 +212,7 @@ func runServerBenchmark(opts Options, config Configuration, f serverFunc) (*Resu
 	}
 	runtime.ReadMemStats(&end)
 
-	replies := StopServerBenchmark(cfgCtx, &StopRequest{}).CollectAll()
+	replies := StopServerBenchmark(cfgCtx, &StopRequest{}).Results().CollectAll()
 	resp, err := StopServerBenchmarkQF(replies)
 	if err != nil {
 		return nil, err

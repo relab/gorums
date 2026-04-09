@@ -167,7 +167,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 					mock.TestMethod,
 				)
 				count := 0
-				for resp := range responses.Seq() {
+				for resp := range responses.Results() {
 					if resp.Err == nil {
 						count++
 						if count >= threshold {
@@ -213,7 +213,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 					mock.Stream,
 				)
 				count := 0
-				for resp := range responses.Seq() {
+				for resp := range responses.Results() {
 					if resp.Err == nil {
 						count++
 						if count >= threshold {
