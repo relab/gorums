@@ -69,11 +69,21 @@ func NewMessageRouter(handler ...RequestHandler) *MessageRouter {
 // NewMessageRouterWithLatency creates a new MessageRouter with an initial latency
 // for testing. The latency may be updated by subsequent message routing operations.
 // This function should only be used in tests.
+//
+// To change the latency after creation, use [MessageRouter.SetLatency].
 func NewMessageRouterWithLatency(latency time.Duration) *MessageRouter {
 	return &MessageRouter{
 		pending: make(map[uint64]Request),
 		latency: latency,
 	}
+}
+
+// SetLatency directly sets the latency estimate. This function should only
+// be used in tests to simulate latency changes without actual message routing.
+func (r *MessageRouter) SetLatency(latency time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.latency = latency
 }
 
 // DispatchLocalRequest handles the request in-process for the local node,
