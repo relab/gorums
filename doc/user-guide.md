@@ -1491,30 +1491,32 @@ As a rule of thumb:
 * **After a topology change** (node added or removed), derive the sub-configuration
   from the new full configuration rather than sorting an outdated one.
 
-A simple periodic refresh pattern:
+A simple periodic refresh pattern using `Configuration.Watch`:
 
 ```go
-var (
-    mu      sync.Mutex
-    fastCfg gorums.Configuration
-)
+updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Configuration) gorums.Configuration {
+    return c.SortBy(gorums.Latency)[:quorumSize]
+})
+fastCfg := <-updates // initial snapshot, available before the first tick
 
-// Refresh the fast sub-configuration every 5 seconds.
-go func() {
-    for range time.Tick(5 * time.Second) {
-        fresh := allNodesCfg.SortBy(gorums.Latency)[:quorumSize]
-        mu.Lock()
-        fastCfg = fresh
-        mu.Unlock()
-    }
-}()
-
-// Callers read the most recently refreshed configuration.
-mu.Lock()
-cfg := fastCfg
-mu.Unlock()
-cfgCtx := cfg.Context(ctx)
+// In your request loop or a dedicated goroutine, consume updates as they arrive:
+for cfg := range updates {
+    fastCfg = cfg // ordering changed; start using the new snapshot
+}
 ```
+
+`Watch` calls the derive function every five seconds and emits a new
+sub-configuration only when the result changes. The initial snapshot is sent
+immediately, so callers always receive a valid configuration without waiting
+for the first tick.
+
+The derive function can combine any operations on the configuration. For
+example, to skip failed nodes before selecting the fastest:
+
+```go
+updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Configuration) gorums.Configuration {
+    return c.WithoutErrors(lastErr).SortBy(gorums.Latency)[:quorumSize]
+})
 
 ### Measurement Limits
 

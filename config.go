@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 )
 
 // Configuration represents a static set of nodes on which multicast or
@@ -230,6 +231,57 @@ func (c Configuration) SortBy(cmp func(*Node, *Node) int) Configuration {
 	sorted := slices.Clone(c)
 	slices.SortStableFunc(sorted, cmp)
 	return sorted
+}
+
+// Watch starts a background goroutine that calls derive(c) every interval and
+// emits the result on the returned channel whenever it differs from the previous
+// result. The initial result is always emitted before the first tick, so callers
+// always receive a valid configuration immediately.
+//
+// The derive function receives the full configuration c and returns any derived
+// sub-configuration. Typical examples:
+//
+//	// Latency-based top-k subset:
+//	cfg.Watch(ctx, 5*time.Second, func(c gorums.Configuration) gorums.Configuration {
+//	    return c.SortBy(gorums.Latency)[:quorumSize]
+//	})
+//
+//	// Skip failed nodes first, then pick fastest:
+//	cfg.Watch(ctx, 5*time.Second, func(c gorums.Configuration) gorums.Configuration {
+//	    return c.WithoutErrors(lastErr).SortBy(gorums.Latency)[:quorumSize]
+//	})
+//
+// The returned channel has a buffer of 1. If the consumer is slow and has not
+// yet read the previous update, the goroutine skips the emission and waits for
+// the next tick to re-evaluate.
+//
+// The goroutine exits and the channel is closed when ctx is cancelled.
+func (c Configuration) Watch(ctx context.Context, interval time.Duration, derive func(Configuration) Configuration) <-chan Configuration {
+	ch := make(chan Configuration, 1)
+	go func() {
+		defer close(ch)
+		current := derive(c)
+		ch <- current
+
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				fresh := derive(c)
+				if !fresh.Equal(current) {
+					current = fresh
+					select {
+					case ch <- current:
+					default: // consumer hasn't read yet; next tick will re-evaluate
+					}
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return ch
 }
 
 // WithoutErrors returns a new Configuration excluding nodes that failed in the
