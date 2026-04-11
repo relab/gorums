@@ -1510,13 +1510,34 @@ sub-configuration only when the result changes. The initial snapshot is sent
 immediately, so callers always receive a valid configuration without waiting
 for the first tick.
 
-The derive function can combine any operations on the configuration. For
-example, to skip failed nodes before selecting the fastest:
+### Combining Watch with Error Filtering
+
+To skip failed nodes on every periodic refresh, capture the most recent
+`gorums.QuorumCallError` in a mutex-guarded variable and include it in the
+derive function:
 
 ```go
+var mu sync.Mutex
+var lastQCErr gorums.QuorumCallError // zero value excludes no nodes
+
+// After each failed quorum call, record the error so the next Watch tick
+// can exclude the offending nodes:
+//
+//   var qcErr gorums.QuorumCallError
+//   if errors.As(err, &qcErr) {
+//       mu.Lock(); lastQCErr = qcErr; mu.Unlock()
+//   }
+
 updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Configuration) gorums.Configuration {
-    return c.WithoutErrors(lastErr).SortBy(gorums.Latency)[:quorumSize]
+    mu.Lock()
+    qcErr := lastQCErr
+    mu.Unlock()
+    return c.WithoutErrors(qcErr).SortBy(gorums.Latency)[:quorumSize]
 })
+```
+
+The zero value of `gorums.QuorumCallError` carries no node errors, so the
+initial derive call behaves identically to the pure-latency example above.
 
 ### Measurement Limits
 
