@@ -267,7 +267,7 @@ func (n *Node) LastErr() error {
 //   - A step-change in latency takes several round trips to settle because
 //     each new sample contributes only 20% of the new value.
 //
-// Use [Latency] as a comparator with [Configuration.SortBy] to order nodes
+// Use the [Latency] comparator with [Configuration.SortBy] to order nodes
 // by their current observed latency.
 func (n *Node) Latency() time.Duration {
 	return n.router.Latency()
@@ -300,6 +300,9 @@ var LastNodeError = func(a, b *Node) int {
 // measurement. It is compatible with [slices.SortFunc] and [Configuration.SortBy].
 var Latency = func(a, b *Node) int {
 	la, lb := a.Latency(), b.Latency()
+	// Note: cmp.Compare alone would sort negative sentinel values first
+	// (as the smallest numbers), making unmeasured nodes appear fastest.
+	// The switch guards against that by pushing any negative value to the end.
 	switch {
 	case la < 0 && lb < 0:
 		return 0
