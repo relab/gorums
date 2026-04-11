@@ -3,6 +3,7 @@ package gorums_test
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 
@@ -271,6 +272,12 @@ func TestConfigurationSortBy(t *testing.T) {
 		sorted := cfg.SortBy(gorums.Latency)
 		if sorted.Size() != cfg.Size() {
 			t.Fatalf("sorted.Size() = %d, want %d", sorted.Size(), cfg.Size())
+		}
+		// When all nodes are unmeasured their reported latencies are all -1; thus, the
+		// Latency comparator returns 0 for every latency pair (the latencies are equal),
+		// so a stable sort must preserve the original order.
+		if got, want := sorted.NodeIDs(), cfg.NodeIDs(); !slices.Equal(got, want) {
+			t.Errorf("SortBy(Latency) with all-unmeasured nodes changed order: got %v, want %v", got, want)
 		}
 	})
 
