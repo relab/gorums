@@ -1545,24 +1545,52 @@ initial derive call behaves identically to the pure-latency example above.
 on it:
 
 * **No traffic → no measurement.** The estimate is only updated on successful
-  responses. A freshly created node, or a node that has been idle for a long
-  time, returns a negative value.  `SortBy(gorums.Latency)` pushes such nodes
-  to the end of the slice, so you will not accidentally pick an unmeasured node
-  when slicing the front.
+  responses. A node that has never received a response returns a negative value.
+  `SortBy(gorums.Latency)` pushes such nodes to the end of the slice, so you
+  will not accidentally pick an unmeasured node when slicing the front.
 
-* **Staleness.** If traffic to a node stops, the estimate freezes at the last
-  observed value.  A node that was fast yesterday but degraded overnight will
-  still look fast until new responses arrive and update the average.
+* **Staleness.** If traffic to a node stops, the estimate holds its last
+  observed value indefinitely.  A node that appeared fast previously will
+  continue to look fast until new responses arrive and update the average,
+  even if network conditions have since changed.
 
 * **Slow convergence.** The moving average uses a smoothing factor of 0.2, so
   a sudden step-change in latency takes roughly five round trips to be reflected
   in the estimate.  Short-lived spikes are smoothed away, which is usually
   desirable but means the estimate lags behind rapid fluctuations.
 
+* **RPC compute time included.** The measurement covers the full round-trip
+  from sending the request to receiving the response.  For long-running RPCs,
+  server-side processing time is included in the estimate, which means the
+  measurement reflects more than just network latency.  In workloads dominated
+  by heavy RPCs, this can skew node selection toward nodes with lighter server
+  load rather than nodes that are genuinely closer on the network.
+
+* **Latency is per node, not per RPC.** The estimate is a single value
+  maintained for each node, shared across all RPC types sent to that node.
+  It reflects the node's overall responsiveness rather than the latency of
+  any particular operation, making it a blunt instrument for workloads where
+  different RPCs have meaningfully different latency profiles.
+
+* **Multicast and unicast calls are not measured.** Only calls that receive
+  replies update the latency estimate.  Multicast calls (fire-and-forget) and
+  unicast calls with no response do not contribute measurements, so nodes
+  contacted exclusively via these call types will remain unmeasured.
+
 * **No variance information.** A single average cannot distinguish a stable
   low-latency node from a high-variance node whose average happens to look good.
   If jitter matters for your workload, the built-in estimate is not sufficient
   on its own.
+
+### Best Practices
+
+The limitations above can be mitigated with a few straightforward patterns:
+
+* **Keep traffic flowing.** Latency estimates are only updated when RPCs
+  complete successfully.  If your application has quiet periods, the estimates
+  for idle nodes will become stale.  Scheduling periodic lightweight RPCs
+  (such as a ping or a no-op read) ensures that estimates remain fresh even
+  when there is no organic traffic.
 
 * **Quorum calls contact all nodes.** Latency-based ordering only improves
   performance when you slice the sorted configuration to a smaller subset.
