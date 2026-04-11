@@ -1449,8 +1449,8 @@ Sending to fewer nodes lowers tail latency without weakening correctness, as lon
 
 ```go
 const n = 5  // total nodes
-const f = 1  // tolerated failures
-quorumSize := (n+f)/2 + 1  // simple majority for crash-fault tolerance = 3
+const f = 2  // tolerated failures (n = 2f+1)
+quorumSize := n/2 + 1  // simple majority for crash-fault tolerance = 3
 
 // Re-derive the fast sub-configuration periodically (see guidance below).
 fastCfg := allNodesCfg.SortBy(gorums.Latency)[:quorumSize]
