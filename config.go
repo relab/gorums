@@ -236,7 +236,8 @@ func (c Configuration) SortBy(cmp func(*Node, *Node) int) Configuration {
 // Watch starts a background goroutine that calls derive(c) every interval and
 // emits the result on the returned channel whenever it differs from the previous
 // result. The initial result is always emitted before the first tick, so callers
-// always receive a valid configuration immediately.
+// always receive a valid configuration immediately. The interval must be greater
+// than zero, and derive must be non-nil; otherwise, Watch will panic.
 //
 // The derive function receives the full configuration c and returns any derived
 // sub-configuration. Typical examples:
@@ -257,6 +258,12 @@ func (c Configuration) SortBy(cmp func(*Node, *Node) int) Configuration {
 //
 // The goroutine exits and the channel is closed when ctx is cancelled.
 func (c Configuration) Watch(ctx context.Context, interval time.Duration, derive func(Configuration) Configuration) <-chan Configuration {
+	if interval <= 0 {
+		panic("gorums: Watch interval must be positive")
+	}
+	if derive == nil {
+		panic("gorums: Watch derive function must be non-nil")
+	}
 	ch := make(chan Configuration, 1)
 	go func() {
 		defer close(ch)
