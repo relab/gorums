@@ -58,11 +58,14 @@ func splitAddrs(s string) []string {
 	if s == "" {
 		return nil
 	}
-	parts := strings.Split(s, ",")
-	for i, p := range parts {
-		parts[i] = strings.TrimSpace(p)
+	var addrs []string
+	for addr := range strings.SplitSeq(s, ",") {
+		trimmed := strings.TrimSpace(addr)
+		if trimmed != "" {
+			addrs = append(addrs, trimmed)
+		}
 	}
-	return parts
+	return addrs
 }
 
 // parseInterceptors converts a comma-separated interceptor list into server options.
