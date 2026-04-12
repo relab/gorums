@@ -63,6 +63,7 @@ memprofile
 mktemp
 multicast
 multicasts
+myaddr
 naddr
 netrwhist
 nofoo

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"fmt"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/examples/storage/proto"
@@ -11,15 +11,14 @@ import (
 
 func runClient(addresses []string) error {
 	if len(addresses) < 1 {
-		log.Fatalln("No addresses provided!")
+		return fmt.Errorf("no server addresses provided")
 	}
-	cfg, err := gorums.NewConfig(gorums.WithNodeList(addresses),
-		gorums.WithDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()), // disable TLS
-		),
+	cfg, err := gorums.NewConfig(
+		gorums.WithNodeList(addresses),
+		gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer cfg.Close()
 	return Repl(cfg)

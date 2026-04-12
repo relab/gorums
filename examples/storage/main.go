@@ -2,64 +2,67 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
-	"os"
 	"strings"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/examples/interceptors"
 	pb "github.com/relab/gorums/examples/storage/proto"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
-	server := flag.String("server", "", "Start as a server on given address.")
-	remotes := flag.String("connect", "", "Comma-separated list of servers to connect to.")
+	cluster := flag.Bool("cluster", false, "Spawn a server process for each address in -addrs.")
+	serve := flag.Bool("serve", false, "Run as a single server node on addrs[0]; the remaining addresses are peers.")
+	addrs := flag.String("addrs", "", "Comma-separated list of server addresses.")
 	ic := flag.String("interceptors", "", "Comma-separated list of interceptors to enable (logging, nofoo, metadata, delayed).")
 	flag.Parse()
 
-	srvOpts := parseInterceptors(*ic)
-
-	if *server != "" {
-		runServer(*server, srvOpts)
+	if *cluster {
+		if *addrs == "" {
+			log.Fatal("Usage: storage -cluster -addrs <addr>[,<addr>...]")
+		}
+		if err := runCluster(*addrs, *ic); err != nil {
+			log.Fatal(err)
+		}
 		return
 	}
 
-	addrs := strings.Split(*remotes, ",")
-	// start local servers if no remote servers were specified
-	if len(addrs) == 1 && addrs[0] == "" {
-		// NewLocalSystems pre-allocates all listeners and configures each system
-		// with WithConfig (node IDs 1..n). Passing dial options auto-creates an
-		// outbound Configuration for each system (accessible via sys.OutboundConfig).
-		dialOpts := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
-		systems, stop, err := gorums.NewLocalSystems(4, gorums.WithServerOptions(srvOpts), dialOpts)
+	all := splitAddrs(*addrs)
+	if *serve {
+		if len(all) == 0 {
+			log.Fatal("Usage: storage -serve -addrs <myaddr>[,<peer>...]")
+		}
+		if err := runServer(all[0], all, parseInterceptors(*ic)); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
+	// Client mode: connect to the provided addresses, or spin up a local cluster (same process).
+	if len(all) == 0 {
+		clusterAddrs, stop, err := runLocalCluster(parseInterceptors(*ic))
 		if err != nil {
-			log.Fatalf("Failed to create local systems: %v", err)
+			log.Fatal(err)
 		}
 		defer stop()
-
-		addrs = make([]string, len(systems))
-		for i, sys := range systems {
-			addrs[i] = sys.Addr()
-		}
-		for i, sys := range systems {
-			storage := newStorageServer(os.Stderr, fmt.Sprintf("node %d", i))
-			sys.RegisterService(nil, func(srv *gorums.Server) {
-				pb.RegisterStorageServer(srv, storage)
-			})
-			go func() {
-				if err := sys.Serve(); err != nil {
-					log.Printf("Server error: %v", err)
-				}
-			}()
-		}
+		all = clusterAddrs
 	}
-
-	if runClient(addrs) != nil {
-		os.Exit(1)
+	if err := runClient(all); err != nil {
+		log.Fatal(err)
 	}
+}
+
+// splitAddrs splits a comma-separated address string, trimming spaces.
+// Returns nil if s is empty.
+func splitAddrs(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	for i, p := range parts {
+		parts[i] = strings.TrimSpace(p)
+	}
+	return parts
 }
 
 // parseInterceptors converts a comma-separated interceptor list into server options.
