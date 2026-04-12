@@ -832,12 +832,12 @@ func TestWaitForConfig(t *testing.T) {
 		const waiters = 5
 		errCh := make(chan error, waiters)
 		for range waiters {
-			go func() {
-				ctx := gorums.TestContext(t, 5*time.Second)
+			ctx := gorums.TestContext(t, 5*time.Second)
+			go func(ctx context.Context) {
 				errCh <- systems[0].WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
 					return cfg.Size() == 3
 				})
-			}()
+			}(ctx)
 		}
 
 		for range waiters {
