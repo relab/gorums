@@ -145,9 +145,12 @@ func TestSystemSymmetricConfigurationConnectsAllPeers(t *testing.T) {
 
 	// Wait for connections to establish
 	for i, sys := range systems {
-		gorums.WaitForConfigCondition(t, sys.Config, func(cfg gorums.Configuration) bool {
+		ctx := gorums.TestContext(t, 5*time.Second)
+		if err := sys.WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
 			return cfg.Size() == len(systems)
-		})
+		}); err != nil {
+			t.Fatalf("system %d: WaitForConfig: %v", i+1, err)
+		}
 		if got := sys.Config().Size(); got != len(systems) {
 			t.Fatalf("system %d config size: %d, expected: %d", i+1, got, len(systems))
 		}
@@ -172,18 +175,24 @@ func waitWithTimeout(t *testing.T, wg *sync.WaitGroup) {
 func awaitSystemReady(t *testing.T, systems []*gorums.System) {
 	t.Helper()
 	for _, sys := range systems {
-		gorums.WaitForConfigCondition(t, sys.Config, func(cfg gorums.Configuration) bool {
+		ctx := gorums.TestContext(t, 5*time.Second)
+		if err := sys.WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
 			return cfg.Size() == len(systems)
-		})
+		}); err != nil {
+			t.Fatalf("awaitSystemReady: %v", err)
+		}
 	}
 }
 
 // awaitClientReady waits until the server's ClientConfig contains n connected peers.
 func awaitClientReady(t *testing.T, sys *gorums.System, n int) {
 	t.Helper()
-	gorums.WaitForConfigCondition(t, sys.ClientConfig, func(cfg gorums.Configuration) bool {
+	ctx := gorums.TestContext(t, 5*time.Second)
+	if err := sys.WaitForClientConfig(ctx, func(cfg gorums.Configuration) bool {
 		return cfg.Size() == n
-	})
+	}); err != nil {
+		t.Fatalf("awaitClientReady: %v", err)
+	}
 }
 
 // createClientServerSystems creates a server system and a client for back-channel testing.

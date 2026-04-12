@@ -162,9 +162,7 @@ func (s *System) ClientConfig() Configuration {
 // The condition is checked immediately against the current configuration,
 // so it may return without blocking if the condition is already satisfied.
 func (s *System) WaitForConfig(ctx context.Context, cond func(Configuration) bool) error {
-	return s.srv.waitForConfig(ctx, func() bool {
-		return cond(s.srv.config)
-	})
+	return s.srv.waitForKnownConfig(ctx, cond)
 }
 
 // WaitForClientConfig blocks until cond returns true for the current
@@ -172,9 +170,7 @@ func (s *System) WaitForConfig(ctx context.Context, cond func(Configuration) boo
 // The condition is checked immediately against the current configuration,
 // so it may return without blocking if the condition is already satisfied.
 func (s *System) WaitForClientConfig(ctx context.Context, cond func(Configuration) bool) error {
-	return s.srv.waitForConfig(ctx, func() bool {
-		return cond(s.srv.clientConfig)
-	})
+	return s.srv.waitForClientConfig(ctx, cond)
 }
 
 // RegisterService registers the service with the server using the provided register function.

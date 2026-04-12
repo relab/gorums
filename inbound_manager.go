@@ -335,7 +335,7 @@ func (im *inboundManager) checkConfig(cond func() bool) (met bool, ch <-chan str
 
 // waitForConfig blocks until cond returns true or until ctx is cancelled
 // or the inboundManager is closed. The cond function is called while the
-// read lock is held, so it may safely read inboundManager fields directly.
+// read lock is held, so it must not acquire any additional locks.
 func (im *inboundManager) waitForConfig(ctx context.Context, cond func() bool) error {
 	for {
 		met, ch := im.checkConfig(cond)
@@ -350,6 +350,26 @@ func (im *inboundManager) waitForConfig(ctx context.Context, cond func() bool) e
 		case <-ch:
 		}
 	}
+}
+
+// waitForKnownConfig blocks until cond returns true for the current known-peer
+// [Configuration], or until ctx is cancelled or the server is stopped.
+// The cond function receives the current known-peer configuration and must not
+// acquire any additional locks.
+func (im *inboundManager) waitForKnownConfig(ctx context.Context, cond func(Configuration) bool) error {
+	return im.waitForConfig(ctx, func() bool {
+		return cond(im.config)
+	})
+}
+
+// waitForClientConfig blocks until cond returns true for the current client-peer
+// [Configuration], or until ctx is cancelled or the server is stopped.
+// The cond function receives the current client-peer configuration and must not
+// acquire any additional locks.
+func (im *inboundManager) waitForClientConfig(ctx context.Context, cond func(Configuration) bool) error {
+	return im.waitForConfig(ctx, func() bool {
+		return cond(im.clientConfig)
+	})
 }
 
 // close signals all waiters to stop and prevents new waits from blocking.
