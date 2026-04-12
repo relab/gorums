@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -156,6 +157,26 @@ func (s *System) ClientConfig() Configuration {
 	return s.srv.ClientConfig()
 }
 
+// WaitForConfig blocks until cond returns true for the current known-peer
+// [Configuration], or until ctx is cancelled or the system is stopped.
+// The condition is checked immediately against the current configuration,
+// so it may return without blocking if the condition is already satisfied.
+func (s *System) WaitForConfig(ctx context.Context, cond func(Configuration) bool) error {
+	return s.srv.waitForConfig(ctx, func() bool {
+		return cond(s.srv.config)
+	})
+}
+
+// WaitForClientConfig blocks until cond returns true for the current
+// client-peer [Configuration], or until ctx is cancelled or the system is stopped.
+// The condition is checked immediately against the current configuration,
+// so it may return without blocking if the condition is already satisfied.
+func (s *System) WaitForClientConfig(ctx context.Context, cond func(Configuration) bool) error {
+	return s.srv.waitForConfig(ctx, func() bool {
+		return cond(s.srv.clientConfig)
+	})
+}
+
 // RegisterService registers the service with the server using the provided register function.
 // The closer is added to the list of closers to be closed when the system is stopped.
 //
@@ -184,6 +205,8 @@ func (s *System) Serve() error {
 // on the client side will get notified by connection errors.
 // It is safe to call Stop before [System.Serve] to avoid resource leaks.
 func (s *System) Stop() (errs error) {
+	// Unblock any WaitForConfig / WaitForClientConfig callers.
+	s.srv.close()
 	// We cannot use graceful stop here since multicast methods does not
 	// respond to the client, and thus would block indefinitely.
 	s.srv.Stop()

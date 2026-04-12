@@ -22,6 +22,10 @@ var ErrTypeMismatch = stream.ErrTypeMismatch
 // This allows the response iterator to account for all nodes without blocking.
 var ErrSkipNode = errors.New("skip node")
 
+// ErrStopped is returned by [System.WaitForConfig] and [System.WaitForClientConfig]
+// when the system is stopped before the condition is met.
+var ErrStopped = errors.New("system stopped")
+
 // QuorumCallError reports on a failed quorum call.
 // It provides detailed information about which nodes failed.
 type QuorumCallError struct {

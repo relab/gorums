@@ -1217,6 +1217,61 @@ log.Println("quorum ready, starting to serve")
 
 The self-node is always present in `cfg`, so a three-node cluster (`quorumSize = 2`) will fire the signal as soon as a single remote peer connects.
 
+## Waiting for Configuration
+
+`System.WaitForConfig` and `System.WaitForClientConfig` block until a condition on the configuration is satisfied, or until the context is cancelled or the system is stopped.
+They replace the need to poll `Config()` in a loop and eliminate the latency and CPU overhead of polling.
+
+```go
+// Block until all three known peers are connected.
+ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+defer cancel()
+if err := sys.WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+    return cfg.Size() == 3
+}); err != nil {
+    log.Fatal("peers did not connect in time:", err)
+}
+```
+
+The condition is checked immediately against the current configuration, so the call returns without blocking if the condition is already satisfied.
+
+### WaitForConfig
+
+`WaitForConfig` waits on the known-peer configuration — the set of pre-configured peers that have connected, plus the local node itself.
+Use this when you need a quorum of static cluster members to be present before beginning to serve requests.
+
+```go
+err := sys.WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+    return cfg.Size() >= quorumSize
+})
+```
+
+### WaitForClientConfig
+
+`WaitForClientConfig` waits on the client-peer configuration — the set of anonymous clients that have connected dynamically and are reachable for reverse-direction calls.
+Use this when a server should not proceed until a minimum number of clients have registered.
+
+```go
+err := sys.WaitForClientConfig(ctx, func(cfg gorums.Configuration) bool {
+    return cfg.Size() >= expectedClients
+})
+```
+
+### Return values
+
+| Condition                         | Return value        |
+| --------------------------------- | ------------------- |
+| `cond` returns `true`             | `nil`               |
+| `ctx` is cancelled or times out   | `ctx.Err()`         |
+| `sys.Stop()` called before `cond` | `gorums.ErrStopped` |
+
+### Relationship to `onChange`
+
+`WaitForConfig` and the `onChange` callback (see [WithConfig onChange Callback](#withconfig-onchange-callback)) serve complementary purposes.
+`onChange` is suited for reactive work that must happen synchronously on every configuration change — for example, triggering a leader election or updating an atomic counter.
+`WaitForConfig` is suited for startup synchronization — blocking until the cluster reaches a desired state before the application begins normal operation.
+Unlike `onChange`, `WaitForConfig` composes naturally with `context.WithTimeout` and `context.WithCancel`.
+
 ## Error Handling
 
 Gorums provides structured error types to help you understand and handle failures in quorum calls.

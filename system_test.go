@@ -746,3 +746,106 @@ func TestSystemLocalDispatchContentionSlowReplica(t *testing.T) {
 		t.Errorf("All: got %q, want %q", result.GetValue(), "echo: all-call")
 	}
 }
+
+func TestWaitForConfig(t *testing.T) {
+	t.Run("ConditionAlreadyMet", func(t *testing.T) {
+		systems := gorums.TestSystems(t, 3)
+		awaitSystemReady(t, systems)
+
+		ctx := gorums.TestContext(t, 2*time.Second)
+		if err := systems[0].WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+			return cfg.Size() == 3
+		}); err != nil {
+			t.Fatalf("WaitForConfig: %v", err)
+		}
+	})
+
+	t.Run("ConditionMetAfterConnect", func(t *testing.T) {
+		systems := gorums.TestSystems(t, 3)
+
+		ctx := gorums.TestContext(t, 5*time.Second)
+		if err := systems[0].WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+			return cfg.Size() == 3
+		}); err != nil {
+			t.Fatalf("WaitForConfig: %v", err)
+		}
+	})
+
+	t.Run("ContextCancelled", func(t *testing.T) {
+		sys, err := gorums.NewSystem("127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("NewSystem: %v", err)
+		}
+		go func() { _ = sys.Serve() }()
+		t.Cleanup(func() { _ = sys.Stop() })
+
+		ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+		defer cancel()
+		err = sys.WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+			return cfg.Size() == 3 // never true
+		})
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("expected DeadlineExceeded, got: %v", err)
+		}
+	})
+
+	t.Run("SystemStopped", func(t *testing.T) {
+		sys, err := gorums.NewSystem("127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("NewSystem: %v", err)
+		}
+		go func() { _ = sys.Serve() }()
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- sys.WaitForConfig(context.Background(), func(cfg gorums.Configuration) bool {
+				return cfg.Size() == 3 // never true
+			})
+		}()
+
+		// Give WaitForConfig time to enter the select.
+		time.Sleep(20 * time.Millisecond)
+		_ = sys.Stop()
+
+		select {
+		case err := <-errCh:
+			if !errors.Is(err, gorums.ErrStopped) {
+				t.Fatalf("expected ErrStopped, got: %v", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("WaitForConfig did not return after Stop")
+		}
+	})
+
+	t.Run("ConcurrentWaiters", func(t *testing.T) {
+		systems := gorums.TestSystems(t, 3)
+
+		const waiters = 5
+		errCh := make(chan error, waiters)
+		for range waiters {
+			go func() {
+				ctx := gorums.TestContext(t, 5*time.Second)
+				errCh <- systems[0].WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+					return cfg.Size() == 3
+				})
+			}()
+		}
+
+		for range waiters {
+			if err := <-errCh; err != nil {
+				t.Errorf("WaitForConfig: %v", err)
+			}
+		}
+	})
+
+	t.Run("ClientConfig", func(t *testing.T) {
+		sysServer, _, _ := createClientServerSystems(t)
+
+		ctx := gorums.TestContext(t, 5*time.Second)
+		if err := sysServer.WaitForClientConfig(ctx, func(cfg gorums.Configuration) bool {
+			return cfg.Size() == 1
+		}); err != nil {
+			t.Fatalf("WaitForClientConfig: %v", err)
+		}
+	})
+}
