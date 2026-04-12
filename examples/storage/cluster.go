@@ -26,7 +26,8 @@ func runCluster(addrs string, ic string) error {
 	cmds := make([]*exec.Cmd, len(all))
 	for i, addr := range all {
 		// Put this server's address first, then the remaining peers.
-		nodeArgs := addr + "," + strings.Join(append(all[:i:i], all[i+1:]...), ",")
+		nodeAddrs := append([]string{addr}, append(all[:i:i], all[i+1:]...)...)
+		nodeArgs := strings.Join(nodeAddrs, ",")
 		args := []string{"-serve", "-addrs", nodeArgs}
 		if ic != "" {
 			args = append(args, "-interceptors", ic)
