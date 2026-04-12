@@ -4,9 +4,14 @@ proto_go := $(proto_src:%.proto=%.pb.go)
 gorums_go := $(proto_src:%.proto=%_gorums.pb.go)
 binaries := storage/storage
 
-.PHONY: all debug proto download tools $(binaries)
+.PHONY: all debug proto download tools start $(binaries)
 
 all: $(binaries)
+
+# Start a three-node local storage cluster for manual testing.
+# Starts three servers on localhost:9081-9083. Press Ctrl-C to stop all servers.
+start: storage/storage
+	@storage/storage -cluster -addrs localhost:9081,localhost:9082,localhost:9083
 
 # Build binaries in debug mode: Tell the Go compiler to compile without
 # optimizations (-N) or inlining (-l) so that debuggers, stack traces,

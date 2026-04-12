@@ -2,44 +2,124 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/signal"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/relab/gorums"
 	pb "github.com/relab/gorums/examples/storage/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func runServer(address string, srvOpt gorums.ServerOption) {
-	sys, err := gorums.NewSystem(address, gorums.WithServerOptions(srvOpt))
-	if err != nil {
-		log.Fatalf("Failed to create system on '%s': %v", address, err)
+// runServer starts a storage server. peers[0] is the address to listen on;
+// the remaining entries are the other cluster peers. The server waits until
+// all peers have connected before logging the ready message.
+func runServer(address string, peers []string, srvOpt gorums.ServerOption) error {
+	if len(peers) == 0 {
+		return fmt.Errorf("no peer addresses provided")
 	}
-	storage := newStorageServer(os.Stderr, sys.Addr())
-	sys.RegisterService(nil, func(srv *gorums.Server) {
-		pb.RegisterStorageServer(srv, storage)
-	})
+	myID, peerList, err := peerConfig(address, peers)
+	if err != nil {
+		return err
+	}
+	sys, err := gorums.NewSystem(address,
+		gorums.WithServerOptions(srvOpt, gorums.WithConfig(myID, peerList)),
+		gorums.WithOutboundNodes(peerList),
+		gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create system on %q: %w", address, err)
+	}
 
 	// catch signals in order to shut down gracefully
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
+	registerAndServe(sys, myID)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := sys.WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+		return cfg.Size() == len(peers)
+	}); err != nil {
+		return fmt.Errorf("peers did not connect in time: %w", err)
+	}
+
+	log.Printf("Started storage server on %s\n", sys.Addr())
+
+	<-signals
+	return sys.Stop()
+}
+
+// runLocalCluster starts four in-process servers for local testing.
+// It returns the server addresses and a stop function. The caller must
+// call stop when the cluster is no longer needed.
+func runLocalCluster(srvOpts gorums.ServerOption) ([]string, func(), error) {
+	dialOpts := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
+	systems, stop, err := gorums.NewLocalSystems(4, gorums.WithServerOptions(srvOpts), dialOpts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create local systems: %w", err)
+	}
+
+	addrs := make([]string, len(systems))
+	for i, sys := range systems {
+		addrs[i] = sys.Addr()
+		registerAndServe(sys, uint32(i+1))
+	}
+
+	// Wait for all systems to see each other before opening the client REPL.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, sys := range systems {
+		if err := sys.WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+			return cfg.Size() == len(systems)
+		}); err != nil {
+			stop()
+			return nil, nil, fmt.Errorf("cluster failed to connect: %w", err)
+		}
+	}
+
+	return addrs, stop, nil
+}
+
+// peerConfig returns the node ID and peer list for a server with the given
+// address and peer addresses. The node ID is assumed to follow the ordering
+// semantics of WithNodeList, where each node's ID is the 1-based index of
+// its address in the sorted peer list. Sorting ensures deterministic node ID
+// assignment regardless of the order of addresses in the input list.
+// The server's own address must be included in the peer list.
+// It returns an error if the server's address is not found in the peer list.
+func peerConfig(address string, peers []string) (uint32, gorums.NodeListOption, error) {
+	sorted := slices.Clone(peers)
+	slices.Sort(sorted)
+	idx := slices.Index(sorted, address)
+	if idx < 0 {
+		return 0, nil, fmt.Errorf("server address %q not found in -addrs list", address)
+	}
+	return uint32(idx + 1), gorums.WithNodeList(sorted), nil
+}
+
+// registerAndServe registers the storage service on sys and starts serving in
+// a background goroutine. The server log output is labelled with the node ID.
+func registerAndServe(sys *gorums.System, id uint32) {
+	storage := newStorageServer(os.Stderr, fmt.Sprintf("node %d", id))
+	sys.RegisterService(nil, func(srv *gorums.Server) {
+		pb.RegisterStorageServer(srv, storage)
+	})
 	go func() {
 		if err := sys.Serve(); err != nil {
 			log.Printf("Server error: %v", err)
 		}
 	}()
-
-	log.Printf("Started storage server on %s\n", sys.Addr())
-
-	<-signals
-	_ = sys.Stop()
 }
 
 type state struct {
