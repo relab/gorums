@@ -78,6 +78,9 @@ type inboundManager struct {
 	handler        stream.RequestHandler // handler for dispatching incoming requests on all inbound nodes
 	onConfigChange func(Configuration)   // optional; called after each known-peer config change
 	nextClientID   uint32                // next ID to assign to a client peer
+	configCh       chan struct{}         // closed and replaced on each config/clientConfig change; protected by mu
+	stopCh         chan struct{}         // closed on shutdown to unblock waiters; never replaced
+	stopOnce       sync.Once             // ensures stopCh is closed exactly once
 }
 
 // clientIDStart is the starting ID for dynamically assigned client peers.
@@ -103,6 +106,8 @@ func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfi
 		handler:        handler,
 		onConfigChange: onConfigChange,
 		nextClientID:   clientIDStart,
+		configCh:       make(chan struct{}),
+		stopCh:         make(chan struct{}),
 	}
 	if opt != nil {
 		if _, err := opt.newConfig(im); err != nil {
@@ -312,6 +317,45 @@ func (im *inboundManager) rebuildConfig() {
 	if cfgChanged && im.onConfigChange != nil {
 		im.onConfigChange(cfg)
 	}
+	// Broadcast config change to all waiters.
+	close(im.configCh)
+	im.configCh = make(chan struct{})
+}
+
+// checkConfig checks the condition under the read lock and returns the
+// current broadcast channel if the condition is not yet met.
+func (im *inboundManager) checkConfig(cond func() bool) (met bool, ch <-chan struct{}) {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+	if cond() {
+		return true, nil
+	}
+	return false, im.configCh
+}
+
+// waitForConfig blocks until cond returns true or until ctx is cancelled
+// or the inboundManager is closed. The cond function is called while the
+// read lock is held, so it may safely read inboundManager fields directly.
+func (im *inboundManager) waitForConfig(ctx context.Context, cond func() bool) error {
+	for {
+		met, ch := im.checkConfig(cond)
+		if met {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-im.stopCh:
+			return ErrStopped
+		case <-ch:
+		}
+	}
+}
+
+// close signals all waiters to stop and prevents new waits from blocking.
+// Called from [System.Stop].
+func (im *inboundManager) close() {
+	im.stopOnce.Do(func() { close(im.stopCh) })
 }
 
 // nilPeerNode implements [stream.PeerNode] for regular clients that have no
