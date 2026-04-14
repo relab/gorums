@@ -22,10 +22,11 @@ import (
 // This method should be used by generated code only.
 func Multicast[Req msg](ctx *ConfigContext, req Req, method string, opts ...CallOption) error {
 	callOpts := getCallOptions(E_Multicast, opts...)
-	waitSendDone := callOpts.mustWaitSendDone()
+	waitForSend := !callOpts.isIgnoreErrors()
 
 	clientCtx := newClientCtx[Req, *emptypb.Empty](ctx, req, method, clientCtxOptions{
-		waitSendDone: waitSendDone,
+		oneway:       true,
+		waitForSend:  waitForSend,
 		interceptors: callOpts.interceptors,
 	})
 
@@ -33,7 +34,7 @@ func Multicast[Req msg](ctx *ConfigContext, req Req, method string, opts ...Call
 	clientCtx.sendNow()
 
 	// If waiting for send completion, drain the reply channel and return the first error.
-	if waitSendDone {
+	if waitForSend {
 		var errs []nodeError
 		for range clientCtx.Size() {
 			select {
