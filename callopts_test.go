@@ -9,21 +9,19 @@ import (
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-func TestCallOptionsIsIgnoreErrors(t *testing.T) {
+func TestCallOptionsIgnoreErrors(t *testing.T) {
 	tests := []struct {
 		name             string
 		callOpts         callOptions
 		wantIgnoreErrors bool
 	}{
-		{name: "Unicast/Default", callOpts: getCallOptions(E_Unicast), wantIgnoreErrors: false},
-		{name: "Unicast/IgnoreErrors", callOpts: getCallOptions(E_Unicast, IgnoreErrors()), wantIgnoreErrors: true},
-		{name: "Multicast/Default", callOpts: getCallOptions(E_Multicast), wantIgnoreErrors: false},
-		{name: "Multicast/IgnoreErrors", callOpts: getCallOptions(E_Multicast, IgnoreErrors()), wantIgnoreErrors: true},
+		{name: "Default", callOpts: getCallOptions(), wantIgnoreErrors: false},
+		{name: "IgnoreErrors", callOpts: getCallOptions(IgnoreErrors()), wantIgnoreErrors: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.callOpts.isIgnoreErrors(); got != tt.wantIgnoreErrors {
-				t.Errorf("isIgnoreErrors() = %v, want %v", got, tt.wantIgnoreErrors)
+			if got := tt.callOpts.ignoreErrors; got != tt.wantIgnoreErrors {
+				t.Errorf("ignoreErrors = %v, want %v", got, tt.wantIgnoreErrors)
 			}
 		})
 	}
@@ -74,7 +72,7 @@ func BenchmarkGetCallOptions(b *testing.B) {
 		b.Run(fmt.Sprintf("options=%d", tc.numOpts), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				_ = getCallOptions(E_Quorumcall, opts...)
+				_ = getCallOptions(opts...)
 			}
 		})
 	}

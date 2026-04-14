@@ -14,15 +14,15 @@ import "github.com/relab/gorums/internal/stream"
 //
 // This method should be used by generated code only.
 func Unicast[Req msg](ctx *NodeContext, req Req, method string, opts ...CallOption) error {
-	callOpts := getCallOptions(E_Unicast, opts...)
+	callOpts := getCallOptions(opts...)
 	reqMsg, err := stream.NewMessage(ctx, ctx.nextMsgID(), method, req)
 	if err != nil {
 		return err
 	}
 
-	if callOpts.isIgnoreErrors() {
+	if callOpts.ignoreErrors {
 		// Fire-and-forget: enqueue and return immediately
-		ctx.enqueue(stream.Request{Ctx: ctx, Msg: reqMsg})
+		ctx.enqueue(stream.Request{Ctx: ctx, Msg: reqMsg, Oneway: true})
 		return nil
 	}
 
