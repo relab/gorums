@@ -11,14 +11,10 @@ type callOptions struct {
 	interceptors []any // Type-erased interceptors, restored by QuorumCall
 }
 
-// mustWaitSendDone returns true if the caller of a one-way call type must wait
-// for send completion. This is the default behavior unless the IgnoreErrors
-// call option is set. This always returns false for two-way call types, since
-// they should always wait for actual server responses.
-func (o callOptions) mustWaitSendDone() bool {
-	// must wait for send completion if we are not ignoring errors
-	// and the call type is Unicast or Multicast
-	return !o.ignoreErrors && (o.callType == E_Unicast || o.callType == E_Multicast)
+// isIgnoreErrors returns true if the IgnoreErrors option is set,
+// meaning the caller does not want to wait for send confirmation.
+func (o callOptions) isIgnoreErrors() bool {
+	return o.ignoreErrors
 }
 
 // CallOption is a function that sets a value in the given callOptions struct
