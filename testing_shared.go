@@ -49,7 +49,8 @@ func TestWaitUntil(t testing.TB, timeout time.Duration, predicate func() bool) b
 		return true
 	}
 
-	ctx := TestContext(t, timeout)
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
+	defer cancel()
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 
