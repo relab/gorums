@@ -40,6 +40,31 @@ func TestContext(t testing.TB, timeout time.Duration) context.Context {
 	return ctx
 }
 
+// TestWaitUntil polls predicate until it returns true or timeout elapses.
+// It returns true when predicate succeeds within timeout, and false otherwise.
+func TestWaitUntil(t testing.TB, timeout time.Duration, predicate func() bool) bool {
+	t.Helper()
+
+	if predicate() {
+		return true
+	}
+
+	ctx := TestContext(t, timeout)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return predicate()
+		case <-ticker.C:
+			if predicate() {
+				return true
+			}
+		}
+	}
+}
+
 // InsecureDialOptions returns a DialOption with insecure transport credentials
 // for testing.
 func InsecureDialOptions(_ testing.TB) DialOption {
@@ -47,7 +72,6 @@ func InsecureDialOptions(_ testing.TB) DialOption {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 }
-
 
 // TestQuorumCallError creates a QuorumCallError for testing.
 // The nodeErrors map contains node IDs and their corresponding errors.

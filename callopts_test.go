@@ -48,7 +48,15 @@ func TestCallOptionsIgnoreErrorsResourceLeak(t *testing.T) {
 		ctx := TestContext(t, 5*time.Second)
 		Multicast(cfg.Context(ctx), pb.String(fmt.Sprintf("mc-%d", i)), mock.TestMethod, IgnoreErrors())
 	}
-	time.Sleep(500 * time.Millisecond)
+	TestWaitUntil(t, 5*time.Second, func() bool {
+		for _, node := range cfg.Nodes() {
+			if node.PendingCount() > 0 {
+				return false
+			}
+		}
+		return true
+	})
+
 	for _, node := range cfg.Nodes() {
 		if pc := node.PendingCount(); pc > 0 {
 			t.Errorf("node %d: pending = %d; expected 0", node.ID(), pc)
