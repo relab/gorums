@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"cmp"
 	"context"
 	"sync"
 	"time"
@@ -28,9 +29,23 @@ type Request struct {
 	Ctx          context.Context
 	Msg          *Message
 	Streaming    bool
-	WaitSendDone bool
+	Oneway       bool
 	ResponseChan chan<- response
 	SendTime     time.Time
+}
+
+// wantServerResponse returns true if the request expects an actual
+// server response and needs a router entry. It returns true for
+// two-way calls (RPC, QuorumCall) and streaming calls (correctable).
+func (r Request) wantServerResponse() bool {
+	return r.ResponseChan != nil && !r.Oneway
+}
+
+// wantSendConfirmation returns true if the request needs send confirmation
+// delivered directly on its ResponseChan, bypassing the router. It returns
+// true for one-way calls (Unicast, Multicast) that are not fire-and-forget.
+func (r Request) wantSendConfirmation() bool {
+	return r.Oneway && r.ResponseChan != nil
 }
 
 // deliver sends the response on request's response channel, preferring delivery
@@ -281,13 +296,15 @@ func (c *Channel) isConnected() bool {
 // the registered RequestHandler without touching the network.
 // If the node is closed, it responds with an error instead.
 //
-// WaitSendDone and Streaming are mutually exclusive: WaitSendDone is for one-way
-// calls that want send-completion confirmation, while Streaming is for
-// correctable calls that keep the router entry alive for multiple server responses.
+// Requests cannot combine Oneway and Streaming; they are mutually exclusive:
+//   - one-way calls (Unicast, Multicast) do not expect server responses.
+//   - streaming (correctable) calls expect multiple server responses and
+//     require the router entry to stay alive for the duration of the stream.
+//
 // Combining them would cause double delivery on the response channel.
 func (c *Channel) Enqueue(req Request) {
-	if req.WaitSendDone && req.Streaming {
-		panic("gorums: WaitSendDone and Streaming are mutually exclusive")
+	if req.Oneway && req.Streaming {
+		panic("gorums: Oneway and Streaming are mutually exclusive")
 	}
 	if c.isLocal() {
 		c.router.DispatchLocalRequest(c.id, req)
@@ -373,13 +390,13 @@ func (c *Channel) drainSendQ() {
 // If the stream is down, it tries to re-establish it.
 //
 // Delivery contract:
-//   - Pre-registration exits (stream error, cancelled request context, nil stream): replyError + continue.
-//     The request never enters the router, so no routeResponse lookup is needed.
-//   - Send failure: requeuePendingMsgs handles the registered entry (requeue or cancel).
-//     continue skips routeResponse since the entry is already gone.
-//   - Send success, WaitSendDone=true: routeResponse delivers the confirmation.
-//   - Send success, WaitSendDone=false: the router entry stays alive for receiver()
-//     to deliver the actual server response, so routeResponse is not called here.
+//   - Pre-registration exits (stream error, cancelled request context, nil stream):
+//     replyError + continue. The request never enters the router.
+//   - Send failure: requeuePendingMsgs handles registered two-way entries (requeue or cancel).
+//     One-way errors are delivered directly via replyError.
+//   - Send success, one-way call: confirm send directly on ResponseChan.
+//   - Send success, two-way call: the router entry stays alive for receiver()
+//     to deliver the actual server response.
 func (c *Channel) sender() {
 	defer c.drainSendQ()
 
@@ -410,9 +427,9 @@ func (c *Channel) sender() {
 			continue
 		}
 
-		// Register call in the response router only for calls that are genuinely
-		// in-flight on the current stream, after all early-exit checks pass.
-		if req.ResponseChan != nil {
+		// One-way calls bypass the router and confirm directly after Send below.
+		if req.wantServerResponse() {
+			// Register only for two-way/streaming calls that expect server responses.
 			c.router.Register(req.Msg.GetMessageSeqNo(), req)
 		}
 
@@ -433,14 +450,20 @@ func (c *Channel) sender() {
 			stop()
 			c.setLastErr(err)
 			c.clearStream(stream)
-			c.requeuePendingMsgs() // removes and requeues/cancels all router entries
+			c.requeuePendingMsgs() // handles registered two-way entries
+			// One-way calls are not registered in the router to receive server responses,
+			// so requeuePendingMsgs won't handle them. Deliver error directly to caller.
+			if !req.wantServerResponse() {
+				// prefer context error when cancellation caused the failure.
+				req.replyError(c.id, cmp.Or(req.Ctx.Err(), err))
+			}
 			continue
 		}
 		stop()
 
-		// For one-way calls (Unicast/Multicast) with WaitSendDone, confirm successful send.
-		if req.WaitSendDone {
-			c.router.RouteResponse(req.Msg.GetMessageSeqNo(), response{NodeID: c.id})
+		// For one-way calls, confirm successful send directly (no router round-trip).
+		if req.wantSendConfirmation() {
+			req.deliver(response{NodeID: c.id})
 		}
 	}
 }

@@ -223,7 +223,7 @@ func TestChannelCreation(t *testing.T) {
 	tc := setupChannelWithoutServer(t)
 
 	// send message when server is down
-	resp := sendRequest(t, tc.Channel, Request{WaitSendDone: true}, 1)
+	resp := sendRequest(t, tc.Channel, Request{Oneway: true}, 1)
 	if resp.Err == nil {
 		t.Error("response err: got <nil>, want error")
 	}
@@ -278,7 +278,7 @@ func TestChannelLatency(t *testing.T) {
 
 	// Send a few requests to update latency
 	for i := range 10 {
-		sendRequest(t, tc.Channel, Request{WaitSendDone: false}, uint64(i))
+		sendRequest(t, tc.Channel, Request{Oneway: false}, uint64(i))
 	}
 
 	latency := tc.router.Latency()
@@ -294,16 +294,16 @@ func TestChannelSendCompletionWaiting(t *testing.T) {
 	tc := setupChannel(t, echoServer)
 
 	tests := []struct {
-		name         string
-		waitSendDone bool
+		name   string
+		oneway bool
 	}{
-		{name: "WaitForSend", waitSendDone: true},
-		{name: "NoSendWaiting", waitSendDone: false},
+		{name: "Oneway", oneway: true},
+		{name: "Twoway", oneway: false},
 	}
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			start := time.Now()
-			resp := sendRequest(t, tc.Channel, Request{WaitSendDone: tt.waitSendDone}, uint64(i))
+			resp := sendRequest(t, tc.Channel, Request{Oneway: tt.oneway}, uint64(i))
 			elapsed := time.Since(start)
 			if resp.Err != nil {
 				t.Errorf("unexpected error: %v", resp.Err)
@@ -342,7 +342,7 @@ func TestChannelErrors(t *testing.T) {
 			setup: func(t *testing.T) *testChannel {
 				tc := setupChannel(t, echoServer)
 				// Send a message to ensure connection is established
-				resp := sendRequest(t, tc.Channel, Request{WaitSendDone: true}, 1)
+				resp := sendRequest(t, tc.Channel, Request{Oneway: true}, 1)
 				if resp.Err != nil {
 					t.Errorf("initial message send should succeed, got error: %v", resp.Err)
 				}
@@ -358,7 +358,7 @@ func TestChannelErrors(t *testing.T) {
 			tc := tt.setup(t)
 			time.Sleep(100 * time.Millisecond)
 
-			resp := sendRequest(t, tc.Channel, Request{WaitSendDone: true}, uint64(i))
+			resp := sendRequest(t, tc.Channel, Request{Oneway: true}, uint64(i))
 			if resp.Err == nil {
 				t.Errorf("expected error containing %q but got nil", tt.wantErr)
 			} else if !strings.Contains(resp.Err.Error(), tt.wantErr) {
@@ -559,35 +559,35 @@ func TestChannelContext(t *testing.T) {
 		name         string
 		serverFn     func(Gorums_NodeStreamServer) error
 		contextSetup func(context.Context) (context.Context, context.CancelFunc)
-		waitSendDone bool
+		oneway       bool
 		wantErr      error
 	}{
 		{
 			name:         "CancelBeforeSend/WaitSending",
 			serverFn:     echoServer,
 			contextSetup: cancelledContext,
-			waitSendDone: true,
+			oneway:       true,
 			wantErr:      context.Canceled,
 		},
 		{
 			name:         "CancelBeforeSend/NoSendWaiting",
 			serverFn:     echoServer,
 			contextSetup: cancelledContext,
-			waitSendDone: false,
+			oneway:       false,
 			wantErr:      context.Canceled,
 		},
 		{
 			name:         "CancelDuringSend/WaitSending",
 			serverFn:     holdServer,
 			contextSetup: expireBeforeSend,
-			waitSendDone: true,
+			oneway:       true,
 			wantErr:      context.DeadlineExceeded,
 		},
 		{
 			name:         "CancelDuringSend/NoSendWaiting",
 			serverFn:     holdServer,
 			contextSetup: expireBeforeSend,
-			waitSendDone: false,
+			oneway:       false,
 			wantErr:      context.DeadlineExceeded,
 		},
 	}
@@ -598,7 +598,7 @@ func TestChannelContext(t *testing.T) {
 			t.Cleanup(cancel)
 
 			tc := setupChannel(t, tt.serverFn)
-			resp := sendRequest(t, tc.Channel, Request{Ctx: ctx, WaitSendDone: tt.waitSendDone}, uint64(i))
+			resp := sendRequest(t, tc.Channel, Request{Ctx: ctx, Oneway: tt.oneway}, uint64(i))
 			if !errors.Is(resp.Err, tt.wantErr) {
 				t.Errorf("expected %v, got: %v", tt.wantErr, resp.Err)
 			}
@@ -1047,16 +1047,16 @@ func TestChannelRouterLifecycle(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		waitSendDone bool
-		streaming    bool
-		wantRouter   bool
-		wantPanic    bool
+		name       string
+		oneway     bool
+		streaming  bool
+		wantRouter bool
+		wantPanic  bool
 	}{
-		{name: "WaitSendDone/NoStreaming/Cleanup", waitSendDone: true, streaming: false, wantRouter: false},
-		{name: "WaitSendDone/Streaming/Invalid", waitSendDone: true, streaming: true, wantPanic: true},
-		{name: "NoSendWaiting/NoStreaming/Cleanup", waitSendDone: false, streaming: false, wantRouter: false},
-		{name: "NoSendWaiting/Streaming/KeepsRouterAlive", waitSendDone: false, streaming: true, wantRouter: true},
+		{name: "Oneway/NoStreaming/Cleanup", oneway: true, streaming: false, wantRouter: false},
+		{name: "Oneway/Streaming/Invalid", oneway: true, streaming: true, wantPanic: true},
+		{name: "Twoway/NoStreaming/Cleanup", oneway: false, streaming: false, wantRouter: false},
+		{name: "Twoway/Streaming/KeepsRouterAlive", oneway: false, streaming: true, wantRouter: true},
 	}
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1070,7 +1070,7 @@ func TestChannelRouterLifecycle(t *testing.T) {
 				}
 			}()
 			msgID := uint64(i)
-			resp := sendRequest(t, tc.Channel, Request{WaitSendDone: tt.waitSendDone, Streaming: tt.streaming}, msgID)
+			resp := sendRequest(t, tc.Channel, Request{Oneway: tt.oneway, Streaming: tt.streaming}, msgID)
 			if resp.Err != nil {
 				t.Errorf("unexpected error: %v", resp.Err)
 			}
@@ -1100,7 +1100,7 @@ func TestChannelResponseRouting(t *testing.T) {
 	results := make(chan msgResponse, numMessages)
 
 	for i := range numMessages {
-		go sendReq(t, results, tc.Channel, i, 1, Request{WaitSendDone: true})
+		go sendReq(t, results, tc.Channel, i, 1, Request{Oneway: true})
 	}
 
 	// Collect and verify results
@@ -1131,8 +1131,8 @@ func TestChannelConcurrentSends(t *testing.T) {
 	results := make(chan msgResponse, numMessages)
 	for goID := range numGoroutines {
 		go func() {
-			sendReq(t, results, tc.Channel, goID, msgsPerGoroutine, Request{WaitSendDone: true})
-			sendReq(t, results, tc.Channel, goID, msgsPerGoroutine, Request{WaitSendDone: false})
+			sendReq(t, results, tc.Channel, goID, msgsPerGoroutine, Request{Oneway: true})
+			sendReq(t, results, tc.Channel, goID, msgsPerGoroutine, Request{Oneway: false})
 		}()
 	}
 
@@ -1173,7 +1173,7 @@ func TestChannelDeadlock(t *testing.T) {
 	}
 
 	// Send message to activate stream
-	sendRequest(t, tc.Channel, Request{WaitSendDone: true}, 1)
+	sendRequest(t, tc.Channel, Request{Oneway: true}, 1)
 
 	// Break the stream, forcing a reconnection on next send
 	tc.clearStream(tc.getStream())
@@ -1286,7 +1286,7 @@ func TestChannelClearStreamDeadlock(t *testing.T) {
 			Ctx:          ctx,
 			Msg:          msg,
 			Streaming:    false,
-			WaitSendDone: false,
+			Oneway:       false,
 			ResponseChan: replyChannels[i],
 		})
 	}
@@ -1389,7 +1389,7 @@ func TestIsInbound(t *testing.T) {
 
 // TestInboundChannel verifies that an inbound channel can send messages.
 // No receiver goroutine is started for inbound channels; the caller's NodeStream
-// Recv loop is the sole reader. WaitSendDone confirms successful delivery to the
+// Recv loop is the sole reader. Oneway confirms successful delivery to the
 // stream without requiring a routed response.
 func TestInboundChannel(t *testing.T) {
 	stream := newMockBidiStream()
@@ -1399,7 +1399,7 @@ func TestInboundChannel(t *testing.T) {
 	})
 
 	// Send a message and verify it is delivered to the stream.
-	resp := sendRequest(t, c, Request{WaitSendDone: true}, 1)
+	resp := sendRequest(t, c, Request{Oneway: true}, 1)
 	if resp.Err != nil {
 		t.Errorf("unexpected error: %v", resp.Err)
 	}
@@ -1420,7 +1420,7 @@ func TestInboundChannelClose(t *testing.T) {
 	}
 
 	// Subsequent sends should fail with ErrNodeClosed.
-	resp := sendRequest(t, c, Request{WaitSendDone: true}, 2)
+	resp := sendRequest(t, c, Request{Oneway: true}, 2)
 	if resp.Err == nil {
 		t.Error("expected error after close, got nil")
 	} else if !errors.Is(resp.Err, ErrNodeClosed) {
@@ -1443,7 +1443,7 @@ func TestInboundChannelStreamDown(t *testing.T) {
 	c := NewInboundChannel(t.Context(), 1, 10, stream, NewMessageRouter())
 
 	// Verify initial send works.
-	resp := sendRequest(t, c, Request{WaitSendDone: true}, 1)
+	resp := sendRequest(t, c, Request{Oneway: true}, 1)
 	if resp.Err != nil {
 		t.Fatalf("initial send failed: %v", resp.Err)
 	}
@@ -1456,7 +1456,7 @@ func TestInboundChannelStreamDown(t *testing.T) {
 	}
 
 	// Sends after close must fail with ErrNodeClosed, not silently reconnect.
-	resp = sendRequest(t, c, Request{WaitSendDone: true}, 2)
+	resp = sendRequest(t, c, Request{Oneway: true}, 2)
 	if resp.Err == nil {
 		t.Error("expected error after stream down, got nil")
 	} else if !errors.Is(resp.Err, ErrNodeClosed) {
@@ -1587,7 +1587,7 @@ func BenchmarkChannelSend(b *testing.B) {
 					Method:       mock.TestMethod,
 					Payload:      payload,
 				}.Build()
-				req := Request{Ctx: context.Background(), Msg: msg, WaitSendDone: true, ResponseChan: replyChan}
+				req := Request{Ctx: context.Background(), Msg: msg, Oneway: true, ResponseChan: replyChan}
 				tc.Enqueue(req)
 				<-replyChan
 			}
@@ -1623,7 +1623,7 @@ func BenchmarkChannelSendParallel(b *testing.B) {
 						Method:       mock.TestMethod,
 						Payload:      payload,
 					}.Build()
-					req := Request{Ctx: context.Background(), Msg: msg, WaitSendDone: true, ResponseChan: replyChan}
+					req := Request{Ctx: context.Background(), Msg: msg, Oneway: true, ResponseChan: replyChan}
 					tc.Enqueue(req)
 					<-replyChan
 				}
