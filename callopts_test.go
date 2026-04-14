@@ -44,8 +44,8 @@ func TestCallOptionsIgnoreErrorsResourceLeak(t *testing.T) {
 		})
 	}
 	cfg := systems[0].OutboundConfig()
+	ctx := TestContext(t, 5*time.Second)
 	for i := range 1000 {
-		ctx := TestContext(t, 5*time.Second)
 		Multicast(cfg.Context(ctx), pb.String(fmt.Sprintf("mc-%d", i)), mock.TestMethod, IgnoreErrors())
 	}
 	TestWaitUntil(t, 5*time.Second, func() bool {
