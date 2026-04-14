@@ -116,6 +116,7 @@ testutils
 timestamppb
 tmpl
 Tormod
+Twoway
 ucast
 unexport
 Unexported
