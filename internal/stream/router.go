@@ -36,7 +36,7 @@ type RequestHandler interface {
 // survives channel replacement (e.g., inbound reconnects).
 //
 // The router maintains a map of pending calls keyed by message sequence number.
-// When a response arrives, RouteResponse looks up the matching request and
+// When a response arrives, deliverPending looks up the matching request and
 // delivers the response on its response channel.
 //
 // The router also provides handler lookup via a shared handler map. All routers
@@ -53,10 +53,10 @@ type MessageRouter struct {
 }
 
 // NewMessageRouter creates a new MessageRouter with an optional RequestHandler.
-// The handler, if provided, is used to dispatch incoming requests:
-// in RouteMessage, it processes server-initiated back-channel calls (high-bit IDs);
-// in RouteInboundMessage, it dispatches client-initiated requests (low-bit IDs).
-// Passing nil (or omitting the argument) disables request dispatch on this router.
+// The handler, if provided, is used to dispatch incoming requests: on the client
+// side it handles server-initiated back-channel calls; on the server side it
+// dispatches client-initiated requests. Passing nil (or omitting the argument)
+// disables request dispatch on this router.
 func NewMessageRouter(handler ...RequestHandler) *MessageRouter {
 	handler = append(handler, nil) // ensure handler[0] is always valid
 	return &MessageRouter{
@@ -86,14 +86,21 @@ func (r *MessageRouter) SetLatency(latency time.Duration) {
 	r.latency = latency
 }
 
+// PendingCount returns the number of pending calls currently registered in the router.
+func (r *MessageRouter) PendingCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.pending)
+}
+
 // DispatchLocalRequest handles the request in-process for the local node,
 // bypassing the network. It delivers the request to the registered handler,
 // serializing execution the same way remote nodes do: the next dispatch is
 // blocked until the handler returns or calls [ServerCtx.Release].
 //
-// For one-way calls, send-completion is confirmed before the handler runs
-// if WaitSendDone is true. For two-way calls, the response is delivered
-// directly to the caller's response channel via the send closure.
+// For one-way calls, send-completion is confirmed before the handler runs.
+// For two-way calls, the response is delivered directly to the caller's
+// response channel via the send closure.
 func (r *MessageRouter) DispatchLocalRequest(nodeID uint32, req Request) {
 	if req.Ctx.Err() != nil {
 		req.replyError(nodeID, req.Ctx.Err())
@@ -103,19 +110,19 @@ func (r *MessageRouter) DispatchLocalRequest(nodeID uint32, req Request) {
 		req.replyError(nodeID, status.Error(codes.Unimplemented, "no request handler registered"))
 		return
 	}
-	if req.WaitSendDone && req.ResponseChan != nil {
+	// One-way calls: confirm "send" completion before running the handler,
+	// since the caller blocks until confirmation arrives on ResponseChan.
+	if req.wantSendConfirmation() {
 		if !req.deliver(response{NodeID: nodeID}) {
-			return
+			return // request cancelled while waiting for send confirmation; do not run the handler.
 		}
 	}
-	// For two-way calls, deliver the response via the send closure.
-	// For one-way calls (WaitSendDone=true or ResponseChan==nil), send is a no-op:
-	// the confirmation was already delivered above, and a second write would either
-	// race with the caller consuming the channel or block on a full response channel.
 	send := func(msg *Message) {
-		if req.WaitSendDone || req.ResponseChan == nil {
+		// One-way fire-and-forget calls have no ResponseChan, so send is a no-op.
+		if !req.wantServerResponse() {
 			return
 		}
+		// Two-way calls: deliver the handler's response on ResponseChan.
 		req.deliver(response{NodeID: nodeID, Value: msg, Err: msg.ErrorStatus()})
 	}
 
@@ -126,13 +133,11 @@ func (r *MessageRouter) DispatchLocalRequest(nodeID uint32, req Request) {
 	go r.handler.HandleRequest(req.Msg.AppendToIncomingContext(req.Ctx), req.Msg, release, send)
 }
 
-// RouteMessage delivers a response to a pending call registered via [Register],
-// or dispatches a server-initiated request to the registered handler.
-// It is the primary entry point for messages received on the client-side stream.
-//
-// Responses to client-initiated calls are delivered to the matching pending call;
-// responses to cancelled calls are silently dropped. Server-initiated requests
-// (back-channel calls) are dispatched to the handler in a new goroutine.
+// RouteMessage demultiplexes a message received on the client-side (outbound) stream.
+// Server-initiated requests (back-channel calls, high-bit IDs) are dispatched to the
+// handler in a new goroutine. Responses to client-initiated calls (low-bit IDs) are
+// delivered to the matching pending call; responses to cancelled or unknown calls are
+// silently dropped.
 func (r *MessageRouter) RouteMessage(ctx context.Context, nodeID uint32, msg *Message, enqueue func(Request)) {
 	msgID := msg.GetMessageSeqNo()
 
@@ -148,20 +153,7 @@ func (r *MessageRouter) RouteMessage(ctx context.Context, nodeID uint32, msg *Me
 		return
 	}
 
-	r.mu.Lock()
-	req, ok := r.pending[msgID]
-	if ok && !req.Streaming {
-		delete(r.pending, msgID)
-	}
-	r.mu.Unlock()
-
-	if ok {
-		resp := response{NodeID: nodeID, Value: msg, Err: msg.ErrorStatus()}
-		if resp.Err == nil {
-			r.updateLatency(time.Since(req.SendTime))
-		}
-		req.deliver(resp)
-	}
+	r.deliverPending(msgID, response{NodeID: nodeID, Value: msg, Err: msg.ErrorStatus()})
 }
 
 // Register registers a pending call awaiting a response.
@@ -173,13 +165,12 @@ func (r *MessageRouter) Register(msgID uint64, req Request) {
 	r.mu.Unlock()
 }
 
-// RouteInboundMessage delivers a response to a pending call registered via [Register],
-// or dispatches a client-initiated request to the registered handler.
+// RouteInboundMessage demultiplexes a message received on the server-side (inbound) stream.
 // It is the symmetric counterpart of [RouteMessage] for the server-side receive path.
-//
-// Responses to server-initiated calls are delivered to the matching pending call;
-// responses to cancelled calls are silently absorbed. Client-initiated requests
-// are dispatched to the handler in a new goroutine. The release function is always called.
+// Client-initiated requests (low-bit IDs) are dispatched to the handler in a new goroutine,
+// or release is called immediately when no handler is registered. Responses to server-initiated
+// calls (high-bit IDs) are delivered to the matching pending call; stale responses from
+// cancelled calls are silently absorbed. The release function is always called.
 func (r *MessageRouter) RouteInboundMessage(ctx context.Context, nodeID uint32, msg *Message, release func(), send func(*Message)) {
 	msgID := msg.GetMessageSeqNo()
 	if !isServerSequenceNumber(msgID) {
@@ -191,33 +182,17 @@ func (r *MessageRouter) RouteInboundMessage(ctx context.Context, nodeID uint32, 
 		}
 		return
 	}
-	// Server-initiated response: look up pending call and deliver if found;
-	// silently absorb if not found (stale response from a cancelled call).
-	r.mu.Lock()
-	req, ok := r.pending[msgID]
-	if ok && !req.Streaming {
-		delete(r.pending, msgID)
-	}
-	r.mu.Unlock()
-
-	if ok {
-		resp := response{NodeID: nodeID, Value: msg, Err: msg.ErrorStatus()}
-		if resp.Err == nil {
-			r.updateLatency(time.Since(req.SendTime))
-		}
-		req.deliver(resp)
-	}
+	// Server-initiated response: deliver to the matching pending call (if any) and
+	// release the ordering lock. Stale responses from cancelled calls are silently absorbed.
+	r.deliverPending(msgID, response{NodeID: nodeID, Value: msg, Err: msg.ErrorStatus()})
 	release()
 }
 
-// RouteResponse delivers a response to a pending call registered via [Register].
+// deliverPending looks up the pending call for msgID and delivers resp to it.
 // For non-streaming calls, the entry is removed after delivery.
 // For streaming calls (correctable), the entry remains for subsequent responses.
-//
-// Unmatched server-initiated calls (back-channel responses) are absorbed and
-// the method returns true. Returns false only for unmatched client-initiated
-// calls (stale responses).
-func (r *MessageRouter) RouteResponse(msgID uint64, resp response) bool {
+// Returns true if a matching pending entry was found and delivered, false otherwise.
+func (r *MessageRouter) deliverPending(msgID uint64, resp response) bool {
 	r.mu.Lock()
 	req, ok := r.pending[msgID]
 	if ok && !req.Streaming {
@@ -230,9 +205,8 @@ func (r *MessageRouter) RouteResponse(msgID uint64, resp response) bool {
 			r.updateLatency(time.Since(req.SendTime))
 		}
 		req.deliver(resp)
-		return true
 	}
-	return isServerSequenceNumber(msgID)
+	return ok
 }
 
 // Latency returns the estimated round-trip latency based on recent responses.

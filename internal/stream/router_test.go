@@ -10,7 +10,7 @@ import (
 	"github.com/relab/gorums/internal/testutils/mock"
 )
 
-func TestRouterRegisterAndRoute(t *testing.T) {
+func TestRouterRegisterAndDeliver(t *testing.T) {
 	r := NewMessageRouter()
 	replyChan := make(chan response, 1)
 	r.Register(42, Request{
@@ -20,8 +20,8 @@ func TestRouterRegisterAndRoute(t *testing.T) {
 	})
 
 	resp := response{NodeID: 1, Value: nil}
-	if !r.RouteResponse(42, resp) {
-		t.Fatal("RouteResponse should return true for registered msgID")
+	if !r.deliverPending(42, resp) {
+		t.Fatal("deliverPending should return true for registered msgID")
 	}
 
 	// The response should be delivered on the channel.
@@ -35,38 +35,40 @@ func TestRouterRegisterAndRoute(t *testing.T) {
 	}
 
 	// After routing a non-streaming request, it should be removed.
-	if r.RouteResponse(42, resp) {
-		t.Error("RouteResponse should return false for already-consumed msgID")
+	if r.deliverPending(42, resp) {
+		t.Error("deliverPending should return false for already-consumed msgID")
 	}
 }
 
-func TestRouterRouteUnknown(t *testing.T) {
+func TestRouterDeliverUnknown(t *testing.T) {
 	r := NewMessageRouter()
 
-	if r.RouteResponse(999, response{NodeID: 1}) {
-		t.Error("RouteResponse should return false for unknown msgID")
+	if r.deliverPending(999, response{NodeID: 1}) {
+		t.Error("deliverPending should return false for unknown msgID")
 	}
 }
 
-// TestRouterRouteResponseServerInitiated verifies that RouteResponse absorbs
-// unmatched server-initiated IDs and rejects unmatched client-initiated IDs.
-func TestRouterRouteResponseServerInitiated(t *testing.T) {
-	t.Run("ServerInitiatedReturnsTrue", func(t *testing.T) {
+// TestRouterDeliverPendingUnknown verifies that deliverPending returns false for
+// any unmatched msgID, regardless of whether it is a client- or server-initiated ID.
+// Callers (RouteMessage, RouteInboundMessage) are responsible for handling the
+// server-initiated case before invoking deliverPending.
+func TestRouterDeliverPendingUnknown(t *testing.T) {
+	t.Run("ServerInitiatedUnknownReturnsFalse", func(t *testing.T) {
 		r := NewMessageRouter()
-		if !r.RouteResponse(ServerSequenceNumber(1), response{NodeID: 1}) {
-			t.Error("RouteResponse should return true for server-initiated msgID")
+		if r.deliverPending(ServerSequenceNumber(1), response{NodeID: 1}) {
+			t.Error("deliverPending should return false for unmatched server-initiated msgID")
 		}
 	})
 
 	t.Run("ClientInitiatedUnknownReturnsFalse", func(t *testing.T) {
 		r := NewMessageRouter()
-		if r.RouteResponse(1, response{NodeID: 1}) {
-			t.Error("RouteResponse should return false for unmatched client-initiated msgID")
+		if r.deliverPending(1, response{NodeID: 1}) {
+			t.Error("deliverPending should return false for unmatched client-initiated msgID")
 		}
 	})
 }
 
-func TestRouterStreamingKeepsEntry(t *testing.T) {
+func TestRouterDeliverPendingStreamingKeepsEntry(t *testing.T) {
 	r := NewMessageRouter()
 	replyChan := make(chan response, 3)
 	r.Register(10, Request{
@@ -78,20 +80,20 @@ func TestRouterStreamingKeepsEntry(t *testing.T) {
 
 	// First route should succeed and keep the entry.
 	resp := response{NodeID: 1}
-	if !r.RouteResponse(10, resp) {
-		t.Fatal("first RouteResponse should succeed")
+	if !r.deliverPending(10, resp) {
+		t.Fatal("first deliverPending should succeed")
 	}
 	<-replyChan // drain
 
 	// Second route should also succeed (streaming keeps entry alive).
-	if !r.RouteResponse(10, resp) {
-		t.Fatal("second RouteResponse should succeed for streaming entry")
+	if !r.deliverPending(10, resp) {
+		t.Fatal("second deliverPending should succeed for streaming entry")
 	}
 	<-replyChan // drain
 
 	// Third route should also succeed.
-	if !r.RouteResponse(10, resp) {
-		t.Fatal("third RouteResponse should succeed for streaming entry")
+	if !r.deliverPending(10, resp) {
+		t.Fatal("third deliverPending should succeed for streaming entry")
 	}
 	<-replyChan // drain
 }
@@ -112,7 +114,7 @@ func TestRouterCancelPending(t *testing.T) {
 	}
 
 	// Map should be empty now.
-	if r.RouteResponse(0, response{}) {
+	if r.PendingCount() != 0 {
 		t.Error("pending map should be empty after CancelPending")
 	}
 }
@@ -161,7 +163,7 @@ func TestRouterRequeuePending(t *testing.T) {
 	}
 
 	// Map should be empty.
-	if r.RouteResponse(0, response{}) {
+	if r.PendingCount() != 0 {
 		t.Error("pending map should be empty after RequeuePending")
 	}
 }
@@ -262,7 +264,7 @@ func (m *mockRequestHandler) HandleRequest(_ context.Context, _ *Message, releas
 	}
 }
 
-func TestRouterRouteResponseDoesNotBlockOnCanceledRequest(t *testing.T) {
+func TestRouterDeliverPendingDoesNotBlockOnCanceledRequest(t *testing.T) {
 	r := NewMessageRouter()
 	ctx, cancel := context.WithCancel(context.Background())
 	replyChan := make(chan response, 1)
@@ -276,8 +278,8 @@ func TestRouterRouteResponseDoesNotBlockOnCanceledRequest(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		if !r.RouteResponse(42, response{NodeID: 1}) {
-			t.Error("RouteResponse should return true for registered msgID")
+		if !r.deliverPending(42, response{NodeID: 1}) {
+			t.Error("deliverPending should return true for registered msgID")
 		}
 		close(done)
 	}()
@@ -285,11 +287,11 @@ func TestRouterRouteResponseDoesNotBlockOnCanceledRequest(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatal("RouteResponse blocked on a canceled request with a full reply channel")
+		t.Fatal("deliverPending blocked on a canceled request with a full reply channel")
 	}
 }
 
-func TestRouterRouteResponsePrefersDeliveryWhenCanceledAndReplyChanReady(t *testing.T) {
+func TestRouterDeliverPendingPrefersDeliveryWhenCanceledAndReplyChanReady(t *testing.T) {
 	r := NewMessageRouter()
 	ctx, cancel := context.WithCancel(context.Background())
 	replyChan := make(chan response, 1)
@@ -300,8 +302,8 @@ func TestRouterRouteResponsePrefersDeliveryWhenCanceledAndReplyChanReady(t *test
 	})
 	cancel()
 
-	if !r.RouteResponse(42, response{NodeID: 1, Err: ErrStreamDown}) {
-		t.Fatal("RouteResponse should return true for registered msgID")
+	if !r.deliverPending(42, response{NodeID: 1, Err: ErrStreamDown}) {
+		t.Fatal("deliverPending should return true for registered msgID")
 	}
 
 	select {
@@ -313,7 +315,7 @@ func TestRouterRouteResponsePrefersDeliveryWhenCanceledAndReplyChanReady(t *test
 			t.Fatalf("reply error = %v, want ErrStreamDown", got.Err)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("RouteResponse dropped a ready delivery on canceled context")
+		t.Fatal("deliverPending dropped a ready delivery on canceled context")
 	}
 }
 
