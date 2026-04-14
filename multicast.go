@@ -19,8 +19,8 @@ import (
 //
 // This method should be used by generated code only.
 func Multicast[Req msg](ctx *ConfigContext, req Req, method string, opts ...CallOption) error {
-	callOpts := getCallOptions(E_Multicast, opts...)
-	waitForSend := !callOpts.isIgnoreErrors()
+	callOpts := getCallOptions(opts...)
+	waitForSend := !callOpts.ignoreErrors
 
 	clientCtx := newMulticastClientCtx(ctx, req, method, waitForSend, callOpts.interceptors)
 

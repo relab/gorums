@@ -2,27 +2,18 @@ package gorums
 
 import (
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/runtime/protoimpl"
 )
 
 type callOptions struct {
-	callType     *protoimpl.ExtensionInfo
 	ignoreErrors bool
 	interceptors []any // Type-erased interceptors, restored by QuorumCall
-}
-
-// isIgnoreErrors returns true if the IgnoreErrors option is set,
-// meaning the caller does not want to wait for send confirmation.
-func (o callOptions) isIgnoreErrors() bool {
-	return o.ignoreErrors
 }
 
 // CallOption is a function that sets a value in the given callOptions struct
 type CallOption func(*callOptions)
 
-func getCallOptions(callType *protoimpl.ExtensionInfo, opts ...CallOption) callOptions {
+func getCallOptions(opts ...CallOption) callOptions {
 	o := callOptions{
-		callType:     callType,
 		ignoreErrors: false, // default: return error and wait for send completion
 	}
 	for _, opt := range opts {
@@ -42,8 +33,8 @@ func IgnoreErrors() CallOption {
 }
 
 // Interceptors returns a CallOption that adds quorum call interceptors.
-// Interceptors are executed in the order provided, modifying the Responses object
-// before the user calls a terminal method.
+// Interceptors are executed in the order provided, modifying the Responses
+// object before the user calls a terminal method.
 //
 // Example:
 //
