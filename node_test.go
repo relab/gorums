@@ -414,7 +414,7 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 				n.Enqueue(stream.Request{
 					Ctx:          context.Background(),
 					Msg:          reqMsg,
-					WaitSendDone: true,
+					Oneway:       true,
 					ResponseChan: replyChan,
 				})
 				<-replyChan

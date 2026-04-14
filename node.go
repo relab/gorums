@@ -150,6 +150,14 @@ func (n *Node) IsInbound() bool {
 	return ch != nil && ch.IsInbound()
 }
 
+// PendingCount returns the number of pending calls currently registered in the router.
+func (n *Node) PendingCount() int {
+	if n == nil || n.router == nil {
+		return 0
+	}
+	return n.router.PendingCount()
+}
+
 // attachStream attaches a new inbound channel to the node when a peer connects.
 // If the node already has an active channel (e.g., a stale stream from a previous
 // connection), it is atomically replaced and the old channel is closed.
