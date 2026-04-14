@@ -191,7 +191,8 @@ func (r *MessageRouter) RouteInboundMessage(ctx context.Context, nodeID uint32, 
 // deliverPending looks up the pending call for msgID and delivers resp to it.
 // For non-streaming calls, the entry is removed after delivery.
 // For streaming calls (correctable), the entry remains for subsequent responses.
-// Returns true if a matching pending entry was found and delivered, false otherwise.
+// Returns true if a matching pending entry was found (delivery is attempted but
+// may be a no-op if the caller's context is already canceled), false otherwise.
 func (r *MessageRouter) deliverPending(msgID uint64, resp response) bool {
 	r.mu.Lock()
 	req, ok := r.pending[msgID]
