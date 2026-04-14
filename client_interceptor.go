@@ -7,6 +7,7 @@ import (
 
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // QuorumInterceptor intercepts and processes quorum calls, allowing modification of
@@ -69,56 +70,64 @@ func (c *ClientCtx[Req, Resp]) sendNow() {
 	c.sendOnce.Do(c.send)
 }
 
-type clientCtxOptions struct {
-	streaming    bool
-	oneway       bool
-	waitForSend  bool // only relevant for oneway calls; ignored for two-way calls
-	interceptors []any
-}
-
-// createChannel allocates the reply channel used by ClientCtx.
-// For two-way calls (oneway=false), a channel is always created.
-// For one-way calls, a channel is created only when waitForSend=true
-// (blocking send). Fire-and-forget calls (oneway=true, waitForSend=false)
-// receive nil, meaning no channel is created and no router entry is registered.
-func (o clientCtxOptions) createChannel(config Configuration) chan NodeResponse[*stream.Message] {
-	if o.oneway && !o.waitForSend {
-		return nil
-	}
-	n := config.Size()
-	if o.streaming {
-		n *= 10
-	}
-	return make(chan NodeResponse[*stream.Message], n)
-}
-
-// newClientCtx constructs and initializes a ClientCtx for quorum-style calls.
-// It creates call metadata, configures the response iterator, and applies
-// interceptors after the base iterator has been established.
-func newClientCtx[Req, Resp msg](
+// newQuorumCallClientCtx constructs a ClientCtx for quorum calls (two-way, always returns responses).
+// A reply channel is always created; streaming controls both its buffer size and the response iterator type.
+func newQuorumCallClientCtx[Req, Resp msg](
 	ctx *ConfigContext,
 	req Req,
 	method string,
-	opts clientCtxOptions,
+	streaming bool,
+	interceptors []any,
 ) *ClientCtx[Req, Resp] {
 	config := ctx.Configuration()
+	n := config.Size()
+	if streaming {
+		n *= 10
+	}
 	clientCtx := &ClientCtx[Req, Resp]{
 		Context:   ctx,
 		config:    config,
 		request:   req,
 		method:    method,
 		msgID:     config.nextMsgID(),
-		streaming: opts.streaming,
-		oneway:    opts.oneway,
-		replyChan: opts.createChannel(config),
+		streaming: streaming,
+		replyChan: make(chan NodeResponse[*stream.Message], n),
 	}
-
-	if clientCtx.streaming {
+	if streaming {
 		clientCtx.responseSeq = clientCtx.streamingResponseSeq()
 	} else {
 		clientCtx.responseSeq = clientCtx.defaultResponseSeq()
 	}
-	clientCtx.applyInterceptors(opts.interceptors)
+	clientCtx.applyInterceptors(interceptors)
+	return clientCtx
+}
+
+// newMulticastClientCtx constructs a ClientCtx for multicast (one-way, no responses).
+// A reply channel is created only when waitForSend=true (blocking send); fire-and-forget
+// calls receive a nil channel, meaning no router entry is registered.
+func newMulticastClientCtx[Req msg](
+	ctx *ConfigContext,
+	req Req,
+	method string,
+	waitForSend bool,
+	interceptors []any,
+) *ClientCtx[Req, *emptypb.Empty] {
+	config := ctx.Configuration()
+	var replyChan chan NodeResponse[*stream.Message]
+	if waitForSend {
+		replyChan = make(chan NodeResponse[*stream.Message], config.Size())
+	}
+	clientCtx := &ClientCtx[Req, *emptypb.Empty]{
+		Context:   ctx,
+		config:    config,
+		request:   req,
+		method:    method,
+		msgID:     config.nextMsgID(),
+		oneway:    true,
+		replyChan: replyChan,
+	}
+	clientCtx.responseSeq = clientCtx.defaultResponseSeq()
+	clientCtx.applyInterceptors(interceptors)
 	return clientCtx
 }
 
@@ -171,6 +180,18 @@ func (c *ClientCtx[Req, Resp]) reportNodeError(nodeID uint32, err error) {
 	}
 }
 
+// enqueue sends a stream.Request to the given node, populating the shared
+// fields from ClientCtx so call sites only need to supply the message.
+func (c *ClientCtx[Req, Resp]) enqueue(n *Node, msg *stream.Message) {
+	n.Enqueue(stream.Request{
+		Ctx:          c.Context,
+		Msg:          msg,
+		Streaming:    c.streaming,
+		Oneway:       c.oneway,
+		ResponseChan: c.replyChan,
+	})
+}
+
 // applyInterceptors chains the given interceptors, wrapping the response sequence.
 // Each interceptor receives the current response sequence and returns a new one.
 // Interceptors are applied in order, with each wrapping the previous result.
@@ -206,13 +227,7 @@ func (c *ClientCtx[Req, Resp]) sendShared() {
 		return
 	}
 	for _, n := range c.config {
-		n.Enqueue(stream.Request{
-			Ctx:          c.Context,
-			Msg:          sharedMsg,
-			Streaming:    c.streaming,
-			Oneway:       c.oneway,
-			ResponseChan: c.replyChan,
-		})
+		c.enqueue(n, sharedMsg)
 	}
 }
 
@@ -224,13 +239,7 @@ func (c *ClientCtx[Req, Resp]) sendWithPerNodeTransformation() {
 		if streamMsg == nil {
 			continue // Skip node: transformAndMarshal already sent ErrSkipNode
 		}
-		n.Enqueue(stream.Request{
-			Ctx:          c.Context,
-			Msg:          streamMsg,
-			Streaming:    c.streaming,
-			Oneway:       c.oneway,
-			ResponseChan: c.replyChan,
-		})
+		c.enqueue(n, streamMsg)
 	}
 }
 
