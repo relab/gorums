@@ -1990,9 +1990,11 @@ sys, _ := gorums.NewSystem(addr,
 )
 
 // Wait for all peers to connect before building the tree.
-sys.WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+if err := sys.WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
     return cfg.Size() == clusterSize
-})
+}); err != nil {
+    panic(err)
+}
 
 tree, err := sys.OutboundConfig().AsTree(gorums.TreeOptions{
     BranchingFactor: 2,
@@ -2004,7 +2006,9 @@ tree, err := sys.OutboundConfig().AsTree(gorums.TreeOptions{
 `TreeOptions.Depth` (≥ 1) is the number of hops from root to leaves.
 The tree capacity is `(bf^(depth+1) − 1) / (bf − 1)`; `AsTree` returns an error if the configuration has more nodes than the capacity, or if it is empty.
 
-The tree is laid out in breadth-first order: the first node in the configuration is the root, the next `bf` are its children, the next `bf²` are the grandchildren, and so on. If the configuration has fewer nodes than a perfect tree of the given shape, the last level is partial.
+The tree is laid out in breadth-first order:
+the first node in the configuration is the root, the next `bf` are its children, the next `bf²` are the grandchildren, and so on.
+If the configuration has fewer nodes than a perfect tree of the given shape, the last level is partial.
 
 ### Registering the Tree with the Server
 
@@ -2014,7 +2018,8 @@ Because the tree requires live node connections, it is registered after the serv
 gorumsSrv.RegisterTree(tree)
 ```
 
-Every server in the cluster should call `RegisterTree` with a tree built from its **own** outbound config, so that `ctx.TreeChildren()` returns nodes backed by that server's connections rather than the client's:
+Every server in the cluster should call `RegisterTree` with a tree built from its **own** outbound config,
+so that `ctx.TreeChildren()` returns nodes backed by that server's connections rather than the client's:
 
 ```go
 for i, sys := range systems {
@@ -2036,7 +2041,8 @@ rpc Broadcast(BroadcastRequest) returns (Empty) {
 }
 ```
 
-In the server handler, relay to `ctx.TreeChildren()` and then apply local logic. Leaves have no children and skip the relay automatically:
+In the server handler, relay to `ctx.TreeChildren()` and then apply local logic.
+Leaves have no children and skip the relay automatically:
 
 ```go
 func (s *myServer) Broadcast(ctx gorums.ServerCtx, req *pb.BroadcastRequest) {
@@ -2048,7 +2054,8 @@ func (s *myServer) Broadcast(ctx gorums.ServerCtx, req *pb.BroadcastRequest) {
 }
 ```
 
-On the client side, call the generated function with `tree.Context(ctx)` instead of `cfg.Context(ctx)`. This targets the root's direct children; the relay handles the rest of the tree:
+On the client side, call the generated function with `tree.Context(ctx)` instead of `cfg.Context(ctx)`.
+This targets the root's direct children; the relay handles the rest of the tree:
 
 ```go
 pb.Broadcast(tree.Context(ctx), &pb.BroadcastRequest{Text: "hello"})
@@ -2064,7 +2071,9 @@ rpc Aggregate(AggregateRequest) returns (AggregateResponse) {
 }
 ```
 
-In the server handler, relay to children first with `ctx.Release()` to avoid blocking the server while waiting for child responses, then aggregate the returned values with local logic. Leaves return just their own value:
+In the server handler, relay to children first with `ctx.Release()` to avoid blocking the server while waiting for child responses,
+then aggregate the returned values with local logic.
+Leaves return just their own value:
 
 ```go
 func (s *myServer) Aggregate(ctx gorums.ServerCtx, req *pb.AggregateRequest) (*pb.AggregateResponse, error) {
@@ -2082,7 +2091,8 @@ func (s *myServer) Aggregate(ctx gorums.ServerCtx, req *pb.AggregateRequest) (*p
 }
 ```
 
-On the client side, the call is identical to a flat quorum call. `Responses` contains one entry per direct child of the root (at most `bf` entries); each entry is that subtree's already-aggregated result:
+On the client side, the call is identical to a flat quorum call.
+`Responses` contains one entry per direct child of the root (at most `bf` entries); each entry is that subtree's already-aggregated result:
 
 ```go
 responses := pb.Aggregate(tree.Context(ctx), &pb.AggregateRequest{})
@@ -2137,12 +2147,12 @@ sequenceDiagram
 
 Inside any server handler registered on a tree-aware server, three accessors are available on `gorums.ServerCtx`:
 
-| Method               | Returns                            | Notes                                                                     |
-| -------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
-| `ctx.TreeChildren()` | `Configuration`                    | Direct children of this node; nil for leaves and if no tree is registered |
-| `ctx.TreeParent()`   | `*Node`                            | Parent of this node; nil for the root                                     |
-| `ctx.TreePosition()` | `depth, indexInLevel int, ok bool` | Depth and within-level index                                              |
+| Method               | Returns         | Notes                                                                     |
+| -------------------- | --------------- | ------------------------------------------------------------------------- |
+| `ctx.TreeChildren()` | `Configuration` | Direct children of this node; nil for leaves and if no tree is registered |
+| `ctx.TreeParent()`   | `*Node`         | Parent of this node; nil for the root                                     |
 
 ### Working Example
 
-A complete working example is in [`internal/tests/tree/`](../internal/tests/tree/). It defines a `TreeAggregator` service with `Broadcast` (multicast) and `Aggregate` (quorum call) methods and tests both patterns on a 7-node tree.
+A complete working example is in [`internal/tests/tree/`](../internal/tests/tree/).
+It defines a `TreeAggregator` service with `Broadcast` (multicast) and `Aggregate` (quorum call) methods and tests both patterns on a 7-node tree.

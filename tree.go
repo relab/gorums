@@ -108,17 +108,6 @@ func (t *TreeConfiguration) posLevel(pos int) (depth, indexInLevel int) {
 	return -1, -1
 }
 
-// PositionOf returns the depth and within-level index of the node with the
-// given ID. ok is false if the node is not in the tree.
-func (t *TreeConfiguration) PositionOf(id uint32) (depth, indexInLevel int, ok bool) {
-	pos, found := t.positionOf[id]
-	if !found {
-		return -1, -1, false
-	}
-	d, idx := t.posLevel(pos)
-	return d, idx, d >= 0
-}
-
 // ParentOf returns the parent of the node with the given ID, or nil if the
 // node is the root or not in the tree.
 func (t *TreeConfiguration) ParentOf(id uint32) *Node {

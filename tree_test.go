@@ -118,38 +118,6 @@ func TestTreeLevelStart(t *testing.T) {
 	}
 }
 
-// TestTreePositionOf verifies PositionOf on a perfect bf=3 depth=2 tree (13 nodes).
-//
-//	      1 (root)
-//	   /    |      \
-//	  2     3       4
-//	 /|\   /|\    / | \
-//	5 6 7 8 9 10 11 12 13
-func TestTreePositionOf(t *testing.T) {
-	tree := mustNewTree(t, 13, TreeOptions{BranchingFactor: 3, Depth: 2})
-	tests := []struct {
-		id        uint32
-		wantDepth int
-		wantIdx   int
-		wantOK    bool
-	}{
-		{id: 1, wantDepth: 0, wantIdx: 0, wantOK: true}, // root
-		{id: 2, wantDepth: 1, wantIdx: 0, wantOK: true}, // first child of root
-		{id: 3, wantDepth: 1, wantIdx: 1, wantOK: true},
-		{id: 4, wantDepth: 1, wantIdx: 2, wantOK: true},     // last child of root
-		{id: 5, wantDepth: 2, wantIdx: 0, wantOK: true},     // first leaf
-		{id: 13, wantDepth: 2, wantIdx: 8, wantOK: true},    // last leaf
-		{id: 14, wantDepth: -1, wantIdx: -1, wantOK: false}, // not in tree
-	}
-	for _, tt := range tests {
-		d, idx, ok := tree.PositionOf(tt.id)
-		if ok != tt.wantOK || d != tt.wantDepth || idx != tt.wantIdx {
-			t.Errorf("PositionOf(%d) = (%d, %d, %v), want (%d, %d, %v)",
-				tt.id, d, idx, ok, tt.wantDepth, tt.wantIdx, tt.wantOK)
-		}
-	}
-}
-
 // TestTreeParentOf verifies ParentOf on a perfect bf=3 depth=2 tree.
 func TestTreeParentOf(t *testing.T) {
 	tree := mustNewTree(t, 13, TreeOptions{BranchingFactor: 3, Depth: 2})
@@ -323,27 +291,6 @@ func TestTreeExcessNodes(t *testing.T) {
 func TestTreeBF2Depth3(t *testing.T) {
 	tree := mustNewTree(t, 15, TreeOptions{BranchingFactor: 2, Depth: 3})
 
-	posTests := []struct {
-		id         uint32
-		depth, idx int
-	}{
-		{1, 0, 0},
-		{2, 1, 0},
-		{3, 1, 1},
-		{4, 2, 0},
-		{5, 2, 1},
-		{6, 2, 2},
-		{7, 2, 3},
-		{8, 3, 0},
-		{15, 3, 7},
-	}
-	for _, tt := range posTests {
-		d, idx, ok := tree.PositionOf(tt.id)
-		if !ok || d != tt.depth || idx != tt.idx {
-			t.Errorf("PositionOf(%d) = (%d, %d, %v), want (%d, %d, true)", tt.id, d, idx, ok, tt.depth, tt.idx)
-		}
-	}
-
 	parentTests := []struct {
 		id     uint32
 		wantID uint32
@@ -409,10 +356,6 @@ func TestServerCtxTree(t *testing.T) {
 		if p := ctx.TreeParent(); p != nil {
 			t.Errorf("TreeParent = node %d, want nil", p.ID())
 		}
-		d, idx, ok := ctx.TreePosition()
-		if !ok || d != 0 || idx != 0 {
-			t.Errorf("TreePosition = (%d, %d, %v), want (0, 0, true)", d, idx, ok)
-		}
 	})
 
 	t.Run("InternalNode", func(t *testing.T) {
@@ -422,10 +365,6 @@ func TestServerCtxTree(t *testing.T) {
 		}
 		if p := ctx.TreeParent(); p == nil || p.ID() != 1 {
 			t.Errorf("TreeParent = %v, want node 1", p)
-		}
-		d, idx, ok := ctx.TreePosition()
-		if !ok || d != 1 || idx != 1 {
-			t.Errorf("TreePosition = (%d, %d, %v), want (1, 1, true)", d, idx, ok)
 		}
 	})
 
@@ -437,10 +376,6 @@ func TestServerCtxTree(t *testing.T) {
 		if p := ctx.TreeParent(); p == nil || p.ID() != 3 {
 			t.Errorf("TreeParent = %v, want node 3", p)
 		}
-		d, idx, ok := ctx.TreePosition()
-		if !ok || d != 2 || idx != 3 {
-			t.Errorf("TreePosition = (%d, %d, %v), want (2, 3, true)", d, idx, ok)
-		}
 	})
 
 	t.Run("NodeNotInTree", func(t *testing.T) {
@@ -450,10 +385,6 @@ func TestServerCtxTree(t *testing.T) {
 		}
 		if p := ctx.TreeParent(); p != nil {
 			t.Errorf("TreeParent = node %d, want nil", p.ID())
-		}
-		_, _, ok := ctx.TreePosition()
-		if ok {
-			t.Error("TreePosition ok = true, want false")
 		}
 	})
 
@@ -465,10 +396,6 @@ func TestServerCtxTree(t *testing.T) {
 		}
 		if p := ctx.TreeParent(); p != nil {
 			t.Errorf("TreeParent = node %d, want nil (no tree)", p.ID())
-		}
-		_, _, ok := ctx.TreePosition()
-		if ok {
-			t.Error("TreePosition ok = true, want false (no tree)")
 		}
 	})
 }
