@@ -119,6 +119,35 @@ func (ctx *ServerCtx) ClientConfigContext() *ConfigContext {
 	return nil
 }
 
+// TreeChildren returns a [Configuration] containing the direct children of this
+// server in the registered [TreeConfiguration]. Returns nil if no tree is registered
+// or this server is a leaf node.
+func (ctx *ServerCtx) TreeChildren() Configuration {
+	if ctx.srv == nil || ctx.srv.tree == nil {
+		return nil
+	}
+	return ctx.srv.tree.ChildrenOf(ctx.srv.myID)
+}
+
+// TreeParent returns the parent [Node] of this server in the registered
+// [TreeConfiguration], or nil if this server is the root or no tree is registered.
+func (ctx *ServerCtx) TreeParent() *Node {
+	if ctx.srv == nil || ctx.srv.tree == nil {
+		return nil
+	}
+	return ctx.srv.tree.ParentOf(ctx.srv.myID)
+}
+
+// TreePosition returns the depth and within-level index of this server in the
+// registered [TreeConfiguration]. ok is false if no tree is registered or this
+// server's ID is not found in the tree.
+func (ctx *ServerCtx) TreePosition() (depth, indexInLevel int, ok bool) {
+	if ctx.srv == nil || ctx.srv.tree == nil {
+		return -1, -1, false
+	}
+	return ctx.srv.tree.PositionOf(ctx.srv.myID)
+}
+
 // NewResponseMessage creates a new response envelope based on the provided proto
 // message. The response includes the message ID and method from the request
 // to facilitate routing the response back to the caller on the client side.

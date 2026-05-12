@@ -95,6 +95,7 @@ type Server struct {
 	grpcServer   *grpc.Server
 	handlers     map[string]Handler
 	interceptors []Interceptor
+	tree         *TreeConfiguration
 	*inboundManager
 }
 
@@ -138,6 +139,15 @@ func NewServer(opts ...ServerOption) *Server {
 // This function should only be used by generated code.
 func (s *Server) RegisterHandler(method string, handler Handler) {
 	s.handlers[method] = chainInterceptors(handler, s.interceptors...)
+}
+
+// RegisterTree associates a TreeConfiguration with this server so that handlers
+// can query their tree position via [ServerCtx.TreeChildren], [ServerCtx.TreeParent],
+// and [ServerCtx.TreePosition]. The tree must be built after servers have started,
+// once node IDs and addresses are known. RegisterTree must be called before any
+// handler can fire; it does not synchronize concurrent updates.
+func (s *Server) RegisterTree(tree *TreeConfiguration) {
+	s.tree = tree
 }
 
 // HandleRequest processes an incoming request from the stream, dispatching it
