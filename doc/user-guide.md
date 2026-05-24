@@ -1,5 +1,7 @@
 # User Guide
 
+Author: Hein Meling
+
 You may wish to read the gRPC [Getting Started documentation](http://www.grpc.io/docs/) before continuing.
 Gorums uses gRPC under the hood, and exposes some of its configuration.
 Gorums also uses [Protocol Buffers](https://developers.google.com/protocol-buffers) to specify messages and RPC methods.
