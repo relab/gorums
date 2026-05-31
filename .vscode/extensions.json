@@ -3,7 +3,6 @@
         "streetsidesoftware.code-spell-checker",
         "golang.go",
         "davidanson.vscode-markdownlint",
-        "drblury.protobuf-vsc",
         "github.vscode-pull-request-github"
     ]
 }

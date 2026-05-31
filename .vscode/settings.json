@@ -56,24 +56,6 @@
         "usePlaceholders": true,
         "staticcheck": false
     },
-    "protobuf.protoc.path": "protoc",
-    "protobuf.formatOnSave": true,
-    "protobuf.formatter.enabled": true,
-    "protobuf.formatter.alignFields": true,
-    "protobuf.protoc.options": [
-        "--proto_path=${workspaceFolder}",
-        "--proto_path=${workspaceFolder}/cmd/protoc-gen-gorums/dev",
-        "--proto_path=${workspaceFolder}/third_party",
-        "--go_opt=paths=source_relative",
-        "--go-grpc_opt=paths=source_relative",
-        "--gorums_opt=paths=source_relative",
-        "--go_opt=default_api_level=API_OPAQUE"
-    ],
-    "protobuf.buf.path": "buf",
-    "protobuf.externalLinter.bufPath": "buf",
-    "protobuf.externalLinter.enabled": true,
-    "protobuf.externalLinter.runOnSave": true,
-    "protobuf.externalLinter.linter": "buf",
     "markdownlint.config": {
         "MD024": false,
         "default": true,
