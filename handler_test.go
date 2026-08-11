@@ -43,27 +43,27 @@ func TestNewResponseMessage(t *testing.T) {
 		},
 		{
 			name: "NilReq/NilResp/StreamIn/StreamOut",
-			in:   &gorums.Message{Msg: nil, Message: streamIn},
+			in:   &gorums.Message{Proto: nil, Message: streamIn},
 			resp: nil,
-			want: &gorums.Message{Msg: (*config.Response)(nil), Message: streamOut},
+			want: &gorums.Message{Proto: (*config.Response)(nil), Message: streamOut},
 		},
 		{
 			name: "NilReq/Resp/StreamIn/StreamOut",
-			in:   &gorums.Message{Msg: nil, Message: streamIn},
+			in:   &gorums.Message{Proto: nil, Message: streamIn},
 			resp: resp,
-			want: &gorums.Message{Msg: resp, Message: streamOut},
+			want: &gorums.Message{Proto: resp, Message: streamOut},
 		},
 		{
 			name: "Req/NilResp/StreamIn/StreamOut",
-			in:   &gorums.Message{Msg: req, Message: streamIn},
+			in:   &gorums.Message{Proto: req, Message: streamIn},
 			resp: nil,
-			want: &gorums.Message{Msg: (*config.Response)(nil), Message: streamOut},
+			want: &gorums.Message{Proto: (*config.Response)(nil), Message: streamOut},
 		},
 		{
 			name: "Req/Resp/StreamIn/StreamOut",
-			in:   &gorums.Message{Msg: req, Message: streamIn},
+			in:   &gorums.Message{Proto: req, Message: streamIn},
 			resp: resp,
-			want: &gorums.Message{Msg: resp, Message: streamOut},
+			want: &gorums.Message{Proto: resp, Message: streamOut},
 		},
 	}
 
@@ -79,11 +79,11 @@ func TestNewResponseMessage(t *testing.T) {
 			if got == nil {
 				t.Fatalf("NewResponseMessage returned nil, want non-nil")
 			}
-			if (tt.want.Msg == nil) != (got.Msg == nil) {
-				t.Errorf("Msg field: want nil=%v, got nil=%v", tt.want.Msg == nil, got.Msg == nil)
-			} else if tt.want.Msg != nil && got.Msg != nil {
-				if diff := cmp.Diff(tt.want.Msg, got.Msg, protocmp.Transform()); diff != "" {
-					t.Errorf("Msg field mismatch (-want, +got):\n%s", diff)
+			if (tt.want.Proto == nil) != (got.Proto == nil) {
+				t.Errorf("Proto field: want nil=%v, got nil=%v", tt.want.Proto == nil, got.Proto == nil)
+			} else if tt.want.Proto != nil && got.Proto != nil {
+				if diff := cmp.Diff(tt.want.Proto, got.Proto, protocmp.Transform()); diff != "" {
+					t.Errorf("Proto field mismatch (-want, +got):\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tt.want.Message, got.Message, protocmp.Transform()); diff != "" {
