@@ -1283,7 +1283,7 @@ A `QuorumCallError` is returned when a quorum call fails.
 It provides the following methods:
 
 * **`Cause() error`** - Returns the underlying cause of the failure (e.g., `ErrIncomplete`, `ErrSendFailure`)
-* **`NodeErrors() int`** - Returns the number of nodes that failed
+* **`NumErrors() int`** - Returns the number of nodes that failed
 * **`Unwrap() []error`** - Supports error unwrapping for use with `errors.Is` and `errors.As`
 
 The error implements Go's standard error unwrapping interface, allowing `errors.Is()` and `errors.As()` to check both the direct cause and any wrapped node-specific errors.
@@ -1312,7 +1312,7 @@ func handleQuorumCall(config *gorums.Config, req *ReadRequest) {
     var qcErr gorums.QuorumCallError
     if errors.As(err, &qcErr) {
       log.Printf("Quorum call failed: %v", qcErr.Cause())
-      log.Printf("Failed nodes: %d", qcErr.NodeErrors())
+      log.Printf("Failed nodes: %d", qcErr.NumErrors())
 
       // Handle specific cause types
       if errors.Is(err, gorums.ErrIncomplete) {

@@ -34,8 +34,8 @@ func checkQuorumCall(t *testing.T, gotErr, wantErr error, expectedNodeErrors ...
 		// Validate QuorumCallError details if expectedNodeErrors provided
 		if len(expectedNodeErrors) > 0 {
 			var qcErr gorums.QuorumCallError
-			if errors.As(gotErr, &qcErr) && qcErr.NodeErrors() != expectedNodeErrors[0] {
-				t.Errorf("Expected %d node errors, got %d", expectedNodeErrors[0], qcErr.NodeErrors())
+			if errors.As(gotErr, &qcErr) && qcErr.NumErrors() != expectedNodeErrors[0] {
+				t.Errorf("Expected %d node errors, got %d", expectedNodeErrors[0], qcErr.NumErrors())
 				return false
 			}
 		}
