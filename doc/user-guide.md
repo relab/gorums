@@ -206,16 +206,17 @@ The first two functions are used to send requests to a single node determined by
 
 ```go
 func ReadRPC(ctx *gorums.NodeContext, in *ReadRequest) (resp *ReadResponse, err error)
-func WriteUnicast(ctx *gorums.NodeContext, in *WriteRequest, opts ...gorums.CallOption) error
+func WriteUnicast(ctx *gorums.NodeContext, in *WriteRequest) *gorums.OnewayCall[*WriteRequest]
 ```
 
 The three functions below are used to send requests to a configuration of nodes determined by the `ConfigContext`.
-The last two functions return a `*gorums.Responses[*ReadResponse]` object, which is a collection of responses from the nodes in the configuration.
+A one-way call returns a `*gorums.OnewayCall` handle: call `Send()` to block until every send completes, or `Async()` to dispatch without waiting and `Wait()` for the result later.
+The last two functions return a `*gorums.Call[*ReadRequest, *ReadResponse]` handle, from which the responses of the nodes in the configuration are aggregated.
 
 ```go
-func WriteMulticast(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.CallOption) error
-func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*ReadResponse]
-func ReadCorrectable(ctx *gorums.ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*ReadResponse]
+func WriteMulticast(ctx *gorums.ConfigContext, in *WriteRequest) *gorums.OnewayCall[*WriteRequest]
+func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse]
+func ReadCorrectable(ctx *gorums.ConfigContext, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse]
 ```
 
 And this is our server interface:
@@ -409,7 +410,7 @@ rpc ReadQC(ReadRequest) returns (ReadResponse) {
 The generated code provides a function for each quorum call method:
 
 ```go
-func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*ReadResponse]
+func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse]
 ```
 
 This function returns a `*gorums.Responses[*ReadResponse]` object that provides several ways to aggregate and process responses.
@@ -862,37 +863,34 @@ func RequireAllSuccess(resp *gorums.Responses[*Response]) (*Response, error) {
 ## Interceptors for Request/Response Transformation
 
 Gorums provides interceptors to transform requests and responses on a per-node basis.
-Interceptors are passed as call options and can be chained together.
+Register them with `Intercept` on the call handle, before any terminal method; they are applied in call-site order and may be chained.
+Calling `Intercept` after the call has been dispatched panics, since an interceptor can no longer affect an in-flight call.
 
-### MapRequest ClientInterceptor
+### MapRequest Interceptor
 
 Transform requests before sending to each node:
 
 ```go
 cfgCtx := config.Context(ctx)
-resp, err := WriteQC(cfgCtx, req,
-    gorums.Interceptors(
-        gorums.MapRequest(func(req *WriteRequest, node *gorums.Node) *WriteRequest {
-            // Customize request for each node
-            return &WriteRequest{Value: fmt.Sprintf("%s-node-%d", req.Value, node.ID())}
-        }),
-    ),
+resp, err := WriteQC(cfgCtx, req).Intercept(
+    gorums.MapRequest(func(req *WriteRequest, node *gorums.Node) *WriteRequest {
+        // Customize request for each node
+        return &WriteRequest{Value: fmt.Sprintf("%s-node-%d", req.Value, node.ID())}
+    }),
 ).Majority()
 ```
 
-### MapResponse ClientInterceptor
+### MapResponse Interceptor
 
 Transform responses received from each node:
 
 ```go
-resp, err := ReadQC(cfgCtx, req,
-    gorums.Interceptors(
-        gorums.MapResponse(func(resp *ReadResponse, node *gorums.Node) *ReadResponse {
-            // Transform response, e.g., add node ID
-            resp.NodeID = node.ID()
-            return resp
-        }),
-    ),
+resp, err := ReadQC(cfgCtx, req).Intercept(
+    gorums.MapResponse(func(resp *ReadResponse, node *gorums.Node) *ReadResponse {
+        // Transform response, e.g., add node ID
+        resp.NodeID = node.ID()
+        return resp
+    }),
 ).Majority()
 ```
 
@@ -901,13 +899,11 @@ resp, err := ReadQC(cfgCtx, req,
 ```go
 // Send different messages to each node in a multicast
 cfgCtx := config.Context(ctx)
-WriteMulticast(cfgCtx, &WriteRequest{},
-    gorums.Interceptors(
-        gorums.MapRequest(func(msg *WriteRequest, node *gorums.Node) *WriteRequest {
-            return &WriteRequest{Value: fmt.Sprintf("node-%d", node.ID())}
-        }),
-    ),
-)
+err := WriteMulticast(cfgCtx, &WriteRequest{}).Intercept(
+    gorums.MapRequest(func(msg *WriteRequest, node *gorums.Node) *WriteRequest {
+        return &WriteRequest{Value: fmt.Sprintf("node-%d", node.ID())}
+    }),
+).Send()
 ```
 
 **Note:** If `MapRequest` returns `nil` for a node, the message will not be sent to that node.
@@ -937,20 +933,18 @@ The interceptor returns a new `ResponseSeq` that wraps `next` with custom logic.
 
 #### Chaining Interceptors
 
-Multiple interceptors can be passed to `gorums.Interceptors()` and are executed in order:
+Multiple interceptors can be passed to `Intercept` and are executed in order:
 
 ```go
 cfgCtx := config.Context(ctx)
-resp, err := ReadQC(cfgCtx, req,
-    gorums.Interceptors(
-        loggingInterceptor,
-        gorums.MapRequest(transformFunc),
-        filterInterceptor,
-    ),
+resp, err := ReadQC(cfgCtx, req).Intercept(
+    loggingInterceptor,
+    gorums.MapRequest(transformFunc),
+    filterInterceptor,
 ).Majority()
 ```
 
-#### Example: Logging ClientInterceptor
+#### Example: Logging Interceptor
 
 Create a logging interceptor that wraps the response iterator:
 
@@ -982,12 +976,12 @@ func LoggingInterceptor[Req, Resp proto.Message](
 }
 
 // Usage
-resp, err := ReadQC(cfgCtx, req,
-    gorums.Interceptors(LoggingInterceptor[*ReadRequest, *ReadResponse]),
-).Majority()
+resp, err := ReadQC(cfgCtx, req).
+    Intercept(LoggingInterceptor[*ReadRequest, *ReadResponse]).
+    Majority()
 ```
 
-#### Example: Response Filtering ClientInterceptor
+#### Example: Response Filtering Interceptor
 
 Filter out responses that don't meet certain criteria:
 
@@ -1012,16 +1006,14 @@ func FilterInterceptor[Req, Resp proto.Message](
 
 // Usage: only include responses with timestamp > threshold
 threshold := time.Now().Add(-1 * time.Hour)
-resp, err := ReadQC(cfgCtx, req,
-    gorums.Interceptors(
-        FilterInterceptor[*ReadRequest, *ReadResponse](func(r *ReadResponse) bool {
-            return r.GetTime().AsTime().After(threshold)
-        }),
-    ),
+resp, err := ReadQC(cfgCtx, req).Intercept(
+    FilterInterceptor[*ReadRequest, *ReadResponse](func(r *ReadResponse) bool {
+        return r.GetTime().AsTime().After(threshold)
+    }),
 ).Majority()
 ```
 
-#### Example: Counting ClientInterceptor
+#### Example: Counting Interceptor
 
 Count responses passing through the interceptor:
 
@@ -1057,7 +1049,7 @@ You can pass multiple interceptors when starting a Gorums server. They can perfo
 
 Below are several examples based on the `examples/interceptors` package.
 
-#### Server-Side Logging ServerInterceptor
+#### Server-Side Logging Interceptor
 
 ```go
 func LoggingInterceptor(addr string) gorums.ServerInterceptor {
