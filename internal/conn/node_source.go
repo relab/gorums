@@ -1,4 +1,4 @@
-package gorums
+package conn
 
 import (
 	"fmt"
@@ -7,14 +7,15 @@ import (
 	"slices"
 )
 
-// NodeSource must be implemented by node providers. It is used by both the
-// Manager (outbound) and by inboundManager (inbound) via newConfig.
+// NodeSource identifies the set of nodes to build a [Config] from. Create one
+// with [WithNodes] or [WithNodeList]; the interface is sealed so it can only
+// be implemented within this package.
 type NodeSource interface {
 	newConfig(nodeRegistry) (Config, error)
 }
 
 // nodeRegistry abstracts the node management operations required to build a Config.
-// Implemented by Manager and inboundManager.
+// Implemented by outboundManager and inboundManager.
 type nodeRegistry interface {
 	Nodes() []*Node
 	newNode(id uint32, addr string) (*Node, error)

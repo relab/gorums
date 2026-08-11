@@ -36,9 +36,6 @@ cmd/protoc-gen-gorums/gengorums/template_static.go.bak
 go.work.sum
 branch-compare-*
 tmp/*
-doc/task-*.md
-doc/issue-*.md
-doc/review-*.md
 .claude/settings.local.json
-.superset/config.json
 .claude/agent-memory/
+CLAUDE.md

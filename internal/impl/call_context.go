@@ -1,4 +1,4 @@
-package gorums
+package impl
 
 import (
 	"context"
@@ -6,19 +6,17 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/relab/gorums/internal/conn"
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// CallContext provides context and access to the quorum call state for interceptors.
-// It exposes the request, configuration, metadata about the call, and the response iterator.
+// CallContext provides an interceptor with the context and state of a call.
 type CallContext[Req, Resp proto.Message] struct {
 	context.Context
 	config    Config
 	request   Req
 	method    string
-	msgID     uint64
 	replyChan chan NodeResponse[*stream.Message]
 
 	// reqTransforms holds request transformation functions registered by interceptors.
@@ -89,41 +87,19 @@ func newQuorumCallContext[Req, Resp proto.Message](
 	if streaming {
 		n *= 10
 	}
-	clientCtx := &CallContext[Req, Resp]{
+	callCtx := &CallContext[Req, Resp]{
 		Context:   ctx,
 		config:    config,
 		request:   req,
 		method:    method,
-		msgID:     config.nextMsgID(),
 		streaming: streaming,
 		replyChan: make(chan NodeResponse[*stream.Message], n),
 	}
 	if streaming {
-		clientCtx.responseSeq = clientCtx.streamingResponseSeq()
+		callCtx.responseSeq = callCtx.streamingResponseSeq()
 	} else {
-		clientCtx.responseSeq = clientCtx.defaultResponseSeq()
+		callCtx.responseSeq = callCtx.defaultResponseSeq()
 	}
-	return clientCtx
-}
-
-// newOnewayCallContext constructs a CallContext for a one-way call over config.
-// The reply channel is installed by [OnewayCall.dispatch], since only a consumed
-// handle collects send confirmations.
-func newOnewayCallContext[Req proto.Message](
-	ctx context.Context,
-	config Config,
-	req Req,
-	method string,
-) *CallContext[Req, *emptypb.Empty] {
-	callCtx := &CallContext[Req, *emptypb.Empty]{
-		Context: ctx,
-		config:  config,
-		request: req,
-		method:  method,
-		msgID:   config.nextMsgID(),
-		oneway:  true,
-	}
-	callCtx.responseSeq = callCtx.defaultResponseSeq()
 	return callCtx
 }
 
@@ -176,10 +152,10 @@ func (c *CallContext[Req, Resp]) reportNodeError(nodeID uint32, err error) {
 	}
 }
 
-// enqueue sends a stream.Request to the given node, populating the shared
-// fields from CallContext so call sites only need to supply the message.
+// enqueue sends a stream.Request to the node, populating the shared fields
+// from CallContext so call sites only need to supply the message.
 func (c *CallContext[Req, Resp]) enqueue(n *Node, msg *stream.Message) {
-	n.Enqueue(stream.Request{
+	conn.NodeTransport(n).Enqueue(stream.Request{
 		Ctx:          c.Context,
 		Msg:          msg,
 		Streaming:    c.streaming,
@@ -199,10 +175,12 @@ func (c *CallContext[Req, Resp]) send() {
 	}
 }
 
-// sendShared marshals the request once and enqueues the shared message to all nodes.
-// On marshal error, it reports the error to every node and returns early.
+// sendShared marshals the request payload once and enqueues it to all nodes.
+// Every outbound node has its own stream and router, so a single message with
+// one client-initiated ID is shared across all of them, avoiding per-node
+// message construction.
 func (c *CallContext[Req, Resp]) sendShared() {
-	sharedMsg, err := stream.NewMessage(c.Context, c.msgID, c.method, c.request)
+	payload, err := proto.Marshal(c.request)
 	if err != nil {
 		// Marshaling fails identically for all nodes; report and return.
 		for _, n := range c.config {
@@ -210,7 +188,11 @@ func (c *CallContext[Req, Resp]) sendShared() {
 		}
 		return
 	}
+	var sharedMsg *stream.Message
 	for _, n := range c.config {
+		if sharedMsg == nil {
+			sharedMsg = stream.NewMessageFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload)
+		}
 		c.enqueue(n, sharedMsg)
 	}
 }
@@ -240,7 +222,7 @@ func (c *CallContext[Req, Resp]) transformAndMarshal(n *Node) *stream.Message {
 		c.reportNodeError(n.ID(), ErrSkipNode)
 		return nil
 	}
-	streamMsg, err := stream.NewMessage(c.Context, c.msgID, c.method, transformedRequest)
+	streamMsg, err := stream.NewMessage(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, transformedRequest)
 	if err != nil {
 		c.reportNodeError(n.ID(), err)
 		return nil
@@ -287,7 +269,3 @@ func (c *CallContext[Req, Resp]) streamingResponseSeq() ResponseSeq[Resp] {
 		}
 	}
 }
-
-// -------------------------------------------------------------------------
-// Interceptors (Middleware)
-// -------------------------------------------------------------------------

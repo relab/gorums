@@ -9,6 +9,7 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -46,7 +47,7 @@ func TestAsync(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := gorumstest.Config(t, tt.numNodes, gorumstest.EchoServerFn)
 			ctx := gorumstest.Context(t, 2*time.Second)
-			responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+			responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 				config.Context(ctx),
 				pb.String("test"),
 				mock.TestMethod,
@@ -72,7 +73,7 @@ func TestAsync_Error(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+	responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
@@ -93,7 +94,7 @@ func TestAsyncDone(t *testing.T) {
 		// stays pending and Done reports false.
 		config := gorumstest.NoDialedConfig(t)
 		ctx := gorumstest.Context(t, 2*time.Second)
-		future := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+		future := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 			config.Context(ctx),
 			pb.String("test"),
 			mock.TestMethod,
@@ -107,7 +108,7 @@ func TestAsyncDone(t *testing.T) {
 	t.Run("CompletedReportsDone", func(t *testing.T) {
 		config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
 		ctx := gorumstest.Context(t, 2*time.Second)
-		future := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+		future := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 			config.Context(ctx),
 			pb.String("test"),
 			mock.TestMethod,
@@ -130,7 +131,7 @@ func BenchmarkAsyncQuorumCall(b *testing.B) {
 		b.Run(fmt.Sprintf("AsyncMajority/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				future := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				future := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -146,7 +147,7 @@ func BenchmarkAsyncQuorumCall(b *testing.B) {
 		b.Run(fmt.Sprintf("BlockingMajority/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				_, err := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				_, err := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,

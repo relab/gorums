@@ -60,9 +60,9 @@ func WaitUntil(t testing.TB, timeout time.Duration, predicate func() bool) bool 
 // order. It gives up when timeout elapses in total, returning the values
 // collected so far, so the caller can report a shortfall instead of blocking
 // forever. Use it wherever a test waits for effects that a failure may never
-// produce, such as one-way messages: a multicast discards a request it cannot
-// deliver without reporting an error, so an unbounded wait would hang the
-// package until the test binary's timeout.
+// produce, such as one-way messages: [gorums.OnewayCall.Send] discards a
+// request it cannot deliver without reporting an error, so an unbounded wait
+// would hang the package until the test binary's timeout.
 //
 // Usage:
 //
@@ -152,7 +152,7 @@ func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, 
 
 	// Create configuration and register its cleanup LAST so it runs FIRST (LIFO)
 	dialOptions := append([]gorums.DialOption{DialOptions(t)}, testOpts.managerOpts...)
-	cfg, err := gorums.NewConfig(testOpts.nodeListOption(addrs), dialOptions...)
+	cfg, err := gorums.NewConfig(testOpts.nodeSource(addrs), dialOptions...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,11 +160,11 @@ func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, 
 	return cfg
 }
 
-// NoDialedConfig returns a [gorums.Config] over addrs whose nodes are
-// never actually dialed: gRPC connections are established lazily on the first
-// RPC, so tests that only need a valid configuration to construct calls,
-// without ever completing one, don't need a running server behind it. If addrs
-// is empty, a single unreachable sentinel address is used.
+// NoDialedConfig returns a [gorums.Config] over addrs whose nodes are never
+// actually dialed: gRPC connections are established lazily on the first RPC,
+// so tests that only need a valid Config to construct calls, without ever
+// completing one, don't need a running server behind it. If addrs is empty,
+// a single unreachable sentinel address is used.
 func NoDialedConfig(t testing.TB, addrs ...string) gorums.Config {
 	t.Helper()
 	if len(addrs) == 0 {
@@ -242,10 +242,7 @@ func LocalServers(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.Se
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
 
-	srvs, stop, err := gorums.NewLocalServers(n,
-		gorums.WithLocalServerOptions(opts...),
-		gorums.WithLocalDialOptions(InsecureDialOptions(t)),
-	)
+	srvs, stop, err := gorums.NewLocalServers(n, gorums.WithLocalServerOptions(opts...), gorums.WithLocalDialOptions(InsecureDialOptions(t)))
 	if err != nil {
 		t.Fatal(err)
 	}

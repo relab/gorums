@@ -1,4 +1,4 @@
-package gorums
+package conn
 
 import (
 	"errors"
@@ -19,8 +19,8 @@ type outboundManager struct {
 	lookup    map[uint32]*Node
 	closeOnce sync.Once
 	logger    *log.Logger
-	opts      dialOptions
-	nextMsgID uint64
+	opts      DialOptions
+	nextMsgID atomic.Uint64
 }
 
 // newOutboundManager returns a new outboundManager for managing connection to
@@ -28,17 +28,17 @@ type outboundManager struct {
 func newOutboundManager(opts ...DialOption) *outboundManager {
 	m := &outboundManager{
 		lookup: make(map[uint32]*Node),
-		opts:   newDialOptions(),
+		opts:   NewDialOptions(),
 	}
 	for _, opt := range opts {
 		opt(&m.opts)
 	}
-	if m.opts.logger != nil {
-		m.logger = m.opts.logger
+	if m.opts.Logger != nil {
+		m.logger = m.opts.Logger
 	}
-	if m.opts.backoff != backoff.DefaultConfig {
-		m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithConnectParams(
-			grpc.ConnectParams{Backoff: m.opts.backoff},
+	if m.opts.Backoff != backoff.DefaultConfig {
+		m.opts.GRPCDialOpts = append(m.opts.GRPCDialOpts, grpc.WithConnectParams(
+			grpc.ConnectParams{Backoff: m.opts.Backoff},
 		))
 	}
 	if m.logger != nil {
@@ -67,7 +67,7 @@ func (m *outboundManager) Node(id uint32) (node *Node, found bool) {
 }
 
 // Nodes returns a slice of each available node. IDs are returned in the same
-// order as they were provided in the creation of the Manager.
+// order as they were provided when the outboundManager was created.
 func (m *outboundManager) Nodes() []*Node {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -85,29 +85,29 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 	if _, found := m.Node(id); found {
 		return nil, fmt.Errorf("gorums: node %d already exists", id)
 	}
-	// Use a local (in-process) node when this ID is our own local node
-	// and a handler is configured (symmetric peer configuration).
-	if id == m.opts.localNodeID && m.opts.handler != nil {
-		n := newLocalNode(id, addr, m.getMsgID, m.opts.handler, m)
+	if id == m.opts.LocalNodeID && m.opts.Handler != nil {
+		// Use a local (in-process) node when this ID is our own node and a handler
+		// is configured, so this server calls itself without a network round-trip.
+		n := newLocalNode(id, addr, m.getMsgID, m.opts.Handler, m)
 		m.addNode(n)
 		return n, nil
 	}
 	opts := nodeOptions{
 		ID:             id,
-		SendBufferSize: m.opts.sendBuffer,
+		SendBufferSize: m.opts.SendBuffer,
 		MsgIDGen:       m.getMsgID,
-		Metadata:       m.opts.metadata,
-		DialOpts:       m.opts.grpcDialOpts,
-		RequestHandler: m.opts.handler,
+		Metadata:       m.opts.Metadata,
+		DialOpts:       m.opts.GRPCDialOpts,
+		RequestHandler: m.opts.Handler,
 		// When this node belongs to a server that calls its peers, the peer may
-		// depend on this connection staying registered on its inbound side. If
-		// it drops while this node has nothing to send, the peer would stall
-		// waiting for the next local send, so re-establish it eagerly. Plain
-		// clients reconnect on the next send.
-		EagerReconnect: m.opts.inboundMgr != nil,
+		// reuse this connection for its own calls and cannot re-dial it. If it
+		// drops while this node has nothing to send, the peer would stall waiting
+		// for the next local send, so re-establish it eagerly. Plain clients
+		// reconnect on the next send.
+		EagerReconnect: m.opts.InboundMgr != nil,
 		Manager:        m,
 	}
-	if im := m.opts.inboundMgr; im != nil && im.isKnown(id) {
+	if im := m.opts.InboundMgr; im != nil && im.isKnown(id) {
 		// Stream-state changes on a dialed peer feed the server's
 		// connected-peer view.
 		opts.StreamState = im.peerStreamChanged
@@ -124,7 +124,7 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 // Client-initiated IDs never have the high bit set in practice: reaching 2^63
 // requires approximately 292,000 years at one million calls per second.
 func (m *outboundManager) getMsgID() uint64 {
-	return atomic.AddUint64(&m.nextMsgID, 1)
+	return m.nextMsgID.Add(1)
 }
 
 // compile-time assertion for interface compliance.

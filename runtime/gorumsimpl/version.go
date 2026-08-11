@@ -1,4 +1,4 @@
-package gorums
+package gorumsimpl
 
 import "github.com/relab/gorums/internal/version"
 
@@ -35,9 +35,9 @@ const (
 //
 //	const (
 //		// Verify that this generated code is sufficiently up-to-date.
-//		_ = gorums.EnforceVersion(genVersion - gorums.MinVersion)
-//		// Verify that runtime/protoimpl is sufficiently up-to-date.
-//		_ = gorums.EnforceVersion(gorums.MaxVersion - genVersion)
+//		_ = gorumsimpl.EnforceVersion(genVersion - gorumsimpl.MinVersion)
+//		// Verify that the gorums runtime is sufficiently up-to-date.
+//		_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - genVersion)
 //	)
 //
 // The genVersion is the current minor version used to generated the code.

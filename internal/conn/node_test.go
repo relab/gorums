@@ -1,4 +1,4 @@
-package gorums
+package conn
 
 import (
 	"context"
@@ -15,14 +15,18 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+func newTestNode(id uint32, router *stream.MessageRouter, ch *stream.Channel) *Node {
+	transport := stream.NewTransport(id, func() uint64 { return 0 }, router)
+	transport.StoreChannel(ch)
+	return newNode(id, "", nil, transport)
+}
+
 func TestNodeSort(t *testing.T) {
 	makeNode := func(id uint32, err error) *Node {
-		n := &Node{id: id, router: stream.NewMessageRouter()}
-		n.channel.Store(stream.NewChannelWithState(err))
-		return n
+		return newTestNode(id, stream.NewMessageRouter(), stream.NewChannelWithState(err))
 	}
 	makeNodeWithLatency := func(id uint32, lat time.Duration) *Node {
-		return &Node{id: id, router: stream.NewMessageRouterWithLatency(lat)}
+		return newTestNode(id, stream.NewMessageRouterWithLatency(lat), nil)
 	}
 	someErr := errors.New("some error")
 	nodes := []*Node{
@@ -132,9 +136,69 @@ func TestNodeSort(t *testing.T) {
 	})
 }
 
+func TestNodeCloseCancelsAllPendingRequests(t *testing.T) {
+	router := stream.NewMessageRouter()
+	node := newTestNode(1, router, stream.NewLocalChannel(1, router))
+	reply := make(chan stream.NodeResponse[*stream.Message], 1)
+	router.Register(1, stream.Request{
+		Ctx:          t.Context(),
+		Msg:          &stream.Message{},
+		ResponseChan: reply,
+	})
+
+	if err := node.close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	select {
+	case got := <-reply:
+		if !errors.Is(got.Err, stream.ErrNodeClosed) {
+			t.Fatalf("pending request error = %v, want ErrNodeClosed", got.Err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("pending request was not cancelled")
+	}
+}
+
+func TestNodeMissingTransportIsSafe(t *testing.T) {
+	nodes := map[string]*Node{
+		"Nil":       nil,
+		"ZeroValue": {},
+	}
+	for name, node := range nodes {
+		t.Run(name, func(t *testing.T) {
+			if node.IsInbound() {
+				t.Error("IsInbound = true, want false")
+			}
+			if node.IsOutbound() {
+				t.Error("IsOutbound = true, want false")
+			}
+			if got := node.PendingCount(); got != 0 {
+				t.Errorf("PendingCount = %d, want 0", got)
+			}
+			if err := node.LastErr(); err != nil {
+				t.Errorf("LastErr = %v, want nil", err)
+			}
+			if got := node.Latency(); got != -1*time.Second {
+				t.Errorf("Latency = %v, want -1s", got)
+			}
+			if err := node.close(); err != nil {
+				t.Errorf("close = %v, want nil", err)
+			}
+
+			reply := make(chan stream.NodeResponse[*stream.Message], 1)
+			node.loadTransport().Enqueue(stream.Request{Ctx: t.Context(), ResponseChan: reply})
+			select {
+			case got := <-reply:
+				t.Fatalf("Enqueue returned unexpected response: %+v", got)
+			default:
+			}
+		})
+	}
+}
+
 func TestConfigurationWatch(t *testing.T) {
 	makeNodeWithLatency := func(id uint32, lat time.Duration) *Node {
-		return &Node{id: id, router: stream.NewMessageRouterWithLatency(lat)}
+		return newTestNode(id, stream.NewMessageRouterWithLatency(lat), nil)
 	}
 
 	// allNodes has five nodes; top-3 by ascending latency are 2(10ms), 3(20ms), 1(30ms).
@@ -197,8 +261,8 @@ func TestConfigurationWatch(t *testing.T) {
 		}
 
 		// Swap latencies: node 2 becomes fastest.
-		n1.router.SetLatency(40 * time.Millisecond)
-		n2.router.SetLatency(5 * time.Millisecond)
+		n1.messageRouter().SetLatency(40 * time.Millisecond)
+		n2.messageRouter().SetLatency(5 * time.Millisecond)
 
 		select {
 		case second := <-updates:
@@ -256,9 +320,9 @@ func (h *testRequestHandler) HandleRequest(_ context.Context, _ *stream.Message,
 func TestNodeRouteInbound(t *testing.T) {
 	t.Run("ServerInitiatedPendingDelivered", func(t *testing.T) {
 		n := newInboundNode(42, "127.0.0.1:9000", func() uint64 { return 0 }, nil)
-		replyChan := make(chan NodeResponse[*stream.Message], 1)
+		replyChan := make(chan stream.NodeResponse[*stream.Message], 1)
 		msgID := stream.ServerSequenceNumber(7)
-		n.router.Register(msgID, stream.Request{
+		n.messageRouter().Register(msgID, stream.Request{
 			Ctx:          context.Background(),
 			Msg:          &stream.Message{},
 			ResponseChan: replyChan,
@@ -266,7 +330,7 @@ func TestNodeRouteInbound(t *testing.T) {
 		respMsg := stream.Message_builder{MessageSeqNo: msgID}.Build()
 		released := make(chan struct{}, 1)
 		release := func() { released <- struct{}{} }
-		n.RouteInbound(context.Background(), respMsg, release, func(*stream.Message) {})
+		n.routeInbound(context.Background(), respMsg, release, func(*stream.Message) {})
 
 		select {
 		case got := <-replyChan:
@@ -289,7 +353,7 @@ func TestNodeRouteInbound(t *testing.T) {
 		respMsg := stream.Message_builder{MessageSeqNo: msgID}.Build()
 		released := make(chan struct{}, 1)
 		release := func() { released <- struct{}{} }
-		n.RouteInbound(context.Background(), respMsg, release, func(*stream.Message) {})
+		n.routeInbound(context.Background(), respMsg, release, func(*stream.Message) {})
 		select {
 		case <-released:
 		default:
@@ -302,7 +366,7 @@ func TestNodeRouteInbound(t *testing.T) {
 		clientMsg := stream.Message_builder{MessageSeqNo: 1}.Build()
 		released := make(chan struct{}, 1)
 		release := func() { released <- struct{}{} }
-		n.RouteInbound(context.Background(), clientMsg, release, func(*stream.Message) {})
+		n.routeInbound(context.Background(), clientMsg, release, func(*stream.Message) {})
 		select {
 		case <-released:
 		default:
@@ -314,7 +378,7 @@ func TestNodeRouteInbound(t *testing.T) {
 		h := &testRequestHandler{done: make(chan struct{})}
 		n := newInboundNode(42, "127.0.0.1:9000", func() uint64 { return 0 }, h)
 		clientMsg := stream.Message_builder{MessageSeqNo: 1}.Build()
-		n.RouteInbound(context.Background(), clientMsg, func() {}, func(*stream.Message) {})
+		n.routeInbound(context.Background(), clientMsg, func() {}, func(*stream.Message) {})
 		select {
 		case <-h.done:
 		case <-time.After(time.Second):
@@ -323,46 +387,43 @@ func TestNodeRouteInbound(t *testing.T) {
 	})
 }
 
-// BenchmarkNodeEnqueue measures the overhead that Node.enqueue adds per
-// request dispatch: an atomic.Pointer.Load() and a nil guard.
-// The cost is ~1-2 ns, which is negligible compared to a full
-// Channel.Enqueue round-trip (~50-100 ns).
+// BenchmarkNodeEnqueue measures the overhead that Node.Enqueue adds per
+// request dispatch: transport and channel atomic loads plus nil guards.
 // See BenchmarkChannelSend in internal/stream and BenchmarkNodeEnqueueSend
 // below for the full send-path cost.
 func BenchmarkNodeEnqueue(b *testing.B) {
 	req := stream.Request{}
 
 	b.Run("ChannelNil", func(b *testing.B) {
-		// No stream attached: channel.Load() returns nil → early return.
-		// Measures the pure atomic load + nil-guard overhead.
+		// No stream attached, so the channel lookup returns nil immediately.
 		n := newInboundNode(1, "127.0.0.1:9081", func() uint64 { return 0 }, nil)
 		b.ResetTimer()
 		for range b.N {
-			n.Enqueue(req)
+			n.loadTransport().Enqueue(req)
 		}
 	})
 
 	b.Run("AtomicLoadNonNil", func(b *testing.B) {
-		// Stub channel attached; measures atomic.Pointer.Load() + non-nil branch
-		// without going through Channel.Enqueue (which requires a running goroutine).
+		// Stub channel attached; measures the transport and channel loads
+		// without going through Channel.Enqueue, which requires a running goroutine.
 		n := newInboundNode(1, "127.0.0.1:9081", func() uint64 { return 0 }, nil)
-		n.channel.Store(stream.NewChannelWithState(nil))
+		n.loadTransport().StoreChannel(stream.NewChannelWithState(nil))
 		b.ResetTimer()
 		for range b.N {
-			_ = n.channel.Load()
+			_ = n.activeChannel()
 		}
 	})
 }
 
 // BenchmarkNodeEnqueueSend measures the end-to-end send latency going through
-// the Node.enqueue path (atomic.Pointer.Load + Channel.Enqueue) against a live
+// the Node.Enqueue path (transport lookup + Channel.Enqueue) against a live
 // echo server.
 //
 // To get a fair comparison with BenchmarkChannelSend in internal/stream, the
 // server is set up identically: a raw gRPC echo handler (benchEchoServer) that
 // calls Recv/Send in a loop with no proto marshal/unmarshal, no per-request
 // goroutines, and a send buffer of 10. This isolates the one structural
-// difference: going through Node.enqueue (atomic.Pointer.Load + nil guard)
+// difference: going through Node.Enqueue (transport and channel lookup)
 // versus calling Channel.Enqueue directly.
 //
 // To run this benchmark together with BenchmarkChannelSend, use:
@@ -384,12 +445,12 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 	}
 	b.Cleanup(func() { _ = conn.Close() })
 
-	// Wrap the outbound channel in a Node, adding the one atomic.Pointer.Load
-	// that Node.enqueue performs on every dispatch.
+	// Wrap the outbound channel in a Node, adding the transport lookup that
+	// Node.Enqueue performs on every dispatch.
 	n := newInboundNode(1, lis.Addr().String(), func() uint64 { return 0 }, nil)
-	ch := stream.NewOutboundChannel(context.Background(), 1, 10, conn, n.router, false, nil)
+	ch := stream.NewOutboundChannel(context.Background(), 1, 10, conn, n.messageRouter(), false, nil)
 	b.Cleanup(func() { _ = ch.Close() })
-	n.channel.Store(ch)
+	n.loadTransport().StoreChannel(ch)
 
 	tests := []struct {
 		name string
@@ -405,13 +466,13 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 			payload := make([]byte, tt.size)
 			b.ResetTimer()
 			for i := range b.N {
-				replyChan := make(chan NodeResponse[*stream.Message], 1)
+				replyChan := make(chan stream.NodeResponse[*stream.Message], 1)
 				reqMsg := stream.Message_builder{
 					MessageSeqNo: uint64(i),
 					Method:       mock.TestMethod,
 					Payload:      payload,
 				}.Build()
-				n.Enqueue(stream.Request{
+				n.loadTransport().Enqueue(stream.Request{
 					Ctx:          context.Background(),
 					Msg:          reqMsg,
 					Oneway:       true,

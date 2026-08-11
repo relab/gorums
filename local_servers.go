@@ -20,7 +20,7 @@ func WithLocalServerOptions(opts ...ServerOption) LocalServerOption {
 	}
 }
 
-// WithLocalDialOptions applies opts to every server's peer configuration
+// WithLocalDialOptions applies opts to every server's outbound configuration
 // created by [NewLocalServers].
 func WithLocalDialOptions(opts ...DialOption) LocalServerOption {
 	return func(o *localServerOptions) {
@@ -33,11 +33,11 @@ func WithLocalDialOptions(opts ...DialOption) LocalServerOption {
 // Each server is assigned a node ID from 1 to n. Every server tracks and calls
 // all the other servers. Use [WithLocalServerOptions] to add [ServerOption]s
 // to every server, and [WithLocalDialOptions] to add [DialOption]s to each
-// server's peer connections.
+// server's outbound connections.
 //
 // The returned servers are not started; call [Server.ListenAndServe] after
 // registering any services. The returned stop function stops all servers and
-// closes all allocated listeners and peer configurations. If listener
+// closes all allocated listeners and outbound configurations. If listener
 // allocation fails, all listeners acquired so far are closed before returning
 // the error.
 func NewLocalServers(n int, opts ...LocalServerOption) ([]*Server, func(), error) {
@@ -47,7 +47,7 @@ func NewLocalServers(n int, opts ...LocalServerOption) ([]*Server, func(), error
 			opt(&localOpts)
 		}
 	}
-	listeners, nodeList, err := allocateListeners(n)
+	listeners, nodeSource, err := allocateListeners(n)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -55,7 +55,7 @@ func NewLocalServers(n int, opts ...LocalServerOption) ([]*Server, func(), error
 	for i := range n {
 		myID := uint32(i + 1)
 		serverOpts := append(
-			[]ServerOption{WithPeers(myID, nodeList, localOpts.dialOpts...)},
+			[]ServerOption{WithPeers(myID, nodeSource, localOpts.dialOpts...)},
 			localOpts.serverOpts...,
 		)
 		srv := NewServer(serverOpts...)
