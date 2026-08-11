@@ -14,8 +14,71 @@ import (
 
 	"github.com/relab/gorums/internal/stream"
 	"github.com/relab/gorums/internal/testutils/mock"
+	"github.com/relab/gorums/internal/testutils/servers"
+	"go.uber.org/goleak"
 	"google.golang.org/grpc/metadata"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
+)
+
+// This file tests unexported gorums internals (inboundManager, srv.im, ...)
+// directly, so it must stay in package gorums rather than an external
+// gorums_test package. That means it cannot import the gorumstest package built
+// on top of the root gorums package: doing so would create an import cycle
+// (building package gorums's tests would require gorumstest, which requires
+// gorums). The helpers below build the server and dial-option setup this file
+// needs directly on top of the gorums-independent internal/testutils/servers
+// package instead of gorumstest.Servers, gorumstest.DialOptions,
+// gorumstest.Closer, and gorumstest.Context, so this file has no dependency on
+// gorumstest.
+
+// testStartServers starts numServers servers via srvFn and stops them, and
+// verifies no goroutines were leaked, when the test finishes.
+func testStartServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []string {
+	t.Helper()
+	if _, ok := t.(*testing.B); !ok {
+		t.Cleanup(func() { goleak.VerifyNone(t) })
+	}
+	addrs, stopFn := servers.Start(t, numServers, func(i int) servers.ServerIface { return srvFn(i) })
+	t.Cleanup(func() { stopFn() })
+	return addrs
+}
+
+// testDialOptions returns a DialOption for connecting to servers started by
+// testStartServers.
+func testDialOptions(t testing.TB) DialOption {
+	return WithDialOptions(servers.DialOptions(t)...)
+}
+
+// testCloser returns a cleanup function that closes the given io.Closer.
+func testCloser(t testing.TB, c io.Closer) func() {
+	t.Helper()
+	return func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("c.Close() = %q, expected no error", err.Error())
+		}
+	}
+}
+
+// testTimeoutContext creates a context with timeout, using t.Context() as the
+// parent, that automatically cancels on cleanup.
+func testTimeoutContext(t testing.TB, timeout time.Duration) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+// testNode is a minimal NodeAddress for use in tests.
+type testNode struct {
+	addr string
+}
+
+func (n testNode) Addr() string { return n.addr }
+
+// Compile-time assertions: both node providers satisfy NodeListOption.
+var (
+	_ NodeListOption = nodeMap[testNode](nil)
+	_ NodeListOption = nodeList(nil)
 )
 
 // mockBidiStream is a minimal stream.BidiStream for testing inboundManager.
@@ -552,7 +615,7 @@ func mustWaitForClientConfig(t *testing.T, srv *Server, cond func(Configuration)
 func testPeerServer(t *testing.T) (*Server, []string) {
 	t.Helper()
 	var srv *Server
-	addrs := TestServers(t, 1, func(_ int) ServerIface {
+	addrs := testStartServers(t, 1, func(_ int) ServerIface {
 		srv = NewServer(WithConfig(1, peerNodes()))
 		return srv
 	})
@@ -580,11 +643,11 @@ func peerNodes() NodeListOption {
 func connectAsPeer(t *testing.T, peerID uint32, addrs []string) Configuration {
 	t.Helper()
 	peerMD := metadata.Pairs(gorumsNodeIDKey, strconv.FormatUint(uint64(peerID), 10))
-	cfg, err := NewConfig(WithNodeList(addrs), TestDialOptions(t), WithMetadata(peerMD))
+	cfg, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithMetadata(peerMD))
 	if err != nil {
 		t.Fatalf("NewConfig() error: %v", err)
 	}
-	t.Cleanup(Closer(t, cfg))
+	t.Cleanup(testCloser(t, cfg))
 	return cfg
 }
 
@@ -627,11 +690,11 @@ func TestUnknownPeerIgnored(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
 	// Connect without metadata (external client) and with an unknown ID.
-	cfg, err := NewConfig(WithNodeList(addrs), TestDialOptions(t))
+	cfg, err := NewConfig(WithNodeList(addrs), testDialOptions(t))
 	if err != nil {
 		t.Fatalf("NewConfig() error: %v", err)
 	}
-	t.Cleanup(Closer(t, cfg))
+	t.Cleanup(testCloser(t, cfg))
 
 	connectAsPeer(t, 99, addrs) // ID 99 not in known set
 
@@ -654,11 +717,11 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 		return NewResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
 	})
 	peerMD := metadata.Pairs(gorumsNodeIDKey, "2")
-	cfg, err := NewConfig(WithNodeList(addrs), TestDialOptions(t), WithMetadata(peerMD), WithServer(clientSrv))
+	cfg, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithMetadata(peerMD), WithServer(clientSrv))
 	if err != nil {
 		t.Fatalf("NewConfig() error: %v", err)
 	}
-	t.Cleanup(Closer(t, cfg))
+	t.Cleanup(testCloser(t, cfg))
 
 	// Wait for the peer to appear in the inbound config.
 	mustWaitForConfig(t, srv, equalNodeIDs([]uint32{1, 2}))
@@ -677,7 +740,7 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 	}
 
 	// Create request message and register it for response routing.
-	ctx := TestContext(t, 5*time.Second)
+	ctx := testTimeoutContext(t, 5*time.Second)
 	reqMsg, err := stream.NewMessage(ctx, srv.getMsgID(), mock.TestMethod, pb.String("hello"))
 	if err != nil {
 		t.Fatalf("NewMessage() error: %v", err)
@@ -719,7 +782,7 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 func testClientServer(t *testing.T) (*Server, []string) {
 	t.Helper()
 	var srv *Server
-	addrs := TestServers(t, 1, func(_ int) ServerIface {
+	addrs := testStartServers(t, 1, func(_ int) ServerIface {
 		srv = NewServer()
 		return srv
 	})
@@ -732,11 +795,11 @@ func testClientServer(t *testing.T) (*Server, []string) {
 // ClientConfig and may dispatch server-initiated calls to it.
 func connectAsPeerClient(t *testing.T, addrs []string) Configuration {
 	t.Helper()
-	cfg, err := NewConfig(WithNodeList(addrs), TestDialOptions(t), WithServer(NewServer()))
+	cfg, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithServer(NewServer()))
 	if err != nil {
 		t.Fatalf("NewConfig() error: %v", err)
 	}
-	t.Cleanup(Closer(t, cfg))
+	t.Cleanup(testCloser(t, cfg))
 	return cfg
 }
 
@@ -829,7 +892,7 @@ func TestClientConfigServerCallsClient(t *testing.T) {
 		}
 		return nil, nil // one-way
 	})
-	addrs := TestServers(t, 1, func(_ int) ServerIface { return srv })
+	addrs := testStartServers(t, 1, func(_ int) ServerIface { return srv })
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -840,17 +903,17 @@ func TestClientConfigServerCallsClient(t *testing.T) {
 		wg.Done()
 		return nil, nil
 	})
-	clientConfig, err := NewConfig(WithNodeList(addrs), TestDialOptions(t), WithServer(clientSrv))
+	clientConfig, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithServer(clientSrv))
 	if err != nil {
 		t.Fatalf("NewConfig() error: %v", err)
 	}
-	t.Cleanup(Closer(t, clientConfig))
+	t.Cleanup(testCloser(t, clientConfig))
 
 	// Wait for the client to appear in the server's ClientConfig.
 	mustWaitForClientConfig(t, srv, func(cfg Configuration) bool { return len(cfg) > 0 })
 
 	// Trigger: client multicasts TestMethod to the server; server fans it back via ClientConfig.
-	ctx := TestContext(t, 2*time.Second)
+	ctx := testTimeoutContext(t, 2*time.Second)
 	if err := Multicast(clientConfig.Context(ctx), pb.String("trigger"), mock.TestMethod); err != nil {
 		t.Fatalf("Multicast error: %v", err)
 	}

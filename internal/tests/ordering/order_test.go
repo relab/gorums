@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/gorumstest"
 )
 
 // stressMode controls whether tests run in stress mode (time-based) or normal mode (iteration-based).
@@ -80,7 +81,7 @@ func serverFn(_ int) gorums.ServerIface {
 }
 
 func TestUnaryRPCOrdering(t *testing.T) {
-	node := gorums.TestNode(t, serverFn)
+	node := gorumstest.Node(t, serverFn)
 
 	for i := range iterations() {
 		nodeCtx := node.Context(t.Context())
@@ -98,7 +99,7 @@ func TestUnaryRPCOrdering(t *testing.T) {
 }
 
 func TestQuorumCallOrdering(t *testing.T) {
-	config := gorums.TestConfiguration(t, 4, serverFn)
+	config := gorumstest.Config(t, 4, serverFn)
 	cfgCtx := config.Context(t.Context())
 
 	for i := range iterations() {
@@ -117,7 +118,7 @@ func TestQuorumCallOrdering(t *testing.T) {
 }
 
 func TestQuorumCallAsyncOrdering(t *testing.T) {
-	config := gorums.TestConfiguration(t, 4, serverFn)
+	config := gorumstest.Config(t, 4, serverFn)
 	cfgCtx := config.Context(t.Context())
 
 	var wg sync.WaitGroup
@@ -144,7 +145,7 @@ func TestQuorumCallAsyncOrdering(t *testing.T) {
 }
 
 func TestMixedOrdering(t *testing.T) {
-	config := gorums.TestConfiguration(t, 4, serverFn)
+	config := gorumstest.Config(t, 4, serverFn)
 	cfgCtx := config.Context(t.Context())
 
 	for i := range iterations() {

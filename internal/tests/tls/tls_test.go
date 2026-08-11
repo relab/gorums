@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/gorumstest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
@@ -43,7 +44,7 @@ func TestTLSConnection(t *testing.T) {
 		RegisterTLSServer(srv, &testSrv{})
 		return srv
 	}
-	node := gorums.TestNode(t, srvFn, gorums.WithDialOptions(
+	node := gorumstest.Node(t, srvFn, gorums.WithDialOptions(
 		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
 	))
 

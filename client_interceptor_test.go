@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
@@ -64,8 +65,8 @@ func CountingInterceptor[Req, Resp proto.Message](
 // TestCustomLoggingInterceptor verifies that custom interceptors can be
 // created and used from an external package.
 func TestCustomLoggingInterceptor(t *testing.T) {
-	config := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
-	ctx := gorums.TestContext(t, 2*time.Second)
+	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+	ctx := gorumstest.Context(t, 2*time.Second)
 
 	// Use the custom logging interceptor from this external package
 	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
@@ -86,8 +87,8 @@ func TestCustomLoggingInterceptor(t *testing.T) {
 
 // TestCustomFilterInterceptor verifies that filter interceptors work correctly.
 func TestCustomFilterInterceptor(t *testing.T) {
-	config := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
-	ctx := gorums.TestContext(t, 2*time.Second)
+	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+	ctx := gorumstest.Context(t, 2*time.Second)
 
 	// Use a filter interceptor that only keeps responses from node 1
 	// (In practice, this would filter based on response content)
@@ -113,8 +114,8 @@ func TestCustomFilterInterceptor(t *testing.T) {
 
 // TestInterceptorChaining verifies that multiple custom interceptors can be chained.
 func TestInterceptorChaining(t *testing.T) {
-	config := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
-	ctx := gorums.TestContext(t, 2*time.Second)
+	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+	ctx := gorumstest.Context(t, 2*time.Second)
 
 	var count int
 
@@ -145,8 +146,8 @@ func TestInterceptorChaining(t *testing.T) {
 
 // TestCustomInterceptorWithMapRequest verifies custom interceptors work with built-in ones.
 func TestCustomInterceptorWithMapRequest(t *testing.T) {
-	config := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
-	ctx := gorums.TestContext(t, 2*time.Second)
+	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+	ctx := gorumstest.Context(t, 2*time.Second)
 
 	var count int
 
@@ -187,7 +188,7 @@ func TestCustomInterceptorWithMapRequest(t *testing.T) {
 // With MapRequest, each node gets a cloned message with individually marshaled payload.
 func BenchmarkQuorumCallMapRequest(b *testing.B) {
 	for _, numNodes := range []int{3, 7, 13} {
-		config := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
+		config := gorumstest.Config(b, numNodes, gorumstest.EchoServerFn)
 		cfgCtx := config.Context(b.Context())
 
 		// Baseline: no interceptors — single marshal, shared message

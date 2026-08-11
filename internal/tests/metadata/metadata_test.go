@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/strconv"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -51,7 +52,7 @@ func TestMetadata(t *testing.T) {
 		"id": fmt.Sprint(want),
 	})
 
-	node := gorums.TestNode(t, serverFn, gorums.WithMetadata(md))
+	node := gorumstest.Node(t, serverFn, gorums.WithMetadata(md))
 	nodeCtx := node.Context(t.Context())
 	resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
 	if err != nil {
@@ -64,7 +65,7 @@ func TestMetadata(t *testing.T) {
 }
 
 func TestPerMessageMetadata(t *testing.T) {
-	node := gorums.TestNode(t, serverFn)
+	node := gorumstest.Node(t, serverFn)
 
 	want := uint32(1)
 	md := metadata.New(map[string]string{
@@ -83,7 +84,7 @@ func TestPerMessageMetadata(t *testing.T) {
 }
 
 func TestCanGetPeerInfo(t *testing.T) {
-	node := gorums.TestNode(t, serverFn)
+	node := gorumstest.Node(t, serverFn)
 	nodeCtx := node.Context(t.Context())
 	ip, err := WhatIP(nodeCtx, &emptypb.Empty{})
 	if err != nil {

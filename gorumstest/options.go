@@ -1,27 +1,32 @@
-package gorums
+package gorumstest
 
-import "testing"
+import (
+	"testing"
 
-// TestOption is a marker interface that can hold DialOption,
-// ServerOption, or NodeListOption. This allows test helpers to accept
-// a single variadic parameter that can be filtered and passed to the
-// appropriate constructors: NewServer or NewConfig.
+	"github.com/relab/gorums"
+)
+
+// Option is a marker interface that can hold a [gorums.DialOption],
+// [gorums.ServerOption], or [gorums.NodeListOption]. This allows test helpers
+// to accept a single variadic parameter that can be filtered and passed to the
+// appropriate constructors: [gorums.NewServer] or [gorums.NewConfig].
 //
-// Each option type (DialOption, ServerOption, NodeListOption) embeds
-// this interface, so they can be passed directly without wrapping:
+// Each option type (gorums.DialOption, gorums.ServerOption,
+// gorums.NodeListOption) satisfies this interface already, since it is just an
+// alias for any, so they can be passed directly without wrapping:
 //
-//	SetupConfiguration(t, 3, nil,
-//		WithBackoff(...),           // DialOption
-//		WithBufferSizes(10, 10),    // ServerOption
-//		WithNodeMap(...),           // NodeListOption
+//	gorumstest.Config(t, 3, nil,
+//		gorums.WithBackoff(...),        // DialOption
+//		gorums.WithBufferSizes(10, 10), // ServerOption
+//		gorums.WithNodes(...),          // NodeListOption
 //	)
-type TestOption any
+type Option any
 
-// testOptions holds extracted options from a slice of TestOption.
+// testOptions holds extracted options from a slice of Option.
 type testOptions struct {
-	managerOpts    []DialOption
-	serverOpts     []ServerOption
-	nodeListOpts   []NodeListOption
+	managerOpts    []gorums.DialOption
+	serverOpts     []gorums.ServerOption
+	nodeListOpts   []gorums.NodeListOption
 	stopFuncPtr    *func(...int)       // pointer to capture the variadic stop function
 	preConnectHook func(stopFn func()) // called before connecting to servers
 	skipGoleak     bool                // skip goleak checks (useful for synctest)
@@ -37,41 +42,41 @@ func (to *testOptions) shouldSkipGoleak() bool {
 // with the provided server options and registers default handlers.
 // If srvFn is not nil and server options are provided, it panics since
 // options cannot be applied to a custom server function.
-func (to *testOptions) serverFunc(srvFn func(i int) ServerIface) func(i int) ServerIface {
+func (to *testOptions) serverFunc(srvFn func(i int) gorums.ServerIface) func(i int) gorums.ServerIface {
 	if srvFn == nil {
 		// Use default server, potentially with custom options
-		return func(i int) ServerIface {
+		return func(i int) gorums.ServerIface {
 			return defaultTestServer(i, to.serverOpts...)
 		}
 	}
 	if len(to.serverOpts) > 0 {
 		// You need to pass nil as the server function to use server options with the default server
-		panic("gorums: cannot use server options with a custom server function")
+		panic("gorumstest: cannot use server options with a custom server function")
 	}
 	return srvFn
 }
 
 // nodeListOption returns the appropriate NodeListOption for the configuration.
 // It uses provided options if available, otherwise defaults to WithNodeList.
-func (to *testOptions) nodeListOption(addrs []string) NodeListOption {
+func (to *testOptions) nodeListOption(addrs []string) gorums.NodeListOption {
 	if len(to.nodeListOpts) > 0 {
 		// Use the last provided NodeListOption (allows overriding)
 		return to.nodeListOpts[len(to.nodeListOpts)-1]
 	}
 	// Default: use WithNodeList which generates unique IDs based on max(manager.NodeIDs()) + 1
-	return WithNodeList(addrs)
+	return gorums.WithNodeList(addrs)
 }
 
-// extractTestOptions separates a slice of TestOption into their specific types.
-func extractTestOptions(opts []TestOption) testOptions {
+// extractTestOptions separates a slice of Option into their specific types.
+func extractTestOptions(opts []Option) testOptions {
 	var result testOptions
 	for _, opt := range opts {
 		switch o := opt.(type) {
-		case DialOption:
+		case gorums.DialOption:
 			result.managerOpts = append(result.managerOpts, o)
-		case ServerOption:
+		case gorums.ServerOption:
 			result.serverOpts = append(result.serverOpts, o)
-		case NodeListOption:
+		case gorums.NodeListOption:
 			result.nodeListOpts = append(result.nodeListOpts, o)
 		case stopFuncProvider:
 			result.stopFuncPtr = o.stopFunc
@@ -84,12 +89,12 @@ func extractTestOptions(opts []TestOption) testOptions {
 	return result
 }
 
-// stopFuncProvider is a TestOption that captures the server stop function.
+// stopFuncProvider is an Option that captures the server stop function.
 type stopFuncProvider struct {
 	stopFunc *func(...int)
 }
 
-// WithStopFunc returns a TestOption that captures the variadic server stop function,
+// WithStopFunc returns an Option that captures the variadic server stop function,
 // allowing tests to stop servers at any point during test execution.
 // Call with no arguments to stop all servers, or with specific indices to stop those servers.
 // This is useful for testing server failure scenarios.
@@ -97,7 +102,7 @@ type stopFuncProvider struct {
 // Usage:
 //
 //	var stopServers func(...int)
-//	config := gorums.TestConfiguration(t, 3, nil, gorums.WithStopFunc(t, &stopServers))
+//	config := gorumstest.Config(t, 3, nil, gorumstest.WithStopFunc(t, &stopServers))
 //	// ... send some messages ...
 //	stopServers() // stop all servers
 //	// OR
@@ -105,49 +110,49 @@ type stopFuncProvider struct {
 //	// ... verify error handling ...
 //
 // This option is intended for testing purposes only.
-func WithStopFunc(_ testing.TB, fn *func(...int)) TestOption {
+func WithStopFunc(_ testing.TB, fn *func(...int)) Option {
 	if fn == nil {
-		panic("gorums: WithStopFunc called with nil function pointer")
+		panic("gorumstest: WithStopFunc called with nil function pointer")
 	}
 	return stopFuncProvider{stopFunc: fn}
 }
 
-// preConnectProvider is a TestOption that registers a pre-connect hook.
+// preConnectProvider is an Option that registers a pre-connect hook.
 type preConnectProvider struct {
 	hook func(stopFn func())
 }
 
-// WithPreConnect returns a TestOption that registers a function to be called
+// WithPreConnect returns an Option that registers a function to be called
 // after servers are started but before nodes attempt to connect. The function
 // receives a stopServers callback that can be used to stop the test servers.
 //
 // This is useful for testing error handling when servers are unavailable:
 //
-//	node := gorums.TestNode(t, nil, gorums.WithPreConnect(t, func(stopServers func()) {
+//	node := gorumstest.Node(t, nil, gorumstest.WithPreConnect(t, func(stopServers func()) {
 //		stopServers()
 //		time.Sleep(300 * time.Millisecond) // wait for server to fully stop
 //	}))
 //
 // This option is intended for testing purposes only.
-func WithPreConnect(_ testing.TB, fn func(stopServers func())) TestOption {
+func WithPreConnect(_ testing.TB, fn func(stopServers func())) Option {
 	if fn == nil {
-		panic("gorums: WithPreConnect called with nil function")
+		panic("gorumstest: WithPreConnect called with nil function")
 	}
 	return preConnectProvider{hook: fn}
 }
 
-// skipGoleakProvider is a TestOption that disables goleak checks.
+// skipGoleakProvider is an Option that disables goleak checks.
 type skipGoleakProvider struct{}
 
-// SkipGoleak returns a TestOption that disables goleak checks for the test.
+// SkipGoleak returns an Option that disables goleak checks for the test.
 // This is useful when using synctest, which creates goroutines that goleak
 // cannot properly track.
 //
 // Usage:
 //
-//	config := gorums.TestConfiguration(t, 3, nil, gorums.SkipGoleak())
+//	config := gorumstest.Config(t, 3, nil, gorumstest.SkipGoleak())
 //
 // This option is intended for testing purposes only.
-func SkipGoleak() TestOption {
+func SkipGoleak() Option {
 	return skipGoleakProvider{}
 }

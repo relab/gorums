@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/tests/oneway"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -45,7 +46,7 @@ func setupWithNodeMap(t testing.TB, cfgSize int) (cfg oneway.Configuration, srvs
 	for i := range cfgSize {
 		srvs[i] = &onewaySrv{received: make(chan *oneway.Request, numCalls)}
 	}
-	cfg = gorums.TestConfiguration(t, cfgSize, func(i int) gorums.ServerIface {
+	cfg = gorumstest.Config(t, cfgSize, func(i int) gorums.ServerIface {
 		srv := gorums.NewServer()
 		oneway.RegisterOnewayTestServer(srv, srvs[i])
 		return srv

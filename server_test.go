@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/grpc/metadata"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
@@ -27,7 +28,7 @@ func TestServerCallback(t *testing.T) {
 	})
 	dialOption := gorums.WithMetadata(metadata.New(map[string]string{"message": "hello"}))
 
-	gorums.TestNode(t, nil, srvOption, dialOption)
+	gorumstest.Node(t, nil, srvOption, dialOption)
 
 	select {
 	case <-time.After(100 * time.Millisecond):
@@ -87,9 +88,9 @@ func TestServerInterceptorsChain(t *testing.T) {
 		})
 		return s
 	}
-	node := gorums.TestNode(t, interceptorServerFn)
+	node := gorumstest.Node(t, interceptorServerFn)
 
-	ctx := gorums.TestContext(t, 5*time.Second)
+	ctx := gorumstest.Context(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
 	res, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String("client-"), mock.TestMethod)
 	if err != nil {
@@ -121,8 +122,8 @@ func TestWithBufferSizesProcessesRequests(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			node := gorums.TestNode(t, nil, gorums.WithBufferSizes(tt.recvSize, tt.sendSize))
-			ctx := gorums.TestContext(t, 5*time.Second)
+			node := gorumstest.Node(t, nil, gorums.WithBufferSizes(tt.recvSize, tt.sendSize))
+			ctx := gorumstest.Context(t, 5*time.Second)
 
 			var wg sync.WaitGroup
 			errs := make([]error, concurrency)
@@ -162,15 +163,15 @@ func TestTCPReconnection(t *testing.T) {
 		_ = srv.Serve(lis)
 	}()
 
-	cfg, err := gorums.NewConfig(gorums.WithNodeList([]string{addr}), gorums.InsecureDialOptions(t))
+	cfg, err := gorums.NewConfig(gorums.WithNodeList([]string{addr}), gorumstest.InsecureDialOptions(t))
 	if err != nil {
 		t.Fatalf("NewConfig failed: %v", err)
 	}
-	t.Cleanup(gorums.Closer(t, cfg))
+	t.Cleanup(gorumstest.Closer(t, cfg))
 	node := cfg.Nodes()[0]
 
 	// Send first message
-	ctx := gorums.TestContext(t, time.Second)
+	ctx := gorumstest.Context(t, time.Second)
 	nodeCtx := node.Context(ctx)
 	_, err = gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String("1"), mock.TestMethod)
 	if err != nil {
@@ -185,7 +186,7 @@ func TestTCPReconnection(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Sending now should fail or timeout
-	ctx2 := gorums.TestContext(t, 200*time.Millisecond)
+	ctx2 := gorumstest.Context(t, 200*time.Millisecond)
 	nodeCtx2 := node.Context(ctx2)
 	_, err = gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx2, pb.String("2"), mock.TestMethod)
 	if err == nil {
@@ -214,7 +215,7 @@ func TestTCPReconnection(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Send message again
-	ctx3 := gorums.TestContext(t, 2*time.Second)
+	ctx3 := gorumstest.Context(t, 2*time.Second)
 	nodeCtx3 := node.Context(ctx3)
 	_, err = gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx3, pb.String("3"), mock.TestMethod)
 	if err != nil {
