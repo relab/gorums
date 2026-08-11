@@ -99,7 +99,7 @@ func awaitClientReady(t *testing.T, srv *gorums.Server, n int) {
 
 // createClientServerPair creates a server and a client for back-channel testing.
 // The server automatically tracks anonymous clients and can dispatch
-// reverse-direction calls to them via [gorums.ServerCtx.ConnectedClients].
+// reverse-direction calls to them via [gorums.ServerContext.ConnectedClients].
 // The client is a standalone [*gorums.Server] (no listener needed) whose registered handlers
 // are reachable by the server over the existing bidirectional gRPC stream. The returned
 // [gorums.Config] is the client's outbound config pointing at the server.
@@ -141,13 +141,13 @@ func createClientServerPair(t *testing.T) (*gorums.Server, *gorums.Server, gorum
 
 // stringEchoHandler returns a handler that replies with prefix+": "+request value.
 func stringEchoHandler(prefix string) gorums.Handler {
-	return func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	return func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		return gorums.NewResponseMessage(in, pb.String(prefix+": "+req.GetValue())), nil
 	}
 }
 
-func configContext(ctx gorums.ServerCtx, client bool) (*gorums.ConfigContext, error) {
+func configContext(ctx gorums.ServerContext, client bool) (*gorums.ConfigContext, error) {
 	if client {
 		clients := ctx.ConnectedClients()
 		if len(clients) == 0 {
@@ -174,7 +174,7 @@ func outerChainedHandler(
 	respFn func(*gorums.Responses[*pb.StringValue]) (*pb.StringValue, error),
 ) gorums.Handler {
 	t.Helper()
-	return func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	return func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		t.Logf("Server %d received outer request: %s", myID, req.GetValue())
 		// Release the NodeStream mutex before making the inner quorum call.
@@ -266,7 +266,7 @@ func TestServerSymmetricConfigurationRoutesMulticast(t *testing.T) {
 
 	// Register mock handler on each server
 	for _, srv := range servers {
-		srv.RegisterHandler(mock.Stream, func(_ gorums.ServerCtx, _ *gorums.Message) (*gorums.Message, error) {
+		srv.RegisterHandler(mock.Stream, func(_ gorums.ServerContext, _ *gorums.Message) (*gorums.Message, error) {
 			wg.Done()
 			return nil, nil
 		})
@@ -298,7 +298,7 @@ func TestServerHandlerCanMulticastViaConfig(t *testing.T) {
 	wg.Add(9)
 
 	for i, srv := range servers {
-		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 			t.Logf("Server %d received multicast on %v: %v", i+1, mock.TestMethod, in.Msg)
 			// Release before the nested multicast: the peer configuration
 			// includes the local node, whose in-process dispatch waits for
@@ -317,7 +317,7 @@ func TestServerHandlerCanMulticastViaConfig(t *testing.T) {
 			return nil, nil // one-way
 		})
 
-		srv.RegisterHandler(mock.Stream, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+		srv.RegisterHandler(mock.Stream, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 			t.Logf("Server %d received multicast on %v: %v", i+1, mock.Stream, in.Msg)
 			wg.Done()
 			return nil, nil
@@ -442,7 +442,7 @@ func TestServerHandlerCanMulticastViaConnectedClients(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	srvServer.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srvServer.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		t.Logf("SERVER received multicast: %v", in.Msg)
 		if cfg := ctx.ConnectedClients(); cfg != nil && cfg.Size() == 1 {
 			err := gorums.Multicast(
@@ -458,7 +458,7 @@ func TestServerHandlerCanMulticastViaConnectedClients(t *testing.T) {
 	})
 
 	// Client handles the reverse-direction multicast dispatched by the server.
-	clientSrv.RegisterHandler(mock.Stream, func(_ gorums.ServerCtx, _ *gorums.Message) (*gorums.Message, error) {
+	clientSrv.RegisterHandler(mock.Stream, func(_ gorums.ServerContext, _ *gorums.Message) (*gorums.Message, error) {
 		t.Log("CLIENT received inner multicast")
 		wg.Done()
 		return nil, nil
@@ -494,7 +494,7 @@ func TestServerLocalDispatchContention(t *testing.T) {
 		t.Helper()
 		servers := gorumstest.LocalServers(t, 3)
 		for _, srv := range servers {
-			srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+			srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 				req := gorums.AsProto[*pb.StringValue](in)
 				return gorums.NewResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
 			})
@@ -593,7 +593,7 @@ func TestServerLocalDispatchContentionSlowReplica(t *testing.T) {
 	for i, srv := range servers {
 		if i == 0 {
 			// Server 0 (self-node): block until signaled.
-			srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+			srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 				<-blocker
 				req := gorums.AsProto[*pb.StringValue](in)
 				return gorums.NewResponseMessage(in, pb.String("echo: "+req.GetValue())), nil

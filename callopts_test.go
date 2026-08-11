@@ -82,7 +82,7 @@ func TestCallOptionsIgnoreErrorsResourceLeak(t *testing.T) {
 	// Now fixed: no replyChan → no ResponseChan → no Register.
 	servers := testLocalServers(t, 3)
 	for _, srv := range servers {
-		srv.RegisterHandler(mock.TestMethod, func(_ ServerCtx, _ *Message) (*Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(_ ServerContext, _ *Message) (*Message, error) {
 			return nil, nil
 		})
 	}

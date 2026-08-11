@@ -97,9 +97,9 @@ func WithMetadata(md metadata.MD) DialOption {
 //
 // NodeID semantics:
 //   - If srv.NodeID() == 0, the remote treats this connection as an anonymous
-//     client and tracks reverse-direction calls via [ServerCtx.ClientConfig].
+//     client and tracks reverse-direction calls via [ServerContext.ClientConfig].
 //   - If srv.NodeID() > 0, the remote treats this connection as a known peer
-//     and routes requests via [ServerCtx.Config].
+//     and routes requests via [ServerContext.Config].
 func WithBackChannel(srv *Server) DialOption {
 	if srv == nil {
 		panic("gorums: WithBackChannel called with nil server")

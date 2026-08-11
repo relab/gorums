@@ -41,7 +41,7 @@ func TestServerCallback(t *testing.T) {
 }
 
 func appendStringInterceptor(inStr, outStr string) gorums.Interceptor {
-	return func(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+	return func(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		// update the underlying request gorums.Message's message field (pb.StringValue in this case)
 		req.Value += inStr
@@ -65,7 +65,7 @@ func appendStringInterceptor(inStr, outStr string) gorums.Interceptor {
 
 type interceptorSrv struct{}
 
-func (interceptorSrv) Test(_ gorums.ServerCtx, req *pb.StringValue) (*pb.StringValue, error) {
+func (interceptorSrv) Test(_ gorums.ServerContext, req *pb.StringValue) (*pb.StringValue, error) {
 	return pb.String(req.GetValue() + "server-"), nil
 }
 
@@ -78,7 +78,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 			appendStringInterceptor("i2in-", "i2out-"),
 		))
 		// register final handler which appends "final-" to the request value
-		s.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+		s.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 			req := gorums.AsProto[*pb.StringValue](in)
 			resp, err := interceptorSrv.Test(ctx, req)
 			if err != nil {
@@ -148,7 +148,7 @@ func TestWithBufferSizesProcessesRequests(t *testing.T) {
 // underlying TCP connection is broken.
 func TestTCPReconnection(t *testing.T) {
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		return gorums.NewResponseMessage(in, req), nil
 	})
@@ -202,7 +202,7 @@ func TestTCPReconnection(t *testing.T) {
 	}
 
 	srv2 := gorums.NewServer()
-	srv2.RegisterHandler(mock.TestMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv2.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		return gorums.NewResponseMessage(in, req), nil
 	})

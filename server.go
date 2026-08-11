@@ -137,7 +137,7 @@ type Server struct {
 // NewServer returns a new instance of [Server].
 //
 // The server tracks connected clients that are capable of receiving reverse-direction
-// calls from the server; these clients are accessible via [ServerCtx.ConnectedClients]
+// calls from the server; these clients are accessible via [ServerContext.ConnectedClients]
 // and [Server.ConnectedClients]. If [WithPeers] is provided, the server additionally
 // tracks and calls a fixed set of peer servers, accessible via [Server.PeerConfig]
 // and, filtered by reachability, [Server.ConnectedPeers].
@@ -219,7 +219,7 @@ func (s *Server) RegisterHandler(method string, handler Handler) {
 // It is responsible for releasing the mutex when the handler chain is done,
 // unless already released by the handler itself, or an interceptor in the chain.
 func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, release func(), send func(*stream.Message)) {
-	srvCtx := ServerCtx{
+	srvCtx := ServerContext{
 		Context: ctx,
 		release: release,
 		send:    send,

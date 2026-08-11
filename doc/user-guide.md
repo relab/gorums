@@ -222,11 +222,11 @@ And this is our server interface:
 
 ```go
 type StorageServer interface {
-	ReadRPC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
-	WriteUnicast(ctx gorums.ServerCtx, request *WriteRequest)
-	WriteMulticast(ctx gorums.ServerCtx, request *WriteRequest)
-	ReadQC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
-	ReadCorrectable(ctx gorums.ServerCtx, request *ReadRequest, send func(response *ReadResponse) error) error
+	ReadRPC(ctx gorums.ServerContext, request *ReadRequest) (response *ReadResponse, err error)
+	WriteUnicast(ctx gorums.ServerContext, request *WriteRequest)
+	WriteMulticast(ctx gorums.ServerContext, request *WriteRequest)
+	ReadQC(ctx gorums.ServerContext, request *ReadRequest) (response *ReadResponse, err error)
+	ReadCorrectable(ctx gorums.ServerContext, request *ReadRequest, send func(response *ReadResponse) error) error
 }
 ```
 
@@ -247,13 +247,13 @@ type storageSrv struct {
   state *ReadResponse
 }
 
-func (srv *storageSrv) ReadRPC(_ gorums.ServerCtx, req *ReadRequest) (resp *ReadResponse, err error) {
+func (srv *storageSrv) ReadRPC(_ gorums.ServerContext, req *ReadRequest) (resp *ReadResponse, err error) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   return srv.state, nil
 }
 
-func (srv *storageSrv) WriteUnicast(_ gorums.ServerCtx, req *WriteRequest) {
+func (srv *storageSrv) WriteUnicast(_ gorums.ServerContext, req *WriteRequest) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   if req.GetTime().AsTime().After(srv.state.GetTime().AsTime()) {
@@ -261,7 +261,7 @@ func (srv *storageSrv) WriteUnicast(_ gorums.ServerCtx, req *WriteRequest) {
   }
 }
 
-func (srv *storageSrv) WriteMulticast(_ gorums.ServerCtx, req *WriteRequest) {
+func (srv *storageSrv) WriteMulticast(_ gorums.ServerContext, req *WriteRequest) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   if req.GetTime().AsTime().After(srv.state.GetTime().AsTime()) {
@@ -269,13 +269,13 @@ func (srv *storageSrv) WriteMulticast(_ gorums.ServerCtx, req *WriteRequest) {
   }
 }
 
-func (srv *storageSrv) ReadQC(_ gorums.ServerCtx, req *ReadRequest) (resp *ReadResponse, err error) {
+func (srv *storageSrv) ReadQC(_ gorums.ServerContext, req *ReadRequest) (resp *ReadResponse, err error) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   return srv.state, nil
 }
 
-func (srv *storageSrv) ReadCorrectable(_ gorums.ServerCtx, req *ReadRequest, send func(response *ReadResponse) error) error {
+func (srv *storageSrv) ReadCorrectable(_ gorums.ServerContext, req *ReadRequest, send func(response *ReadResponse) error) error {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   return send(srv.state)
@@ -291,12 +291,12 @@ There are some important things to note about implementing the server interfaces
   To guarantee messages from different senders are executed in-order at the different servers, you must use a total ordering protocol.
 * Errors should be returned using the [`status` package](https://pkg.go.dev/google.golang.org/grpc/status?tab=doc).
 * Handlers run synchronously, and hence a long-running handler will prevent other messages from being handled.
-  To help solve this problem, our `ServerCtx` objects have a `Release()` function that releases the handler's lock on the server,
+  To help solve this problem, our `ServerContext` objects have a `Release()` function that releases the handler's lock on the server,
   which allows the next request to be processed. After `ctx.Release()` has been called, the handler may run concurrently
   with the handlers for the next requests. The handler automatically calls `ctx.Release()` after returning.
 
   ```go
-  func (srv *storageSrv) ReadRPC(ctx gorums.ServerCtx, req *ReadRequest) (resp *ReadResponse, err error) {
+  func (srv *storageSrv) ReadRPC(ctx gorums.ServerContext, req *ReadRequest) (resp *ReadResponse, err error) {
     // any code running before this will be executed in-order
     ctx.Release()
     // after Release() has been called, a new request handler may be started,
@@ -1050,7 +1050,7 @@ Gorums also supports server-side interceptors that wrap inbound RPC handlers, si
 A server-side interceptor implements the `gorums.Interceptor` signature:
 
 ```go
-type Interceptor func(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error)
+type Interceptor func(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error)
 ```
 
 You can pass multiple interceptors when starting a Gorums server. They can perform logging, latency injection, metadata insertion, and request validation before sending the request to the handler.
@@ -1061,7 +1061,7 @@ Below are several examples based on the `examples/interceptors` package.
 
 ```go
 func LoggingInterceptor(addr string) gorums.Interceptor {
-    return func(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+    return func(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
         req := gorums.AsProto[proto.Message](in)
         log.Printf("[%s]: LoggingInterceptor(incoming): Method=%s, Message=%s", addr, in.GetMethod(), req)
 
@@ -1081,13 +1081,13 @@ func LoggingInterceptor(addr string) gorums.Interceptor {
 Interceptors can inject arbitrary delays based on client properties or attach metadata to the incoming requests:
 
 ```go
-func DelayedInterceptor(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
     delay := 50 * time.Millisecond
     time.Sleep(delay)
     return next(ctx, in)
 }
 
-func MetadataInterceptor(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
     // Inject a custom metadata field for the handler
     entry := gorums.MetadataEntry_builder{
         Key:   "customKey",
@@ -1105,7 +1105,7 @@ A server interceptor can also stop a request from reaching the handler entirely.
 
 ```go
 // NoFooAllowedInterceptor rejects requests for messages with key "foo".
-func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
     if req, ok := gorums.AsProto[proto.Message](in).(T); ok {
         if req.GetKey() == "foo" {
             return nil, fmt.Errorf("requests for key 'foo' are not allowed")
@@ -1748,12 +1748,12 @@ greeting = gorums
 
 The `nread` and `nwrite` commands trigger server-side nested quorum calls and nested multicasts, which are described in the following sections.
 
-## Nested Quorum Calls with ServerCtx.PeerConfig
+## Nested Quorum Calls with ServerContext.PeerConfig
 
 A server handler (the server method itself) can act as a client and issue its own quorum calls to other nodes.
 These are called *nested quorum calls*, because one quorum call triggers another from inside the server handler.
 
-`ServerCtx.PeerConfig()` returns the `Config` of the peers the server was configured with via `gorums.WithPeers`.
+`ServerContext.PeerConfig()` returns the `Config` of the peers the server was configured with via `gorums.WithPeers`.
 This makes it straightforward for a handler to fan out a sub-request to the rest of the cluster.
 It is the full peer set, not the reachable subset, so a quorum size derived from it inside a handler does not shift as peers connect and disconnect; use `ctx.ConnectedPeers()` to observe reachability.
 
@@ -1790,7 +1790,7 @@ Without `Release()`, the server would block all other inbound messages until the
 ```go
 // ReadNestedQC is a quorum-call handler that fans out a nested ReadQC
 // to all known connected peers and returns the most recent value.
-func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (*pb.ReadResponse, error) {
+func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadRequest) (*pb.ReadResponse, error) {
     config := ctx.PeerConfig()
     if len(config) == 0 {
         return nil, fmt.Errorf("read_nested_qc: requires a server peer configuration")
@@ -1805,7 +1805,7 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) 
 The same pattern applies to nested multicast:
 
 ```go
-func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerCtx, req *pb.WriteRequest) (*pb.WriteResponse, error) {
+func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerContext, req *pb.WriteRequest) (*pb.WriteResponse, error) {
     config := ctx.PeerConfig()
     if len(config) == 0 {
         return nil, fmt.Errorf("write_nested_multicast: requires server peer configuration")
@@ -1841,9 +1841,9 @@ sequenceDiagram
 
 The client sees a single quorum call, but internally each receiving node fans out to all of its peers and returns the freshest value found across the whole cluster.
 
-## Reverse Direction Calls with ServerCtx.ConnectedClients
+## Reverse Direction Calls with ServerContext.ConnectedClients
 
-`ServerCtx.ConnectedClients()` returns a `Config` of all currently connected *client peers* — nodes that connected to this server dynamically, rather than being pre-configured with `WithPeers`.
+`ServerContext.ConnectedClients()` returns a `Config` of all currently connected *client peers* — nodes that connected to this server dynamically, rather than being pre-configured with `WithPeers`.
 A handler can use this configuration to make outbound calls back towards those clients, reversing the usual direction of communication.
 
 This pattern is particularly useful when clients are behind a firewall and cannot accept inbound connections.
@@ -1929,7 +1929,7 @@ The handler reads `ctx.ConnectedClients()` to reach all currently connected clie
 
 ```go
 // ReadNestedQC fans out a ReadQC to all clients that have connected.
-func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (*pb.ReadResponse, error) {
+func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadRequest) (*pb.ReadResponse, error) {
     config := ctx.ConnectedClients()
     if len(config) == 0 {
         return nil, fmt.Errorf("read_nested_qc: no client peers connected")
@@ -1939,7 +1939,7 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) 
 }
 ```
 
-The key difference from `ServerCtx.PeerConfig()` is the direction of each per-node connection:
+The key difference from `ServerContext.PeerConfig()` is the direction of each per-node connection:
 
 | Method               | Connection direction                            | Typical use case                                   |
 | -------------------- | ----------------------------------------------- | -------------------------------------------------- |

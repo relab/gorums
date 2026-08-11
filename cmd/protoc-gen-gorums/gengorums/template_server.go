@@ -1,7 +1,7 @@
 package gengorums
 
 var serverVariables = `
-{{$context := use "gorums.ServerCtx" .GenFile}}
+{{$context := use "gorums.ServerContext" .GenFile}}
 `
 
 var serverInterface = `

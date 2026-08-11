@@ -11,7 +11,7 @@ import (
 
 type cfgSrv struct{}
 
-func (cfgSrv) Read(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
+func (cfgSrv) Read(_ gorums.ServerContext, req *Request) (resp *Response, err error) {
 	return Response_builder{
 		Num: req.GetNum(),
 	}.Build(), nil
