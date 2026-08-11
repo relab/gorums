@@ -26,3 +26,13 @@ func NewMessageRouterWithLatency(latency time.Duration) *MessageRouter {
 		latency: latency,
 	}
 }
+
+// NewSharedTransportWithGen is like [NewSharedTransport] but overrides the
+// message-ID generator, so a test can simulate a deduplicated transport that
+// draws IDs from a server-initiated space while reusing an existing channel.
+// This function should only be used in tests.
+func NewSharedTransportWithGen(peer *Transport, msgIDGen func() uint64) *Transport {
+	t := NewSharedTransport(peer)
+	t.msgIDGen = msgIDGen
+	return t
+}

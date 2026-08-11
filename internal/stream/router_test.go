@@ -447,7 +447,7 @@ func TestRouterRouteMessage(t *testing.T) {
 	t.Run("ServerInitiatedIncludesMessageMetadata", func(t *testing.T) {
 		const (
 			key  = "request-id"
-			want = "server-initiated-metadata"
+			want = "dedup-metadata"
 		)
 		handlerMD := make(chan metadata.MD, 1)
 		handler := requestHandlerFunc(func(ctx context.Context, _ *Message, release func(), _ func(*Message)) {

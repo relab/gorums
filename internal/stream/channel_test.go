@@ -1475,7 +1475,8 @@ func TestChannelLateCancelWatcherRequeuesPending(t *testing.T) {
 // the watched Send is still in flight. Once the send has completed, a
 // late-running watcher must leave the stream and its pending requests
 // untouched: clearing then would sever a healthy stream that later requests
-// depend on. A late watcher is routine, not exotic — a caller may cancel its context
+// (and, under stream deduplication, a remote peer sharing the stream) depend
+// on. A late watcher is routine, not exotic — a caller may cancel its context
 // the moment the response arrives (as the benchmark readiness probe does),
 // which lands the cancellation between Send returning and the sender's stop
 // call, and the watcher goroutine spawned by that cancellation can then run
@@ -1606,10 +1607,10 @@ func killFirstStreamServer() (serverFn func(Gorums_NodeStreamServer) error, conn
 // TestChannelEagerReconnectRedialsWithoutSends verifies that a channel with
 // eager reconnection re-establishes a stream the server killed without any
 // local send prompting it, and that the replacement stream then carries a
-// request round trip. A symmetric peer depends on this stream staying
-// registered on its inbound side, so waiting for the next local send — the
-// default — would leave that peer dropped indefinitely on a node with nothing
-// to send.
+// request round trip. Under stream deduplication the remote peer reuses this
+// stream for its own calls and cannot re-dial it, so waiting for the next
+// local send — the default — would leave that peer failing indefinitely on a
+// node with nothing to send.
 func TestChannelEagerReconnectRedialsWithoutSends(t *testing.T) {
 	serverFn, conns := killFirstStreamServer()
 	tc := setupChannelEager(t, true, serverFn)
