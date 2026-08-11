@@ -217,6 +217,23 @@ func (im *InboundManager) newNode(id uint32, addr string) (*Node, error) {
 	return node, nil
 }
 
+// knownPeer returns the pre-created inbound node for a known peer, or nil if
+// id is not part of the server's peer configuration. The node is returned
+// regardless of whether the peer is currently connected: known-peer nodes
+// exist from construction, so a dedup outbound configuration can borrow a
+// peer's channel slot before the peer first connects. The returned node's
+// channel pointer is shared, so channel attachments and replacements remain
+// visible to holders, and its router is owned by the node and stable across
+// reconnects.
+func (im *InboundManager) knownPeer(id uint32) *Node {
+	if im == nil {
+		return nil
+	}
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+	return im.knownNodes[id]
+}
+
 // isKnown returns true if the given NodeID is a known peer.
 // Returns false for id == 0 (external clients) or unknown IDs.
 func (im *InboundManager) isKnown(id uint32) bool {
