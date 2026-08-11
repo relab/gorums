@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"fmt"
 	"net"
 
 	"github.com/relab/gorums/internal/stream"
@@ -18,9 +19,11 @@ type serverOptions struct {
 	connectCallback func(context.Context)
 	interceptors    []Interceptor
 	// Peer management options
-	myID           uint32
-	peerOpt        NodeListOption
-	onConfigChange func(Configuration)
+	myID             uint32
+	peerNodes        NodeListOption      // Peers to track as they connect; set by WithPeers.
+	onConfigChange   func(Configuration) // Callback registered via WithPeerChange.
+	outboundNodes    NodeListOption      // Nodes this server calls; set by WithPeers.
+	outboundDialOpts []DialOption
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -74,24 +77,35 @@ func WithInterceptors(i ...Interceptor) ServerOption {
 	}
 }
 
-// WithConfig configures the server to track a fixed set of peer servers.
-// When a recognized peer connects, it is included in the [Configuration]
-// returned by [Config]. The myID parameter is this server's own NodeID;
-// it is always present in the [Config] so that quorum thresholds account
-// for the local replica.
+// WithPeers configures the server to both track and call a fixed set of peer
+// servers. The myID parameter is this server's own node ID; it is always
+// present in the peer [Configuration] so that quorum thresholds account for
+// the local replica, and calls to it are served in-process without a network
+// round-trip.
 //
-// The optional onChange callback is called after each change to the known
-// peer [Configuration] (server peer connect or disconnect). It is invoked
-// while any internal locks are held, so it must not call [Config] or other
-// blocking methods. Use it only to signal or copy; do not perform long
-// work inside the callback.
-func WithConfig(myID uint32, opt NodeListOption, onChange ...func(Configuration)) ServerOption {
+// The server builds the peer [Configuration] itself, available from
+// [Server.PeerConfig], applying opts to the connections it establishes. To
+// observe which peers are currently reachable, use [Server.Config].
+//
+// The returned option only records the peer set; the [NewServer] call that
+// receives it panics if the node source is invalid, for example if it contains
+// a duplicate or malformed address.
+func WithPeers(myID uint32, nodes NodeListOption, opts ...DialOption) ServerOption {
 	return func(o *serverOptions) {
 		o.myID = myID
-		o.peerOpt = opt
-		if len(onChange) > 0 {
-			o.onConfigChange = onChange[0]
-		}
+		o.peerNodes = nodes
+		o.outboundNodes = nodes
+		o.outboundDialOpts = append(o.outboundDialOpts, opts...)
+	}
+}
+
+// WithPeerChange registers a callback invoked after each change to the peer
+// [Configuration] (peer connect or disconnect). The callback runs while
+// internal locks are held, so it must not call [Server.Config] or other
+// blocking methods; use it only to signal or copy, not for long work.
+func WithPeerChange(callback func(Configuration)) ServerOption {
+	return func(o *serverOptions) {
+		o.onConfigChange = callback
 	}
 }
 
@@ -101,6 +115,7 @@ type Server struct {
 	grpcServer   *grpc.Server
 	handlers     map[string]Handler
 	interceptors []Interceptor
+	outbound     Configuration // peer config built by WithPeers; nil if unused
 	*inboundManager
 }
 
@@ -134,14 +149,37 @@ func NewServer(opts ...ServerOption) *Server {
 	}
 	s.inboundManager = newInboundManager(
 		serverOpts.myID,
-		serverOpts.peerOpt,
+		serverOpts.peerNodes,
 		serverOpts.sendBufferSize,
 		serverOpts.onConfigChange,
 		s,
 	)
 	s.srv = stream.NewServer(serverOpts.recvBufferSize, serverOpts.connectCallback, s.inboundManager)
 	stream.RegisterGorumsServer(s.grpcServer, s.srv)
+	if serverOpts.outboundNodes != nil {
+		cfg, err := s.newPeerConfig(serverOpts.outboundNodes, serverOpts.outboundDialOpts)
+		if err != nil {
+			panic(fmt.Sprintf("gorums: invalid peer configuration: %v", err))
+		}
+		s.outbound = cfg
+	}
 	return s
+}
+
+// newPeerConfig builds the outbound [Configuration] this server uses to call
+// other servers. It installs the server as the back-channel request handler so
+// the remote can dispatch requests back over the same connection.
+func (s *Server) newPeerConfig(nodes NodeListOption, dialOpts []DialOption) (Configuration, error) {
+	opts := append([]DialOption{withServer(s)}, dialOpts...)
+	return NewConfig(nodes, opts...)
+}
+
+// PeerConfig returns the [Configuration] of the peers configured with
+// [WithPeers], or nil if [WithPeers] was not used. Calls on the returned
+// configuration reach the peers over connections this server establishes;
+// calls on the local node are served in-process.
+func (s *Server) PeerConfig() Configuration {
+	return s.outbound
 }
 
 // RegisterHandler registers a request handler for the specified method name.
@@ -206,9 +244,15 @@ func (s *Server) GracefulStop() {
 	s.grpcServer.GracefulStop()
 }
 
-// Stop stops the server immediately.
+// Stop stops the server immediately and releases the resources it owns,
+// including the peer [Configuration] built by [WithPeers]. It does not use
+// gRPC graceful stop, because one-way methods do not respond and would block
+// indefinitely. Stop is safe to call more than once.
 func (s *Server) Stop() {
 	s.grpcServer.Stop()
+	if s.outbound != nil {
+		_ = s.outbound.Close()
+	}
 }
 
 // compile-time assertion for interface compliance.
