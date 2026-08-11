@@ -43,11 +43,13 @@ func (h *seqNoRecorder) first(t *testing.T) uint64 {
 	return 0
 }
 
-// TestCallContextSendSharedMessageIDs verifies that sendShared reuses a single
-// message with one client-initiated ID for every node in the configuration.
+// TestCallContextSendSharedMessageIDs verifies that sendShared reuses a
+// single message with one client-initiated ID for all regular nodes, while a
+// shared dedup node gets its own message with a server-initiated ID.
 func TestCallContextSendSharedMessageIDs(t *testing.T) {
-	var clientID atomic.Uint64
+	var clientID, serverID atomic.Uint64
 	clientGen := func() uint64 { return clientID.Add(1) }
+	serverGen := func() uint64 { return stream.ServerSequenceNumber(serverID.Add(1)) }
 
 	recorders := make([]*seqNoRecorder, 3)
 	config := make(Config, 3)
@@ -57,6 +59,11 @@ func TestCallContextSendSharedMessageIDs(t *testing.T) {
 		router := stream.NewMessageRouter(recorders[i])
 		transport := stream.NewTransport(id, clientGen, router)
 		transport.StoreChannel(stream.NewLocalChannel(id, router))
+		// The third node reuses an inbound stream and must use server-initiated
+		// IDs; wrap its transport as a shared transport over the same channel.
+		if i == 2 {
+			transport = stream.NewSharedTransportWithGen(transport, serverGen)
+		}
 		config[i] = conn.NewNodeForTest(id, transport)
 	}
 
@@ -69,10 +76,15 @@ func TestCallContextSendSharedMessageIDs(t *testing.T) {
 	}
 	c.sendShared()
 
-	first := recorders[0].first(t)
-	for i, r := range recorders[1:] {
-		if got := r.first(t); got != first {
-			t.Errorf("node %d got ID %d, want the shared message ID %d", i+2, got, first)
-		}
+	regular1, regular2 := recorders[0].first(t), recorders[1].first(t)
+	shared := recorders[2].first(t)
+	if regular1 != regular2 {
+		t.Errorf("regular nodes got IDs %d and %d, want one shared message ID", regular1, regular2)
+	}
+	if shared == regular1 {
+		t.Errorf("shared node got ID %d, want its own message ID", shared)
+	}
+	if shared != stream.ServerSequenceNumber(1) {
+		t.Errorf("shared node ID = %d, want server-initiated ID %d", shared, stream.ServerSequenceNumber(1))
 	}
 }
