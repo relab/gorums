@@ -108,37 +108,38 @@ func (s *System) Addr() string {
 	return s.lis.Addr().String()
 }
 
-// Config returns a [Configuration] of all connected known peers, including this node.
+// ConnectedPeers returns the currently reachable subset of the server's peer
+// [Configuration], including this node.
 // An empty (non-nil) Configuration is returned if no known peers are connected.
 // The returned slice is replaced atomically on each connect/disconnect;
 // thus, retaining a reference to an old configuration is safe.
-func (s *System) Config() Configuration {
-	return s.srv.Config()
+func (s *System) ConnectedPeers() Configuration {
+	return s.srv.ConnectedPeers()
 }
 
-// ClientConfig returns a [Configuration] of all connected client peers
+// ConnectedClients returns a [Configuration] of all connected client peers
 // that can accept server-initiated requests.
 // An empty (non-nil) Configuration is returned if no client peers are connected.
 // The returned slice is replaced atomically on each connect/disconnect;
 // thus, retaining a reference to an old configuration is safe.
-func (s *System) ClientConfig() Configuration {
-	return s.srv.ClientConfig()
+func (s *System) ConnectedClients() Configuration {
+	return s.srv.ConnectedClients()
 }
 
-// WaitForConfig blocks until cond returns true for the current known-peer
+// WaitForPeers blocks until cond returns true for the current connected-peer
 // [Configuration], or until ctx is cancelled or the system is stopped.
 // The condition is checked immediately against the current configuration,
 // so it may return without blocking if the condition is already satisfied.
-func (s *System) WaitForConfig(ctx context.Context, cond func(Configuration) bool) error {
-	return s.srv.waitForKnownConfig(ctx, cond)
+func (s *System) WaitForPeers(ctx context.Context, cond func(Configuration) bool) error {
+	return s.srv.WaitForPeers(ctx, cond)
 }
 
-// WaitForClientConfig blocks until cond returns true for the current
+// WaitForClients blocks until cond returns true for the current
 // client-peer [Configuration], or until ctx is cancelled or the system is stopped.
 // The condition is checked immediately against the current configuration,
 // so it may return without blocking if the condition is already satisfied.
-func (s *System) WaitForClientConfig(ctx context.Context, cond func(Configuration) bool) error {
-	return s.srv.waitForClientConfig(ctx, cond)
+func (s *System) WaitForClients(ctx context.Context, cond func(Configuration) bool) error {
+	return s.srv.WaitForClients(ctx, cond)
 }
 
 // RegisterService registers the service with the server using the provided register function.
@@ -169,7 +170,7 @@ func (s *System) Serve() error {
 // on the client side will get notified by connection errors.
 // It is safe to call Stop before [System.Serve] to avoid resource leaks.
 func (s *System) Stop() (errs error) {
-	// Unblock any WaitForConfig / WaitForClientConfig callers.
+	// Unblock any WaitForPeers / WaitForClients callers.
 	s.srv.close()
 	// We cannot use graceful stop here since multicast methods does not
 	// respond to the client, and thus would block indefinitely.

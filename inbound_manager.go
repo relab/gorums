@@ -72,7 +72,9 @@ type inboundManager struct {
 	myID           uint32                // this server's own NodeID; always present in inboundCfg
 	knownNodes     map[uint32]*Node      // pre-created configured peers, including self when configured
 	clientNodes    map[uint32]*Node      // dynamically assigned peer-capable clients
-	config         Configuration         // auto-updated slice of known peer servers, sorted by ID
+	peerConfig     Configuration         // the server's peer Configuration; set once by setPeerConfig
+	config         Configuration         // auto-updated connectivity-filtered subset of peerConfig, sorted by ID
+	inboundCfg     Configuration         // auto-updated slice of known peers with an inbound stream, sorted by ID
 	clientConfig   Configuration         // auto-updated slice of client peers, sorted by ID
 	nextMsgID      atomic.Uint64         // counter for server-initiated message IDs
 	sendBufferSize uint                  // send buffer size for inbound channels
@@ -132,11 +134,10 @@ func (im *inboundManager) Nodes() []*Node {
 	})
 }
 
-// Config returns a [Configuration] of all connected known peer servers, including this node.
-// An empty (non-nil) Configuration is returned if no known peers are connected.
-// The returned slice is replaced atomically on each connect/disconnect;
-// thus, retaining a reference to an old configuration is safe.
-func (im *inboundManager) Config() Configuration {
+// ConnectedPeers returns the current connected-peer [Configuration]; see
+// [Server.ConnectedPeers]. Before setPeerConfig installs a peer configuration,
+// it falls back to the inbound view.
+func (im *inboundManager) ConnectedPeers() Configuration {
 	if im == nil {
 		return nil
 	}
@@ -145,12 +146,42 @@ func (im *inboundManager) Config() Configuration {
 	return im.config
 }
 
-// ClientConfig returns a [Configuration] of all connected clients capable of
+// setPeerConfig installs the server's peer [Configuration], from which the
+// connected-peer view is derived. It is called once by [NewServer] after the
+// peer configuration is built; stream-state changes observed before that are
+// picked up by the rebuild here.
+func (im *inboundManager) setPeerConfig(cfg Configuration) {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	im.peerConfig = cfg
+	im.rebuildConfig()
+}
+
+// peerStreamChanged records that a dialed peer's outbound stream came up or
+// went down and rebuilds the connected-peer view. It is registered as the
+// stream-state callback for the server's outbound peer nodes; the new state
+// is read directly from the nodes during the rebuild.
+func (im *inboundManager) peerStreamChanged(uint32, bool) {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	im.rebuildConfig()
+}
+
+// inboundPeers returns the known peers with an inbound stream open to this
+// server, plus the local node. Test-only: production code observes
+// connectivity through ConnectedPeers.
+func (im *inboundManager) inboundPeers() Configuration {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+	return im.inboundCfg
+}
+
+// ConnectedClients returns a [Configuration] of all connected clients capable of
 // receiving reverse-direction calls from the server.
 // An empty (non-nil) Configuration is returned if no client peers are connected.
 // The returned slice is replaced atomically on each connect/disconnect;
 // thus, retaining a reference to an old configuration is safe.
-func (im *inboundManager) ClientConfig() Configuration {
+func (im *inboundManager) ConnectedClients() Configuration {
 	if im == nil {
 		return nil
 	}
@@ -310,15 +341,19 @@ func (im *inboundManager) nextAvailableClientID() (uint32, error) {
 	return 0, fmt.Errorf("gorums: dynamic client ID space exhausted")
 }
 
-// rebuildConfig rebuilds inbound and client configurations from the current nodes map.
-// A node is included in the known Config if it has an active channel (peer connected)
-// or if it is myID. A node is included in ClientConfig if it is a connected client peer.
+// rebuildConfig rebuilds the inbound, client, and connected-peer
+// configurations from their sources. A known peer is in the inbound
+// configuration if it has an active channel (the peer opened a stream to this
+// server) or if it is myID; a client is in the client configuration while its
+// stream lives. The connected-peer configuration is the subset of the installed
+// peer configuration whose nodes can currently carry calls; before a peer
+// configuration is installed it falls back to the inbound view.
 // Callers must hold the lock.
 func (im *inboundManager) rebuildConfig() {
-	cfg := make(Configuration, 0, len(im.knownNodes))
+	inboundCfg := make(Configuration, 0, len(im.knownNodes))
 	for id, node := range im.knownNodes {
 		if id == im.myID || node.channel.Load() != nil {
-			cfg = append(cfg, node)
+			inboundCfg = append(inboundCfg, node)
 		}
 	}
 	clientCfg := make(Configuration, 0, len(im.clientNodes))
@@ -327,11 +362,23 @@ func (im *inboundManager) rebuildConfig() {
 			clientCfg = append(clientCfg, node)
 		}
 	}
-	slices.SortFunc(cfg, ID)
+	slices.SortFunc(inboundCfg, ID)
 	slices.SortFunc(clientCfg, ID)
+	im.inboundCfg = inboundCfg
+	im.clientConfig = clientCfg
+
+	cfg := inboundCfg
+	if im.peerConfig != nil {
+		cfg = make(Configuration, 0, len(im.peerConfig))
+		for _, node := range im.peerConfig {
+			if node.ID() == im.myID || node.isUp() {
+				cfg = append(cfg, node)
+			}
+		}
+		slices.SortFunc(cfg, ID)
+	}
 	cfgChanged := !slices.Equal(im.config, cfg)
 	im.config = cfg
-	im.clientConfig = clientCfg
 	if cfgChanged && im.onConfigChange != nil {
 		im.onConfigChange(cfg)
 	}
@@ -370,21 +417,29 @@ func (im *inboundManager) waitForConfig(ctx context.Context, cond func() bool) e
 	}
 }
 
-// waitForKnownConfig blocks until cond returns true for the current known-peer
+// WaitForPeers blocks until cond returns true for the current connected-peer
 // [Configuration], or until ctx is cancelled or the server is stopped.
-// The cond function receives the current known-peer configuration and must not
-// acquire any additional locks.
-func (im *inboundManager) waitForKnownConfig(ctx context.Context, cond func(Configuration) bool) error {
+// The cond function receives the current connected-peer configuration and must
+// not acquire any additional locks.
+func (im *inboundManager) WaitForPeers(ctx context.Context, cond func(Configuration) bool) error {
 	return im.waitForConfig(ctx, func() bool {
 		return cond(im.config)
 	})
 }
 
-// waitForClientConfig blocks until cond returns true for the current client-peer
+// waitForInbound blocks until cond returns true for the current inbound view.
+// Test-only counterpart of WaitForPeers.
+func (im *inboundManager) waitForInbound(ctx context.Context, cond func(Configuration) bool) error {
+	return im.waitForConfig(ctx, func() bool {
+		return cond(im.inboundCfg)
+	})
+}
+
+// WaitForClients blocks until cond returns true for the current client-peer
 // [Configuration], or until ctx is cancelled or the server is stopped.
 // The cond function receives the current client-peer configuration and must not
 // acquire any additional locks.
-func (im *inboundManager) waitForClientConfig(ctx context.Context, cond func(Configuration) bool) error {
+func (im *inboundManager) WaitForClients(ctx context.Context, cond func(Configuration) bool) error {
 	return im.waitForConfig(ctx, func() bool {
 		return cond(im.clientConfig)
 	})

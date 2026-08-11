@@ -122,10 +122,10 @@ type Server struct {
 // NewServer returns a new instance of [Server].
 //
 // The server tracks connected clients that are capable of receiving reverse-direction
-// calls from the server; these clients are accessible via [ServerCtx.ClientConfig]
-// and [Server.ClientConfig]. If [WithConfig] is provided, the server additionally
-// tracks a fixed set of peer servers, which are accessible via [ServerCtx.Config]
-// and [Server.Config].
+// calls from the server; these clients are accessible via [ServerCtx.ConnectedClients]
+// and [Server.ConnectedClients]. If [WithPeers] is provided, the server additionally
+// tracks and calls a fixed set of peer servers, accessible via [Server.PeerConfig]
+// and, filtered by reachability, [Server.ConnectedPeers].
 //
 // Panics on configuration errors (invalid addresses, duplicate nodes, etc.)
 // since these are programmer errors detectable at startup.
@@ -162,6 +162,7 @@ func NewServer(opts ...ServerOption) *Server {
 			panic(fmt.Sprintf("gorums: invalid peer configuration: %v", err))
 		}
 		s.outbound = cfg
+		s.inboundManager.setPeerConfig(cfg)
 	}
 	return s
 }

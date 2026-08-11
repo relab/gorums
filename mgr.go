@@ -107,6 +107,11 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 		EagerReconnect: m.opts.inboundMgr != nil,
 		Manager:        m,
 	}
+	if im := m.opts.inboundMgr; im != nil && im.isKnown(id) {
+		// Stream-state changes on a dialed peer feed the server's
+		// connected-peer view.
+		opts.StreamState = im.peerStreamChanged
+	}
 	n, err := newOutboundNode(addr, opts)
 	if err != nil {
 		return nil, err

@@ -86,7 +86,7 @@ func TestCallOptionsIgnoreErrorsResourceLeak(t *testing.T) {
 		})
 	}
 	for _, sys := range systems {
-		sys.WaitForConfig(t.Context(), func(cfg Configuration) bool {
+		sys.WaitForPeers(t.Context(), func(cfg Configuration) bool {
 			return cfg.Size() == 3
 		})
 	}
