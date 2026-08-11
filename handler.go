@@ -72,51 +72,37 @@ func (ctx *ServerCtx) SendMessage(out *Message) {
 	}
 }
 
-// Config returns a [Configuration] of all connected known peer servers, including this node.
-// An empty (non-nil) Configuration is returned if no known peers are connected.
-// The returned slice is replaced atomically on each connect/disconnect;
-// thus, retaining a reference to an old configuration is safe.
-func (ctx *ServerCtx) Config() Configuration {
+// PeerConfig returns the [Configuration] of the peers the server was configured
+// with via [WithPeers], or nil if it was not used. It is the full peer set, not
+// the currently reachable subset, so quorum sizes derived from it inside a
+// handler do not shift as peers connect and disconnect. Use
+// [ServerCtx.ConnectedPeers] to observe reachability.
+func (ctx *ServerCtx) PeerConfig() Configuration {
 	if ctx.srv == nil {
 		return nil
 	}
-	return ctx.srv.Config()
+	return ctx.srv.PeerConfig()
 }
 
-// ClientConfig returns a [Configuration] of all connected clients capable of
+// ConnectedPeers returns the currently reachable subset of
+// [ServerCtx.PeerConfig]; see [Server.ConnectedPeers].
+func (ctx *ServerCtx) ConnectedPeers() Configuration {
+	if ctx.srv == nil {
+		return nil
+	}
+	return ctx.srv.ConnectedPeers()
+}
+
+// ConnectedClients returns a [Configuration] of all connected clients capable of
 // receiving reverse-direction calls from the server.
 // An empty (non-nil) Configuration is returned if no client peers are connected.
 // The returned slice is replaced atomically on each connect/disconnect;
 // thus, retaining a reference to an old configuration is safe.
-func (ctx *ServerCtx) ClientConfig() Configuration {
+func (ctx *ServerCtx) ConnectedClients() Configuration {
 	if ctx.srv == nil {
 		return nil
 	}
-	return ctx.srv.ClientConfig()
-}
-
-// ConfigContext returns a [ConfigContext] encapsulating the [Configuration] of
-// all connected known peer servers, including this node.
-func (ctx *ServerCtx) ConfigContext() *ConfigContext {
-	if ctx.srv == nil {
-		return nil
-	}
-	if cfg := ctx.srv.Config(); cfg != nil {
-		return cfg.Context(ctx)
-	}
-	return nil
-}
-
-// ClientConfigContext returns a [ConfigContext] encapsulating the [Configuration] of
-// all connected clients capable of receiving reverse-direction calls from the server.
-func (ctx *ServerCtx) ClientConfigContext() *ConfigContext {
-	if ctx.srv == nil {
-		return nil
-	}
-	if cfg := ctx.srv.ClientConfig(); len(cfg) > 0 {
-		return cfg.Context(ctx)
-	}
-	return nil
+	return ctx.srv.ConnectedClients()
 }
 
 // NewResponseMessage creates a new response envelope based on the provided proto

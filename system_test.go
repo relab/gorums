@@ -147,12 +147,12 @@ func TestSystemSymmetricConfigurationConnectsAllPeers(t *testing.T) {
 	// Wait for connections to establish
 	for i, sys := range systems {
 		ctx := gorumstest.Context(t, 5*time.Second)
-		if err := sys.WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+		if err := sys.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
 			return cfg.Size() == len(systems)
 		}); err != nil {
-			t.Fatalf("system %d: WaitForConfig: %v", i+1, err)
+			t.Fatalf("system %d: WaitForPeers: %v", i+1, err)
 		}
-		if got := sys.Config().Size(); got != len(systems) {
+		if got := sys.ConnectedPeers().Size(); got != len(systems) {
 			t.Fatalf("system %d config size: %d, expected: %d", i+1, got, len(systems))
 		}
 	}
@@ -177,7 +177,7 @@ func awaitSystemReady(t *testing.T, systems []*gorums.System) {
 	t.Helper()
 	for _, sys := range systems {
 		ctx := gorumstest.Context(t, 5*time.Second)
-		if err := sys.WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+		if err := sys.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
 			return cfg.Size() == len(systems)
 		}); err != nil {
 			t.Fatalf("awaitSystemReady: %v", err)
@@ -189,7 +189,7 @@ func awaitSystemReady(t *testing.T, systems []*gorums.System) {
 func awaitClientReady(t *testing.T, sys *gorums.System, n int) {
 	t.Helper()
 	ctx := gorumstest.Context(t, 5*time.Second)
-	if err := sys.WaitForClientConfig(ctx, func(cfg gorums.Configuration) bool {
+	if err := sys.WaitForClients(ctx, func(cfg gorums.Configuration) bool {
 		return cfg.Size() == n
 	}); err != nil {
 		t.Fatalf("awaitClientReady: %v", err)
@@ -242,17 +242,17 @@ func stringEchoHandler(prefix string) gorums.Handler {
 
 func configContext(ctx gorums.ServerCtx, client bool) (*gorums.ConfigContext, error) {
 	if client {
-		configContext := ctx.ClientConfigContext()
-		if configContext == nil {
-			return nil, errors.New("ClientConfigContext: expected non-nil config")
+		clients := ctx.ConnectedClients()
+		if len(clients) == 0 {
+			return nil, errors.New("ConnectedClients: expected at least one client")
 		}
-		return configContext, nil
+		return clients.Context(ctx), nil
 	}
-	configContext := ctx.ConfigContext()
-	if configContext == nil {
-		return nil, errors.New("ConfigContext: expected non-nil config")
+	peers := ctx.PeerConfig()
+	if len(peers) == 0 {
+		return nil, errors.New("PeerConfig: expected non-empty peer configuration")
 	}
-	return configContext, nil
+	return peers.Context(ctx), nil
 }
 
 // outerChainedHandler returns an outer handler that fans out an inner quorum call
@@ -398,7 +398,11 @@ func TestSystemHandlerCanMulticastViaConfig(t *testing.T) {
 		sys.RegisterService(nil, func(srv *gorums.Server) {
 			srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 				t.Logf("System %d received multicast on %v: %v", i+1, mock.TestMethod, in.Msg)
-				if cfg := ctx.Config(); cfg != nil && cfg.Size() == 3 {
+				// Release before the nested multicast: the peer configuration
+				// includes the local node, whose in-process dispatch waits for
+				// this handler's dispatch lock.
+				ctx.Release()
+				if cfg := ctx.PeerConfig(); cfg.Size() == 3 {
 					err := gorums.Multicast(
 						cfg.Context(t.Context()),
 						pb.String("inner-multicast"),
@@ -544,7 +548,7 @@ func TestSystemHandlerCanMulticastViaClientConfig(t *testing.T) {
 	sysServer.RegisterService(nil, func(srv *gorums.Server) {
 		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 			t.Logf("SERVER received multicast: %v", in.Msg)
-			if cfg := ctx.ClientConfig(); cfg != nil && cfg.Size() == 1 {
+			if cfg := ctx.ConnectedClients(); cfg != nil && cfg.Size() == 1 {
 				err := gorums.Multicast(
 					cfg.Context(t.Context()),
 					pb.String("inner-call"),
@@ -757,16 +761,16 @@ func TestSystemLocalDispatchContentionSlowReplica(t *testing.T) {
 	}
 }
 
-func TestWaitForConfig(t *testing.T) {
+func TestWaitForPeers(t *testing.T) {
 	t.Run("ConditionAlreadyMet", func(t *testing.T) {
 		systems := gorumstest.Systems(t, 3)
 		awaitSystemReady(t, systems)
 
 		ctx := gorumstest.Context(t, 2*time.Second)
-		if err := systems[0].WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+		if err := systems[0].WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
 			return cfg.Size() == 3
 		}); err != nil {
-			t.Fatalf("WaitForConfig: %v", err)
+			t.Fatalf("WaitForPeers: %v", err)
 		}
 	})
 
@@ -774,10 +778,10 @@ func TestWaitForConfig(t *testing.T) {
 		systems := gorumstest.Systems(t, 3)
 
 		ctx := gorumstest.Context(t, 5*time.Second)
-		if err := systems[0].WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+		if err := systems[0].WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
 			return cfg.Size() == 3
 		}); err != nil {
-			t.Fatalf("WaitForConfig: %v", err)
+			t.Fatalf("WaitForPeers: %v", err)
 		}
 	})
 
@@ -791,7 +795,7 @@ func TestWaitForConfig(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 		defer cancel()
-		err = sys.WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+		err = sys.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
 			return cfg.Size() == 3 // never true
 		})
 		if !errors.Is(err, context.DeadlineExceeded) {
@@ -808,12 +812,12 @@ func TestWaitForConfig(t *testing.T) {
 
 		errCh := make(chan error, 1)
 		go func() {
-			errCh <- sys.WaitForConfig(context.Background(), func(cfg gorums.Configuration) bool {
+			errCh <- sys.WaitForPeers(context.Background(), func(cfg gorums.Configuration) bool {
 				return cfg.Size() == 3 // never true
 			})
 		}()
 
-		// Give WaitForConfig time to enter the select.
+		// Give WaitForPeers time to enter the select.
 		time.Sleep(20 * time.Millisecond)
 		_ = sys.Stop()
 
@@ -823,7 +827,7 @@ func TestWaitForConfig(t *testing.T) {
 				t.Fatalf("expected ErrStopped, got: %v", err)
 			}
 		case <-time.After(2 * time.Second):
-			t.Fatal("WaitForConfig did not return after Stop")
+			t.Fatal("WaitForPeers did not return after Stop")
 		}
 	})
 
@@ -835,7 +839,7 @@ func TestWaitForConfig(t *testing.T) {
 		for range waiters {
 			ctx := gorumstest.Context(t, 5*time.Second)
 			go func(ctx context.Context) {
-				errCh <- systems[0].WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+				errCh <- systems[0].WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
 					return cfg.Size() == 3
 				})
 			}(ctx)
@@ -843,7 +847,7 @@ func TestWaitForConfig(t *testing.T) {
 
 		for range waiters {
 			if err := <-errCh; err != nil {
-				t.Errorf("WaitForConfig: %v", err)
+				t.Errorf("WaitForPeers: %v", err)
 			}
 		}
 	})
@@ -852,10 +856,10 @@ func TestWaitForConfig(t *testing.T) {
 		sysServer, _, _ := createClientServerSystems(t)
 
 		ctx := gorumstest.Context(t, 5*time.Second)
-		if err := sysServer.WaitForClientConfig(ctx, func(cfg gorums.Configuration) bool {
+		if err := sysServer.WaitForClients(ctx, func(cfg gorums.Configuration) bool {
 			return cfg.Size() == 1
 		}); err != nil {
-			t.Fatalf("WaitForClientConfig: %v", err)
+			t.Fatalf("WaitForClients: %v", err)
 		}
 	})
 }

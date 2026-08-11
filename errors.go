@@ -39,8 +39,8 @@ var ErrSendQueueFull = stream.ErrSendQueueFull
 // This allows the response iterator to account for all nodes without blocking.
 var ErrSkipNode = errors.New("skip node")
 
-// ErrStopped is returned by [System.WaitForConfig] and [System.WaitForClientConfig]
-// when the system is stopped before the condition is met.
+// ErrStopped is returned by [Server.WaitForPeers] and [Server.WaitForClients]
+// when the server is stopped before the condition is met.
 var ErrStopped = errors.New("system stopped")
 
 // QuorumCallError reports on a failed quorum call.

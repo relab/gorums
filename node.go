@@ -195,6 +195,13 @@ func (n *Node) attachStream(streamCtx context.Context, inboundStream stream.Bidi
 	}
 }
 
+// isUp reports whether this node's channel can currently carry a request:
+// it has an attached channel and, for an outbound channel, a live stream.
+func (n *Node) isUp() bool {
+	ch := n.channel.Load()
+	return ch != nil && ch.StreamUp()
+}
+
 // RouteInbound delivers a response to a pending call or dispatches a
 // client-initiated request to the registered handler. The release
 // function is always called.
