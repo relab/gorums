@@ -50,10 +50,9 @@ type CorrectableResponse = *gorums.Correctable[*Response]
 // Example:
 //
 //	resp, err := Read(ctx, in).Majority()
-func Read(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
+func Read(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *Response] {
 	return gorums.QuorumCall[*Request, *Response](
 		ctx, in, "config.ConfigTest.Read",
-		opts...,
 	)
 }
 

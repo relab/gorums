@@ -37,16 +37,30 @@ type (
 	ConfigContext = gorums.ConfigContext
 )
 
-// Unicast is a unicast call invoked on the node in ctx.
-// No reply is returned to the client.
-func Unicast(ctx *NodeContext, in *Request, opts ...gorums.CallOption) error {
-	return gorums.Unicast(ctx, in, "oneway.OnewayTest.Unicast", opts...)
+// Unicast is a unicast call invoked on the node in ctx; no reply is
+// returned to the client. It returns a one-way call handle; call Send to block
+// until the send completes and observe any send error, or Async to dispatch
+// without waiting.
+//
+// Example:
+//
+//	err := Unicast(ctx, in).Send()
+//	h := Unicast(ctx, in).Async(); err := h.Wait()
+func Unicast(ctx *NodeContext, in *Request) *gorums.OnewayCall[*Request] {
+	return gorums.Unicast(ctx, in, "oneway.OnewayTest.Unicast")
 }
 
 // Multicast is a multicast call invoked on all nodes in the configuration in ctx.
-// Use gorums.MapRequest to send different messages to each node. No replies are collected.
-func Multicast(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) error {
-	return gorums.Multicast(ctx, in, "oneway.OnewayTest.Multicast", opts...)
+// It returns a one-way call handle; call Send to block until every send
+// completes and observe any send errors, or Async to dispatch without waiting.
+// Use gorums.MapRequest to send different messages to each node.
+//
+// Example:
+//
+//	err := Multicast(ctx, in).Send()
+//	h := Multicast(ctx, in).Async(); err := h.Wait()
+func Multicast(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
+	return gorums.Multicast(ctx, in, "oneway.OnewayTest.Multicast")
 }
 
 // OnewayTest is the server-side API for the OnewayTest Service

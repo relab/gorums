@@ -50,10 +50,9 @@ type CorrectableResponse = *gorums.Correctable[*Response]
 // Example:
 //
 //	resp, err := Correctable(ctx, in).Majority()
-func Correctable(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
+func Correctable(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *Response] {
 	return gorums.QuorumCall[*Request, *Response](
 		ctx, in, "correctable.CorrectableTest.Correctable",
-		opts...,
 	)
 }
 
@@ -65,10 +64,9 @@ func Correctable(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *go
 //	corr := CorrectableStream(ctx, in).Correctable(2)
 //	<-corr.Watch(2)
 //	resp, level, err := corr.Get()
-func CorrectableStream(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
+func CorrectableStream(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *Response] {
 	return gorums.QuorumCallStream[*Request, *Response](
 		ctx, in, "correctable.CorrectableTest.CorrectableStream",
-		opts...,
 	)
 }
 
