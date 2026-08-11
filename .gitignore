@@ -25,6 +25,7 @@ Session.vim
 .idea/
 *.xo
 z-scratch/
+.scratch/
 
 # Binary files
 cmd/benchmark/benchmark

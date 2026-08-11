@@ -43,7 +43,9 @@ gorums/
 - ALWAYS write tests for new features and bug fixes
 - Large changes must be broken into small, manageable units to be committed separately
 - NEVER make unrelated changes in the same commit (e.g., code + documentation + formatting)
-- Instead, if you discover a bug or issue while working, document the issue in a separate file `doc/issue-*.md`
+- Issues, designs, reviews, plans, specifications, and task notes are private local artifacts.
+  Store them under `.scratch/<feature>/`; never stage or commit them.
+- If you discover a separate issue while working, add or update its numbered file under `.scratch/<feature>/issues/` instead of expanding the current change.
 - COMMIT messages must follow conventional commit style (at most 75 characters wide), must be human readable plain text and easily copyable, and must not contain any markdown links or formatting.
 
 ### Code Generation Workflow
@@ -193,10 +195,14 @@ Gorums provides custom protobuf options defined in `gorums.proto`:
 
 ## Documentation
 
+Maintained user and developer documentation belongs under `doc/`.
+Private issues, designs, reviews, plans, specifications, and tasks belong under the ignored `.scratch/` directory.
+
 Before making significant changes, consult:
 
 - `doc/user-guide.md` - Understanding the API and usage patterns
 - `doc/dev-guide.md` - Development workflow and architecture
+- `.scratch/README.md`, when present - Private work index and local issue conventions
 
 - `README.md` - Project overview and getting started
 - When editing markdown files, use one sentences per line, so that diffs are easier to read.
