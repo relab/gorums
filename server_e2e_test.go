@@ -48,7 +48,7 @@ func TestServerSymmetricConfigurationConnectsAllPeers(t *testing.T) {
 	// includes each server's node ID in its connection metadata.
 	for i, srv := range servers {
 		ctx := gorumstest.Context(t, 5*time.Second)
-		if err := srv.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+		if err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
 			return cfg.Size() == len(servers)
 		}); err != nil {
 			t.Fatalf("server %d: WaitForPeers: %v", i+1, err)
@@ -78,7 +78,7 @@ func awaitServerReady(t *testing.T, servers []*gorums.Server) {
 	t.Helper()
 	for _, srv := range servers {
 		ctx := gorumstest.Context(t, 5*time.Second)
-		if err := srv.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+		if err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
 			return cfg.Size() == len(servers)
 		}); err != nil {
 			t.Fatalf("awaitServerReady: %v", err)
@@ -90,7 +90,7 @@ func awaitServerReady(t *testing.T, servers []*gorums.Server) {
 func awaitClientReady(t *testing.T, srv *gorums.Server, n int) {
 	t.Helper()
 	ctx := gorumstest.Context(t, 5*time.Second)
-	if err := srv.WaitForClients(ctx, func(cfg gorums.Configuration) bool {
+	if err := srv.WaitForClients(ctx, func(cfg gorums.Config) bool {
 		return cfg.Size() == n
 	}); err != nil {
 		t.Fatalf("awaitClientReady: %v", err)
@@ -102,8 +102,8 @@ func awaitClientReady(t *testing.T, srv *gorums.Server, n int) {
 // reverse-direction calls to them via [gorums.ServerCtx.ConnectedClients].
 // The client is a standalone [*gorums.Server] (no listener needed) whose registered handlers
 // are reachable by the server over the existing bidirectional gRPC stream. The returned
-// [gorums.Configuration] is the client's outbound config pointing at the server.
-func createClientServerPair(t *testing.T) (*gorums.Server, *gorums.Server, gorums.Configuration) {
+// [gorums.Config] is the client's outbound config pointing at the server.
+func createClientServerPair(t *testing.T) (*gorums.Server, *gorums.Server, gorums.Config) {
 	t.Helper()
 
 	// Bind the listener up front so the client knows the address before the
@@ -490,7 +490,7 @@ func TestServerHandlerCanMulticastViaConnectedClients(t *testing.T) {
 // Each subtest creates its own isolated servers so that goroutines left over
 // from one subtest cannot contaminate the next.
 func TestServerLocalDispatchContention(t *testing.T) {
-	startServers := func(t *testing.T) gorums.Configuration {
+	startServers := func(t *testing.T) gorums.Config {
 		t.Helper()
 		servers := gorumstest.LocalServers(t, 3)
 		for _, srv := range servers {
@@ -656,7 +656,7 @@ func TestWaitForPeers(t *testing.T) {
 		awaitServerReady(t, servers)
 
 		ctx := gorumstest.Context(t, 2*time.Second)
-		if err := servers[0].WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+		if err := servers[0].WaitForPeers(ctx, func(cfg gorums.Config) bool {
 			return cfg.Size() == 3
 		}); err != nil {
 			t.Fatalf("WaitForPeers: %v", err)
@@ -667,7 +667,7 @@ func TestWaitForPeers(t *testing.T) {
 		servers := gorumstest.LocalServers(t, 3)
 
 		ctx := gorumstest.Context(t, 5*time.Second)
-		if err := servers[0].WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+		if err := servers[0].WaitForPeers(ctx, func(cfg gorums.Config) bool {
 			return cfg.Size() == 3
 		}); err != nil {
 			t.Fatalf("WaitForPeers: %v", err)
@@ -681,7 +681,7 @@ func TestWaitForPeers(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 		defer cancel()
-		err := srv.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+		err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
 			return cfg.Size() == 3 // never true
 		})
 		if !errors.Is(err, context.DeadlineExceeded) {
@@ -695,7 +695,7 @@ func TestWaitForPeers(t *testing.T) {
 
 		errCh := make(chan error, 1)
 		go func() {
-			errCh <- srv.WaitForPeers(context.Background(), func(cfg gorums.Configuration) bool {
+			errCh <- srv.WaitForPeers(context.Background(), func(cfg gorums.Config) bool {
 				return cfg.Size() == 3 // never true
 			})
 		}()
@@ -722,7 +722,7 @@ func TestWaitForPeers(t *testing.T) {
 		for range waiters {
 			ctx := gorumstest.Context(t, 5*time.Second)
 			go func(ctx context.Context) {
-				errCh <- servers[0].WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+				errCh <- servers[0].WaitForPeers(ctx, func(cfg gorums.Config) bool {
 					return cfg.Size() == 3
 				})
 			}(ctx)
@@ -739,7 +739,7 @@ func TestWaitForPeers(t *testing.T) {
 		srvServer, _, _ := createClientServerPair(t)
 
 		ctx := gorumstest.Context(t, 5*time.Second)
-		if err := srvServer.WaitForClients(ctx, func(cfg gorums.Configuration) bool {
+		if err := srvServer.WaitForClients(ctx, func(cfg gorums.Config) bool {
 			return cfg.Size() == 1
 		}); err != nil {
 			t.Fatalf("WaitForClients: %v", err)

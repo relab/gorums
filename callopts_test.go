@@ -87,7 +87,7 @@ func TestCallOptionsIgnoreErrorsResourceLeak(t *testing.T) {
 		})
 	}
 	for _, srv := range servers {
-		srv.WaitForPeers(t.Context(), func(cfg Configuration) bool {
+		srv.WaitForPeers(t.Context(), func(cfg Config) bool {
 			return cfg.Size() == 3
 		})
 	}

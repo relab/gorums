@@ -12,7 +12,7 @@ import (
 func TestReservedIdentifiers(t *testing.T) {
 	pkg := loadPackage("github.com/relab/gorums/cmd/protoc-gen-gorums/dev")
 	_, got := findIdentifiers(pkg)
-	want := []string{"ConfigContext", "Configuration", "Node", "NodeContext"}
+	want := []string{"Config", "ConfigContext", "Node", "NodeContext"}
 	if !slices.Equal(got, want) {
 		t.Errorf("generated static surface changed:\ngot:  %v\nwant: %v\nIf intentional, update aliases.go and this want slice.", got, want)
 	}

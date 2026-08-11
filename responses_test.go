@@ -32,7 +32,7 @@ func makeClientCtx[Req, Resp msg](t *testing.T, numNodes int, responses []NodeRe
 	}
 	close(resultChan)
 
-	config := make(Configuration, numNodes)
+	config := make(Config, numNodes)
 	for i := range numNodes {
 		config[i] = &Node{id: uint32(i + 1)}
 	}
