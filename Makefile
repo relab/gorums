@@ -7,12 +7,18 @@ static_file				:= $(gen_path)/template_static.go
 static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -not -name "*_test.go")
 proto_path 				:= $(dev_path):third_party:.
 
-workspace_packages		:= ./... ./examples/...
+# The benchkit module keeps its .proto files under benchkit/proto so that the
+# import paths protoc records stay "benchkit/*.proto" and "benchmark/*.proto".
+bk_path					:= benchkit/proto
+bk_proto_path			:= $(bk_path):third_party:.
+bk_module				:= github.com/relab/gorums/benchkit
+workspace_packages		:= ./... ./examples/... ./benchkit/...
 
 plugin_deps				:= gorums.pb.go $(static_file)
 runtime_deps			:= internal/stream/stream.pb.go internal/stream/stream_grpc.pb.go
+benchkit_deps			:= benchkit/benchkit.pb.go benchkit/control.pb.go benchkit/control_gorums.pb.go
 
-.PHONY: all dev tools bootstrapgorums installgorums test compiletests genproto benchtest bench lint deadcode modernize goplscheck
+.PHONY: all dev tools bootstrapgorums installgorums benchkit test compiletests genproto benchtest bench lint deadcode modernize goplscheck
 
 all: dev compiletests
 
@@ -23,6 +29,24 @@ dev: installgorums $(runtime_deps)
 		--gorums_out=dev=true:. \
 		--go_opt=default_api_level=API_OPAQUE \
 		$(zorums_proto)
+
+benchkit: installgorums $(benchkit_deps)
+
+# The benchkit module's generated code is written back into the module root
+# rather than next to its .proto file, so these cannot use the pattern rules.
+benchkit/benchkit.pb.go: $(bk_path)/benchkit/benchkit.proto
+	@protoc -I=$(bk_proto_path) \
+		--go_out=benchkit --go_opt=module=$(bk_module) \
+		--go_opt=default_api_level=API_OPAQUE $<
+
+benchkit/control.pb.go: $(bk_path)/benchkit/control.proto
+	@protoc -I=$(bk_proto_path) \
+		--go_out=benchkit --go_opt=module=$(bk_module) \
+		--go_opt=default_api_level=API_OPAQUE $<
+
+benchkit/control_gorums.pb.go: $(bk_path)/benchkit/control.proto
+	@protoc -I=$(bk_proto_path) \
+		--gorums_out=benchkit --gorums_opt=module=$(bk_module) $<
 
 $(static_file): $(static_files)
 	@cp $(static_file) $(static_file).bak
@@ -100,20 +124,20 @@ stressgen: tools
 	rm ./internal/testprotos/testprotos.test
 
 lint: deadcode
-	@golangci-lint-v2 run ./... ./examples/...
+	@golangci-lint-v2 run ./... ./examples/... ./benchkit/...
 
 # deadcode reports functions unreachable from any main or test across all
-# workspace modules (root and examples), so cross-module usage is
+# workspace modules (root, examples, benchkit), so cross-module usage is
 # accounted for. It is advisory: exported library API with no in-repo caller
 # (e.g. optional dial/server options) and example-only helpers are expected to
 # appear. Review new entries for genuinely dead internal code.
 deadcode:
-	@go run golang.org/x/tools/cmd/deadcode@latest -test ./... ./examples/...
+	@go run golang.org/x/tools/cmd/deadcode@latest -test ./... ./examples/... ./benchkit/...
 
 modernize:
-	@go fix ./... ./examples/...
+	@go fix ./... ./examples/... ./benchkit/...
 	@go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest \
-		-fix ./... ./examples/...
+		-fix ./... ./examples/... ./benchkit/...
 
 # Report all gopls diagnostics, including hint-level style and modernization
 # suggestions. Generated Go files are excluded because their generators own them.
@@ -134,11 +158,12 @@ goplscheck:
 			exit 1; \
 		fi
 
-# Regenerate all Gorums and protobuf generated files across the repo (dev, internal/tests, examples).
+# Regenerate all Gorums and protobuf generated files across the repo (dev, benchkit, internal/tests, examples).
 # This will force regeneration even though the proto files have not changed.
 genproto: installgorums dev
-	@echo "Regenerating all proto files (dev, internal/tests, examples)"
+	@echo "Regenerating all proto files (dev, benchkit, internal/tests, examples)"
 	@$(MAKE) -B -s dev
+	@$(MAKE) -B -s $(benchkit_deps)
 	@$(MAKE) -B -s --no-print-directory -C ./internal/tests all
 	@$(MAKE) -B -s --no-print-directory -C ./examples all
 

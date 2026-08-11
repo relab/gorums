@@ -1,0 +1,43 @@
+edition = "2024";
+
+package benchmark;
+option go_package = "github.com/relab/gorums/benchkit/benchmark";
+option features.field_presence = IMPLICIT;
+
+import "google/protobuf/empty.proto";
+
+import "gorums.proto";
+
+// Echo is a simple message used for echo benchmarks.
+message Echo {
+  bytes payload = 1;
+}
+
+// TimedMsg is a message with a send time and a payload used for multicast benchmarks.
+message TimedMsg {
+  int64  send_time = 1;
+  bytes  payload   = 2;
+  uint32 sender_id = 3;  // gorums node ID of the sender; lets the receiver bucket
+                         // one-way latency samples per sender for clock-offset
+                         // correction. Zero means untagged (no per-sender bucketing).
+}
+
+// Benchmark is the gorums workload service benchmarked by benchkit. The
+// measurement control plane (Start, Stop, ClockSync, Done) lives in benchkit's
+// Control service; this service carries only the operations under test.
+service Benchmark {
+  // QuorumCall performs an echo quorum call on all servers.
+  rpc QuorumCall(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+  }
+
+  // SlowServer performs an echo quorum call on slow servers.
+  rpc SlowServer(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+  }
+
+  // Multicast performs a multicast call to all servers.
+  rpc Multicast(TimedMsg) returns (google.protobuf.Empty) {
+    option (gorums.multicast) = true;
+  }
+}
