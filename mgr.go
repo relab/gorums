@@ -99,6 +99,12 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 		Metadata:       m.opts.metadata,
 		DialOpts:       m.opts.grpcDialOpts,
 		RequestHandler: m.opts.handler,
+		// When this node belongs to a server that calls its peers, the peer may
+		// depend on this connection staying registered on its inbound side. If
+		// it drops while this node has nothing to send, the peer would stall
+		// waiting for the next local send, so re-establish it eagerly. Plain
+		// clients reconnect on the next send.
+		EagerReconnect: m.opts.inboundMgr != nil,
 		Manager:        m,
 	}
 	n, err := newOutboundNode(addr, opts)

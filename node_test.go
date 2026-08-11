@@ -387,7 +387,7 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 	// Wrap the outbound channel in a Node, adding the one atomic.Pointer.Load
 	// that Node.enqueue performs on every dispatch.
 	n := newInboundNode(1, lis.Addr().String(), func() uint64 { return 0 }, nil)
-	ch := stream.NewOutboundChannel(context.Background(), 1, 10, conn, n.router)
+	ch := stream.NewOutboundChannel(context.Background(), 1, 10, conn, n.router, false, nil)
 	b.Cleanup(func() { _ = ch.Close() })
 	n.channel.Store(ch)
 

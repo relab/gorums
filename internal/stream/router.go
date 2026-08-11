@@ -31,6 +31,24 @@ type RequestHandler interface {
 	HandleRequest(ctx context.Context, msg *Message, release func(), send func(*Message))
 }
 
+// pendingOwner is an opaque identity token recording which channel registered
+// a pending call. Each channel allocates one token and tags its registrations
+// with it, so that closing or requeueing a retired channel affects only that
+// channel's calls and never those of its replacement on the same router.
+// The struct must not be zero-sized: Go gives distinct zero-size allocations
+// the same address, which would make separate tokens compare equal; the
+// padding byte guarantees each token a unique address.
+type pendingOwner struct {
+	_ byte
+}
+
+// pendingRequest is a router map entry: a pending call plus the owner token
+// of the channel that sent it (nil when registered via the exported Register).
+type pendingRequest struct {
+	request Request
+	owner   *pendingOwner
+}
+
 // MessageRouter handles response routing for pending calls on a bidi stream.
 // It is owned by the Node and injected into each Channel, so the router
 // survives channel replacement (e.g., inbound reconnects).
@@ -44,12 +62,12 @@ type RequestHandler interface {
 // reference, so handlers registered once are visible to all routers.
 type MessageRouter struct {
 	mu      sync.Mutex
-	pending map[uint64]Request
+	pending map[uint64]pendingRequest
 	latency time.Duration
 	handler RequestHandler // shared by reference; may be nil
-	// localMu serializes in-process handler dispatch, mirroring NodeStream's
-	// lock+release pattern so local and remote nodes behave identically.
-	localMu sync.Mutex
+	// dispatchMu serializes handler dispatch when no stream-owned ordering lock
+	// exists, covering local and client-side back-channel requests.
+	dispatchMu sync.Mutex
 }
 
 // NewMessageRouter creates a new MessageRouter with an optional RequestHandler.
@@ -60,21 +78,9 @@ type MessageRouter struct {
 func NewMessageRouter(handler ...RequestHandler) *MessageRouter {
 	handler = append(handler, nil) // ensure handler[0] is always valid
 	return &MessageRouter{
-		pending: make(map[uint64]Request),
+		pending: make(map[uint64]pendingRequest),
 		latency: -1 * time.Second,
 		handler: handler[0],
-	}
-}
-
-// NewMessageRouterWithLatency creates a new MessageRouter with an initial latency
-// for testing. The latency may be updated by subsequent message routing operations.
-// This function should only be used in tests.
-//
-// To change the latency after creation, use [MessageRouter.SetLatency].
-func NewMessageRouterWithLatency(latency time.Duration) *MessageRouter {
-	return &MessageRouter{
-		pending: make(map[uint64]Request),
-		latency: latency,
 	}
 }
 
@@ -96,18 +102,18 @@ func (r *MessageRouter) PendingCount() int {
 // DispatchLocalRequest handles the request in-process for the local node,
 // bypassing the network. It delivers the request to the registered handler,
 // serializing execution the same way remote nodes do: the next dispatch is
-// blocked until the handler returns or calls [ServerCtx.Release].
+// blocked until the handler returns or calls [ServerContext.Release].
 //
 // For one-way calls, send-completion is confirmed before the handler runs.
 // For two-way calls, the response is delivered directly to the caller's
 // response channel via the send closure.
 func (r *MessageRouter) DispatchLocalRequest(nodeID uint32, req Request) {
 	if req.Ctx.Err() != nil {
-		req.replyError(nodeID, req.Ctx.Err())
+		req.ReplyError(nodeID, req.Ctx.Err())
 		return
 	}
 	if r.handler == nil {
-		req.replyError(nodeID, status.Error(codes.Unimplemented, "no request handler registered"))
+		req.ReplyError(nodeID, status.Error(codes.Unimplemented, "no request handler registered"))
 		return
 	}
 	// One-way calls: confirm "send" completion before running the handler,
@@ -126,11 +132,17 @@ func (r *MessageRouter) DispatchLocalRequest(nodeID uint32, req Request) {
 		req.deliver(response{NodeID: nodeID, Value: msg, Err: msg.ErrorStatus()})
 	}
 
-	r.localMu.Lock()
-	var once sync.Once
-	release := func() { once.Do(r.localMu.Unlock) }
+	r.dispatchSerialized(req.Msg.AppendToIncomingContext(req.Ctx), req.Msg, send)
+}
 
-	go r.handler.HandleRequest(req.Msg.AppendToIncomingContext(req.Ctx), req.Msg, release, send)
+// dispatchSerialized starts a handler while holding the router's dispatch lock.
+// The next dispatch blocks until the handler invokes the idempotent release
+// callback, matching the ordering contract enforced by NodeStream.
+func (r *MessageRouter) dispatchSerialized(ctx context.Context, msg *Message, send func(*Message)) {
+	r.dispatchMu.Lock()
+	var once sync.Once
+	release := func() { once.Do(r.dispatchMu.Unlock) }
+	go r.handler.HandleRequest(ctx, msg, release, send)
 }
 
 // RouteMessage demultiplexes a message received on the client-side (outbound) stream.
@@ -148,7 +160,7 @@ func (r *MessageRouter) RouteMessage(ctx context.Context, nodeID uint32, msg *Me
 			send := func(reply *Message) {
 				enqueue(Request{Ctx: ctx, Msg: reply})
 			}
-			go r.handler.HandleRequest(ctx, msg, func() {}, send)
+			r.dispatchSerialized(msg.AppendToIncomingContext(ctx), msg, send)
 		}
 		return
 	}
@@ -156,12 +168,18 @@ func (r *MessageRouter) RouteMessage(ctx context.Context, nodeID uint32, msg *Me
 	r.deliverPending(msgID, response{NodeID: nodeID, Value: msg, Err: msg.ErrorStatus()})
 }
 
-// Register registers a pending call awaiting a response.
-// Called by Channel.sender() after all pre-send checks pass.
+// Register registers an unowned pending call awaiting a response.
+// Full-router cancellation and requeue operations include unowned calls,
+// while channel-scoped operations do not.
 func (r *MessageRouter) Register(msgID uint64, req Request) {
+	r.register(nil, msgID, req)
+}
+
+// register associates a pending call with the channel that sent it.
+func (r *MessageRouter) register(owner *pendingOwner, msgID uint64, req Request) {
 	req.SendTime = time.Now()
 	r.mu.Lock()
-	r.pending[msgID] = req
+	r.pending[msgID] = pendingRequest{request: req, owner: owner}
 	r.mu.Unlock()
 }
 
@@ -195,13 +213,14 @@ func (r *MessageRouter) RouteInboundMessage(ctx context.Context, nodeID uint32, 
 // may be a no-op if the caller's context is already canceled), false otherwise.
 func (r *MessageRouter) deliverPending(msgID uint64, resp response) bool {
 	r.mu.Lock()
-	req, ok := r.pending[msgID]
-	if ok && !req.Streaming {
+	pending, ok := r.pending[msgID]
+	if ok && !pending.request.Streaming {
 		delete(r.pending, msgID)
 	}
 	r.mu.Unlock()
 
 	if ok {
+		req := pending.request
 		if resp.Err == nil {
 			r.updateLatency(time.Since(req.SendTime))
 		}
@@ -234,8 +253,23 @@ func (r *MessageRouter) updateLatency(rtt time.Duration) {
 func (r *MessageRouter) CancelPending() []Request {
 	r.mu.Lock()
 	reqs := make([]Request, 0, len(r.pending))
-	for msgID, req := range r.pending {
-		reqs = append(reqs, req)
+	for msgID, pending := range r.pending {
+		reqs = append(reqs, pending.request)
+		delete(r.pending, msgID)
+	}
+	r.mu.Unlock()
+	return reqs
+}
+
+// cancelPending removes pending requests owned by owner.
+func (r *MessageRouter) cancelPending(owner *pendingOwner) []Request {
+	r.mu.Lock()
+	reqs := make([]Request, 0)
+	for msgID, pending := range r.pending {
+		if pending.owner != owner {
+			continue
+		}
+		reqs = append(reqs, pending.request)
 		delete(r.pending, msgID)
 	}
 	r.mu.Unlock()
@@ -252,12 +286,31 @@ func (r *MessageRouter) RequeuePending() (requeue, cancel []Request) {
 	r.mu.Lock()
 	requeue = make([]Request, 0, len(r.pending))
 	cancel = make([]Request, 0)
-	for msgID, req := range r.pending {
+	for msgID, pending := range r.pending {
 		delete(r.pending, msgID)
+		req := pending.request
 		if req.Streaming {
 			cancel = append(cancel, req)
 		} else {
 			requeue = append(requeue, req)
+		}
+	}
+	r.mu.Unlock()
+	return requeue, cancel
+}
+
+// requeuePending removes and classifies pending requests owned by owner.
+func (r *MessageRouter) requeuePending(owner *pendingOwner) (requeue, cancel []Request) {
+	r.mu.Lock()
+	for msgID, pending := range r.pending {
+		if pending.owner != owner {
+			continue
+		}
+		delete(r.pending, msgID)
+		if pending.request.Streaming {
+			cancel = append(cancel, pending.request)
+		} else {
+			requeue = append(requeue, pending.request)
 		}
 	}
 	r.mu.Unlock()

@@ -77,6 +77,14 @@ type nodeOptions struct {
 	DialOpts       []grpc.DialOption
 	RequestHandler stream.RequestHandler
 	Manager        *outboundManager // owning manager
+	// EagerReconnect makes the channel's receiver re-establish a lost stream
+	// on its own, with capped backoff, instead of waiting for the next local
+	// send. Set for a server that calls its peers, whose dialed stream the
+	// remote depends on staying registered.
+	EagerReconnect bool
+	// StreamState, if non-nil, is notified when this node's stream comes up or
+	// goes down, so the owning server can update its connected-peer view.
+	StreamState func(id uint32, up bool)
 }
 
 // newOutboundNode creates a new node using the provided options. It establishes
@@ -106,8 +114,17 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Create new outbound channel and establish gRPC node stream
-	n.channel.Store(stream.NewOutboundChannel(ctx, n.id, opts.SendBufferSize, conn, n.router))
+	n.channel.Store(stream.NewOutboundChannel(ctx, n.id, opts.SendBufferSize, conn, n.router, opts.EagerReconnect, onStreamChange(opts)))
 	return n, nil
+}
+
+// onStreamChange adapts the node's StreamState hook to the channel's
+// stream-change callback, which reports only up or down.
+func onStreamChange(opts nodeOptions) func(up bool) {
+	if opts.StreamState == nil {
+		return nil
+	}
+	return func(up bool) { opts.StreamState(opts.ID, up) }
 }
 
 // newInboundNode creates a Node for a known peer or self without an active
@@ -189,10 +206,19 @@ func (n *Node) RouteInbound(ctx context.Context, msg *stream.Message, release fu
 // Enqueue enqueues a request to this node's channel.
 // For local channels the channel handles in-process dispatch directly.
 // If no channel is available, the request is silently dropped.
-// This implements the [stream.PeerNode] interface.
 func (n *Node) Enqueue(req stream.Request) {
 	if ch := n.channel.Load(); ch != nil {
 		ch.Enqueue(req)
+	}
+}
+
+// TrySend enqueues a request to this node's channel without ever blocking the
+// caller; see [stream.Channel.TrySend]. A request for a node without a channel
+// is silently dropped.
+// This implements the [stream.PeerNode] interface.
+func (n *Node) TrySend(req stream.Request) {
+	if ch := n.channel.Load(); ch != nil {
+		ch.TrySend(req)
 	}
 }
 
