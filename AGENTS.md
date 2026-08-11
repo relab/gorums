@@ -68,8 +68,14 @@ These files are generated from templates. Instead:
 
 ### Testing Requirements
 
-- Use testing utilities in `testing_shared.go` for common test setup
-- If the provided testing utilities are insufficient, create new ones in `testing_shared.go` and document their usage
+- Use the `github.com/relab/gorums/gorumstest` package for common test setup.
+- Use `gorumstest.Config` for a multi-server configuration, `gorumstest.Node` for a single server node, `gorumstest.Servers` for server addresses, and `gorumstest.Systems` for symmetric in-process server groups.
+- Use `gorumstest.NoDialedConfig` when a test needs configuration construction without dialing servers.
+- Use `gorumstest.Context` for test-scoped timeouts and `gorumstest.WaitUntil` for bounded polling.
+- Use `gorumstest.DialOptions` or `gorumstest.InsecureDialOptions` for test connections, and use `gorumstest.WithStopFunc` or `gorumstest.WithPreConnect` when a failure-path test needs server lifecycle control.
+- These helpers own listener allocation, cleanup ordering, and goroutine-leak checks.
+- If the provided `gorumstest` helpers are insufficient, add a focused helper to that package and document its contract and usage.
+- Tests in package `gorums` itself cannot import `gorumstest`, since that would create an import cycle; they build on `internal/testutils/servers` directly.
 - Always write table-driven tests when same logic needs to be tested with multiple inputs
 - Organize related tests using subtests
 - Test names should be capitalized, like TestFileNameFeatureName, e.g., TestQuorumCallFeatureName, for some feature in `quorumcall_test.go`
