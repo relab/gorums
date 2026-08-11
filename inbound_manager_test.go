@@ -75,10 +75,10 @@ type testNode struct {
 
 func (n testNode) Addr() string { return n.addr }
 
-// Compile-time assertions: both node providers satisfy NodeListOption.
+// Compile-time assertions: both node providers satisfy NodeSource.
 var (
-	_ NodeListOption = nodeMap[testNode](nil)
-	_ NodeListOption = nodeList(nil)
+	_ NodeSource = nodeMap[testNode](nil)
+	_ NodeSource = nodeList(nil)
 )
 
 // mockBidiStream is a minimal stream.BidiStream for testing inboundManager.
@@ -132,7 +132,7 @@ func newTestInboundManager(t *testing.T, myID uint32) *inboundManager {
 func TestNewInboundManager(t *testing.T) {
 	tests := []struct {
 		name       string
-		opt        NodeListOption
+		opt        NodeSource
 		wantIDs    []uint32
 		wantCfgIDs []uint32 // expected Config IDs after construction
 		wantPanic  string   // if non-empty, expect panic containing this substring
@@ -628,8 +628,8 @@ func equalNodeIDs(ids []uint32) func(Config) bool {
 	}
 }
 
-// peerNodes creates the peer NodeListOption used by the E2E tests.
-func peerNodes() NodeListOption {
+// peerNodes creates the peer NodeSource used by the E2E tests.
+func peerNodes() NodeSource {
 	return WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9001"},
 		2: {"127.0.0.1:9002"},

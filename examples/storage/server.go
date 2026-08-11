@@ -100,7 +100,7 @@ func runLocalCluster(srvOpts gorums.ServerOption) ([]string, func(), error) {
 // assignment regardless of the order of addresses in the input list.
 // The server's own address must be included in the peer list.
 // It returns an error if the server's address is not found in the peer list.
-func peerConfig(address string, peers []string) (uint32, gorums.NodeListOption, error) {
+func peerConfig(address string, peers []string) (uint32, gorums.NodeSource, error) {
 	sorted := slices.Clone(peers)
 	slices.Sort(sorted)
 	idx := slices.Index(sorted, address)
