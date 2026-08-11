@@ -48,7 +48,7 @@ func runServer(address string, peers []string, srvOpt gorums.ServerOption) error
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := sys.WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+	if err := sys.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
 		return cfg.Size() == len(peers)
 	}); err != nil {
 		return fmt.Errorf("peers did not connect in time: %w", err)
@@ -80,7 +80,7 @@ func runLocalCluster(srvOpts gorums.ServerOption) ([]string, func(), error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	for _, sys := range systems {
-		if err := sys.WaitForConfig(ctx, func(cfg gorums.Configuration) bool {
+		if err := sys.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
 			return cfg.Size() == len(systems)
 		}); err != nil {
 			stop()
@@ -214,9 +214,9 @@ func (s *storageServer) ReadCorrectable(_ gorums.ServerCtx, req *pb.ReadRequest,
 }
 
 // ReadNestedQC is a quorum-call handler that performs a nested quorum call
-// using the server's known-peer configuration from WithConfig.
+// using the server's peer configuration from WithPeers.
 func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
-	cfg := ctx.Config()
+	cfg := ctx.PeerConfig()
 	if len(cfg) == 0 {
 		return nil, fmt.Errorf("read_nested_qc: requires server peer configuration")
 	}
@@ -226,9 +226,9 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) 
 }
 
 // WriteNestedMulticast is a quorum-call handler that performs a nested multicast
-// using the server's known-peer configuration from WithConfig.
+// using the server's peer configuration from WithPeers.
 func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerCtx, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
-	cfg := ctx.Config()
+	cfg := ctx.PeerConfig()
 	if len(cfg) == 0 {
 		return nil, fmt.Errorf("write_nested_multicast: requires server peer configuration")
 	}
