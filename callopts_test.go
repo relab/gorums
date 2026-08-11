@@ -22,7 +22,9 @@ func testSystems(t testing.TB, n int) []*System {
 	if _, ok := t.(*testing.B); !ok {
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
-	systems, stop, err := NewLocalSystems(n, WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())))
+	systems, stop, err := NewLocalSystems(n, WithLocalDialOptions(
+		WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+	))
 	if err != nil {
 		t.Fatal(err)
 	}

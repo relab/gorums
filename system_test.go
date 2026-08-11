@@ -113,7 +113,7 @@ func TestSystemStopBeforeServeClosesListener(t *testing.T) {
 // returned by NewLocalSystems closes all pre-allocated listeners even when none of
 // the systems has had Serve called yet, so no file descriptors are leaked.
 func TestNewLocalSystemsStopBeforeServeClosesListeners(t *testing.T) {
-	systems, stop, err := gorums.NewLocalSystems(3, gorumstest.InsecureDialOptions(t))
+	systems, stop, err := gorums.NewLocalSystems(3, gorums.WithLocalDialOptions(gorumstest.InsecureDialOptions(t)))
 	if err != nil {
 		t.Fatalf("NewLocalSystems: %v", err)
 	}
