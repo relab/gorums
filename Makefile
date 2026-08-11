@@ -9,11 +9,10 @@ proto_path 				:= $(dev_path):third_party:.
 
 plugin_deps				:= gorums.pb.go $(static_file)
 runtime_deps			:= internal/stream/stream.pb.go internal/stream/stream_grpc.pb.go
-benchmark_deps			:= benchmark/benchmark.pb.go benchmark/benchmark_gorums.pb.go
 
-.PHONY: all dev tools bootstrapgorums installgorums benchmark test compiletests genproto benchtest bench
+.PHONY: all dev tools bootstrapgorums installgorums test compiletests genproto benchtest bench
 
-all: dev benchmark compiletests
+all: dev compiletests
 
 dev: installgorums $(runtime_deps)
 	@rm -f $(dev_path)/zorums*.pb.go
@@ -22,9 +21,6 @@ dev: installgorums $(runtime_deps)
 		--gorums_out=dev=true:. \
 		--go_opt=default_api_level=API_OPAQUE \
 		$(zorums_proto)
-
-benchmark: installgorums $(benchmark_deps)
-	@go build -o cmd/benchmark/benchmark ./cmd/benchmark
 
 $(static_file): $(static_files)
 	@cp $(static_file) $(static_file).bak
@@ -104,12 +100,11 @@ stressgen: tools
 modernize:
 	@go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix ./...
 
-# Regenerate all Gorums and protobuf generated files across the repo (dev, benchmark, internal/tests, examples).
+# Regenerate all Gorums and protobuf generated files across the repo (dev, internal/tests, examples).
 # This will force regeneration even though the proto files have not changed.
 genproto: installgorums dev
-	@echo "Regenerating all proto files (dev, benchmark, internal/tests, examples)"
+	@echo "Regenerating all proto files (dev, internal/tests, examples)"
 	@$(MAKE) -B -s dev
-	@$(MAKE) -B -s benchmark
 	@$(MAKE) -B -s --no-print-directory -C ./internal/tests all
 	@$(MAKE) -B -s --no-print-directory -C ./examples all
 
