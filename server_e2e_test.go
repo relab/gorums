@@ -299,7 +299,7 @@ func TestServerHandlerCanMulticastViaConfig(t *testing.T) {
 
 	for i, srv := range servers {
 		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
-			t.Logf("Server %d received multicast on %v: %v", i+1, mock.TestMethod, in.Msg)
+			t.Logf("Server %d received multicast on %v: %v", i+1, mock.TestMethod, in.Proto)
 			// Release before the nested multicast: the peer configuration
 			// includes the local node, whose in-process dispatch waits for
 			// this handler's dispatch lock.
@@ -318,7 +318,7 @@ func TestServerHandlerCanMulticastViaConfig(t *testing.T) {
 		})
 
 		srv.RegisterHandler(mock.Stream, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
-			t.Logf("Server %d received multicast on %v: %v", i+1, mock.Stream, in.Msg)
+			t.Logf("Server %d received multicast on %v: %v", i+1, mock.Stream, in.Proto)
 			wg.Done()
 			return nil, nil
 		})
@@ -443,7 +443,7 @@ func TestServerHandlerCanMulticastViaConnectedClients(t *testing.T) {
 	wg.Add(1)
 
 	srvServer.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
-		t.Logf("SERVER received multicast: %v", in.Msg)
+		t.Logf("SERVER received multicast: %v", in.Proto)
 		if cfg := ctx.ConnectedClients(); cfg != nil && cfg.Size() == 1 {
 			err := gorums.Multicast(
 				cfg.Context(t.Context()),

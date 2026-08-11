@@ -235,7 +235,7 @@ func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, rele
 	}
 
 	msg, err := unmarshalRequest(reqMsg)
-	in := &Message{Msg: msg, Message: reqMsg}
+	in := &Message{Proto: msg, Message: reqMsg}
 	if err != nil {
 		srvCtx.SendMessage(MessageWithError(in, nil, err))
 		return
