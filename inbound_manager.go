@@ -94,14 +94,14 @@ type inboundManager struct {
 const clientIDStart = 1 << 20
 
 // newInboundManager creates an inboundManager for this server whose NodeID is myID.
-// If opt is non-nil, the inboundManager is configured with the given NodeListOption
-// defining the set of known peers. If myID is present in the NodeListOption it is
+// If opt is non-nil, the inboundManager is configured with the given NodeSource
+// defining the set of known peers. If myID is present in the NodeSource it is
 // immediately included in the Config as the self-node, so that quorum thresholds
 // account for the local replica from the moment of construction. The handler is
 // installed on the self-node (if present) to enable in-process dispatch without
 // a network round-trip. Panics on configuration errors (invalid addresses,
 // duplicate nodes, etc.)
-func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfigChange func(Config), handler stream.RequestHandler) *inboundManager {
+func newInboundManager(myID uint32, opt NodeSource, sendBuffer uint, onConfigChange func(Config), handler stream.RequestHandler) *inboundManager {
 	im := &inboundManager{
 		myID:           myID,
 		knownNodes:     make(map[uint32]*Node),

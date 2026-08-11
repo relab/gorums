@@ -32,7 +32,7 @@ func (n testNode) Addr() string {
 func TestNewConfig(t *testing.T) {
 	tests := []struct {
 		name     string
-		opt      gorums.NodeListOption
+		opt      gorums.NodeSource
 		wantSize int
 		wantErr  string
 	}{
@@ -335,7 +335,7 @@ func TestConfigurationExtend(t *testing.T) {
 	tests := []struct {
 		name         string
 		initialNodes []string
-		extendOpt    gorums.NodeListOption
+		extendOpt    gorums.NodeSource
 		wantSize     int
 		wantErr      string
 	}{

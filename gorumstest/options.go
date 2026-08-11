@@ -7,18 +7,18 @@ import (
 )
 
 // Option is a marker interface that can hold a [gorums.DialOption],
-// [gorums.ServerOption], or [gorums.NodeListOption]. This allows test helpers
+// [gorums.ServerOption], or [gorums.NodeSource]. This allows test helpers
 // to accept a single variadic parameter that can be filtered and passed to the
 // appropriate constructors: [gorums.NewServer] or [gorums.NewConfig].
 //
 // Each option type (gorums.DialOption, gorums.ServerOption,
-// gorums.NodeListOption) satisfies this interface already, since it is just an
+// gorums.NodeSource) satisfies this interface already, since it is just an
 // alias for any, so they can be passed directly without wrapping:
 //
 //	gorumstest.Config(t, 3, nil,
 //		gorums.WithBackoff(...),        // DialOption
 //		gorums.WithBufferSizes(10, 10), // ServerOption
-//		gorums.WithNodes(...),          // NodeListOption
+//		gorums.WithNodes(...),          // NodeSource
 //	)
 type Option any
 
@@ -26,7 +26,7 @@ type Option any
 type testOptions struct {
 	managerOpts    []gorums.DialOption
 	serverOpts     []gorums.ServerOption
-	nodeListOpts   []gorums.NodeListOption
+	nodeListOpts   []gorums.NodeSource
 	stopFuncPtr    *func(...int)       // pointer to capture the variadic stop function
 	preConnectHook func(stopFn func()) // called before connecting to servers
 	skipGoleak     bool                // skip goleak checks (useful for synctest)
@@ -56,11 +56,11 @@ func (to *testOptions) serverFunc(srvFn func(i int) gorums.ServerIface) func(i i
 	return srvFn
 }
 
-// nodeListOption returns the appropriate NodeListOption for the configuration.
+// nodeListOption returns the appropriate NodeSource for the configuration.
 // It uses provided options if available, otherwise defaults to WithNodeList.
-func (to *testOptions) nodeListOption(addrs []string) gorums.NodeListOption {
+func (to *testOptions) nodeListOption(addrs []string) gorums.NodeSource {
 	if len(to.nodeListOpts) > 0 {
-		// Use the last provided NodeListOption (allows overriding)
+		// Use the last provided NodeSource (allows overriding)
 		return to.nodeListOpts[len(to.nodeListOpts)-1]
 	}
 	// Default: use WithNodeList which generates unique IDs based on max(manager.NodeIDs()) + 1
@@ -76,7 +76,7 @@ func extractTestOptions(opts []Option) testOptions {
 			result.managerOpts = append(result.managerOpts, o)
 		case gorums.ServerOption:
 			result.serverOpts = append(result.serverOpts, o)
-		case gorums.NodeListOption:
+		case gorums.NodeSource:
 			result.nodeListOpts = append(result.nodeListOpts, o)
 		case stopFuncProvider:
 			result.stopFuncPtr = o.stopFunc
