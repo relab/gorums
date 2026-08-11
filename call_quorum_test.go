@@ -52,7 +52,7 @@ func checkQuorumCall(t *testing.T, gotErr, wantErr error, expectedNodeErrors ...
 
 func TestQuorumCall(t *testing.T) {
 	// type alias short hand for the responses type
-	type respType = *gorums.Responses[*pb.StringValue]
+	type respType = *gorums.Call[*pb.StringValue, *pb.StringValue]
 	tests := []struct {
 		name      string
 		call      func(respType) (*pb.StringValue, error)
@@ -110,7 +110,7 @@ func TestQuorumCallPartialFailures(t *testing.T) {
 
 	const numServers = 3
 
-	type respType = *gorums.Responses[*pb.StringValue]
+	type respType = *gorums.Call[*pb.StringValue, *pb.StringValue]
 
 	// Helper to create QuorumCall variants
 	quorumcall := func(name string, aggregateFunc func(respType) (*pb.StringValue, error)) callInfo {
@@ -123,12 +123,12 @@ func TestQuorumCallPartialFailures(t *testing.T) {
 		}
 	}
 
-	// Helper to create Multicast variants
-	multicast := func(name string, opts ...gorums.CallOption) callInfo {
+	// Helper to create a Multicast variant; Wait returns the send error.
+	multicast := func(name string) callInfo {
 		return callInfo{
 			name: "Multicast/" + name,
 			callFunc: func(ctx *gorums.ConfigContext, req *pb.StringValue) error {
-				return gorums.Multicast(ctx, req, mock.TestMethod, opts...)
+				return gorums.Multicast(ctx, req, mock.TestMethod).Send()
 			},
 		}
 	}
@@ -138,15 +138,11 @@ func TestQuorumCallPartialFailures(t *testing.T) {
 		failing int // number of servers to stop (0 to 3)
 		wantErr error
 	}{
-		// Multicast: Fails if ANY node fails
+		// Multicast Wait: Fails if ANY node fails
 		{multicast("Wait"), 0, nil},
 		{multicast("Wait"), 1, gorums.ErrSendFailure},
 		{multicast("Wait"), 2, gorums.ErrSendFailure},
 		{multicast("Wait"), 3, gorums.ErrSendFailure},
-
-		// Multicast with IgnoreErrors: Should not return error even if nodes fail
-		{multicast("IgnoreErrors", gorums.IgnoreErrors()), 0, nil},
-		{multicast("IgnoreErrors", gorums.IgnoreErrors()), 3, nil},
 
 		// QuorumCall Majority (2/3): Tolerates 1 failure
 		{quorumcall("Majority", respType.Majority), 0, nil},

@@ -191,7 +191,7 @@ func outerChainedHandler(
 			req,
 			innerMethod,
 		)
-		res, err := respFn(responses)
+		res, err := respFn(responses.Responses)
 		if err != nil {
 			return nil, err
 		}
@@ -246,7 +246,7 @@ func TestServerSymmetricConfigurationRoutesQuorumCalls(t *testing.T) {
 				mock.TestMethod,
 			)
 
-			result, err := tt.call(responses)
+			result, err := tt.call(responses.Responses)
 			if err != nil {
 				t.Fatalf("quorum call error: %v", err)
 			}
@@ -280,7 +280,7 @@ func TestServerSymmetricConfigurationRoutesMulticast(t *testing.T) {
 		cfg.Context(ctx),
 		pb.String("test"),
 		mock.Stream,
-	)
+	).Send()
 	if err != nil {
 		t.Fatalf("multicast error: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestServerHandlerCanMulticastViaConfig(t *testing.T) {
 					cfg.Context(t.Context()),
 					pb.String("inner-multicast"),
 					mock.Stream,
-				)
+				).Send()
 				if err != nil {
 					return nil, err // failed to multicast
 				}
@@ -332,7 +332,7 @@ func TestServerHandlerCanMulticastViaConfig(t *testing.T) {
 		cfg.Context(ctx),
 		pb.String("outer-multicast"),
 		mock.TestMethod,
-	)
+	).Send()
 	if err != nil {
 		t.Fatalf("multicast error: %v", err)
 	}
@@ -390,7 +390,7 @@ func TestServerHandlerCanChainQuorumCallViaConfig(t *testing.T) {
 				pb.String("outer-call"),
 				mock.TestMethod,
 			)
-			result, err := tt.outerFn(responses)
+			result, err := tt.outerFn(responses.Responses)
 			if err != nil {
 				t.Fatalf("quorum call error: %v", err)
 			}
@@ -449,7 +449,7 @@ func TestServerHandlerCanMulticastViaConnectedClients(t *testing.T) {
 				cfg.Context(t.Context()),
 				pb.String("inner-call"),
 				mock.Stream,
-			)
+			).Send()
 			if err != nil {
 				return nil, err // failed to multicast
 			}
@@ -471,7 +471,7 @@ func TestServerHandlerCanMulticastViaConnectedClients(t *testing.T) {
 		cfgClient.Context(ctx),
 		pb.String("trigger"),
 		mock.TestMethod,
-	)
+	).Send()
 	if err != nil {
 		t.Fatalf("multicast error: %v", err)
 	}

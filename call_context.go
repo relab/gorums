@@ -4,41 +4,16 @@ import (
 	"context"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// ClientInterceptor intercepts and processes quorum calls, allowing modification of
-// requests, responses, and aggregation logic. Interceptors can be chained together.
-//
-// Type parameters:
-//   - Req: The request message type sent to nodes
-//   - Resp: The response message type from individual nodes
-//
-// The interceptor receives the CallContext for metadata access, the current response
-// iterator (next), and returns a new response iterator. This pattern allows
-// interceptors to wrap the response stream with custom logic.
-//
-// Custom interceptors can be created like this:
-//
-//	func LoggingInterceptor[Req, Resp proto.Message](
-//	    ctx *gorums.CallContext[Req, Resp],
-//	    next gorums.ResponseSeq[Resp],
-//	) gorums.ResponseSeq[Resp] {
-//	    return func(yield func(gorums.NodeResponse[Resp]) bool) {
-//	        for resp := range next {
-//	            log.Printf("Response from node %d", resp.NodeID)
-//	            if !yield(resp) { return }
-//	        }
-//	    }
-//	}
-type ClientInterceptor[Req, Resp msg] func(ctx *CallContext[Req, Resp], next ResponseSeq[Resp]) ResponseSeq[Resp]
-
 // CallContext provides context and access to the quorum call state for interceptors.
 // It exposes the request, configuration, metadata about the call, and the response iterator.
-type CallContext[Req, Resp msg] struct {
+type CallContext[Req, Resp proto.Message] struct {
 	context.Context
 	config    Config
 	request   Req
@@ -63,21 +38,51 @@ type CallContext[Req, Resp msg] struct {
 	// call to Responses(). This deferred sending allows interceptors
 	// to register request transformations before dispatch.
 	sendOnce sync.Once
+
+	// dispatched is set once dispatch has been initiated (by sendNow or by
+	// marking an async/correctable call). Once set, Intercept panics because
+	// interceptors can no longer affect the in-flight call. It is an
+	// atomic.Bool rather than a plain bool because sendNow can be called again,
+	// redundantly, from the goroutine an async or correctable call spawns
+	// (ranging over responseSeq calls sendNow), concurrently with a caller
+	// checking or setting the flag on another goroutine.
+	dispatched atomic.Bool
 }
 
 // sendNow triggers request dispatch exactly once.
 func (c *CallContext[Req, Resp]) sendNow() {
+	c.markDispatched()
 	c.sendOnce.Do(c.send)
+}
+
+// markDispatched records that dispatch has been initiated, so a later Intercept
+// panics. It is idempotent and does not itself send anything.
+func (c *CallContext[Req, Resp]) markDispatched() {
+	c.dispatched.Store(true)
+}
+
+// intercept applies the given interceptors in order, before dispatch. Nil
+// interceptors are ignored. It panics if the call has already been dispatched,
+// since interceptors can no longer influence an in-flight call.
+func (c *CallContext[Req, Resp]) intercept(ics ...ClientInterceptor[Req, Resp]) {
+	if c.dispatched.Load() {
+		panic("gorums: Intercept called after the call was dispatched")
+	}
+	for _, ic := range ics {
+		if ic == nil {
+			continue
+		}
+		c.responseSeq = ic(c, c.responseSeq)
+	}
 }
 
 // newQuorumCallContext constructs a CallContext for quorum calls (two-way, always returns responses).
 // A reply channel is always created; streaming controls both its buffer size and the response iterator type.
-func newQuorumCallContext[Req, Resp msg](
+func newQuorumCallContext[Req, Resp proto.Message](
 	ctx *ConfigContext,
 	req Req,
 	method string,
 	streaming bool,
-	interceptors []any,
 ) *CallContext[Req, Resp] {
 	config := ctx.Config()
 	n := config.Size()
@@ -98,37 +103,28 @@ func newQuorumCallContext[Req, Resp msg](
 	} else {
 		clientCtx.responseSeq = clientCtx.defaultResponseSeq()
 	}
-	clientCtx.applyInterceptors(interceptors)
 	return clientCtx
 }
 
-// newMulticastCallContext constructs a CallContext for multicast (one-way, no responses).
-// A reply channel is created only when waitForSend=true (blocking send); fire-and-forget
-// calls receive a nil channel, meaning no router entry is registered.
-func newMulticastCallContext[Req msg](
-	ctx *ConfigContext,
+// newOnewayCallContext constructs a CallContext for a one-way call over config.
+// The reply channel is installed by [OnewayCall.dispatch], since only a consumed
+// handle collects send confirmations.
+func newOnewayCallContext[Req proto.Message](
+	ctx context.Context,
+	config Config,
 	req Req,
 	method string,
-	waitForSend bool,
-	interceptors []any,
 ) *CallContext[Req, *emptypb.Empty] {
-	config := ctx.Config()
-	var replyChan chan NodeResponse[*stream.Message]
-	if waitForSend {
-		replyChan = make(chan NodeResponse[*stream.Message], config.Size())
+	callCtx := &CallContext[Req, *emptypb.Empty]{
+		Context: ctx,
+		config:  config,
+		request: req,
+		method:  method,
+		msgID:   config.nextMsgID(),
+		oneway:  true,
 	}
-	clientCtx := &CallContext[Req, *emptypb.Empty]{
-		Context:   ctx,
-		config:    config,
-		request:   req,
-		method:    method,
-		msgID:     config.nextMsgID(),
-		oneway:    true,
-		replyChan: replyChan,
-	}
-	clientCtx.responseSeq = clientCtx.defaultResponseSeq()
-	clientCtx.applyInterceptors(interceptors)
-	return clientCtx
+	callCtx.responseSeq = callCtx.defaultResponseSeq()
+	return callCtx
 }
 
 // -------------------------------------------------------------------------
@@ -190,18 +186,6 @@ func (c *CallContext[Req, Resp]) enqueue(n *Node, msg *stream.Message) {
 		Oneway:       c.oneway,
 		ResponseChan: c.replyChan,
 	})
-}
-
-// applyInterceptors chains the given interceptors, wrapping the response sequence.
-// Each interceptor receives the current response sequence and returns a new one.
-// Interceptors are applied in order, with each wrapping the previous result.
-func (c *CallContext[Req, Resp]) applyInterceptors(interceptors []any) {
-	responseSeq := c.responseSeq
-	for _, ic := range interceptors {
-		interceptor := ic.(ClientInterceptor[Req, Resp])
-		responseSeq = interceptor(c, responseSeq)
-	}
-	c.responseSeq = responseSeq
 }
 
 // send dispatches requests to all nodes. It delegates to sendWithPerNodeTransformation
@@ -307,45 +291,3 @@ func (c *CallContext[Req, Resp]) streamingResponseSeq() ResponseSeq[Resp] {
 // -------------------------------------------------------------------------
 // Interceptors (Middleware)
 // -------------------------------------------------------------------------
-
-// MapRequest returns an interceptor that applies per-node request transformations.
-// Multiple interceptors can be chained together, with transforms applied in order.
-//
-// The fn receives the original request and a node, and returns the transformed
-// request to send to that node. If the function returns an invalid message or nil,
-// an ErrSkipNode error is sent for that node, indicating it was skipped.
-func MapRequest[Req, Resp msg](fn func(Req, *Node) Req) ClientInterceptor[Req, Resp] {
-	return func(ctx *CallContext[Req, Resp], next ResponseSeq[Resp]) ResponseSeq[Resp] {
-		if fn != nil {
-			ctx.reqTransforms = append(ctx.reqTransforms, fn)
-		}
-		return next
-	}
-}
-
-// MapResponse returns an interceptor that applies per-node response transformations.
-//
-// The fn receives the response from a node and the node itself, and returns the
-// transformed response.
-func MapResponse[Req, Resp msg](fn func(Resp, *Node) Resp) ClientInterceptor[Req, Resp] {
-	return func(ctx *CallContext[Req, Resp], next ResponseSeq[Resp]) ResponseSeq[Resp] {
-		if fn == nil {
-			return next
-		}
-		// Wrap the response iterator with the transformation logic.
-		return func(yield func(NodeResponse[Resp]) bool) {
-			for resp := range next {
-				// We only apply the transformation if there is no error.
-				// Errors are passed through as-is.
-				if resp.Err == nil {
-					if node := ctx.Node(resp.NodeID); node != nil {
-						resp.Value = fn(resp.Value, node)
-					}
-				}
-				if !yield(resp) {
-					return
-				}
-			}
-		}
-	}
-}

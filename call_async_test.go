@@ -52,7 +52,7 @@ func TestAsync(t *testing.T) {
 				mock.TestMethod,
 			)
 
-			future := tt.call(responses)
+			future := tt.call(responses.Responses)
 
 			reply, err := future.Get()
 			if !checkQuorumCall(t, err, nil) {
@@ -83,6 +83,43 @@ func TestAsync_Error(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error, got nil")
 	}
+}
+
+// TestAsyncDone verifies that Async.Done reports false while the call is still
+// in flight and true once a result is available.
+func TestAsyncDone(t *testing.T) {
+	t.Run("PendingReportsNotDone", func(t *testing.T) {
+		// A call over a never-dialed config never completes, so the future
+		// stays pending and Done reports false.
+		config := gorumstest.NoDialedConfig(t)
+		ctx := gorumstest.Context(t, 2*time.Second)
+		future := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+			config.Context(ctx),
+			pb.String("test"),
+			mock.TestMethod,
+		).AsyncMajority()
+
+		if future.Done() {
+			t.Error("Done() = true for a call that has not completed, want false")
+		}
+	})
+
+	t.Run("CompletedReportsDone", func(t *testing.T) {
+		config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+		ctx := gorumstest.Context(t, 2*time.Second)
+		future := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+			config.Context(ctx),
+			pb.String("test"),
+			mock.TestMethod,
+		).AsyncMajority()
+
+		if _, err := future.Get(); err != nil {
+			t.Fatalf("Get() error: %v", err)
+		}
+		if !future.Done() {
+			t.Error("Done() = false after Get() returned, want true")
+		}
+	})
 }
 
 func BenchmarkAsyncQuorumCall(b *testing.B) {

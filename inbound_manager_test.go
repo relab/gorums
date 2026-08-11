@@ -881,14 +881,21 @@ func TestClientConfigMixedMode(t *testing.T) {
 	}
 }
 
-// TestClientConfigServerCallsClient verifies that a server dispatches a reverse-direction
+// TestConnectedClientsServerCallsClient verifies that a server dispatches a reverse-direction
 // multicast to a connected client via [ServerContext.ConnectedClients].
-func TestClientConfigServerCallsClient(t *testing.T) {
+func TestConnectedClientsServerCallsClient(t *testing.T) {
 	// Register the server handler before starting so it is present before clients arrive.
 	srv := NewServer()
 	srv.RegisterHandler(mock.TestMethod, func(ctx ServerContext, _ *Message) (*Message, error) {
-		if clients := ctx.ConnectedClients(); len(clients) > 0 {
-			_ = Multicast(clients.Context(ctx), pb.String("ping"), mock.Stream)
+		if cfg := ctx.ConnectedClients(); len(cfg) > 0 {
+			// Release before the back-channel send: Send blocks until every
+			// client's send completes, and holding the dispatch lock across
+			// that wait would stop this connection from reading further
+			// inbound frames.
+			ctx.Release()
+			if err := Multicast(cfg.Context(ctx), pb.String("ping"), mock.Stream).Send(); err != nil {
+				t.Errorf("back-channel Multicast: %v", err)
+			}
 		}
 		return nil, nil // one-way
 	})
@@ -897,7 +904,7 @@ func TestClientConfigServerCallsClient(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	// Client: a Server whose reverse-direction mock.Stream handler is wired in via WithServer.
+	// Client: a Server whose reverse-direction mock.Stream handler is wired in via WithBackChannel.
 	clientSrv := NewServer()
 	clientSrv.RegisterHandler(mock.Stream, func(_ ServerContext, _ *Message) (*Message, error) {
 		wg.Done()
@@ -914,7 +921,7 @@ func TestClientConfigServerCallsClient(t *testing.T) {
 
 	// Trigger: client multicasts TestMethod to the server; server fans it back via ClientConfig.
 	ctx := testTimeoutContext(t, 2*time.Second)
-	if err := Multicast(clientConfig.Context(ctx), pb.String("trigger"), mock.TestMethod); err != nil {
+	if err := Multicast(clientConfig.Context(ctx), pb.String("trigger"), mock.TestMethod).Send(); err != nil {
 		t.Fatalf("Multicast error: %v", err)
 	}
 
