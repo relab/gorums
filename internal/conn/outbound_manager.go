@@ -92,6 +92,30 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 		m.addNode(n)
 		return n, nil
 	}
+	if m.opts.StreamDedup && m.opts.InboundMgr != nil && id < m.opts.LocalNodeID {
+		// A lower-ID peer dials this node, so rather than dial back, this node
+		// reuses that peer's inbound connection. It works once the peer connects
+		// and fails with ErrStreamDown until then; [Server.WaitForAll] waits for
+		// the peer.
+		//
+		// A dedup node routes its calls onto the borrowed peer's shared channel,
+		// so the borrowed peer must be the same process this node addresses: an
+		// ID that maps to no known peer, or to a peer at a different address,
+		// would silently carry calls to the wrong process. WithPeers derives the
+		// peer and outbound sets from one NodeSource, but Config.Extend can add
+		// outbound nodes from a different source, so validate the borrow here.
+		// Both addresses are already normalized by the node builder.
+		peer := m.opts.InboundMgr.knownPeer(id)
+		if peer == nil {
+			return nil, fmt.Errorf("gorums: stream dedup outbound node %d (%s) is not a configured peer", id, addr)
+		}
+		if peer.addr != addr {
+			return nil, fmt.Errorf("gorums: stream dedup outbound node %d address %s does not match peer address %s", id, addr, peer.addr)
+		}
+		n := newSharedNode(peer, addr, m)
+		m.addNode(n)
+		return n, nil
+	}
 	opts := nodeOptions{
 		ID:             id,
 		SendBufferSize: m.opts.SendBuffer,
@@ -118,6 +142,23 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 	}
 	m.addNode(n)
 	return n, nil
+}
+
+// validateStreamDedup reports whether the server is correctly configured
+// for stream deduplication. It requires a nonzero local node ID that is
+// one of the server's own peers.
+func (m *outboundManager) validateStreamDedup() error {
+	if !m.opts.StreamDedup || m.opts.InboundMgr == nil {
+		return nil
+	}
+	localID := m.opts.LocalNodeID
+	if localID == 0 {
+		return errors.New("gorums: stream dedup requires a nonzero local node ID")
+	}
+	if !m.opts.InboundMgr.isKnown(localID) {
+		return fmt.Errorf("gorums: stream dedup server peer configuration does not contain local node %d", localID)
+	}
+	return nil
 }
 
 // getMsgID returns a unique message ID for a new RPC from this client's manager.

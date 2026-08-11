@@ -124,6 +124,26 @@ func (c Config) mgr() *outboundManager {
 	return c[0].mgr
 }
 
+// WaitForAllRequired reports whether the configuration must wait for its peers
+// to connect before calls can proceed. That is only the case under stream
+// deduplication with a server's inbound manager attached, where a higher-ID
+// peer borrows a lower-ID peer's dialed stream and cannot dial it itself.
+func WaitForAllRequired(c Config) bool {
+	mgr := c.mgr()
+	return mgr != nil && mgr.opts.StreamDedup && mgr.opts.InboundMgr != nil
+}
+
+// ValidateStreamDedup reports a configuration error if the configuration is set
+// up for stream deduplication but the local node ID is missing or is not one of
+// the server's peers. It returns nil when stream dedup is not in effect.
+func ValidateStreamDedup(c Config) error {
+	mgr := c.mgr()
+	if mgr == nil {
+		return nil
+	}
+	return mgr.validateStreamDedup()
+}
+
 // Close closes all node connections managed by this configuration.
 func (c Config) Close() error {
 	if mgr := c.mgr(); mgr != nil {
