@@ -431,12 +431,12 @@ func timeSeriesFigures(ts timeSeriesRunFigures, slugStem, section string) []figu
 		}
 		specs = append(specs, figureSpec{
 			kind: kindTimeSeries, section: section,
-			slug:       slugStem + "_" + ts.base + "_" + bench,
-			heading:    heading,
-			runScoped:  ts.title != "",
-			note:       ts.note,
-			dataCSV:    timeSeriesDataNote(ts.base, bench),
-			base:       ts.base, bench: bench,
+			slug:      slugStem + "_" + ts.base + "_" + bench,
+			heading:   heading,
+			runScoped: ts.title != "",
+			note:      ts.note,
+			dataCSV:   timeSeriesDataNote(ts.base, bench),
+			base:      ts.base, bench: bench,
 			sharesNodes: ts.sharesNodes,
 		})
 	}
