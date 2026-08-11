@@ -119,7 +119,7 @@ func startServers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerI
 // Optional [Option] values can be provided to customize the manager, server, or configuration.
 //
 // By default, nodes are assigned sequential IDs (1, 2, 3, ...) matching the server
-// creation order. This can be overridden by providing a [gorums.NodeListOption].
+// creation order. This can be overridden by providing a [gorums.NodeSource].
 //
 // This is the recommended way to set up tests that need both servers and a configuration.
 // It ensures proper cleanup and detects goroutine leaks.

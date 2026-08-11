@@ -51,7 +51,7 @@ func (c Config) Context(parent context.Context) *ConfigContext {
 //	    gorums.WithNodeList([]string{"localhost:8080", "localhost:8081", "localhost:8082"}),
 //	    gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 //	)
-func NewConfig(nodes NodeListOption, opts ...DialOption) (Config, error) {
+func NewConfig(nodes NodeSource, opts ...DialOption) (Config, error) {
 	if nodes == nil {
 		return nil, fmt.Errorf("gorums: missing required node list")
 	}
@@ -64,8 +64,8 @@ func NewConfig(nodes NodeListOption, opts ...DialOption) (Config, error) {
 	return cfg, nil
 }
 
-// Extend returns a new Config combining c with new nodes from the provided NodeListOption.
-func (c Config) Extend(opt NodeListOption) (Config, error) {
+// Extend returns a new Config combining c with new nodes from the provided NodeSource.
+func (c Config) Extend(opt NodeSource) (Config, error) {
 	if len(c) == 0 {
 		return nil, fmt.Errorf("gorums: cannot extend empty configuration")
 	}

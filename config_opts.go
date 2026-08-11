@@ -7,9 +7,9 @@ import (
 	"slices"
 )
 
-// NodeListOption must be implemented by node providers. It is used by both the
+// NodeSource must be implemented by node providers. It is used by both the
 // Manager (outbound) and by inboundManager (inbound) via newConfig.
-type NodeListOption interface {
+type NodeSource interface {
 	newConfig(nodeRegistry) (Config, error)
 }
 
@@ -25,10 +25,10 @@ type NodeAddress interface {
 	Addr() string
 }
 
-// WithNodes returns a NodeListOption containing the provided mapping from
+// WithNodes returns a NodeSource containing the provided mapping from
 // application-specific IDs to types implementing NodeAddress.
 // Node IDs must be greater than 0.
-func WithNodes[T NodeAddress](nodes map[uint32]T) NodeListOption {
+func WithNodes[T NodeAddress](nodes map[uint32]T) NodeSource {
 	return nodeMap[T](nodes)
 }
 
@@ -49,11 +49,11 @@ func (nm nodeMap[T]) newConfig(registry nodeRegistry) (Config, error) {
 	return builder.configuration(), nil
 }
 
-// WithNodeList returns a NodeListOption for the provided list of node addresses.
+// WithNodeList returns a NodeSource for the provided list of node addresses.
 // Unique Node IDs are generated sequentially starting from the maximum existing
 // node ID plus one, or from 1 if no nodes exist, preventing conflicts with
 // existing nodes.
-func WithNodeList(addrsList []string) NodeListOption {
+func WithNodeList(addrsList []string) NodeSource {
 	return nodeList(addrsList)
 }
 

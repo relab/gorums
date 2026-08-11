@@ -21,10 +21,10 @@ type serverOptions struct {
 	interceptors    []Interceptor
 	// Peer management options
 	myID             uint32
-	peerNodes        NodeListOption // Peers to track as they connect; set by WithPeers.
-	onConfigChange   func(Config)   // Callback registered via WithPeerChange.
-	listenAddr       string         // Listener address recorded by WithAddr; bound by ListenAndServe.
-	outboundNodes    NodeListOption // Nodes this server calls; set by WithPeers.
+	peerNodes        NodeSource   // Peers to track as they connect; set by WithPeers.
+	onConfigChange   func(Config) // Callback registered via WithPeerChange.
+	listenAddr       string       // Listener address recorded by WithAddr; bound by ListenAndServe.
+	outboundNodes    NodeSource   // Nodes this server calls; set by WithPeers.
 	outboundDialOpts []DialOption
 }
 
@@ -92,7 +92,7 @@ func WithInterceptors(i ...Interceptor) ServerOption {
 // The returned option only records the peer set; the [NewServer] call that
 // receives it panics if the node source is invalid, for example if it contains
 // a duplicate or malformed address.
-func WithPeers(myID uint32, nodes NodeListOption, opts ...DialOption) ServerOption {
+func WithPeers(myID uint32, nodes NodeSource, opts ...DialOption) ServerOption {
 	return func(o *serverOptions) {
 		o.myID = myID
 		o.peerNodes = nodes
@@ -186,7 +186,7 @@ func NewServer(opts ...ServerOption) *Server {
 // newPeerConfig builds the outbound [Config] this server uses to call
 // other servers. It installs the server as the back-channel request handler so
 // the remote can dispatch requests back over the same connection.
-func (s *Server) newPeerConfig(nodes NodeListOption, dialOpts []DialOption) (Config, error) {
+func (s *Server) newPeerConfig(nodes NodeSource, dialOpts []DialOption) (Config, error) {
 	opts := append([]DialOption{withServer(s)}, dialOpts...)
 	return NewConfig(nodes, opts...)
 }
