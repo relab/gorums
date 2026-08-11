@@ -67,58 +67,63 @@ func WriteRPC(ctx *NodeContext, in *WriteRequest) (*WriteResponse, error) {
 
 // WriteUnicast executes a one-way Write unicast call on a single node.
 // It does not wait for a response.
-func WriteUnicast(ctx *NodeContext, in *WriteRequest, opts ...gorums.CallOption) error {
-	return gorums.Unicast(ctx, in, "proto.Storage.WriteUnicast", opts...)
+//
+// Example:
+//
+//	err := WriteUnicast(ctx, in).Send()
+//	h := WriteUnicast(ctx, in).Async(); err := h.Wait()
+func WriteUnicast(ctx *NodeContext, in *WriteRequest) *gorums.OnewayCall[*WriteRequest] {
+	return gorums.Unicast(ctx, in, "proto.Storage.WriteUnicast")
 }
 
 // WriteMulticast executes a Write multicast call on a configuration of nodes.
 // It does not wait for any responses.
-func WriteMulticast(ctx *ConfigContext, in *WriteRequest, opts ...gorums.CallOption) error {
-	return gorums.Multicast(ctx, in, "proto.Storage.WriteMulticast", opts...)
+//
+// Example:
+//
+//	err := WriteMulticast(ctx, in).Send()
+//	h := WriteMulticast(ctx, in).Async(); err := h.Wait()
+func WriteMulticast(ctx *ConfigContext, in *WriteRequest) *gorums.OnewayCall[*WriteRequest] {
+	return gorums.Multicast(ctx, in, "proto.Storage.WriteMulticast")
 }
 
 // ReadQC executes a Read quorum call on a configuration of nodes and
 // returns the most recent value.
-func ReadQC(ctx *ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*ReadResponse] {
+func ReadQC(ctx *ConfigContext, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse] {
 	return gorums.QuorumCall[*ReadRequest, *ReadResponse](
 		ctx, in, "proto.Storage.ReadQC",
-		opts...,
 	)
 }
 
 // WriteQC executes a Write quorum call on a configuration of nodes and
 // returns true if a majority of nodes were updated.
-func WriteQC(ctx *ConfigContext, in *WriteRequest, opts ...gorums.CallOption) *gorums.Responses[*WriteResponse] {
+func WriteQC(ctx *ConfigContext, in *WriteRequest) *gorums.Call[*WriteRequest, *WriteResponse] {
 	return gorums.QuorumCall[*WriteRequest, *WriteResponse](
 		ctx, in, "proto.Storage.WriteQC",
-		opts...,
 	)
 }
 
 // ReadNestedQC executes a quorum call where each server handler performs
 // a nested quorum call using ServerCtx.Config().
-func ReadNestedQC(ctx *ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*ReadResponse] {
+func ReadNestedQC(ctx *ConfigContext, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse] {
 	return gorums.QuorumCall[*ReadRequest, *ReadResponse](
 		ctx, in, "proto.Storage.ReadNestedQC",
-		opts...,
 	)
 }
 
 // WriteNestedMulticast executes a quorum call where each server handler
 // performs a nested multicast using ServerCtx.Config().
-func WriteNestedMulticast(ctx *ConfigContext, in *WriteRequest, opts ...gorums.CallOption) *gorums.Responses[*WriteResponse] {
+func WriteNestedMulticast(ctx *ConfigContext, in *WriteRequest) *gorums.Call[*WriteRequest, *WriteResponse] {
 	return gorums.QuorumCall[*WriteRequest, *WriteResponse](
 		ctx, in, "proto.Storage.WriteNestedMulticast",
-		opts...,
 	)
 }
 
 // ReadCorrectable executes a quorum call that supports correctable responses.
 // It returns a stream of ReadResponse as multiple nodes respond or updates occur.
-func ReadCorrectable(ctx *ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*ReadResponse] {
+func ReadCorrectable(ctx *ConfigContext, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse] {
 	return gorums.QuorumCallStream[*ReadRequest, *ReadResponse](
 		ctx, in, "proto.Storage.ReadCorrectable",
-		opts...,
 	)
 }
 

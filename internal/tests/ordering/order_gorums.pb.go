@@ -50,10 +50,9 @@ type CorrectableResponse = *gorums.Correctable[*Response]
 // Example:
 //
 //	resp, err := QuorumCall(ctx, in).Majority()
-func QuorumCall(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
+func QuorumCall(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *Response] {
 	return gorums.QuorumCall[*Request, *Response](
 		ctx, in, "ordering.GorumsTest.QuorumCall",
-		opts...,
 	)
 }
 
