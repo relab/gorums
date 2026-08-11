@@ -72,12 +72,12 @@ func (ctx *ServerCtx) SendMessage(out *Message) {
 	}
 }
 
-// PeerConfig returns the [Configuration] of the peers the server was configured
+// PeerConfig returns the [Config] of the peers the server was configured
 // with via [WithPeers], or nil if it was not used. It is the full peer set, not
 // the currently reachable subset, so quorum sizes derived from it inside a
 // handler do not shift as peers connect and disconnect. Use
 // [ServerCtx.ConnectedPeers] to observe reachability.
-func (ctx *ServerCtx) PeerConfig() Configuration {
+func (ctx *ServerCtx) PeerConfig() Config {
 	if ctx.srv == nil {
 		return nil
 	}
@@ -86,19 +86,19 @@ func (ctx *ServerCtx) PeerConfig() Configuration {
 
 // ConnectedPeers returns the currently reachable subset of
 // [ServerCtx.PeerConfig]; see [Server.ConnectedPeers].
-func (ctx *ServerCtx) ConnectedPeers() Configuration {
+func (ctx *ServerCtx) ConnectedPeers() Config {
 	if ctx.srv == nil {
 		return nil
 	}
 	return ctx.srv.ConnectedPeers()
 }
 
-// ConnectedClients returns a [Configuration] of all connected clients capable of
+// ConnectedClients returns a [Config] of all connected clients capable of
 // receiving reverse-direction calls from the server.
-// An empty (non-nil) Configuration is returned if no client peers are connected.
+// An empty (non-nil) Config is returned if no client peers are connected.
 // The returned slice is replaced atomically on each connect/disconnect;
 // thus, retaining a reference to an old configuration is safe.
-func (ctx *ServerCtx) ConnectedClients() Configuration {
+func (ctx *ServerCtx) ConnectedClients() Config {
 	if ctx.srv == nil {
 		return nil
 	}

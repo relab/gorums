@@ -123,7 +123,7 @@ func TestNewConfig(t *testing.T) {
 }
 
 func TestEmptyConfiguration(t *testing.T) {
-	var empty gorums.Configuration
+	var empty gorums.Config
 
 	populated, err := gorums.NewConfig(gorums.WithNodeList(nodes), gorumstest.InsecureDialOptions(t))
 	if err != nil {
@@ -174,7 +174,7 @@ func TestEmptyConfiguration(t *testing.T) {
 	})
 
 	t.Run("Equal", func(t *testing.T) {
-		var otherEmpty gorums.Configuration
+		var otherEmpty gorums.Config
 		if !empty.Equal(otherEmpty) {
 			t.Fatal("empty.Equal(otherEmpty) = false, want true")
 		}
@@ -202,7 +202,7 @@ func TestEmptyConfiguration(t *testing.T) {
 	})
 
 	t.Run("UnionWithEmptyNil", func(t *testing.T) {
-		var otherEmpty gorums.Configuration
+		var otherEmpty gorums.Config
 		if got := empty.Union(otherEmpty); got != nil {
 			t.Fatalf("empty.Union(otherEmpty) = %v, want nil", got)
 		}
@@ -292,7 +292,7 @@ func TestConfigurationSortBy(t *testing.T) {
 	})
 
 	t.Run("Empty/ReturnsNil", func(t *testing.T) {
-		var empty gorums.Configuration
+		var empty gorums.Config
 		if got := empty.SortBy(gorums.ID); got != nil {
 			t.Fatalf("empty.SortBy(ID) = %v, want nil", got)
 		}
@@ -627,7 +627,7 @@ func TestConfigurationImmutability(t *testing.T) {
 	t.Cleanup(gorumstest.Closer(t, c1))
 
 	// Test Union with empty returns a clone, not the original
-	var emptyConfig gorums.Configuration
+	var emptyConfig gorums.Config
 	c2 := c1.Union(emptyConfig)
 	if !c1.Equal(c2) {
 		t.Errorf("c1.Equal(c2) = false, want true")

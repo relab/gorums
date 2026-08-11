@@ -127,7 +127,7 @@ func startServers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerI
 //
 // This is the recommended way to set up tests that need both servers and a configuration.
 // It ensures proper cleanup and detects goroutine leaks.
-func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, opts ...Option) gorums.Configuration {
+func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, opts ...Option) gorums.Config {
 	t.Helper()
 
 	testOpts := extractTestOptions(opts)
@@ -167,11 +167,11 @@ func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, 
 // unreachableSentinelAddr is a loopback address with no server.
 const unreachableSentinelAddr = "127.0.0.1:1"
 
-// UnreachableConfig returns a [gorums.Configuration] over addrs with no server
+// UnreachableConfig returns a [gorums.Config] over addrs with no server
 // behind any address. Tests use it to obtain a valid configuration whose calls
 // can never complete. If addrs is empty, the configuration uses
 // [unreachableSentinelAddr].
-func UnreachableConfig(t testing.TB, addrs ...string) gorums.Configuration {
+func UnreachableConfig(t testing.TB, addrs ...string) gorums.Config {
 	t.Helper()
 	if len(addrs) == 0 {
 		addrs = []string{unreachableSentinelAddr}
@@ -235,7 +235,7 @@ func Servers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface)
 
 // LocalServers returns n started Gorums servers forming a symmetric peer
 // group on random localhost ports (see [gorums.NewLocalServers]). Each
-// server auto-creates a peer [gorums.Configuration] over the group, accessible
+// server auto-creates a peer [gorums.Config] over the group, accessible
 // via [gorums.Server.PeerConfig]. The servers are automatically stopped
 // when the test finishes via t.Cleanup. Any [gorums.ServerOption]s are
 // applied to every server.

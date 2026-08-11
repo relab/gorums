@@ -21,10 +21,10 @@ type serverOptions struct {
 	interceptors    []Interceptor
 	// Peer management options
 	myID             uint32
-	peerNodes        NodeListOption      // Peers to track as they connect; set by WithPeers.
-	onConfigChange   func(Configuration) // Callback registered via WithPeerChange.
-	listenAddr       string              // Listener address recorded by WithAddr; bound by ListenAndServe.
-	outboundNodes    NodeListOption      // Nodes this server calls; set by WithPeers.
+	peerNodes        NodeListOption // Peers to track as they connect; set by WithPeers.
+	onConfigChange   func(Config)   // Callback registered via WithPeerChange.
+	listenAddr       string         // Listener address recorded by WithAddr; bound by ListenAndServe.
+	outboundNodes    NodeListOption // Nodes this server calls; set by WithPeers.
 	outboundDialOpts []DialOption
 }
 
@@ -81,11 +81,11 @@ func WithInterceptors(i ...Interceptor) ServerOption {
 
 // WithPeers configures the server to both track and call a fixed set of peer
 // servers. The myID parameter is this server's own node ID; it is always
-// present in the peer [Configuration] so that quorum thresholds account for
+// present in the peer [Config] so that quorum thresholds account for
 // the local replica, and calls to it are served in-process without a network
 // round-trip.
 //
-// The server builds the peer [Configuration] itself, available from
+// The server builds the peer [Config] itself, available from
 // [Server.PeerConfig], applying opts to the connections it establishes. To
 // observe which peers are currently reachable, use [Server.ConnectedPeers].
 //
@@ -102,10 +102,10 @@ func WithPeers(myID uint32, nodes NodeListOption, opts ...DialOption) ServerOpti
 }
 
 // WithPeerChange registers a callback invoked after each change to the peer
-// [Configuration] (peer connect or disconnect). The callback runs while
+// [Config] (peer connect or disconnect). The callback runs while
 // internal locks are held, so it must not call [Server.ConnectedPeers] or other
 // blocking methods; use it only to signal or copy, not for long work.
-func WithPeerChange(callback func(Configuration)) ServerOption {
+func WithPeerChange(callback func(Config)) ServerOption {
 	return func(o *serverOptions) {
 		o.onConfigChange = callback
 	}
@@ -127,10 +127,10 @@ type Server struct {
 	handlers     map[string]Handler
 	interceptors []Interceptor
 
-	mu         sync.Mutex    // guards lis
-	lis        net.Listener  // active listener; set by Serve, ListenAndServe, or NewLocalServers
-	listenAddr string        // address recorded by WithAddr
-	outbound   Configuration // peer config built by WithPeers; nil if unused
+	mu         sync.Mutex   // guards lis
+	lis        net.Listener // active listener; set by Serve, ListenAndServe, or NewLocalServers
+	listenAddr string       // address recorded by WithAddr
+	outbound   Config       // peer config built by WithPeers; nil if unused
 	*inboundManager
 }
 
@@ -183,19 +183,19 @@ func NewServer(opts ...ServerOption) *Server {
 	return s
 }
 
-// newPeerConfig builds the outbound [Configuration] this server uses to call
+// newPeerConfig builds the outbound [Config] this server uses to call
 // other servers. It installs the server as the back-channel request handler so
 // the remote can dispatch requests back over the same connection.
-func (s *Server) newPeerConfig(nodes NodeListOption, dialOpts []DialOption) (Configuration, error) {
+func (s *Server) newPeerConfig(nodes NodeListOption, dialOpts []DialOption) (Config, error) {
 	opts := append([]DialOption{withServer(s)}, dialOpts...)
 	return NewConfig(nodes, opts...)
 }
 
-// PeerConfig returns the [Configuration] of the peers configured with
+// PeerConfig returns the [Config] of the peers configured with
 // [WithPeers], or nil if [WithPeers] was not used. Calls on the returned
 // configuration reach the peers over connections this server establishes;
 // calls on the local node are served in-process.
-func (s *Server) PeerConfig() Configuration {
+func (s *Server) PeerConfig() Config {
 	return s.outbound
 }
 
@@ -313,7 +313,7 @@ func (s *Server) GracefulStop() {
 // unblocks any [Server.WaitForPeers] and [Server.WaitForClients] callers, stops
 // the gRPC server, closes the listener owned by [Server.Serve],
 // [Server.ListenAndServe], or [NewLocalServers], and closes the peer
-// [Configuration] built by [WithPeers]. It does not use gRPC graceful stop,
+// [Config] built by [WithPeers]. It does not use gRPC graceful stop,
 // because one-way methods do not respond and would block indefinitely. Stop is
 // safe to call before serving starts, and safe to call more than once.
 func (s *Server) Stop() {

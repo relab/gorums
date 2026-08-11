@@ -40,7 +40,7 @@ type QuorumInterceptor[Req, Resp msg] func(ctx *ClientCtx[Req, Resp], next Respo
 // It exposes the request, configuration, metadata about the call, and the response iterator.
 type ClientCtx[Req, Resp msg] struct {
 	context.Context
-	config    Configuration
+	config    Config
 	request   Req
 	method    string
 	msgID     uint64
@@ -79,7 +79,7 @@ func newQuorumCallClientCtx[Req, Resp msg](
 	streaming bool,
 	interceptors []any,
 ) *ClientCtx[Req, Resp] {
-	config := ctx.Configuration()
+	config := ctx.Config()
 	n := config.Size()
 	if streaming {
 		n *= 10
@@ -112,7 +112,7 @@ func newMulticastClientCtx[Req msg](
 	waitForSend bool,
 	interceptors []any,
 ) *ClientCtx[Req, *emptypb.Empty] {
-	config := ctx.Configuration()
+	config := ctx.Config()
 	var replyChan chan NodeResponse[*stream.Message]
 	if waitForSend {
 		replyChan = make(chan NodeResponse[*stream.Message], config.Size())
@@ -141,7 +141,7 @@ func (c *ClientCtx[Req, Resp]) Request() Req {
 }
 
 // Config returns the configuration (set of nodes) for this quorum call.
-func (c *ClientCtx[Req, Resp]) Config() Configuration {
+func (c *ClientCtx[Req, Resp]) Config() Config {
 	return c.config
 }
 

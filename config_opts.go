@@ -10,10 +10,10 @@ import (
 // NodeListOption must be implemented by node providers. It is used by both the
 // Manager (outbound) and by inboundManager (inbound) via newConfig.
 type NodeListOption interface {
-	newConfig(nodeRegistry) (Configuration, error)
+	newConfig(nodeRegistry) (Config, error)
 }
 
-// nodeRegistry abstracts the node management operations required to build a Configuration.
+// nodeRegistry abstracts the node management operations required to build a Config.
 // Implemented by Manager and inboundManager.
 type nodeRegistry interface {
 	Nodes() []*Node
@@ -34,7 +34,7 @@ func WithNodes[T NodeAddress](nodes map[uint32]T) NodeListOption {
 
 type nodeMap[T NodeAddress] map[uint32]T
 
-func (nm nodeMap[T]) newConfig(registry nodeRegistry) (Configuration, error) {
+func (nm nodeMap[T]) newConfig(registry nodeRegistry) (Config, error) {
 	if len(nm) == 0 {
 		return nil, fmt.Errorf("gorums: missing required node map")
 	}
@@ -59,7 +59,7 @@ func WithNodeList(addrsList []string) NodeListOption {
 
 type nodeList []string
 
-func (nl nodeList) newConfig(registry nodeRegistry) (Configuration, error) {
+func (nl nodeList) newConfig(registry nodeRegistry) (Config, error) {
 	if len(nl) == 0 {
 		return nil, fmt.Errorf("gorums: missing required node addresses")
 	}
@@ -74,14 +74,14 @@ func (nl nodeList) newConfig(registry nodeRegistry) (Configuration, error) {
 	return builder.configuration(), nil
 }
 
-// nodeBuilder helps construct a Configuration while tracking addresses to prevent duplicates.
+// nodeBuilder helps construct a Config while tracking addresses to prevent duplicates.
 // It encapsulates the common logic shared between WithNodes and WithNodeList.
 type nodeBuilder struct {
 	registry nodeRegistry
 	addrToID map[string]uint32 // normalized address -> node ID
 	idToNode map[uint32]*Node  // existing node ID -> node
 	maxID    uint32            // maximum existing node ID
-	nodes    Configuration
+	nodes    Config
 }
 
 // newNodeBuilder creates a new nodeBuilder initialized with existing nodes from the registry.
@@ -101,7 +101,7 @@ func newNodeBuilder(registry nodeRegistry, capacity int) *nodeBuilder {
 		addrToID: addrToID,
 		idToNode: idToNode,
 		maxID:    maxID,
-		nodes:    make(Configuration, 0, capacity),
+		nodes:    make(Config, 0, capacity),
 	}
 }
 
@@ -138,8 +138,8 @@ func (b *nodeBuilder) add(id uint32, addr string) error {
 	return nil
 }
 
-// configuration returns the built Configuration, sorted by ID.
-func (b *nodeBuilder) configuration() Configuration {
+// configuration returns the built Config, sorted by ID.
+func (b *nodeBuilder) configuration() Config {
 	slices.SortFunc(b.nodes, ID)
 	return b.nodes
 }
