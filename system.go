@@ -34,6 +34,32 @@ func NewSystem(addr string, opts ...DialOption) (*System, error) {
 	}, nil
 }
 
+// localServerOptions accumulates the options [NewLocalSystems] applies to every
+// system it creates.
+type localServerOptions struct {
+	serverOpts []ServerOption
+	dialOpts   []DialOption
+}
+
+// LocalServerOption configures [NewLocalSystems]. Use [WithLocalServerOptions]
+// and [WithLocalDialOptions] to build one.
+type LocalServerOption func(*localServerOptions)
+
+// WithLocalServerOptions applies opts to every server created by [NewLocalSystems].
+func WithLocalServerOptions(opts ...ServerOption) LocalServerOption {
+	return func(o *localServerOptions) {
+		o.serverOpts = append(o.serverOpts, opts...)
+	}
+}
+
+// WithLocalDialOptions applies opts to every server's peer configuration
+// created by [NewLocalSystems].
+func WithLocalDialOptions(opts ...DialOption) LocalServerOption {
+	return func(o *localServerOptions) {
+		o.dialOpts = append(o.dialOpts, opts...)
+	}
+}
+
 // NewLocalSystems creates n Gorums systems listening on random localhost ports.
 //
 // Each system is assigned a node ID in the range 1..n and is configured to
@@ -41,19 +67,22 @@ func NewSystem(addr string, opts ...DialOption) (*System, error) {
 // [Configuration] is created automatically for each system and is available via
 // [System.OutboundConfig].
 //
-// The opts may contain any [DialOption]s. Server options may be passed via
-// [WithServerOptions].
+// Use [WithLocalServerOptions] to add [ServerOption]s to every server, and
+// [WithLocalDialOptions] to add [DialOption]s to every server's peer
+// connections.
 //
 // The returned systems are not started. Call [System.Serve] after registering
 // any services. The returned stop function stops all systems and should be
 // called when they are no longer needed.
 //
-// If system creation fails, all resources acquired by this function are
-// released before returning the error.
-func NewLocalSystems(n int, opts ...DialOption) ([]*System, func(), error) {
-	dialOpts := newDialOptions()
+// If listener allocation fails, all listeners acquired so far are closed before
+// returning the error.
+func NewLocalSystems(n int, opts ...LocalServerOption) ([]*System, func(), error) {
+	var localOpts localServerOptions
 	for _, opt := range opts {
-		opt(&dialOpts)
+		if opt != nil {
+			opt(&localOpts)
+		}
 	}
 	listeners, nodeList, err := allocateListeners(n)
 	if err != nil {
@@ -62,7 +91,10 @@ func NewLocalSystems(n int, opts ...DialOption) ([]*System, func(), error) {
 	systems := make([]*System, n)
 	for i := range n {
 		myID := uint32(i + 1)
-		sysSrvOpts := append([]ServerOption{WithPeers(myID, nodeList, opts...)}, dialOpts.srvOpts...)
+		sysSrvOpts := append(
+			[]ServerOption{WithPeers(myID, nodeList, localOpts.dialOpts...)},
+			localOpts.serverOpts...,
+		)
 		systems[i] = &System{
 			srv: NewServer(sysSrvOpts...),
 			lis: listeners[i],

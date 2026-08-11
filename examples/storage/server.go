@@ -65,7 +65,10 @@ func runServer(address string, peers []string, srvOpt gorums.ServerOption) error
 // call stop when the cluster is no longer needed.
 func runLocalCluster(srvOpts gorums.ServerOption) ([]string, func(), error) {
 	dialOpts := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
-	systems, stop, err := gorums.NewLocalSystems(4, gorums.WithServerOptions(srvOpts), dialOpts)
+	systems, stop, err := gorums.NewLocalSystems(4,
+		gorums.WithLocalServerOptions(srvOpts),
+		gorums.WithLocalDialOptions(dialOpts),
+	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create local systems: %w", err)
 	}
