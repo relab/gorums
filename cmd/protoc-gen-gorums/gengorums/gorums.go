@@ -8,6 +8,7 @@ import (
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/version"
+	"github.com/relab/gorums/runtime/gorumsimpl"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/runtime/protoimpl"
@@ -58,11 +59,15 @@ func genGeneratedHeader(gen *protogen.Plugin, file *protogen.File, g *protogen.G
 
 func genVersionCheck(g *protogen.GeneratedFile) {
 	if GenerateVersionMarkers {
+		gorumsimplPath := protogen.GoImportPath("github.com/relab/gorums/runtime/gorumsimpl")
+		enforceVersion := g.QualifiedGoIdent(gorumsimplPath.Ident("EnforceVersion"))
+		minVersion := g.QualifiedGoIdent(gorumsimplPath.Ident("MinVersion"))
+		maxVersion := g.QualifiedGoIdent(gorumsimplPath.Ident("MaxVersion"))
 		g.P("const (")
 		g.P("// Verify that this generated code is sufficiently up-to-date.")
-		g.P("_ = gorums.EnforceVersion(", gorums.GenVersion, " - gorums.MinVersion)")
+		g.P("_ = ", enforceVersion, "(", gorumsimpl.GenVersion, " - ", minVersion, ")")
 		g.P("// Verify that the gorums runtime is sufficiently up-to-date.")
-		g.P("_ = gorums.EnforceVersion(gorums.MaxVersion - ", gorums.GenVersion, ")")
+		g.P("_ = ", enforceVersion, "(", maxVersion, " - ", gorumsimpl.GenVersion, ")")
 		g.P(")")
 		g.P()
 	}

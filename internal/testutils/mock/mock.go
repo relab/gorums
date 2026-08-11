@@ -1,3 +1,6 @@
+// Package mock provides shared test fixtures for Gorums tests: mock service
+// registrations and request handlers that echo or record requests, so tests
+// can exercise the runtime without a real service definition.
 package mock
 
 import (
@@ -64,7 +67,7 @@ func RegisterServices(services []Service) error {
 		}
 
 		svcDesc := &descriptorpb.ServiceDescriptorProto{
-			Name: proto.String(svcName),
+			Name: new(svcName),
 		}
 
 		for _, m := range s.Methods {
@@ -74,9 +77,9 @@ func RegisterServices(services []Service) error {
 			outName := string(outDesc.FullName())
 
 			svcDesc.Method = append(svcDesc.Method, &descriptorpb.MethodDescriptorProto{
-				Name:       proto.String(m.Name),
-				InputType:  proto.String("." + inName),
-				OutputType: proto.String("." + outName),
+				Name:       new(m.Name),
+				InputType:  new("." + inName),
+				OutputType: new("." + outName),
 			})
 		}
 		packages[pkgName] = append(packages[pkgName], svcDesc)
@@ -104,8 +107,8 @@ func RegisterServices(services []Service) error {
 		}
 
 		fd := &descriptorpb.FileDescriptorProto{
-			Name:    proto.String(fmt.Sprintf("mock/%s.proto", pkg)),
-			Package: proto.String(pkg),
+			Name:    new(fmt.Sprintf("mock/%s.proto", pkg)),
+			Package: new(pkg),
 			Service: svcDescriptors,
 		}
 

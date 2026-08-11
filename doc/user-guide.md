@@ -210,8 +210,8 @@ func WriteUnicast(ctx *gorums.NodeContext, in *WriteRequest) *gorums.OnewayCall[
 ```
 
 The three functions below are used to send requests to a configuration of nodes determined by the `ConfigContext`.
-A one-way call returns a `*gorums.OnewayCall` handle: call `Send()` to block until every send completes, or `Async()` to dispatch without waiting and `Wait()` for the result later.
-The last two functions return a `*gorums.Call[*ReadRequest, *ReadResponse]` handle, from which the responses of the nodes in the configuration are aggregated.
+The quorum-call functions return a `*gorums.Call[*ReadRequest, *ReadResponse]`, which embeds `*gorums.Responses[*ReadResponse]` and adds `Intercept`.
+The one-way `WriteMulticast` returns a `*gorums.OnewayCall[*WriteRequest]`; call `.Send()` to block until every send completes and observe any send errors, or `.Async()` to dispatch without waiting.
 
 ```go
 func WriteMulticast(ctx *gorums.ConfigContext, in *WriteRequest) *gorums.OnewayCall[*WriteRequest]
@@ -327,6 +327,19 @@ func ExampleStorageServer(port int) {
 }
 ```
 
+`Serve(lis)` serves on a listener you create.
+Alternatively, record the address with the `WithAddr` server option and call `ListenAndServe`, which binds the address for you:
+
+```go
+gorumsSrv := gorums.NewServer(gorums.WithAddr(":8080"))
+RegisterStorageServer(gorumsSrv, &srv)
+go gorumsSrv.ListenAndServe()
+```
+
+`Server.Addr` reports the bound address (useful when the configured port is `0`).
+`Server.Stop` stops the server immediately, closing the listener it owns and any outbound configuration.
+`Server.Stop` is safe to call before serving starts.
+
 ## Implementing the StorageClient
 
 Next, we write client code to call RPCs on our servers.
@@ -386,7 +399,7 @@ We can now invoke the WriteUnicast RPC on each `node` in the configuration:
   ctx := context.Background()
   for _, node := range allNodesConfig.Nodes() {
     nodeCtx := node.Context(ctx)
-    err := WriteUnicast(nodeCtx, req)
+    err := WriteUnicast(nodeCtx, req).Send()
     if err != nil {
       log.Fatalln("write rpc returned error:", err)
     }
@@ -507,15 +520,37 @@ _, _ = futA.Get()
 _, _ = futB.Get()
 ```
 
-**Multicast and unicast send immediately.** One-way calls do not return a `*Responses[T]` object, so there is no deferred consumption step; messages are enqueued as soon as the call is made.
+**Multicast and unicast are lazy too.** A one-way call returns an `OnewayCall` handle instead of a `*Responses[T]`, but the request is not enqueued until the caller consumes that handle with `.Send()` or `.Async()`.
+A handle that is dropped without consuming it never dispatches.
+
+Both terminals report every send failure, so a one-way call cannot fail silently.
+They return once the message has reached each node's stream; since a one-way call carries no reply, there is nothing further to wait for.
+A server handler that multicasts back to its callers should call `ServerContext.Release()` first, so that inbound processing is not blocked while the sends complete.
+
+`.Send()` blocks until the sends complete, so one goroutine holds a single outstanding message per node — the same depth a quorum call has.
+`.Async()` dispatches and returns a `*OnewayAsync` whose `.Wait()` collects the errors later, letting one goroutine keep several calls in flight:
+
+```go
+handles := make([]*gorums.OnewayAsync, 0, len(batch))
+for _, req := range batch {
+    handles = append(handles, WriteMulticast(cfgCtx, req).Async())
+}
+for _, h := range handles {
+    if err := h.Wait(); err != nil {
+        log.Println("multicast failed:", err)
+    }
+}
+```
+
+`.Async()` starts no goroutine; `.Wait()` collects the send confirmations on the caller's goroutine.
 
 Summary:
 
-| Call type           | When messages are sent        |
-| ------------------- | ----------------------------- |
-| Quorum call (sync)  | On first consumption (lazy)   |
-| Quorum call (async) | Immediately, before goroutine |
-| Multicast / unicast | Immediately                   |
+| Call type           | When messages are sent           |
+| ------------------- | -------------------------------- |
+| Quorum call (sync)  | On first consumption (lazy)      |
+| Quorum call (async) | Immediately, before goroutine    |
+| Multicast / unicast | On `.Send()` or `.Async()` (lazy) |
 
 ## Iterator-Based Custom Aggregation
 
@@ -864,8 +899,7 @@ func RequireAllSuccess(resp *gorums.Responses[*Response]) (*Response, error) {
 ## Interceptors for Request/Response Transformation
 
 Gorums provides interceptors to transform requests and responses on a per-node basis.
-Register them with `Intercept` on the call handle, before any terminal method; they are applied in call-site order and may be chained.
-Calling `Intercept` after the call has been dispatched panics, since an interceptor can no longer affect an in-flight call.
+Register them with `Call.Intercept` (or `OnewayCall.Intercept`) before invoking a terminal or one-way method; interceptors are applied in call-site order and can be chained.
 
 ### MapRequest Interceptor
 
@@ -873,12 +907,14 @@ Transform requests before sending to each node:
 
 ```go
 cfgCtx := config.Context(ctx)
-resp, err := WriteQC(cfgCtx, req).Intercept(
-    gorums.MapRequest(func(req *WriteRequest, node *gorums.Node) *WriteRequest {
-        // Customize request for each node
-        return &WriteRequest{Value: fmt.Sprintf("%s-node-%d", req.Value, node.ID())}
-    }),
-).Majority()
+resp, err := WriteQC(cfgCtx, req).
+    Intercept(
+        gorums.MapRequest(func(req *WriteRequest, node *gorums.Node) *WriteRequest {
+            // Customize request for each node
+            return &WriteRequest{Value: fmt.Sprintf("%s-node-%d", req.Value, node.ID())}
+        }),
+    ).
+    Majority()
 ```
 
 ### MapResponse Interceptor
@@ -886,13 +922,15 @@ resp, err := WriteQC(cfgCtx, req).Intercept(
 Transform responses received from each node:
 
 ```go
-resp, err := ReadQC(cfgCtx, req).Intercept(
-    gorums.MapResponse(func(resp *ReadResponse, node *gorums.Node) *ReadResponse {
-        // Transform response, e.g., add node ID
-        resp.NodeID = node.ID()
-        return resp
-    }),
-).Majority()
+resp, err := ReadQC(cfgCtx, req).
+    Intercept(
+        gorums.MapResponse(func(resp *ReadResponse, node *gorums.Node) *ReadResponse {
+            // Transform response, e.g., add node ID
+            resp.NodeID = node.ID()
+            return resp
+        }),
+    ).
+    Majority()
 ```
 
 ### Multicast/Unicast with MapRequest
@@ -900,11 +938,13 @@ resp, err := ReadQC(cfgCtx, req).Intercept(
 ```go
 // Send different messages to each node in a multicast
 cfgCtx := config.Context(ctx)
-err := WriteMulticast(cfgCtx, &WriteRequest{}).Intercept(
-    gorums.MapRequest(func(msg *WriteRequest, node *gorums.Node) *WriteRequest {
-        return &WriteRequest{Value: fmt.Sprintf("node-%d", node.ID())}
-    }),
-).Send()
+WriteMulticast(cfgCtx, &WriteRequest{}).
+    Intercept(
+        gorums.MapRequest(func(msg *WriteRequest, node *gorums.Node) *WriteRequest {
+            return &WriteRequest{Value: fmt.Sprintf("node-%d", node.ID())}
+        }),
+    ).
+    Send()
 ```
 
 **Note:** If `MapRequest` returns `nil` for a node, the message will not be sent to that node.
@@ -938,11 +978,13 @@ Multiple interceptors can be passed to `Intercept` and are executed in order:
 
 ```go
 cfgCtx := config.Context(ctx)
-resp, err := ReadQC(cfgCtx, req).Intercept(
-    loggingInterceptor,
-    gorums.MapRequest(transformFunc),
-    filterInterceptor,
-).Majority()
+resp, err := ReadQC(cfgCtx, req).
+    Intercept(
+        loggingInterceptor,
+        gorums.MapRequest(transformFunc),
+        filterInterceptor,
+    ).
+    Majority()
 ```
 
 #### Example: Logging Interceptor
@@ -1007,11 +1049,13 @@ func FilterInterceptor[Req, Resp proto.Message](
 
 // Usage: only include responses with timestamp > threshold
 threshold := time.Now().Add(-1 * time.Hour)
-resp, err := ReadQC(cfgCtx, req).Intercept(
-    FilterInterceptor[*ReadRequest, *ReadResponse](func(r *ReadResponse) bool {
-        return r.GetTime().AsTime().After(threshold)
-    }),
-).Majority()
+resp, err := ReadQC(cfgCtx, req).
+    Intercept(
+        FilterInterceptor[*ReadRequest, *ReadResponse](func(r *ReadResponse) bool {
+            return r.GetTime().AsTime().After(threshold)
+        }),
+    ).
+    Majority()
 ```
 
 #### Example: Counting Interceptor
@@ -1108,7 +1152,7 @@ func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCo
 }
 ```
 
-## Server Config Callbacks
+## Server Configuration Callbacks
 
 Two server options expose hooks that fire at connection or configuration change time.
 Both are passed to `gorums.NewServer` as `ServerOption` values.
@@ -1161,9 +1205,10 @@ config, err := gorums.NewConfig(
 )
 ```
 
-### WithPeerChange Callback
+### WithPeerChange
 
-`WithPeerChange` registers a callback invoked after every change to the connected-peer configuration — that is, each time a configured peer becomes reachable or unreachable.
+`WithPeerChange` registers a `func(gorums.Config)` callback.
+The callback is called after every change to the known-peer configuration — that is, each time a pre-configured peer connects or disconnects.
 
 **Signature:**
 
@@ -1171,15 +1216,15 @@ config, err := gorums.NewConfig(
 gorums.WithPeerChange(func(cfg gorums.Config) { ... })
 ```
 
-**When it runs:** after every change to the connected-peer configuration.
+**When it runs:** after every change to the known-peer configuration.
 For peer connect/disconnect events, the callback runs inside the server's internal configuration lock, immediately after the configuration slice has been replaced.
-The callback also fires once during `NewServer` construction, with the initial configuration, which contains only the self-node when no peers have connected yet; that initial construction-time call does **not** run under the internal configuration lock.
+The callback also fires during `NewServer` construction with the initial configuration, which contains only the self-node when no peers have connected yet.
 
-**What is available:** the connected-peer configuration, sorted by node ID.
+**What is available:** a configuration of connected known peers, sorted by node ID.
 The self-node (this server's own ID) is always included regardless of connectivity.
 
 **Safe side effects:** signaling a channel, writing to an atomic, or copying the slice.
-For connect/disconnect-triggered callbacks, the callback is invoked while holding the internal lock, so it must **not** call `srv.ConnectedPeers()`, `ctx.ConnectedPeers()`, or any other method that acquires the same lock.
+For connect/disconnect-triggered callbacks, the callback is invoked while holding the internal lock, so it must **not** call `srv.ConnectedPeers()` or any other method that acquires the same lock.
 Do not perform blocking or long-running work inside the callback, including during the initial construction-time call.
 
 #### Example: Reacting to Peer Membership Changes
@@ -1192,7 +1237,7 @@ const quorumSize = 2 // majority for a three-node cluster, including self
 ready := make(chan struct{}, 1)
 
 gorumsSrv := gorums.NewServer(
-    gorums.WithPeers(myNodeID, gorums.WithNodeList(peerAddrs), dialOpts...),
+    gorums.WithPeers(myNodeID, gorums.WithNodeList(peerAddrs)),
     gorums.WithPeerChange(func(cfg gorums.Config) {
         if len(cfg) >= quorumSize {
             select {
@@ -1210,9 +1255,9 @@ log.Println("quorum ready, starting to serve")
 
 The self-node is always present in `cfg`, so a three-node cluster (`quorumSize = 2`) will fire the signal as soon as a single remote peer connects.
 
-## Waiting for Config
+## Waiting for Configuration
 
-`Server.WaitForPeers` and `Server.WaitForClients` block until a condition on the configuration is satisfied, or until the context is cancelled or the server is stopped.
+`Server.WaitForPeers` and `Server.WaitForClients` block until a condition on the configuration is satisfied, or until the context is cancelled or the system is stopped.
 They replace the need to poll `ConnectedPeers()` in a loop and eliminate the latency and CPU overhead of polling.
 
 ```go
@@ -1230,7 +1275,7 @@ The condition is checked immediately against the current configuration, so the c
 
 ### WaitForPeers
 
-`WaitForPeers` waits on the connected-peer configuration — the subset of the configured peers this server can currently reach, plus the local node itself (see `ConnectedPeers()`).
+`WaitForPeers` waits on the connected-peer configuration — the subset of `PeerConfig()` that is currently reachable, plus the local node itself (see `ConnectedPeers()`).
 Use this when you need a quorum of static cluster members to be present before beginning to serve requests.
 
 ```go
@@ -1241,7 +1286,7 @@ err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
 
 ### WaitForClients
 
-`WaitForClients` waits on the client-peer configuration — the set of anonymous clients that have connected dynamically and are reachable for reverse-direction calls.
+`WaitForClients` waits on the client-peer configuration — the set of anonymous clients that have connected dynamically and are reachable for back-channel calls.
 Use this when a server should not proceed until a minimum number of clients have registered.
 
 ```go
@@ -1260,10 +1305,10 @@ err := srv.WaitForClients(ctx, func(cfg gorums.Config) bool {
 
 ### Relationship to `onChange`
 
-`WaitForPeers` and the `WithPeerChange` callback (see [WithPeerChange Callback](#withpeerchange-callback)) serve complementary purposes.
+`WaitForPeers` and the `onChange` callback (see [WithPeerChange](#withpeerchange)) serve complementary purposes.
 `onChange` is suited for reactive work that must happen synchronously on every configuration change — for example, triggering a leader election or updating an atomic counter.
 `WaitForPeers` is suited for startup synchronization — blocking until the cluster reaches a desired state before the application begins normal operation.
-Unlike the callback, `WaitForPeers` composes naturally with `context.WithTimeout` and `context.WithCancel`.
+Unlike `onChange`, `WaitForPeers` composes naturally with `context.WithTimeout` and `context.WithCancel`.
 
 ## Error Handling
 
@@ -1490,7 +1535,7 @@ sorted := cfg.Sort(func(a, b *gorums.Node) int {
 })
 ```
 
-### Using a Smaller Fast Config
+### Using a Smaller Fast Configuration
 
 The most practical use of latency-based selection is reducing the quorum size to the fastest subset of nodes.
 Sending to fewer nodes lowers tail latency without weakening correctness, as long as the subset still meets your quorum threshold.
@@ -1621,7 +1666,7 @@ on it:
   different RPCs have meaningfully different latency profiles.
 
 * **Multicast and unicast calls are not measured.** Only calls that receive
-  replies update the latency estimate.  Multicast calls (fire-and-forget) and
+  replies update the latency estimate.  Multicast and
   unicast calls with no response do not contribute measurements, so nodes
   contacted exclusively via these call types will remain unmeasured.
 
@@ -1746,9 +1791,8 @@ The `nread` and `nwrite` commands trigger server-side nested quorum calls and ne
 A server handler (the server method itself) can act as a client and issue its own quorum calls to other nodes.
 These are called *nested quorum calls*, because one quorum call triggers another from inside the server handler.
 
-`ServerContext.PeerConfig()` returns the `Config` of the peers the server was configured with via `gorums.WithPeers`.
+`ServerContext.PeerConfig()` returns the `Config` of the peers configured with `gorums.WithPeers`, backed by connections this server establishes.
 This makes it straightforward for a handler to fan out a sub-request to the rest of the cluster.
-It is the full peer set, not the reachable subset, so a quorum size derived from it inside a handler does not shift as peers connect and disconnect; use `ctx.ConnectedPeers()` to observe reachability.
 
 ### Setting Up Peer Tracking
 
@@ -1756,7 +1800,7 @@ Enable peer tracking for the server at construction time:
 
 ```go
 gorumsSrv := gorums.NewServer(
-    gorums.WithPeers(myNodeID, gorums.WithNodeList(peerAddrs), dialOpts...),
+    gorums.WithPeers(myNodeID, gorums.WithNodeList(peerAddrs)),
 )
 ```
 
@@ -1766,19 +1810,22 @@ It is included in the configuration returned by `PeerConfig()` so that all quoru
 Peers appear in `ConnectedPeers()` as connections to them are established.
 Use `WaitForPeers` to wait for enough peers to connect before issuing calls.
 
-A symmetric server re-establishes an outbound stream proactively when it drops while idle, rather than waiting for the next local send.
+A symmetric server (one that both tracks peers and calls them via `WithPeers`) re-establishes an outbound stream proactively when it drops while idle, rather than waiting for the next local send.
 Without this, a peer would remain absent from the remote's `ConnectedPeers()` until that side happened to send something.
 
 The storage example uses `gorums.NewLocalServers`, which calls `WithPeers` automatically for each server.
 
-Register a `WithPeerChange` callback to react each time the connected-peer configuration changes.
-See [WithPeerChange Callback](#withpeerchange-callback) for details and an example.
+Register a `WithPeerChange` to react each time the peer configuration changes.
+See [Server Configuration Callbacks](#server-configuration-callbacks) for details and an example.
 
 ### Writing the Handler
 
 Call `ctx.Release()` before making nested outbound calls to release the handler's exclusive lock on the server,
 allowing the server to continue processing inbound messages while the nested calls are in flight.
 Without `Release()`, the server would block all other inbound messages until the nested calls complete.
+
+Check that a configuration is non-empty before calling `Context` on it: `Config.Context` panics on an empty configuration.
+The `len(config) == 0` checks below exist for this reason, not just as a general safety habit.
 
 ```go
 // ReadNestedQC is a quorum-call handler that fans out a nested ReadQC
@@ -1804,7 +1851,7 @@ func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerContext, req *pb.W
         return nil, fmt.Errorf("write_nested_multicast: requires server peer configuration")
     }
     ctx.Release()
-    if err := pb.WriteMulticast(config.Context(ctx), req); err != nil {
+    if err := pb.WriteMulticast(config.Context(ctx), req).Send(); err != nil {
         return nil, fmt.Errorf("write_nested_multicast: %w", err)
     }
     return pb.WriteResponse_builder{New: true}.Build(), nil
@@ -1841,7 +1888,7 @@ A handler can use this configuration to make outbound calls back towards those c
 
 This pattern is particularly useful when clients are behind a firewall and cannot accept inbound connections.
 Clients can still initiate outbound connections to a server with a public IP address.
-Once a client establishes a connection, the server retains a reverse-direction stream back to that client, and `ConnectedClients()` includes it as a callable target.
+Once a client establishes a connection, the server retains a back-channel stream back to that client, and `ConnectedClients()` includes it as a callable target.
 The server can therefore fan out quorum calls to all connected clients without requiring any additional network connections or firewall rules.
 
 A typical setup: each client connects to the server and calls a `Register` RPC to announce itself as ready.
@@ -1861,7 +1908,7 @@ If you also need to track known peers with static node IDs, combine with `WithPe
 
 ```go
 gorumsSrv := gorums.NewServer(
-    gorums.WithPeers(myNodeID, gorums.WithNodeList(knownPeers), dialOpts...),  // static known peers
+    gorums.WithPeers(myNodeID, gorums.WithNodeList(knownPeers)),  // static known peers
     // anonymous clients are tracked automatically
 )
 ```
@@ -1869,7 +1916,7 @@ gorumsSrv := gorums.NewServer(
 For example, a local test cluster:
 
 ```go
-servers, stop, err := gorums.NewLocalServers(4)
+systems, stop, err := gorums.NewLocalServers(4, nil)
 ```
 
 > **Note:** The `nread` and `nwrite` commands in the storage REPL example use `ctx.PeerConfig()` (the static server-to-server direction) rather than `ctx.ConnectedClients()`.
@@ -1879,16 +1926,17 @@ servers, stop, err := gorums.NewLocalServers(4)
 ### Setting Up the Client
 
 For the server to call back to a client, the client must expose its own method handlers over the same bidirectional stream it opens to the server.
-Create a `*gorums.Server`, register any handler methods the server may invoke, and then pass it to `WithBackChannel` when establishing the outbound connection:
+Create a handler-only `*gorums.Server` (no listener, no peers), register any handler methods the server may invoke, and pass it to `gorums.NewConfig` via the `WithBackChannel` dial option.
+`WithBackChannel` installs the client as the back-channel request handler automatically:
 
 ```go
-// Create a server to host the client-side handlers.
+// Create a handler-only server and register the methods the remote server is
+// allowed to call back on this client.
 clientSrv := gorums.NewServer()
-
-// Register the methods the remote server is allowed to call back on this client.
 clientSrv.RegisterHandler(pb.MyMethod, myHandler)
 
-// Connect to the server; WithBackChannel wires up the back-channel dispatcher automatically.
+// The configuration is used to reach the server(s); WithBackChannel installs
+// clientSrv as the back-channel handler on its connections.
 config, err := gorums.NewConfig(
     gorums.WithNodeList(serverAddrs),
     gorums.WithBackChannel(clientSrv),
@@ -1896,16 +1944,15 @@ config, err := gorums.NewConfig(
 )
 ```
 
-Passing `clientSrv` to `gorums.WithBackChannel` is what installs the server as the back-channel request handler.
-When the remote server dispatches a reverse-direction call via `ctx.ConnectedClients()`, the call arrives on the same gRPC stream the client opened and is routed to `clientSrv` for dispatch.
+When the remote server dispatches a back-channel call via `ctx.ConnectedClients()`, the call arrives on the same gRPC stream the client opened and is routed to `clientSrv` for dispatch.
 
 The client does **not** need to open a separate listening socket — the handler is served entirely over the existing outbound connection.
 
 ### Connecting as an Anonymous Client
 
-A client must announce `NodeID=0` in its connection metadata to be assigned a dynamic node ID by the server and to appear in `ConnectedClients()` for reverse-direction calls.
+A client must announce `NodeID=0` in its connection metadata to be assigned a dynamic node ID by the server and to appear in `ConnectedClients()` for back-channel calls.
 Clients behind a firewall typically have no pre-configured node ID, so they connect as anonymous clients.
-Connecting via `gorums.NewConfig(..., gorums.WithBackChannel(clientSrv), ...)` without `WithPeers` sends `NodeID=0` automatically.
+`WithBackChannel` requires a handler-only server, which has node ID 0, so the client sends `NodeID=0` automatically.
 The server assigns it a dynamic ID and includes it in `ConnectedClients()`.
 The client can then call `Register` (a unicast) to signal that it is ready to receive calls:
 
@@ -1936,7 +1983,7 @@ The key difference from `ServerContext.PeerConfig()` is the direction of each pe
 
 | Method               | Connection direction                            | Typical use case                                   |
 | -------------------- | ----------------------------------------------- | -------------------------------------------------- |
-| `ctx.PeerConfig()`       | Outbound (this server connects to peers)        | Static cluster with known membership               |
+| `ctx.PeerConfig()`   | Outbound (this server dials its peers)          | Static cluster with known membership               |
 | `ctx.ConnectedClients()` | Inbound reversed (server calls back to clients) | Clients behind a firewall that connect to a server |
 
 ### Sequence Diagram
@@ -1957,9 +2004,9 @@ sequenceDiagram
     Coord->>Srv: ReadNestedQC(key)
     Note over Srv: ctx.ConnectedClients() = {A, B, C}
     Note over Srv: ctx.Release()
-    Srv->>A: ReadQC(key) [reverse-direction]
-    Srv->>B: ReadQC(key) [reverse-direction]
-    Srv->>C: ReadQC(key) [reverse-direction]
+    Srv->>A: ReadQC(key) [back-channel]
+    Srv->>B: ReadQC(key) [back-channel]
+    Srv->>C: ReadQC(key) [back-channel]
     A-->>Srv: ReadResponse(value, time)
     B-->>Srv: ReadResponse(value, time)
     C-->>Srv: ReadResponse(value, time)
@@ -1967,14 +2014,15 @@ sequenceDiagram
     Srv-->>Coord: ReadResponse(newest value)
 ```
 
-The reverse-direction calls reuse the existing inbound gRPC streams established by the clients, so no additional network connections or firewall rules are needed.
+The back-channel calls reuse the existing inbound gRPC streams established by the clients, so no additional network connections or firewall rules are needed.
 
 ## Send Queue Capacity and Backpressure
 
 The per-node send queue defaults to 4096 entries.
 Passing zero to `WithSendBufferSize` or the send-size argument of `WithBufferSizes` selects that default.
-Two-way requests fail fast with an unavailable error when a real buffered queue is full: a full queue means the peer is not draining sends, and failing fast lets quorum logic count that peer as failed instead of stalling every caller behind it.
+Two-way requests fail fast with an unavailable error when a real buffered queue is full.
 One-way client calls (`Unicast`, `Multicast`) wait for space instead, since backpressure on the caller is what paces them.
-A reply sent from a receive or dispatch loop — a server-initiated back-channel reply or a server-side inbound reply — also fails fast instead of waiting, or is silently dropped if it has no error channel to report on.
+A reply sent from a receive/dispatch loop — a server-initiated back-channel reply or a server-side inbound reply — also fails fast instead of waiting, or is silently dropped if it has no error channel to report on.
 Waiting there could stall that connection from reading further messages.
+`Node.DroppedReplies` counts these silent drops for a given node, so a deployment can monitor for sustained backpressure that would otherwise be invisible.
 Applications that previously relied on an unbuffered send queue should remove that assumption and choose an explicit positive capacity when a smaller backlog is required.

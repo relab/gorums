@@ -1,3 +1,5 @@
+// Package interceptors shows how to write Gorums server interceptors, such as a
+// logging interceptor that reports each incoming request and its response.
 package interceptors
 
 import (
@@ -54,7 +56,7 @@ func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorum
 	return out, err
 }
 
-/** NoFooAllowedInterceptor rejects requests for messages with key "foo". */
+// NoFooAllowedInterceptor rejects requests for messages with key "foo".
 func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 	if req, ok := gorums.AsProto[proto.Message](in).(T); ok {
 		log.Printf("NoFooAllowedInterceptor: Received request for key '%s'", req.GetKey())
@@ -69,13 +71,11 @@ func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCo
 func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 	log.Printf("MetadataInterceptor: Adding custom metadata to message(customKey=customValue)")
 	// Add a custom metadata field
-	entry := gorums.MetadataEntry_builder{
-		Key:   "customKey",
-		Value: "customValue",
-	}.Build()
-	in.SetEntry([]*gorums.MetadataEntry{
-		entry,
-	})
+	entry := &gorums.MetadataEntry{}
+	entry.SetKey("customKey")
+	entry.SetValue("customValue")
+	in.SetEntry([]*gorums.MetadataEntry{entry})
+
 	// Call the next handler in the chain
 	out, err := next(ctx, in)
 	log.Printf("MetadataInterceptor: Finished processing message with custom metadata")

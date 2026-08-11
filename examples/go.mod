@@ -1,21 +1,20 @@
 module github.com/relab/gorums/examples
 
-go 1.26.0
+go 1.26.2
 
 require (
 	github.com/relab/gorums v0.11.0
-	golang.org/x/term v0.41.0
-	google.golang.org/grpc v1.79.3
+	golang.org/x/term v0.44.0
+	google.golang.org/grpc v1.82.0
 	google.golang.org/protobuf v1.36.11
 )
 
 require (
-	go.uber.org/goleak v1.3.0 // indirect
-	golang.org/x/net v0.52.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260319201613-d00831a3d3e7 // indirect
-	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.1 // indirect
+	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260630182238-925bb5da69e7 // indirect
+	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.2 // indirect
 )
 
 replace github.com/relab/gorums => ../

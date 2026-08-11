@@ -1,15 +1,20 @@
 package gorums_test
 
 import (
+	"bytes"
 	"context"
+	"log"
 	"net"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	"google.golang.org/grpc/metadata"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -92,7 +97,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 
 	ctx := gorumstest.Context(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
-	res, err := gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String("client-"), mock.TestMethod)
+	res, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String("client-"), mock.TestMethod)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -130,7 +135,7 @@ func TestWithBufferSizesProcessesRequests(t *testing.T) {
 			for i := range concurrency {
 				wg.Go(func() {
 					nodeCtx := node.Context(ctx)
-					_, errs[i] = gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
+					_, errs[i] = gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
 				})
 			}
 			wg.Wait()
@@ -173,7 +178,7 @@ func TestTCPReconnection(t *testing.T) {
 	// Send first message
 	ctx := gorumstest.Context(t, time.Second)
 	nodeCtx := node.Context(ctx)
-	_, err = gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String("1"), mock.TestMethod)
+	_, err = gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String("1"), mock.TestMethod)
 	if err != nil {
 		t.Fatalf("First call failed: %v", err)
 	}
@@ -188,7 +193,7 @@ func TestTCPReconnection(t *testing.T) {
 	// Sending now should fail or timeout
 	ctx2 := gorumstest.Context(t, 200*time.Millisecond)
 	nodeCtx2 := node.Context(ctx2)
-	_, err = gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx2, pb.String("2"), mock.TestMethod)
+	_, err = gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx2, pb.String("2"), mock.TestMethod)
 	if err == nil {
 		// It might succeed if it just queued it? But we wait for response.
 	} else {
@@ -217,8 +222,235 @@ func TestTCPReconnection(t *testing.T) {
 	// Send message again
 	ctx3 := gorumstest.Context(t, 2*time.Second)
 	nodeCtx3 := node.Context(ctx3)
-	_, err = gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx3, pb.String("3"), mock.TestMethod)
+	_, err = gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx3, pb.String("3"), mock.TestMethod)
 	if err != nil {
 		t.Errorf("Call after reconnection failed: %v", err)
 	}
+}
+
+// TestNewLocalServersStopBeforeServeClosesListeners verifies that the stop
+// function returned by NewLocalServers closes all pre-allocated listeners even
+// when none of the servers has had ListenAndServe called yet, so no file
+// descriptors are leaked.
+func TestNewLocalServersStopBeforeServeClosesListeners(t *testing.T) {
+	servers, stop, err := gorums.NewLocalServers(3, gorums.WithLocalDialOptions(gorumstest.InsecureDialOptions(t)))
+	if err != nil {
+		t.Fatalf("NewLocalServers: %v", err)
+	}
+	addrs := make([]string, len(servers))
+	for i, srv := range servers {
+		addrs[i] = srv.Addr()
+	}
+	stop() // called before any Serve()
+	// Every pre-allocated listener must be closed. Assert this by dialing each
+	// address and expecting a refused connection, rather than re-binding a new
+	// listener to it: re-binding races with anything else on the machine that
+	// might grab the now-free ephemeral port, which caused flakiness before.
+	for _, addr := range addrs {
+		if conn, err := net.DialTimeout("tcp", addr, 2*time.Second); err == nil {
+			_ = conn.Close()
+			t.Errorf("connected to %s after stop (without Serve); expected the listener to be closed", addr)
+		}
+	}
+}
+
+// TestNewLocalServersAssignsSequentialNodeIDs verifies that NewLocalServers
+// assigns node IDs 1..n in the order the servers are returned.
+func TestNewLocalServersAssignsSequentialNodeIDs(t *testing.T) {
+	const n = 4
+	servers, stop, err := gorums.NewLocalServers(n, gorums.WithLocalDialOptions(gorumstest.InsecureDialOptions(t)))
+	if err != nil {
+		t.Fatalf("NewLocalServers: %v", err)
+	}
+	t.Cleanup(stop)
+
+	for i, srv := range servers {
+		if want := uint32(i + 1); srv.NodeID() != want {
+			t.Errorf("servers[%d].NodeID() = %d, want %d", i, srv.NodeID(), want)
+		}
+	}
+}
+
+// TestNewLocalServersPeerConfigSize verifies that each server's peer
+// configuration includes every node in the symmetric group.
+func TestNewLocalServersPeerConfigSize(t *testing.T) {
+	const n = 4
+	servers, stop, err := gorums.NewLocalServers(n, gorums.WithLocalDialOptions(gorumstest.InsecureDialOptions(t)))
+	if err != nil {
+		t.Fatalf("NewLocalServers: %v", err)
+	}
+	t.Cleanup(stop)
+
+	for i, srv := range servers {
+		if got := srv.PeerConfig().Size(); got != n {
+			t.Errorf("servers[%d].PeerConfig().Size() = %d, want %d", i, got, n)
+		}
+	}
+}
+
+// TestNewLocalServersAppliesServerOptions verifies that a ServerOption passed
+// via WithLocalServerOptions is applied to every server, not just the first.
+func TestNewLocalServersAppliesServerOptions(t *testing.T) {
+	const n = 3
+	var connects atomic.Int32
+	servers, stop, err := gorums.NewLocalServers(
+		n,
+		gorums.WithLocalServerOptions(gorums.WithConnectCallback(func(context.Context) { connects.Add(1) })),
+		gorums.WithLocalDialOptions(gorumstest.InsecureDialOptions(t)),
+	)
+	if err != nil {
+		t.Fatalf("NewLocalServers: %v", err)
+	}
+	t.Cleanup(stop)
+	for _, srv := range servers {
+		go func() { _ = srv.ListenAndServe() }()
+	}
+
+	// Wait on the callback counter directly: WaitForPeers observes this
+	// server's own connections, which can be established before any peer's
+	// inbound connect callback has run.
+	if !gorumstest.WaitUntil(t, 5*time.Second, func() bool { return connects.Load() > 0 }) {
+		t.Error("WithConnectCallback never fired; ServerOption was not applied to the local servers")
+	}
+}
+
+// TestNewLocalServersAppliesDialOptions verifies that a DialOption passed via
+// WithLocalDialOptions is applied to every server's outbound configuration.
+// WithLogger's "ready" line is written synchronously when the outbound
+// manager is constructed, so this does not depend on any network activity.
+func TestNewLocalServersAppliesDialOptions(t *testing.T) {
+	const n = 3
+	var buf bytes.Buffer
+	logger := log.New(&buf, "", 0)
+	_, stop, err := gorums.NewLocalServers(
+		n,
+		gorums.WithLocalDialOptions(gorumstest.InsecureDialOptions(t), gorums.WithLogger(logger)),
+	)
+	if err != nil {
+		t.Fatalf("NewLocalServers: %v", err)
+	}
+	t.Cleanup(stop)
+
+	if got := strings.Count(buf.String(), "ready"); got != n {
+		t.Errorf("logger recorded %d \"ready\" lines, want %d (one per server); DialOption was not applied to every server", got, n)
+	}
+}
+
+// TestNewLocalServersStopIsIdempotent verifies that the stop function
+// returned by NewLocalServers can be called more than once without panicking.
+func TestNewLocalServersStopIsIdempotent(t *testing.T) {
+	_, stop, err := gorums.NewLocalServers(3, gorums.WithLocalDialOptions(gorumstest.InsecureDialOptions(t)))
+	if err != nil {
+		t.Fatalf("NewLocalServers: %v", err)
+	}
+	stop()
+	stop()
+}
+
+// TestServerAddrBeforeAndAfterBinding verifies that Addr returns the configured
+// listen address before binding and the concrete bound address after
+// ListenAndServe binds a port-0 listener.
+func TestServerAddrBeforeAndAfterBinding(t *testing.T) {
+	srv := gorums.NewServer(gorums.WithAddr("127.0.0.1:0"))
+	t.Cleanup(srv.Stop)
+
+	if got := srv.Addr(); got != "127.0.0.1:0" {
+		t.Errorf("Addr before binding = %q, want %q", got, "127.0.0.1:0")
+	}
+
+	go func() { _ = srv.ListenAndServe() }()
+
+	if !gorumstest.WaitUntil(t, 2*time.Second, func() bool {
+		return srv.Addr() != "127.0.0.1:0"
+	}) {
+		t.Fatalf("Addr did not update after binding; still %q", srv.Addr())
+	}
+	if _, port, err := net.SplitHostPort(srv.Addr()); err != nil || port == "" || port == "0" {
+		t.Errorf("Addr after binding = %q, want a concrete bound port", srv.Addr())
+	}
+}
+
+// TestListenAndServeAfterStopReturnsError verifies that calling ListenAndServe
+// after Stop has already been called returns an error instead of silently
+// binding and serving on an already-stopped server, and that the listener
+// ListenAndServe binds in that case does not leak: grpc.Server.Serve closes
+// any listener handed to an already-stopped server.
+func TestListenAndServeAfterStopReturnsError(t *testing.T) {
+	srv := gorums.NewServer(gorums.WithAddr("127.0.0.1:0"))
+	srv.Stop()
+
+	err := srv.ListenAndServe()
+	if err == nil {
+		t.Fatal("ListenAndServe after Stop = nil error, want error")
+	}
+
+	addr := srv.Addr()
+	if _, port, splitErr := net.SplitHostPort(addr); splitErr != nil || port == "" || port == "0" {
+		t.Fatalf("Addr after ListenAndServe = %q, want a concrete bound port", addr)
+	}
+	// The listener ListenAndServe bound must already be closed (by grpc's Serve
+	// on a stopped server), not leaked: dialing it must be refused.
+	if conn, dialErr := net.DialTimeout("tcp", addr, 2*time.Second); dialErr == nil {
+		_ = conn.Close()
+		t.Fatalf("connected to %s after ListenAndServe on a stopped server; expected the listener to be closed", addr)
+	}
+}
+
+// TestListenAndServeWithoutAddrReturnsError verifies that ListenAndServe returns
+// a clear error when no listen address was configured and no listener was
+// preallocated.
+func TestListenAndServeWithoutAddrReturnsError(t *testing.T) {
+	srv := gorums.NewServer()
+	t.Cleanup(srv.Stop)
+	if err := srv.ListenAndServe(); err == nil {
+		t.Fatal("ListenAndServe without a listen address = nil error, want error")
+	}
+}
+
+// TestServeRecordsListenerForAddrAndStop verifies that Serve records the
+// externally supplied listener so that Addr reports its address and Stop closes
+// it, matching the folded lifecycle semantics.
+func TestServeRecordsListenerForAddrAndStop(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := lis.Addr().String()
+	srv := gorums.NewServer()
+	go func() { _ = srv.Serve(lis) }()
+
+	if !gorumstest.WaitUntil(t, 2*time.Second, func() bool {
+		return srv.Addr() == addr
+	}) {
+		t.Fatalf("Addr = %q, want %q after Serve", srv.Addr(), addr)
+	}
+	srv.Stop()
+	// Stop must close the recorded listener. Assert this by dialing the address
+	// and expecting a refused connection, rather than re-binding a new listener
+	// to it: re-binding races with anything else on the machine that might grab
+	// the now-free ephemeral port, which caused flakiness before.
+	if conn, err := net.DialTimeout("tcp", addr, 2*time.Second); err == nil {
+		_ = conn.Close()
+		t.Fatalf("connected to %s after Stop; expected the listener to be closed", addr)
+	}
+}
+
+// TestOutboundInvalidPanics verifies that an invalid outbound node source
+// configured via WithPeers panics during NewServer.
+func TestOutboundInvalidPanics(t *testing.T) {
+	// Duplicate address makes the node source invalid.
+	invalid := gorums.WithNodeList([]string{"127.0.0.1:1", "127.0.0.1:1"})
+	assertPanics(t, "WithPeers", func() {
+		gorums.NewServer(gorums.WithPeers(1, invalid))
+	})
+}
+
+func assertPanics(t *testing.T, name string, fn func()) {
+	t.Helper()
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("NewServer with invalid %s did not panic", name)
+		}
+	}()
+	fn()
 }

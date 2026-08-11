@@ -31,11 +31,10 @@ func runServer(address string, peers []string, srvOpt gorums.ServerOption) error
 	if err != nil {
 		return err
 	}
-	insecureDial := gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
 	srv := gorums.NewServer(
 		gorums.WithAddr(address),
-		gorums.WithPeers(myID, peerList, insecureDial),
 		srvOpt,
+		gorums.WithPeers(myID, peerList, gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))),
 	)
 
 	// catch signals in order to shut down gracefully
@@ -214,7 +213,7 @@ func (s *storageServer) ReadCorrectable(_ gorums.ServerContext, req *pb.ReadRequ
 }
 
 // ReadNestedQC is a quorum-call handler that performs a nested quorum call
-// using the server's peer configuration from WithPeers.
+// using the server's known-peer configuration from WithPeers.
 func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
 	cfg := ctx.PeerConfig()
 	if len(cfg) == 0 {
@@ -226,7 +225,7 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadReque
 }
 
 // WriteNestedMulticast is a quorum-call handler that performs a nested multicast
-// using the server's peer configuration from WithPeers.
+// using the server's known-peer configuration from WithPeers.
 func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerContext, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
 	cfg := ctx.PeerConfig()
 	if len(cfg) == 0 {
