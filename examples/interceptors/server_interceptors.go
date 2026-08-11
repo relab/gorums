@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func LoggingInterceptor(addr string) gorums.Interceptor {
+func LoggingInterceptor(addr string) gorums.ServerInterceptor {
 	return func(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 		req := gorums.AsProto[proto.Message](in)
 		log.Printf("[%s]: LoggingInterceptor(incoming): Method=%s, Message=%s", addr, in.GetMethod(), req)

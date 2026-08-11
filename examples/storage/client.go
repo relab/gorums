@@ -15,7 +15,7 @@ func runClient(addresses []string) error {
 	}
 	cfg, err := gorums.NewConfig(
 		gorums.WithNodeList(addresses),
-		gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+		gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 	)
 	if err != nil {
 		return err

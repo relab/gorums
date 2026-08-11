@@ -356,7 +356,7 @@ func ExampleStorageClient() {
   // Create a configuration including all nodes
   allNodesConfig, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
-    gorums.WithDialOptions(
+    gorums.WithGRPCDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
   )
@@ -653,7 +653,7 @@ func ExampleStorageClient() {
   // Create a configuration with all nodes
   config, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
-    gorums.WithDialOptions(
+    gorums.WithGRPCDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
   )
@@ -864,7 +864,7 @@ func RequireAllSuccess(resp *gorums.Responses[*Response]) (*Response, error) {
 Gorums provides interceptors to transform requests and responses on a per-node basis.
 Interceptors are passed as call options and can be chained together.
 
-### MapRequest Interceptor
+### MapRequest ServerInterceptor
 
 Transform requests before sending to each node:
 
@@ -880,7 +880,7 @@ resp, err := WriteQC(cfgCtx, req,
 ).Majority()
 ```
 
-### MapResponse Interceptor
+### MapResponse ServerInterceptor
 
 Transform responses received from each node:
 
@@ -950,7 +950,7 @@ resp, err := ReadQC(cfgCtx, req,
 ).Majority()
 ```
 
-#### Example: Logging Interceptor
+#### Example: Logging ServerInterceptor
 
 Create a logging interceptor that wraps the response iterator:
 
@@ -987,7 +987,7 @@ resp, err := ReadQC(cfgCtx, req,
 ).Majority()
 ```
 
-#### Example: Response Filtering Interceptor
+#### Example: Response Filtering ServerInterceptor
 
 Filter out responses that don't meet certain criteria:
 
@@ -1021,7 +1021,7 @@ resp, err := ReadQC(cfgCtx, req,
 ).Majority()
 ```
 
-#### Example: Counting Interceptor
+#### Example: Counting ServerInterceptor
 
 Count responses passing through the interceptor:
 
@@ -1047,20 +1047,20 @@ func CountingInterceptor[Req, Resp proto.Message](
 ### Server-Side Interceptors
 
 Gorums also supports server-side interceptors that wrap inbound RPC handlers, similar to gRPC server interceptors.
-A server-side interceptor implements the `gorums.Interceptor` signature:
+A server-side interceptor implements the `gorums.ServerInterceptor` signature:
 
 ```go
-type Interceptor func(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error)
+type ServerInterceptor func(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error)
 ```
 
 You can pass multiple interceptors when starting a Gorums server. They can perform logging, latency injection, metadata insertion, and request validation before sending the request to the handler.
 
 Below are several examples based on the `examples/interceptors` package.
 
-#### Server-Side Logging Interceptor
+#### Server-Side Logging ServerInterceptor
 
 ```go
-func LoggingInterceptor(addr string) gorums.Interceptor {
+func LoggingInterceptor(addr string) gorums.ServerInterceptor {
     return func(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
         req := gorums.AsProto[proto.Message](in)
         log.Printf("[%s]: LoggingInterceptor(incoming): Method=%s, Message=%s", addr, in.GetMethod(), req)
@@ -1164,7 +1164,7 @@ The connecting client attaches the metadata with `WithMetadata`:
 config, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
     gorums.WithMetadata(metadata.New(map[string]string{"client-id": "replica-3"})),
-    gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+    gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 )
 ```
 
@@ -1419,7 +1419,7 @@ func ExampleConfigClient() {
   // Create base configuration c1 from addrs, giving |c1| = 3.
   c1, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
-    gorums.WithDialOptions(
+    gorums.WithGRPCDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
   )
@@ -1899,7 +1899,7 @@ clientSrv.RegisterHandler(pb.MyMethod, myHandler)
 config, err := gorums.NewConfig(
     gorums.WithNodeList(serverAddrs),
     gorums.WithBackChannel(clientSrv),
-    gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+    gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 )
 ```
 

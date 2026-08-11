@@ -46,7 +46,7 @@ func testStartServers(t testing.TB, numServers int, srvFn func(i int) ServerIfac
 // testDialOptions returns a DialOption for connecting to servers started by
 // testStartServers.
 func testDialOptions(t testing.TB) DialOption {
-	return WithDialOptions(servers.DialOptions(t)...)
+	return WithGRPCDialOptions(servers.DialOptions(t)...)
 }
 
 // testCloser returns a cleanup function that closes the given io.Closer.

@@ -93,7 +93,7 @@ func Collect[T any](t testing.TB, timeout time.Duration, want int, ch <-chan T) 
 // InsecureDialOptions returns a [gorums.DialOption] with insecure transport
 // credentials for testing.
 func InsecureDialOptions(_ testing.TB) gorums.DialOption {
-	return gorums.WithDialOptions(
+	return gorums.WithGRPCDialOptions(
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 }
@@ -103,7 +103,7 @@ func InsecureDialOptions(_ testing.TB) gorums.DialOption {
 // bufconn dialer in the default build, or insecure real-network credentials
 // under the integration build tag.
 func DialOptions(t testing.TB) gorums.DialOption {
-	return gorums.WithDialOptions(servers.DialOptions(t)...)
+	return gorums.WithGRPCDialOptions(servers.DialOptions(t)...)
 }
 
 // startServers starts numServers servers via srvFn, adapting srvFn's

@@ -40,7 +40,7 @@ func TestServerCallback(t *testing.T) {
 	}
 }
 
-func appendStringInterceptor(inStr, outStr string) gorums.Interceptor {
+func appendStringInterceptor(inStr, outStr string) gorums.ServerInterceptor {
 	return func(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		// update the underlying request gorums.Message's message field (pb.StringValue in this case)
@@ -73,7 +73,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 	// set up a server with two interceptors: i1, i2
 	interceptorServerFn := func(_ int) gorums.ServerIface {
 		interceptorSrv := &interceptorSrv{}
-		s := gorums.NewServer(gorums.WithInterceptors(
+		s := gorums.NewServer(gorums.WithServerInterceptors(
 			appendStringInterceptor("i1in-", "i1out"),
 			appendStringInterceptor("i2in-", "i2out-"),
 		))
