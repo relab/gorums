@@ -92,7 +92,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 
 	ctx := gorumstest.Context(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
-	res, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String("client-"), mock.TestMethod)
+	res, err := gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String("client-"), mock.TestMethod)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestWithBufferSizesProcessesRequests(t *testing.T) {
 			for i := range concurrency {
 				wg.Go(func() {
 					nodeCtx := node.Context(ctx)
-					_, errs[i] = gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
+					_, errs[i] = gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
 				})
 			}
 			wg.Wait()
@@ -173,7 +173,7 @@ func TestTCPReconnection(t *testing.T) {
 	// Send first message
 	ctx := gorumstest.Context(t, time.Second)
 	nodeCtx := node.Context(ctx)
-	_, err = gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String("1"), mock.TestMethod)
+	_, err = gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String("1"), mock.TestMethod)
 	if err != nil {
 		t.Fatalf("First call failed: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestTCPReconnection(t *testing.T) {
 	// Sending now should fail or timeout
 	ctx2 := gorumstest.Context(t, 200*time.Millisecond)
 	nodeCtx2 := node.Context(ctx2)
-	_, err = gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx2, pb.String("2"), mock.TestMethod)
+	_, err = gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx2, pb.String("2"), mock.TestMethod)
 	if err == nil {
 		// It might succeed if it just queued it? But we wait for response.
 	} else {
@@ -217,7 +217,7 @@ func TestTCPReconnection(t *testing.T) {
 	// Send message again
 	ctx3 := gorumstest.Context(t, 2*time.Second)
 	nodeCtx3 := node.Context(ctx3)
-	_, err = gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx3, pb.String("3"), mock.TestMethod)
+	_, err = gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx3, pb.String("3"), mock.TestMethod)
 	if err != nil {
 		t.Errorf("Call after reconnection failed: %v", err)
 	}
