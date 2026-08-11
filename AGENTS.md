@@ -31,6 +31,7 @@ gorums/
 │   ├── proto/                 # .proto sources for the benchkit module
 │   ├── benchmark/             # Gorums workloads built on benchkit
 │   ├── cmd/benchmark/         # Benchmark node binary
+│   └── cmd/sweep/             # Cluster sweep orchestrator
 ├── examples/                  # Separate module: example implementations
 ├── internal/                  # Internal packages
 ├── doc/                       # Documentation
@@ -187,6 +188,9 @@ make -B
 # Install protoc-gen-gorums plugin
 make installgorums
 
+# Build benchmark tool
+make benchmark
+
 # Install required tools
 make tools
 ```
@@ -259,6 +263,7 @@ Before making significant changes, consult:
 
 - Gorums is used in performance-critical distributed systems
 - Benchmarking tools are available in `benchkit/benchmark/` and `benchkit/cmd/benchmark/`
+- See `doc/benchmarking.md` for benchmarking procedures
 - Profile before optimizing - use Go's pprof tools
 
 ## Communication with Project Maintainer
