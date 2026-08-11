@@ -197,7 +197,7 @@ func (r repl) unicast(args []string) {
 	nodeCtx := node.Context(ctx)
 	err = pb.WriteUnicast(nodeCtx, pb.WriteRequest_builder{
 		Key: args[1], Value: args[2], Time: timestamppb.Now(),
-	}.Build())
+	}.Build()).Send()
 	cancel()
 	if err != nil {
 		fmt.Printf("Write unicast failed to send: %v\n", err)
@@ -217,7 +217,7 @@ func (r repl) multicast(args []string) {
 	cfgCtx := r.cfg.Context(ctx)
 	err := pb.WriteMulticast(cfgCtx, pb.WriteRequest_builder{
 		Key: args[0], Value: args[1], Time: timestamppb.Now(),
-	}.Build())
+	}.Build()).Send()
 	cancel()
 	if err != nil {
 		fmt.Printf("Write multicast failed to send: %v\n", err)

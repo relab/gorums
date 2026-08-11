@@ -1,42 +1,20 @@
 package gorums
 
-import "github.com/relab/gorums/internal/stream"
+import "google.golang.org/protobuf/proto"
 
-// Unicast is a one-way call; no replies are returned to the client.
+// Unicast is a one-way call to the single node in ctx; no reply is returned to
+// the client. It returns an [OnewayCall] handle that dispatches the request only
+// when it is consumed: [OnewayCall.Send] blocks until the send completes and
+// reports any send error, while [OnewayCall.Async] dispatches without waiting
+// and defers that error to [OnewayAsync.Wait].
 //
-// By default, this method blocks until the message has been sent to the node.
-// This ensures that send operations complete before the caller proceeds, which can
-// be useful for observing context cancellation or for pacing message sends.
-// If the sending fails, the error is returned to the caller.
+// Register request transforms with [OnewayCall.Intercept] and [MapRequest]
+// before consuming the handle.
 //
-// With the IgnoreErrors call option, the method returns nil immediately after
-// enqueueing the message (fire-and-forget semantics).
-//
-// This method should be used by generated code only.
-func Unicast[Req msg](ctx *NodeContext, req Req, method string, opts ...CallOption) error {
-	callOpts := getCallOptions(opts...)
-	reqMsg, err := stream.NewMessage(ctx, ctx.nextMsgID(), method, req)
-	if err != nil {
-		return err
-	}
-
-	if callOpts.ignoreErrors {
-		// Fire-and-forget: enqueue and return immediately
-		ctx.enqueue(stream.Request{Ctx: ctx, Msg: reqMsg, Oneway: true})
-		return nil
-	}
-
-	// Default: block until send completes
-	replyChan := make(chan NodeResponse[*stream.Message], 1)
-	ctx.enqueue(stream.Request{Ctx: ctx, Msg: reqMsg, Oneway: true, ResponseChan: replyChan})
-
-	// Wait for send confirmation
-	select {
-	case r := <-replyChan:
-		// Unicast doesn't expect replies, but we still
-		// want to report errors from the send attempt.
-		return r.Err
-	case <-ctx.Done():
-		return ctx.Err()
+// This function should be used by generated code only.
+func Unicast[Req proto.Message](ctx *NodeContext, req Req, method string) *OnewayCall[Req] {
+	return &OnewayCall[Req]{
+		ctx:     newOnewayCallContext(ctx, Config{ctx.Node()}, req, method),
+		unicast: true,
 	}
 }

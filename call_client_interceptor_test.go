@@ -73,8 +73,7 @@ func TestCustomLoggingInterceptor(t *testing.T) {
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
-		gorums.Interceptors(LoggingInterceptor[*pb.StringValue, *pb.StringValue]),
-	)
+	).Intercept(LoggingInterceptor[*pb.StringValue, *pb.StringValue])
 
 	result, err := responses.Majority()
 	if err != nil {
@@ -96,12 +95,11 @@ func TestCustomFilterInterceptor(t *testing.T) {
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
-		gorums.Interceptors(FilterInterceptor[*pb.StringValue](
-			func(resp gorums.NodeResponse[*pb.StringValue]) bool {
-				return resp.Err == nil // Only keep successful responses
-			},
-		)),
-	)
+	).Intercept(FilterInterceptor[*pb.StringValue](
+		func(resp gorums.NodeResponse[*pb.StringValue]) bool {
+			return resp.Err == nil // Only keep successful responses
+		},
+	))
 
 	result, err := responses.First()
 	if err != nil {
@@ -124,10 +122,9 @@ func TestInterceptorChaining(t *testing.T) {
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
-		gorums.Interceptors(
-			LoggingInterceptor[*pb.StringValue, *pb.StringValue],
-			CountingInterceptor[*pb.StringValue, *pb.StringValue](&count),
-		),
+	).Intercept(
+		LoggingInterceptor[*pb.StringValue, *pb.StringValue],
+		CountingInterceptor[*pb.StringValue, *pb.StringValue](&count),
 	)
 
 	result, err := responses.Majority()
@@ -156,15 +153,14 @@ func TestCustomInterceptorWithMapRequest(t *testing.T) {
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
-		gorums.Interceptors(
-			// Custom: count responses
-			CountingInterceptor[*pb.StringValue, *pb.StringValue](&count),
-			// Built-in: transform request (identity transform for this test)
-			gorums.MapRequest[*pb.StringValue, *pb.StringValue](
-				func(req *pb.StringValue, _ *gorums.Node) *pb.StringValue {
-					return req
-				},
-			),
+	).Intercept(
+		// Custom: count responses
+		CountingInterceptor[*pb.StringValue, *pb.StringValue](&count),
+		// Built-in: transform request (identity transform for this test)
+		gorums.MapRequest[*pb.StringValue, *pb.StringValue](
+			func(req *pb.StringValue, _ *gorums.Node) *pb.StringValue {
+				return req
+			},
 		),
 	)
 
@@ -214,12 +210,11 @@ func BenchmarkQuorumCallMapRequest(b *testing.B) {
 					cfgCtx,
 					pb.String("benchmark payload"),
 					mock.TestMethod,
-					gorums.Interceptors(
-						gorums.MapRequest[*pb.StringValue, *pb.StringValue](
-							func(req *pb.StringValue, _ *gorums.Node) *pb.StringValue {
-								return req
-							},
-						),
+				).Intercept(
+					gorums.MapRequest[*pb.StringValue, *pb.StringValue](
+						func(req *pb.StringValue, _ *gorums.Node) *pb.StringValue {
+							return req
+						},
 					),
 				)
 				if _, err := responses.Majority(); err != nil {
@@ -236,12 +231,11 @@ func BenchmarkQuorumCallMapRequest(b *testing.B) {
 					cfgCtx,
 					pb.String("benchmark payload"),
 					mock.TestMethod,
-					gorums.Interceptors(
-						gorums.MapRequest[*pb.StringValue, *pb.StringValue](
-							func(req *pb.StringValue, n *gorums.Node) *pb.StringValue {
-								return pb.String(fmt.Sprintf("%s-node-%d", req.GetValue(), n.ID()))
-							},
-						),
+				).Intercept(
+					gorums.MapRequest[*pb.StringValue, *pb.StringValue](
+						func(req *pb.StringValue, n *gorums.Node) *pb.StringValue {
+							return pb.String(fmt.Sprintf("%s-node-%d", req.GetValue(), n.ID()))
+						},
 					),
 				)
 				if _, err := responses.Majority(); err != nil {
