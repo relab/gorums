@@ -1,11 +1,14 @@
 package gorums
 
-import "github.com/relab/gorums/internal/stream"
+import (
+	"github.com/relab/gorums/internal/stream"
+	"google.golang.org/protobuf/proto"
+)
 
 // RemoteCall executes a remote procedure call on the node.
 //
 // This method should be used by generated code only.
-func RemoteCall[Req, Resp msg](ctx *NodeContext, req Req, method string) (Resp, error) {
+func RemoteCall[Req, Resp proto.Message](ctx *NodeContext, req Req, method string) (Resp, error) {
 	replyChan := make(chan NodeResponse[*stream.Message], 1)
 	reqMsg, err := stream.NewMessage(ctx, ctx.nextMsgID(), method, req)
 	if err != nil {

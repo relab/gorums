@@ -234,7 +234,7 @@ func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerContext, req *pb.W
 	}
 	// Release before nested outbound calls to avoid blocking inbound recv processing.
 	ctx.Release()
-	if err := pb.WriteMulticast(cfg.Context(ctx), req); err != nil {
+	if err := pb.WriteMulticast(cfg.Context(ctx), req).Send(); err != nil {
 		return nil, fmt.Errorf("write_nested_multicast: %w", err)
 	}
 	return pb.WriteResponse_builder{New: true}.Build(), nil
