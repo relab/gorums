@@ -32,32 +32,31 @@ func runServer(address string, peers []string, srvOpt gorums.ServerOption) error
 		return err
 	}
 	insecureDial := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
-	sys, err := gorums.NewSystem(address,
-		gorums.WithServerOptions(srvOpt, gorums.WithPeers(myID, peerList, insecureDial)),
-		insecureDial,
+	srv := gorums.NewServer(
+		gorums.WithAddr(address),
+		gorums.WithPeers(myID, peerList, insecureDial),
+		srvOpt,
 	)
-	if err != nil {
-		return fmt.Errorf("failed to create system on %q: %w", address, err)
-	}
 
 	// catch signals in order to shut down gracefully
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
-	registerAndServe(sys, myID)
+	registerAndServe(srv, myID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := sys.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+	if err := srv.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
 		return cfg.Size() == len(peers)
 	}); err != nil {
 		return fmt.Errorf("peers did not connect in time: %w", err)
 	}
 
-	log.Printf("Started storage server on %s\n", sys.Addr())
+	log.Printf("Started storage server on %s\n", srv.Addr())
 
 	<-signals
-	return sys.Stop()
+	srv.Stop()
+	return nil
 }
 
 // runLocalCluster starts four in-process servers for local testing.
@@ -65,26 +64,26 @@ func runServer(address string, peers []string, srvOpt gorums.ServerOption) error
 // call stop when the cluster is no longer needed.
 func runLocalCluster(srvOpts gorums.ServerOption) ([]string, func(), error) {
 	dialOpts := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
-	systems, stop, err := gorums.NewLocalSystems(4,
+	servers, stop, err := gorums.NewLocalServers(4,
 		gorums.WithLocalServerOptions(srvOpts),
 		gorums.WithLocalDialOptions(dialOpts),
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create local systems: %w", err)
+		return nil, nil, fmt.Errorf("failed to create local servers: %w", err)
 	}
 
-	addrs := make([]string, len(systems))
-	for i, sys := range systems {
-		addrs[i] = sys.Addr()
-		registerAndServe(sys, uint32(i+1))
+	addrs := make([]string, len(servers))
+	for i, srv := range servers {
+		addrs[i] = srv.Addr()
+		registerAndServe(srv, uint32(i+1))
 	}
 
-	// Wait for all systems to see each other before opening the client REPL.
+	// Wait for all servers to see each other before opening the client REPL.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	for _, sys := range systems {
-		if err := sys.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
-			return cfg.Size() == len(systems)
+	for _, srv := range servers {
+		if err := srv.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+			return cfg.Size() == len(servers)
 		}); err != nil {
 			stop()
 			return nil, nil, fmt.Errorf("cluster failed to connect: %w", err)
@@ -111,15 +110,13 @@ func peerConfig(address string, peers []string) (uint32, gorums.NodeListOption, 
 	return uint32(idx + 1), gorums.WithNodeList(sorted), nil
 }
 
-// registerAndServe registers the storage service on sys and starts serving in
+// registerAndServe registers the storage service on srv and starts serving in
 // a background goroutine. The server log output is labelled with the node ID.
-func registerAndServe(sys *gorums.System, id uint32) {
+func registerAndServe(srv *gorums.Server, id uint32) {
 	storage := newStorageServer(os.Stderr, fmt.Sprintf("node %d", id))
-	sys.RegisterService(nil, func(srv *gorums.Server) {
-		pb.RegisterStorageServer(srv, storage)
-	})
+	pb.RegisterStorageServer(srv, storage)
 	go func() {
-		if err := sys.Serve(); err != nil {
+		if err := srv.ListenAndServe(); err != nil {
 			log.Printf("Server error: %v", err)
 		}
 	}()

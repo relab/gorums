@@ -1776,7 +1776,7 @@ Use `WaitForPeers` to wait for enough peers to connect before issuing calls.
 A symmetric server re-establishes an outbound stream proactively when it drops while idle, rather than waiting for the next local send.
 Without this, a peer would remain absent from the remote's `ConnectedPeers()` until that side happened to send something.
 
-The storage example uses `gorums.NewLocalSystems`, which calls `WithPeers` automatically for each system.
+The storage example uses `gorums.NewLocalServers`, which calls `WithPeers` automatically for each server.
 
 Register a `WithPeerChange` callback to react each time the connected-peer configuration changes.
 See [WithPeerChange Callback](#withpeerchange-callback) for details and an example.
@@ -1876,7 +1876,7 @@ gorumsSrv := gorums.NewServer(
 For example, a local test cluster:
 
 ```go
-systems, stop, err := gorums.NewLocalSystems(4)
+servers, stop, err := gorums.NewLocalServers(4)
 ```
 
 > **Note:** The `nread` and `nwrite` commands in the storage REPL example use `ctx.PeerConfig()` (the static server-to-server direction) rather than `ctx.ConnectedClients()`.
