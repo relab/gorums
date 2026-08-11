@@ -7,10 +7,12 @@ static_file				:= $(gen_path)/template_static.go
 static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -not -name "*_test.go")
 proto_path 				:= $(dev_path):third_party:.
 
+workspace_packages		:= ./... ./examples/...
+
 plugin_deps				:= gorums.pb.go $(static_file)
 runtime_deps			:= internal/stream/stream.pb.go internal/stream/stream_grpc.pb.go
 
-.PHONY: all dev tools bootstrapgorums installgorums test compiletests genproto benchtest bench
+.PHONY: all dev tools bootstrapgorums installgorums test compiletests genproto benchtest bench lint deadcode modernize goplscheck
 
 all: dev compiletests
 
@@ -53,19 +55,19 @@ compiletests: installgorums
 	@$(MAKE) --no-print-directory -C ./internal/tests all
 
 test: compiletests benchtest
-	@go test ./...
+	@go test $(workspace_packages)
 
 integrationtest: compiletests
-	@go test -tags=integration ./...
+	@go test -tags=integration $(workspace_packages)
 
 testrace: compiletests
-	go test -race -cpu=1,2,4 ./...
+	go test -race -cpu=1,2,4 $(workspace_packages)
 
 # Run benchmarks with validation (short runs to verify they don't fail).
 # Uses -benchtime=100x for limited iterations to avoid port exhaustion on macOS.
 # Suppresses output on success; shows details on failure.
 benchtest: compiletests
-	@if ! go test -run=^$$ -bench=. -benchtime=100x -count=1 ./... > /tmp/benchtest.out 2>&1; then \
+	@if ! go test -run=^$$ -bench=. -benchtime=100x -count=1 $(workspace_packages) > /tmp/benchtest.out 2>&1; then \
 		echo "Benchmark validation failed:"; \
 		cat /tmp/benchtest.out; \
 		exit 1; \
@@ -82,7 +84,7 @@ bench: compiletests
 # Run stress tests that use longer durations for thorough testing.
 # These tests are excluded from normal test runs via the 'stress' build tag.
 stresstest: compiletests
-	go test -tags=stress ./...
+	go test -tags=stress $(workspace_packages)
 
 # Warning: will probably run for 10 minutes; the timeout does not work
 stressdev: tools
@@ -97,8 +99,40 @@ stressgen: tools
 	cd ./internal/testprotos; stress -timeout=10s -p=1 ./testprotos.test
 	rm ./internal/testprotos/testprotos.test
 
+lint: deadcode
+	@golangci-lint-v2 run --fast-only ./... ./examples/...
+
+# deadcode reports functions unreachable from any main or test across all
+# workspace modules (root and examples), so cross-module usage is
+# accounted for. It is advisory: exported library API with no in-repo caller
+# (e.g. optional dial/server options) and example-only helpers are expected to
+# appear. Review new entries for genuinely dead internal code.
+deadcode:
+	@go run golang.org/x/tools/cmd/deadcode@latest -test ./... ./examples/...
+
 modernize:
-	@go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix ./...
+	@go fix ./... ./examples/...
+	@go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest \
+		-fix ./... ./examples/...
+
+# Report all gopls diagnostics, including hint-level style and modernization
+# suggestions. Generated Go files are excluded because their generators own them.
+goplscheck:
+	@command -v gopls >/dev/null || { echo "gopls is required; install it from https://go.dev/gopls/"; exit 1; }
+	@out=$$(mktemp); trap 'rm -f "$$out"' EXIT; \
+		if ! git ls-files -z --cached --others --exclude-standard -- '*.go' \
+			':(exclude)*.pb.go' ':(exclude)**/*.pb.go' \
+			':(exclude)cmd/protoc-gen-gorums/gengorums/template_static.go' \
+			| xargs -0 gopls check -severity=hint > "$$out"; then \
+			cat "$$out"; \
+			exit 1; \
+		fi; \
+		if [ -s "$$out" ]; then \
+			cat "$$out"; \
+			echo ""; \
+			echo "gopls diagnostics found; apply the suggested quick fixes and rerun make goplscheck."; \
+			exit 1; \
+		fi
 
 # Regenerate all Gorums and protobuf generated files across the repo (dev, internal/tests, examples).
 # This will force regeneration even though the proto files have not changed.

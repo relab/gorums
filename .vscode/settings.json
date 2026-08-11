@@ -41,9 +41,10 @@
     "git.inputValidation": true,
     "git.inputValidationSubjectLength": 72,
     "git.inputValidationLength": 72,
-    "go.lintTool": "golangci-lint",
+    "go.lintTool": "golangci-lint-v2",
+    "go.lintOnSave": "package",
     "go.lintFlags": [
-        "--fast"
+        "--fast-only"
     ],
     "go.useLanguageServer": true,
     "gopls": {
@@ -54,7 +55,7 @@
         ],
         // Add parameter placeholders when completing a function.
         "usePlaceholders": true,
-        "staticcheck": false
+        "staticcheck": true
     },
     "markdownlint.config": {
         "MD024": false,
