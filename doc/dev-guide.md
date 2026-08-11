@@ -23,7 +23,7 @@ That block currently consists of four type aliases:
 
 ```go
 type (
-    Config = gorums.Config
+    Configuration = gorums.Configuration
     Node          = gorums.Node
     NodeContext   = gorums.NodeContext
     ConfigContext = gorums.ConfigContext
@@ -101,4 +101,20 @@ The `Makefile` itself also serves as documentation; inspect it for details.
 | `benchtest`       | Validates that benchmarks compile and run without error (short runs).                                  |
 | `bench`           | Runs benchmarks with proper measurement for performance analysis.                                      |
 | `stresstest`      | Runs stress tests (build tag: `stress`) for thorough testing.                                          |
-| `modernize`       | Applies Go modernization fixes across the codebase.                                                    |
+| `modernize`       | Applies `go fix` and `x/tools/modernize@latest` across all workspace modules.                           |
+| `goplscheck`      | Fails on gopls diagnostics, including hint-level suggestions, in non-generated Go source.             |
+
+## Message ID Spaces
+
+Client-initiated message IDs use the low 63 bits, while server-initiated IDs have bit 63 set.
+The two spaces let one bidirectional stream carry calls in both directions through a single router without sequence-number collisions.
+These IDs encode as ten-byte protobuf varints because the high bit is set; the small wire-cost increase is intentional and avoids a second stream or router.
+
+Each channel registers pending calls with an owner token.
+Closing a channel cancels or requeues only entries registered by that channel, while full router shutdown cancels all remaining entries during node teardown.
+
+`Node` identity and its transport are fixed at construction; only the channel behind the transport's shared channel reference changes as streams come and go.
+A call therefore reads the node's message-ID generator, router, and current channel directly from that fixed transport, with no per-call binding step.
+
+Back-channel request dispatch appends per-message metadata to the incoming context and serializes handlers through the router's FIFO dispatch gate.
+This keeps back-channel behavior consistent with ordinary inbound stream dispatch.

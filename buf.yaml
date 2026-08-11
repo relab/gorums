@@ -5,3 +5,14 @@ modules:
       - .claude
       - third_party
   - path: third_party
+lint:
+  use:
+    - STANDARD
+  except:
+    # We intentionally use unprefixed enum value names (e.g. CLIENT_MEASURED
+    # rather than MEASUREMENT_MODE_CLIENT_MEASURED) to avoid stuttering names
+    # in the generated Go code (e.g. MeasurementMode_MEASUREMENT_MODE_*).
+    - ENUM_VALUE_PREFIX
+    # Our enums have no *_UNSPECIFIED zero value; the zero value is instead a
+    # meaningful default (e.g. CLIENT_MEASURED, EXACT, START).
+    - ENUM_ZERO_VALUE_SUFFIX
