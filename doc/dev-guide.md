@@ -104,10 +104,15 @@ The `Makefile` itself also serves as documentation; inspect it for details.
 | `modernize`       | Applies `go fix` and `x/tools/modernize@latest` across all workspace modules.                           |
 | `goplscheck`      | Fails on gopls diagnostics, including hint-level suggestions, in non-generated Go source.             |
 
-## Message ID Spaces
+## Stream Deduplication Internals
 
-Client-initiated message IDs use the low 63 bits, while server-initiated IDs have bit 63 set.
-The two spaces let one bidirectional stream carry calls in both directions through a single router without sequence-number collisions.
+Symmetric stream deduplication makes the lower-ID peer of each pair the only dialer.
+The higher-ID peer's outbound node is born shared: it borrows the matching inbound transport when the configuration is created, before the peer has connected.
+The borrower cannot dial through a shared transport, so it reports `gorums.ErrStreamDown` while the owner-side stream is unavailable; callers match it with `errors.Is`.
+The owner re-establishes a lost stream eagerly with capped backoff from its channel's receiver goroutine, so a borrower heals without waiting for the owner's next send.
+
+Client-initiated message IDs use the low 63 bits, while server-initiated and shared-call IDs have bit 63 set.
+Shared calls use the server-generated ID space so both directions can share one router without sequence-number collisions.
 These IDs encode as ten-byte protobuf varints because the high bit is set; the small wire-cost increase is intentional and avoids a second stream or router.
 
 Each channel registers pending calls with an owner token.
