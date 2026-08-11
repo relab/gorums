@@ -1,0 +1,269 @@
+edition = "2024";
+
+package benchkit;
+
+option features.field_presence = IMPLICIT;
+option go_package = "github.com/relab/gorums/benchkit";
+
+// MeasurementMode records who timed each operation, which decides whether the
+// event-stream index map can cut the latency slice at read time. Client-measured
+// runs record one in-order sample per op, so the cut is exact; server-measured
+// samples arrive out of band and clock-corrected, so they cannot be cut by
+// client op counts (see doc/benchkit.html, section 11).
+enum MeasurementMode {
+  CLIENT_MEASURED = 0; // latency from Stats.AddLatency, one per op (default)
+  SERVER_MEASURED = 1; // latency from server replies, clock-corrected
+}
+
+// StatsMode records the aggregate latency backing store, so consumers know
+// whether raw per-op samples (exact) or a bounded-memory histogram (hdr) is
+// available without inferring it from the presence of the latencies field.
+enum StatsMode {
+  EXACT = 0; // every sample retained; exact percentiles (default)
+  HDR   = 2; // log-linear histogram; approximate percentiles, bounded memory
+  reserved 1; // was WELFORD (online mean/stddev only); removed
+}
+
+// RunConfig holds the configuration metadata for one benchmark run. It is kept
+// separate from the measured results so producers and consumers can reason
+// about how a run was configured independently of what it measured. Durations
+// are nanoseconds (compatible with time.Duration).
+message RunConfig {
+  string name      = 1; // benchmark name, e.g. "QuorumCall"
+  int32  num_nodes = 2; // number of nodes in the configuration
+  string mode      = 3; // "local" or "remote"
+  int64  duration  = 4; // configured run duration, nanoseconds
+  int32  workers   = 5; // concurrent worker goroutines
+  int32  payload   = 6; // request/response payload size, bytes
+  int64  rate      = 7; // target ops/s per node; 0 = unlimited (saturating)
+  int64  interval  = 8; // ticker interval, nanoseconds; 0 = events disabled
+
+  MeasurementMode measurement_mode = 9;  // client- vs server-measured
+  StatsMode       stats_mode       = 10; // exact vs hdr aggregate store
+  string          stream_mode      = 11; // "dual" or "dedup" for symmetric stream topology
+
+  int32 quorum_size    = 12; // number of replies awaited per quorum call; 0 if not applicable
+  int32 max_async      = 13; // max in-flight async calls; 0 if not applicable
+  int64 rate_step      = 14; // rate increment per ramp step, ops/s; 0 = no ramp
+  int64 rate_step_max  = 15; // maximum target rate during the ramp, ops/s; 0 = no ramp
+  int64 call_timeout   = 16; // per-call deadline, nanoseconds; 0 = disabled
+
+  int32 send_buffer = 17; // per-node send queue capacity
+  int32 recv_buffer = 18; // server receive queue capacity
+}
+
+// ThroughputInterval is the ops-completed count and elapsed time for one
+// ticker interval (both quantities come from Stats.TickInterval).
+message ThroughputInterval {
+  uint64 ops      = 1; // operations completed during this interval
+  int64  duration = 2; // actual elapsed interval, nanoseconds
+}
+
+// LatencyInterval is the Welford accumulator state for one ticker interval.
+// Emitted each tick to summarize latency over time; the values are derived
+// online and retain no raw samples.
+message LatencyInterval {
+  double mean   = 1; // mean latency, nanoseconds
+  double stddev = 2; // sample standard deviation, nanoseconds
+  uint64 count  = 3; // number of latency samples in this interval
+}
+
+// PhaseMarker announces a lifecycle transition in a run. There is no warmup
+// phase: START fires at t=0, STOP at the end, and RATE_STEP on each rate-ramp
+// transition. Consumers use phase offsets to trim and annotate.
+message PhaseMarker {
+  enum Phase {
+    START     = 0; // t=0; rate carries the initial target ops/s (default)
+    RATE_STEP = 1; // rate ramp step; rate carries the new target ops/s
+    STOP      = 2; // run finished
+  }
+  Phase phase = 1;
+  int64 rate  = 2; // target ops/s at START and RATE_STEP; 0 = unlimited
+}
+
+// Event is one time-stamped entry in the per-node event stream. offset is
+// nanoseconds since the START phase marker (monotonic). Field 15 is reserved
+// for a google.protobuf.Any escape hatch carrying protocol-specific events
+// without a schema change.
+message Event {
+  int64 offset = 1; // nanoseconds since START (monotonic)
+  oneof payload {
+    ThroughputInterval throughput = 2;
+    LatencyInterval    latency    = 3;
+    PhaseMarker        phase      = 4;
+    // 15 reserved for google.protobuf.Any extension
+  }
+}
+
+// LatencyHistogram is the bounded-memory latency distribution recorded in
+// StatsMode_HDR, where no raw samples are retained. Entry i records count[i]
+// samples indistinguishable from value[i] (nanoseconds) at the histogram's
+// resolution; values are ascending. Consumers treat the pairs as a weighted
+// sample set — quantiles, mean, and stddev are computed over them without
+// knowing the producer's bucket layout.
+message LatencyHistogram {
+  repeated int64  value = 1; // representative latency, nanoseconds; ascending
+  repeated uint64 count = 2; // samples recorded at value[i]
+}
+
+// MemoryStat contains memory statistics for a single server.
+message MemoryStat {
+  uint64 allocs = 1; // total heap allocations
+  uint64 memory = 2; // total heap bytes allocated
+}
+
+// Result is one benchmark's complete output for one node: the run
+// configuration, the aggregate measured results, and the time-series event
+// stream. The startup transient is not removed here; consumers trim it at read
+// time using the event offsets (see doc/benchkit.html, section 11).
+message Result {
+  RunConfig config = 1; // how the run was configured
+
+  // Aggregate measured results over the whole run.
+  uint64 total_ops     = 2; // total operations completed
+  int64  total_time    = 3; // elapsed wall time, nanoseconds
+  double throughput    = 4; // operations per second over the whole run
+  uint64 allocs_per_op = 5; // heap allocations per operation
+  uint64 mem_per_op    = 6; // heap bytes allocated per operation
+  repeated MemoryStat server_stats = 7; // per-server memory stats
+
+  // Raw per-op latency samples, nanoseconds; nil in hdr mode. Signed:
+  // clock-offset correction (server-measured benchmarks) can yield negatives.
+  repeated int64 latencies = 8;
+
+  // Time-series event stream covering the whole run; empty when interval = 0.
+  repeated Event events = 9;
+
+  // Latency distribution for StatsMode_HDR runs; nil otherwise.
+  LatencyHistogram histogram = 10;
+
+  // Field 11 held the retired StreamStats message (stream-topology
+  // statistics); reserved so older result files never misdecode.
+  reserved 11;
+  reserved stream_stats;
+
+  // Operations that returned an error and were counted but not aborted on
+  // (client-measured runs). Under saturation a workload may see failed quorum
+  // calls; the run completes and records them here instead of exiting. Total
+  // attempts is total_ops + failed_ops; a high ratio flags an unhealthy run.
+  uint64 failed_ops = 12;
+}
+
+// Report is the per-node container: one labeled set of benchmark results,
+// written once per node and suitable for later comparison via -compare. The
+// name is deliberately distinct from Result to avoid a one-character typo
+// silently compiling against the wrong type.
+message Report {
+  string         label   = 1; // run label, e.g. "baseline" or "experiment"
+  repeated Result results = 2; // one Result per benchmark that ran
+}
+
+// LatencySummary is a latency distribution reduced to summary statistics,
+// microseconds. It is a message rather than inline fields on its parent so an
+// absent distribution (a run or node that recorded no latency samples) is a
+// nil message instead of a spurious all-zero summary, which would be
+// indistinguishable from a real measurement.
+message LatencySummary {
+  double mean_us = 1; // mean latency
+  double p50_us  = 2; // 50th percentile latency
+  double p95_us  = 3; // 95th percentile latency
+  double p99_us  = 4; // 99th percentile latency
+  uint64 samples = 5; // samples the summary was computed from
+}
+
+// The messages below hold a whole sweep reduced for plotting. A sweep's raw
+// per-node Result files are far too large to keep or transfer in full, so a
+// consumer reduces each run to summary statistics plus a sampled latency CDF.
+// Identity is stored once per run and once per node rather than repeated on
+// every CDF point, which is what keeps the reduction compact.
+
+// PlotNode is one node's reduced contribution to one benchmark of one run.
+message PlotNode {
+  string         node       = 1; // node label, matching Report.label
+  double         throughput = 2; // this node's operations per second
+  LatencySummary summary    = 3; // this node's latency distribution; nil when it recorded no samples
+
+  // Latency CDF, microseconds, ascending. The cumulative probability of point
+  // i is i/(n-1) for n points, so the probability grid is implied by position
+  // and is not stored.
+  repeated double cdf_us = 4;
+}
+
+// PlotBenchmark is one benchmark's reduced results for one run: the run-wide
+// aggregate across nodes, plus each node's own reduction.
+message PlotBenchmark {
+  RunConfig config = 1; // benchmark name and the sweep dimensions of this run
+
+  double throughput = 2; // aggregate operations per second across nodes
+  uint64 total_ops  = 3; // total operations completed
+  uint64 failed_ops = 4; // total operations that returned an error
+
+  // Per-op cost averaged over the reporting nodes. These are doubles, unlike
+  // their uint64 counterparts in Result, because they are means rather than a
+  // single node's count.
+  double allocs_per_op = 5; // mean heap allocations per operation
+  double mem_per_op    = 6; // mean heap bytes allocated per operation
+
+  int32 nodes_seen = 7; // nodes that reported this benchmark
+
+  // summary covers the merged sample set across all nodes, so it is not
+  // derivable from the per-node summaries; nil when no node recorded samples.
+  LatencySummary summary = 8;
+
+  repeated PlotNode nodes = 9; // per-node reductions
+}
+
+// PlotRun is one run's identity and its per-benchmark reductions. The identity
+// fields mirror the run's manifest, so the reduction is self-describing.
+message PlotRun {
+  string base   = 1; // run base name, shared with its manifest
+  string label  = 2; // sweep label prefix
+  string status = 3; // run outcome; a consumer may exclude degraded runs from aggregates
+  int32  rep    = 4; // repetition number, 1-based
+
+  repeated PlotBenchmark benchmarks = 5; // one entry per benchmark that ran
+}
+
+// PlotData is a whole sweep reduced for plotting: one entry per run that a
+// consumer chose to retain. Having a single repeated field means two encoded
+// PlotData messages concatenate into a valid message holding both sweeps' runs.
+message PlotData {
+  repeated PlotRun runs = 1;
+}
+
+// The messages below carry a sweep's event streams, the one part of a raw
+// Result the reduction above drops. They are stored beside PlotData rather than
+// inside it, so a consumer that wants only the summaries reads the small
+// message, and a directory reduced before the event streams existed stays
+// readable. Identity nests base -> benchmark -> node, mirroring PlotData, so a
+// node is named once however many events it recorded. Every run's events are
+// retained regardless of outcome: an event stream is a fraction of a percent of
+// a raw result file, and a failed run's throughput trace is the most useful of
+// all.
+
+// PlotNodeEvents is one node's event stream for one benchmark of one run.
+message PlotNodeEvents {
+  string node = 1;           // node label, matching Report.label
+  repeated Event events = 2; // this node's stream, in recorded order and untrimmed
+}
+
+// PlotBenchmarkEvents holds every node's event stream for one benchmark of one run.
+message PlotBenchmarkEvents {
+  string benchmark = 1;              // benchmark name, matching PlotBenchmark.config.name
+  repeated PlotNodeEvents nodes = 2; // per-node streams
+}
+
+// PlotRunEvents holds one run's per-benchmark event streams. The run's identity
+// beyond its base name (status, trim, dimensions) lives in its manifest, which
+// travels alongside, so it is not duplicated here.
+message PlotRunEvents {
+  string base = 1; // run base name, shared with its manifest
+
+  repeated PlotBenchmarkEvents benchmarks = 2; // one entry per benchmark that ran
+}
+
+// PlotEvents is a whole sweep's event streams. As with PlotData, the single
+// repeated field means two encoded messages concatenate into a valid one.
+message PlotEvents {
+  repeated PlotRunEvents runs = 1;
+}
