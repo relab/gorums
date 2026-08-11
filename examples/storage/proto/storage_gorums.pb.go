@@ -8,14 +8,15 @@ package proto
 
 import (
 	gorums "github.com/relab/gorums"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
 	// Verify that this generated code is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(11 - gorums.MinVersion)
+	_ = gorumsimpl.EnforceVersion(11 - gorumsimpl.MinVersion)
 	// Verify that the gorums runtime is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(gorums.MaxVersion - 11)
+	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 11)
 )
 
 // The type aliases below are useful Gorums types that we make accessible
@@ -56,13 +57,13 @@ var _ emptypb.Empty
 // ReadRPC executes a Read RPC on a single node and
 // returns the value for the provided key.
 func ReadRPC(ctx *NodeContext, in *ReadRequest) (*ReadResponse, error) {
-	return gorums.RemoteCall[*ReadRequest, *ReadResponse](ctx, in, "proto.Storage.ReadRPC")
+	return gorumsimpl.RemoteCall[*ReadRequest, *ReadResponse](ctx, in, "proto.Storage.ReadRPC")
 }
 
 // WriteRPC executes a Write RPC on a single node and
 // returns true if the value was updated.
 func WriteRPC(ctx *NodeContext, in *WriteRequest) (*WriteResponse, error) {
-	return gorums.RemoteCall[*WriteRequest, *WriteResponse](ctx, in, "proto.Storage.WriteRPC")
+	return gorumsimpl.RemoteCall[*WriteRequest, *WriteResponse](ctx, in, "proto.Storage.WriteRPC")
 }
 
 // WriteUnicast executes a one-way Write unicast call on a single node.
@@ -73,7 +74,7 @@ func WriteRPC(ctx *NodeContext, in *WriteRequest) (*WriteResponse, error) {
 //	err := WriteUnicast(ctx, in).Send()
 //	h := WriteUnicast(ctx, in).Async(); err := h.Wait()
 func WriteUnicast(ctx *NodeContext, in *WriteRequest) *gorums.OnewayCall[*WriteRequest] {
-	return gorums.Unicast(ctx, in, "proto.Storage.WriteUnicast")
+	return gorumsimpl.Unicast(ctx, in, "proto.Storage.WriteUnicast")
 }
 
 // WriteMulticast executes a Write multicast call on a configuration of nodes.
@@ -84,13 +85,13 @@ func WriteUnicast(ctx *NodeContext, in *WriteRequest) *gorums.OnewayCall[*WriteR
 //	err := WriteMulticast(ctx, in).Send()
 //	h := WriteMulticast(ctx, in).Async(); err := h.Wait()
 func WriteMulticast(ctx *ConfigContext, in *WriteRequest) *gorums.OnewayCall[*WriteRequest] {
-	return gorums.Multicast(ctx, in, "proto.Storage.WriteMulticast")
+	return gorumsimpl.Multicast(ctx, in, "proto.Storage.WriteMulticast")
 }
 
 // ReadQC executes a Read quorum call on a configuration of nodes and
 // returns the most recent value.
 func ReadQC(ctx *ConfigContext, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse] {
-	return gorums.QuorumCall[*ReadRequest, *ReadResponse](
+	return gorumsimpl.QuorumCall[*ReadRequest, *ReadResponse](
 		ctx, in, "proto.Storage.ReadQC",
 	)
 }
@@ -98,23 +99,23 @@ func ReadQC(ctx *ConfigContext, in *ReadRequest) *gorums.Call[*ReadRequest, *Rea
 // WriteQC executes a Write quorum call on a configuration of nodes and
 // returns true if a majority of nodes were updated.
 func WriteQC(ctx *ConfigContext, in *WriteRequest) *gorums.Call[*WriteRequest, *WriteResponse] {
-	return gorums.QuorumCall[*WriteRequest, *WriteResponse](
+	return gorumsimpl.QuorumCall[*WriteRequest, *WriteResponse](
 		ctx, in, "proto.Storage.WriteQC",
 	)
 }
 
 // ReadNestedQC executes a quorum call where each server handler performs
-// a nested quorum call using ServerCtx.Config().
+// a nested quorum call using ServerContext.PeerConfig().
 func ReadNestedQC(ctx *ConfigContext, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse] {
-	return gorums.QuorumCall[*ReadRequest, *ReadResponse](
+	return gorumsimpl.QuorumCall[*ReadRequest, *ReadResponse](
 		ctx, in, "proto.Storage.ReadNestedQC",
 	)
 }
 
 // WriteNestedMulticast executes a quorum call where each server handler
-// performs a nested multicast using ServerCtx.Config().
+// performs a nested multicast using ServerContext.PeerConfig().
 func WriteNestedMulticast(ctx *ConfigContext, in *WriteRequest) *gorums.Call[*WriteRequest, *WriteResponse] {
-	return gorums.QuorumCall[*WriteRequest, *WriteResponse](
+	return gorumsimpl.QuorumCall[*WriteRequest, *WriteResponse](
 		ctx, in, "proto.Storage.WriteNestedMulticast",
 	)
 }
@@ -122,7 +123,7 @@ func WriteNestedMulticast(ctx *ConfigContext, in *WriteRequest) *gorums.Call[*Wr
 // ReadCorrectable executes a quorum call that supports correctable responses.
 // It returns a stream of ReadResponse as multiple nodes respond or updates occur.
 func ReadCorrectable(ctx *ConfigContext, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse] {
-	return gorums.QuorumCallStream[*ReadRequest, *ReadResponse](
+	return gorumsimpl.QuorumCallStream[*ReadRequest, *ReadResponse](
 		ctx, in, "proto.Storage.ReadCorrectable",
 	)
 }
