@@ -161,7 +161,7 @@ type starter interface {
 	sendNow()
 }
 
-func NewResponses[Req, Resp msg](ctx *ClientCtx[Req, Resp]) *Responses[Resp] {
+func NewResponses[Req, Resp msg](ctx *CallContext[Req, Resp]) *Responses[Resp] {
 	return &Responses[Resp]{
 		seq:   ctx.responseSeq,
 		size:  ctx.Size(),

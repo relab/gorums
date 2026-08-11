@@ -22,7 +22,7 @@ func Multicast[Req msg](ctx *ConfigContext, req Req, method string, opts ...Call
 	callOpts := getCallOptions(opts...)
 	waitForSend := !callOpts.ignoreErrors
 
-	clientCtx := newMulticastClientCtx(ctx, req, method, waitForSend, callOpts.interceptors)
+	clientCtx := newMulticastCallContext(ctx, req, method, waitForSend, callOpts.interceptors)
 
 	// Send messages immediately (multicast doesn't use lazy sending)
 	clientCtx.sendNow()

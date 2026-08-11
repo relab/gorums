@@ -919,12 +919,12 @@ Beyond the built-in `MapRequest` and `MapResponse` interceptors, you can create 
 A custom interceptor has the signature:
 
 ```go
-func(ctx *gorums.ClientCtx[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp]
+func(ctx *gorums.CallContext[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp]
 ```
 
 The interceptor receives:
 
-* `ctx` - the `ClientCtx` providing access to:
+* `ctx` - the `CallContext` providing access to:
   * `.Request()` - the original request
   * `.Config()` - the configuration being used
   * `.Method()` - the RPC method name
@@ -956,7 +956,7 @@ Create a logging interceptor that wraps the response iterator:
 
 ```go
 func LoggingInterceptor[Req, Resp proto.Message](
-    ctx *gorums.ClientCtx[Req, Resp],
+    ctx *gorums.CallContext[Req, Resp],
     next gorums.ResponseSeq[Resp],
 ) gorums.ResponseSeq[Resp] {
     startTime := time.Now()
@@ -994,8 +994,8 @@ Filter out responses that don't meet certain criteria:
 ```go
 func FilterInterceptor[Req, Resp proto.Message](
     shouldInclude func(Resp) bool,
-) gorums.QuorumInterceptor[Req, Resp] {
-    return func(ctx *gorums.ClientCtx[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
+) gorums.ClientInterceptor[Req, Resp] {
+    return func(ctx *gorums.CallContext[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
         return func(yield func(gorums.NodeResponse[Resp]) bool) {
             for resp := range next {
                 // Skip responses that don't pass the filter
@@ -1028,8 +1028,8 @@ Count responses passing through the interceptor:
 ```go
 func CountingInterceptor[Req, Resp proto.Message](
     counter *int,
-) gorums.QuorumInterceptor[Req, Resp] {
-    return func(_ *gorums.ClientCtx[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
+) gorums.ClientInterceptor[Req, Resp] {
+    return func(_ *gorums.CallContext[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
         return func(yield func(gorums.NodeResponse[Resp]) bool) {
             for resp := range next {
                 *counter++
@@ -1042,7 +1042,7 @@ func CountingInterceptor[Req, Resp proto.Message](
 }
 ```
 
-**Note:** Custom interceptors can be defined in any package. The `ClientCtx` type and `QuorumInterceptor` signature are exported from the gorums package.
+**Note:** Custom interceptors can be defined in any package. The `CallContext` type and `ClientInterceptor` signature are exported from the gorums package.
 
 ### Server-Side Interceptors
 

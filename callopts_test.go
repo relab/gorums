@@ -113,7 +113,7 @@ func TestCallOptionsIgnoreErrorsResourceLeak(t *testing.T) {
 }
 
 func BenchmarkGetCallOptions(b *testing.B) {
-	interceptor := func(_ *ClientCtx[msg, msg], next ResponseSeq[msg]) ResponseSeq[msg] { return next }
+	interceptor := func(_ *CallContext[msg, msg], next ResponseSeq[msg]) ResponseSeq[msg] { return next }
 	tests := []struct {
 		numOpts int
 	}{
