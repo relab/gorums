@@ -3,6 +3,7 @@ package metadata
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
@@ -83,31 +84,57 @@ func TestPerMessageMetadata(t *testing.T) {
 	}
 }
 
-func TestPerMessageMetadataOnPeerConfig(t *testing.T) {
-	servers := gorumstest.LocalServers(t, 2)
-	for _, srv := range servers {
-		RegisterMetadataTestServer(srv, &testSrv{})
+func TestPerMessageMetadataAcrossStreamTopologies(t *testing.T) {
+	tests := []struct {
+		name  string
+		dedup bool
+	}{
+		{name: "Dual"},
+		{name: "Dedup", dedup: true},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var opts []gorums.ServerOption
+			if tt.dedup {
+				opts = append(opts, gorums.WithStreamDedup())
+			}
+			servers := gorumstest.LocalServers(t, 2, opts...)
+			for _, srv := range servers {
+				RegisterMetadataTestServer(srv, &testSrv{})
+			}
+			if tt.dedup {
+				ctx := gorumstest.Context(t, 10*time.Second)
+				for _, srv := range servers {
+					if _, err := srv.WaitForAll(ctx); err != nil {
+						t.Fatalf("WaitForAll: %v", err)
+					}
+				}
+			}
 
-	var target *gorums.Node
-	for _, node := range servers[1].PeerConfig() {
-		if node.ID() == 1 {
-			target = node
-			break
-		}
-	}
-	if target == nil {
-		t.Fatal("node 1 not found in server 2 outbound configuration")
-	}
+			var target *gorums.Node
+			for _, node := range servers[1].PeerConfig() {
+				if node.ID() == 1 {
+					target = node
+					break
+				}
+			}
+			if target == nil {
+				t.Fatal("node 1 not found in server 2 outbound configuration")
+			}
+			if target.IsShared() != tt.dedup {
+				t.Fatalf("node 1 IsShared = %t, want %t", target.IsShared(), tt.dedup)
+			}
 
-	const want = uint32(42)
-	ctx := metadata.NewOutgoingContext(t.Context(), metadata.Pairs("id", fmt.Sprint(want)))
-	resp, err := IDFromMD(target.Context(ctx), &emptypb.Empty{})
-	if err != nil {
-		t.Fatalf("IDFromMD: %v", err)
-	}
-	if got := resp.GetID(); got != want {
-		t.Fatalf("IDFromMD() = %d, want %d", got, want)
+			const want = uint32(42)
+			ctx := metadata.NewOutgoingContext(t.Context(), metadata.Pairs("id", fmt.Sprint(want)))
+			resp, err := IDFromMD(target.Context(ctx), &emptypb.Empty{})
+			if err != nil {
+				t.Fatalf("IDFromMD: %v", err)
+			}
+			if got := resp.GetID(); got != want {
+				t.Fatalf("IDFromMD() = %d, want %d", got, want)
+			}
+		})
 	}
 }
 

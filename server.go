@@ -121,6 +121,22 @@ func WithAddr(addr string) ServerOption {
 	}
 }
 
+// WithStreamDedup makes each pair of peers share a single connection for
+// calls in both directions instead of using one connection per direction.
+// It applies only to the peer [Config] built by [WithPeers].
+//
+// The lower-ID peer of each pair owns the shared connection: it dials the
+// higher-ID peer and re-establishes the connection whenever it drops. The
+// higher-ID peer never dials; its calls are sent over the connection its
+// peer opened, and fail with [ErrStreamDown] while that connection is down.
+// Call [Server.WaitForAll] once at startup to wait until the shared
+// connections are established before issuing calls.
+func WithStreamDedup() ServerOption {
+	return func(o *serverOptions) {
+		o.outboundDialOpts = append(o.outboundDialOpts, conn.WithStreamDedup())
+	}
+}
+
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
 	srv          *stream.Server
@@ -142,8 +158,9 @@ func (s *Server) NodeID() uint32 {
 }
 
 // ConnectedPeers returns the subset of [Server.PeerConfig] whose peers are
-// currently reachable: the local node and every peer whose connection this
-// server established. It equals [Server.PeerConfig] when all peers are
+// currently reachable: the local node, every peer whose connection this
+// server established, and, under [WithStreamDedup], every peer whose shared
+// connection is attached. It equals [Server.PeerConfig] when all peers are
 // connected, and always includes the local node, even before any peers have
 // connected. A returned configuration remains valid across connectivity changes.
 func (s *Server) ConnectedPeers() Config {
@@ -344,9 +361,40 @@ func (s *Server) Addr() string {
 // PeerConfig returns the [Config] of the peers configured with [WithPeers],
 // or nil if [WithPeers] was not used. Calls on the returned [Config] reach
 // the peers over connections this server establishes; calls on the local
-// node are served in-process.
+// node are served in-process. With [WithStreamDedup], calls may fail with
+// [ErrStreamDown] until the peers they target have connected. Call
+// [Server.WaitForAll] first to wait for them.
 func (s *Server) PeerConfig() Config {
 	return s.outbound
+}
+
+// WaitForAll blocks until every peer is connected — that is, until
+// [Server.ConnectedPeers] equals [Server.PeerConfig] — then returns the peer
+// [Config].
+//
+// It waits only under [WithStreamDedup]. Without stream dedup, or without
+// [WithPeers], it returns the current peer [Config] immediately (nil if
+// none), since this server's own connections are established on demand.
+//
+// It returns an error without waiting if the server has no node ID, or if that
+// node ID is not one of its configured peers.
+func (s *Server) WaitForAll(ctx context.Context) (Config, error) {
+	cfg := s.outbound
+	if cfg == nil {
+		return nil, nil
+	}
+	if !conn.WaitForAllRequired(cfg) {
+		return cfg, nil
+	}
+	if err := conn.ValidateStreamDedup(cfg); err != nil {
+		return nil, err
+	}
+	if err := s.WaitForPeers(ctx, func(connected Config) bool {
+		return connected.Size() == cfg.Size()
+	}); err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }
 
 // GracefulStop waits for all RPCs to finish before stopping.
