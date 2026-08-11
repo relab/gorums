@@ -22,7 +22,6 @@ type dialOptions struct {
 	handler      stream.RequestHandler
 	localNodeID  uint32          // if non-zero, skip setting handler on this node ID
 	inboundMgr   *inboundManager // set by WithBackChannel; enables eager reconnect for symmetric nodes
-	srvOpts      []ServerOption  // applied only by NewSystem
 }
 
 // DefaultSendBufferSize is the per-node send queue capacity used when no
@@ -116,18 +115,5 @@ func withServer(srv *Server) DialOption {
 		o.localNodeID = srv.NodeID()
 		o.inboundMgr = srv.inboundManager
 		o.metadata = metadata.Join(o.metadata, metadataWithNodeID(srv.NodeID()))
-	}
-}
-
-// WithServerOptions bundles [ServerOption]s into a [DialOption] for use with
-// [NewSystem]. It has no effect when passed to [NewConfig].
-// Nil options are silently ignored.
-func WithServerOptions(opts ...ServerOption) DialOption {
-	return func(o *dialOptions) {
-		for _, opt := range opts {
-			if opt != nil {
-				o.srvOpts = append(o.srvOpts, opt)
-			}
-		}
 	}
 }

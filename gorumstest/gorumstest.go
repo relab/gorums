@@ -227,13 +227,13 @@ func Servers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface)
 	return addrs
 }
 
-// Systems returns n started Gorums systems on random localhost ports (see
-// [gorums.NewLocalSystems]). Each system auto-creates a peer
-// [gorums.Configuration] over the group, accessible via
-// [gorums.System.OutboundConfig]. The systems are automatically stopped when
-// the test finishes via t.Cleanup. Any [gorums.ServerOption]s are applied to
-// every server.
-func Systems(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.System {
+// LocalServers returns n started Gorums servers forming a symmetric peer
+// group on random localhost ports (see [gorums.NewLocalServers]). Each
+// server auto-creates a peer [gorums.Configuration] over the group, accessible
+// via [gorums.Server.PeerConfig]. The servers are automatically stopped
+// when the test finishes via t.Cleanup. Any [gorums.ServerOption]s are
+// applied to every server.
+func LocalServers(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.Server {
 	t.Helper()
 
 	// Skip goleak check for benchmarks
@@ -242,7 +242,7 @@ func Systems(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.System 
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
 
-	systems, stop, err := gorums.NewLocalSystems(n,
+	srvs, stop, err := gorums.NewLocalServers(n,
 		gorums.WithLocalServerOptions(opts...),
 		gorums.WithLocalDialOptions(InsecureDialOptions(t)),
 	)
@@ -253,11 +253,11 @@ func Systems(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.System 
 	// Register server cleanup SECOND so it runs BEFORE goleak check
 	t.Cleanup(stop)
 
-	for _, sys := range systems {
-		go sys.Serve()
+	for _, srv := range srvs {
+		go srv.ListenAndServe()
 	}
 
-	return systems
+	return srvs
 }
 
 // Closer returns a cleanup function that closes the given io.Closer.

@@ -446,7 +446,7 @@ func (im *inboundManager) WaitForClients(ctx context.Context, cond func(Configur
 }
 
 // close signals all waiters to stop and prevents new waits from blocking.
-// Called from [System.Stop].
+// Called from [Server.Stop].
 func (im *inboundManager) close() {
 	im.stopOnce.Do(func() { close(im.stopCh) })
 }

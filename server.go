@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc"
@@ -22,6 +23,7 @@ type serverOptions struct {
 	myID             uint32
 	peerNodes        NodeListOption      // Peers to track as they connect; set by WithPeers.
 	onConfigChange   func(Configuration) // Callback registered via WithPeerChange.
+	listenAddr       string              // Listener address recorded by WithAddr; bound by ListenAndServe.
 	outboundNodes    NodeListOption      // Nodes this server calls; set by WithPeers.
 	outboundDialOpts []DialOption
 }
@@ -109,13 +111,26 @@ func WithPeerChange(callback func(Configuration)) ServerOption {
 	}
 }
 
+// WithAddr records the address that [Server.ListenAndServe] binds.
+// It only stores the address; nothing is resolved or bound until
+// [Server.ListenAndServe] is called.
+func WithAddr(addr string) ServerOption {
+	return func(o *serverOptions) {
+		o.listenAddr = addr
+	}
+}
+
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
 	srv          *stream.Server
 	grpcServer   *grpc.Server
 	handlers     map[string]Handler
 	interceptors []Interceptor
-	outbound     Configuration // peer config built by WithPeers; nil if unused
+
+	mu         sync.Mutex    // guards lis
+	lis        net.Listener  // active listener; set by Serve, ListenAndServe, or NewLocalServers
+	listenAddr string        // address recorded by WithAddr
+	outbound   Configuration // peer config built by WithPeers; nil if unused
 	*inboundManager
 }
 
@@ -146,6 +161,7 @@ func NewServer(opts ...ServerOption) *Server {
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
 		handlers:     make(map[string]Handler),
 		interceptors: serverOpts.interceptors,
+		listenAddr:   serverOpts.listenAddr,
 	}
 	s.inboundManager = newInboundManager(
 		serverOpts.myID,
@@ -235,9 +251,57 @@ func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, rele
 	srvCtx.SendMessage(MessageWithError(in, out, err))
 }
 
-// Serve starts serving on the listener.
+// Serve serves on the externally supplied listener and records it so that
+// [Server.Addr] reports its address and [Server.Stop] closes it. The server
+// takes lifecycle responsibility for the listener once Serve is called: Stop
+// closes it even though gRPC also closes it when Serve returns.
 func (s *Server) Serve(listener net.Listener) error {
+	s.setListener(listener)
 	return s.grpcServer.Serve(listener)
+}
+
+// ListenAndServe binds the address recorded by [WithAddr] and serves on it.
+// When the server was created by [NewLocalServers], it serves on the
+// preallocated listener instead. It returns a clear error if no listen address
+// was configured, or the bind error if the address is invalid or cannot be
+// bound. When the configured address uses port 0, [Server.Addr] reports the
+// actual bound address after this method creates the listener.
+func (s *Server) ListenAndServe() error {
+	s.mu.Lock()
+	lis := s.lis
+	s.mu.Unlock()
+	if lis == nil {
+		if s.listenAddr == "" {
+			return fmt.Errorf("gorums: ListenAndServe requires a listen address; use WithAddr")
+		}
+		var err error
+		lis, err = net.Listen("tcp", s.listenAddr)
+		if err != nil {
+			return err
+		}
+		s.setListener(lis)
+	}
+	return s.grpcServer.Serve(lis)
+}
+
+// setListener records lis as the server's active listener.
+func (s *Server) setListener(lis net.Listener) {
+	s.mu.Lock()
+	s.lis = lis
+	s.mu.Unlock()
+}
+
+// Addr returns the bound listener address once the server has a listener.
+// Before binding, it returns the address configured with [WithAddr].
+// If neither exists, it returns the empty string.
+func (s *Server) Addr() string {
+	s.mu.Lock()
+	lis := s.lis
+	s.mu.Unlock()
+	if lis != nil {
+		return lis.Addr().String()
+	}
+	return s.listenAddr
 }
 
 // GracefulStop waits for all RPCs to finish before stopping.
@@ -245,12 +309,23 @@ func (s *Server) GracefulStop() {
 	s.grpcServer.GracefulStop()
 }
 
-// Stop stops the server immediately and releases the resources it owns,
-// including the peer [Configuration] built by [WithPeers]. It does not use
-// gRPC graceful stop, because one-way methods do not respond and would block
-// indefinitely. Stop is safe to call more than once.
+// Stop stops the server immediately and releases the resources it owns. It
+// unblocks any [Server.WaitForPeers] and [Server.WaitForClients] callers, stops
+// the gRPC server, closes the listener owned by [Server.Serve],
+// [Server.ListenAndServe], or [NewLocalServers], and closes the peer
+// [Configuration] built by [WithPeers]. It does not use gRPC graceful stop,
+// because one-way methods do not respond and would block indefinitely. Stop is
+// safe to call before serving starts, and safe to call more than once.
 func (s *Server) Stop() {
+	// Unblock any WaitForPeers / WaitForClients callers.
+	s.inboundManager.close()
 	s.grpcServer.Stop()
+	s.mu.Lock()
+	lis := s.lis
+	s.mu.Unlock()
+	if lis != nil {
+		_ = lis.Close()
+	}
 	if s.outbound != nil {
 		_ = s.outbound.Close()
 	}
