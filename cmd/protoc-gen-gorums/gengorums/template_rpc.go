@@ -12,7 +12,7 @@ var rpcComment = `
 var rpcVar = `
 {{$genFile := .GenFile}}
 {{$nodeContext := "NodeContext"}}
-{{$rpc := use "gorums.RPCCall" .GenFile}}
+{{$rpc := use "gorums.RemoteCall" .GenFile}}
 {{$_ := use "gorums.EnforceVersion" .GenFile}}
 `
 
