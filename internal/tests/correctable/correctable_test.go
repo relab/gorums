@@ -101,11 +101,11 @@ type testSrv struct {
 	n int
 }
 
-func (testSrv) Correctable(_ gorums.ServerCtx, _ *Request) (*Response, error) {
+func (testSrv) Correctable(_ gorums.ServerContext, _ *Request) (*Response, error) {
 	return Response_builder{Level: 1}.Build(), nil
 }
 
-func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, _ *Request, send func(response *Response)) {
+func (srv testSrv) CorrectableStream(_ gorums.ServerContext, _ *Request, send func(response *Response)) {
 	for i := range srv.n {
 		send(Response_builder{Level: int32(i + 1)}.Build())
 	}

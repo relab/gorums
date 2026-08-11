@@ -167,24 +167,24 @@ func (rw rawWriter) Write(p []byte) (n int, err error) {
 }
 
 // ReadRPC is an RPC handler
-func (s *storageServer) ReadRPC(_ gorums.ServerCtx, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
+func (s *storageServer) ReadRPC(_ gorums.ServerContext, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
 	return s.Read(req)
 }
 
 // WriteRPC is an RPC handler
-func (s *storageServer) WriteRPC(_ gorums.ServerCtx, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
+func (s *storageServer) WriteRPC(_ gorums.ServerContext, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
 	return s.Write(req)
 }
 
 // WriteUnicast is an RPC handler for one-way unicast writes.
-func (s *storageServer) WriteUnicast(_ gorums.ServerCtx, req *pb.WriteRequest) {
+func (s *storageServer) WriteUnicast(_ gorums.ServerContext, req *pb.WriteRequest) {
 	if _, err := s.Write(req); err != nil {
 		s.logger.Printf("WriteUnicast error: %v", err)
 	}
 }
 
 // WriteMulticast is an RPC handler for one-way multicast writes.
-func (s *storageServer) WriteMulticast(_ gorums.ServerCtx, req *pb.WriteRequest) {
+func (s *storageServer) WriteMulticast(_ gorums.ServerContext, req *pb.WriteRequest) {
 	_, err := s.Write(req)
 	if err != nil {
 		s.logger.Printf("Write error: %v", err)
@@ -192,17 +192,17 @@ func (s *storageServer) WriteMulticast(_ gorums.ServerCtx, req *pb.WriteRequest)
 }
 
 // ReadQC is an RPC handler for a quorum call.
-func (s *storageServer) ReadQC(_ gorums.ServerCtx, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
+func (s *storageServer) ReadQC(_ gorums.ServerContext, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
 	return s.Read(req)
 }
 
 // WriteQC is an RPC handler for a quorum call.
-func (s *storageServer) WriteQC(_ gorums.ServerCtx, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
+func (s *storageServer) WriteQC(_ gorums.ServerContext, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
 	return s.Write(req)
 }
 
 // ReadCorrectable is an RPC handler for a correctable quorum call. It sends multiple responses.
-func (s *storageServer) ReadCorrectable(_ gorums.ServerCtx, req *pb.ReadRequest, send func(response *pb.ReadResponse)) {
+func (s *storageServer) ReadCorrectable(_ gorums.ServerContext, req *pb.ReadRequest, send func(response *pb.ReadResponse)) {
 	resp, err := s.Read(req)
 	if err != nil {
 		s.logger.Printf("ReadCorrectable error: %v", err)
@@ -215,7 +215,7 @@ func (s *storageServer) ReadCorrectable(_ gorums.ServerCtx, req *pb.ReadRequest,
 
 // ReadNestedQC is a quorum-call handler that performs a nested quorum call
 // using the server's peer configuration from WithPeers.
-func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
+func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
 	cfg := ctx.PeerConfig()
 	if len(cfg) == 0 {
 		return nil, fmt.Errorf("read_nested_qc: requires server peer configuration")
@@ -227,7 +227,7 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) 
 
 // WriteNestedMulticast is a quorum-call handler that performs a nested multicast
 // using the server's peer configuration from WithPeers.
-func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerCtx, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
+func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerContext, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
 	cfg := ctx.PeerConfig()
 	if len(cfg) == 0 {
 		return nil, fmt.Errorf("write_nested_multicast: requires server peer configuration")

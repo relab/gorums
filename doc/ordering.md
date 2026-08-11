@@ -54,7 +54,7 @@ type Server interface {
   // Runs in its own goroutine.
   // Server waits until the handler returns
   // or until the handler calls Release() on the context object.
-  RPC(gorums.ServerCtx, *Request) (*Response, error)
+  RPC(gorums.ServerContext, *Request) (*Response, error)
 }
 ```
 
@@ -69,7 +69,7 @@ Hence, the penalty for running server handlers synchronously is reduced while st
 Below is an example of how such a handler could be written:
 
 ```go
-func (s *testSrv) AsyncHandler(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
+func (s *testSrv) AsyncHandler(ctx gorums.ServerContext, req *Request) (resp *Response, err error) {
   // do synchronous work
   response := &Response{
     InOrder: s.isInOrder(req.GetNum()),
