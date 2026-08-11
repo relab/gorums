@@ -29,6 +29,7 @@ z-scratch/
 
 # Binary files
 benchkit/cmd/benchmark/benchmark
+benchkit/cmd/sweep/sweep
 examples/storage/storage
 
 # Gorums generated backup files
@@ -37,6 +38,13 @@ cmd/protoc-gen-gorums/gengorums/template_static.go.bak
 go.work.sum
 branch-compare-*
 tmp/*
+out/*
 .claude/settings.local.json
 .claude/agent-memory/
 CLAUDE.md
+scripts/bbchain-echo.sh
+scripts/bbchain-ssh-config
+scripts/bbchain-infocmp.sh
+scripts/__pycache__/plot.cpython-314.pyc
+scripts/install-bbchain-key.sh
+report/dedup-eval*/*
