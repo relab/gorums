@@ -1,24 +1,19 @@
-package gorums
+package impl
 
-// Async is a generic future type for asynchronous quorum calls.
-// It encapsulates the state of an asynchronous call and provides methods
-// for checking the status or waiting for completion.
-//
-// Type parameter Resp is the response type from nodes.
+// Async represents the eventual result of an asynchronous quorum call.
 type Async[Resp any] struct {
 	reply Resp
 	err   error
 	c     chan struct{}
 }
 
-// Get returns the reply and any error associated with the called method.
-// The method blocks until a reply or error is available.
+// Get blocks until the call completes and returns its response and error.
 func (f *Async[Resp]) Get() (Resp, error) {
 	<-f.c
 	return f.reply, f.err
 }
 
-// Done reports if a reply and/or error is available for the called method.
+// Done reports whether the call has completed.
 func (f *Async[Resp]) Done() bool {
 	select {
 	case <-f.c:

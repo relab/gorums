@@ -83,6 +83,34 @@ func TestPerMessageMetadata(t *testing.T) {
 	}
 }
 
+func TestPerMessageMetadataOnPeerConfig(t *testing.T) {
+	servers := gorumstest.LocalServers(t, 2)
+	for _, srv := range servers {
+		RegisterMetadataTestServer(srv, &testSrv{})
+	}
+
+	var target *gorums.Node
+	for _, node := range servers[1].PeerConfig() {
+		if node.ID() == 1 {
+			target = node
+			break
+		}
+	}
+	if target == nil {
+		t.Fatal("node 1 not found in server 2 outbound configuration")
+	}
+
+	const want = uint32(42)
+	ctx := metadata.NewOutgoingContext(t.Context(), metadata.Pairs("id", fmt.Sprint(want)))
+	resp, err := IDFromMD(target.Context(ctx), &emptypb.Empty{})
+	if err != nil {
+		t.Fatalf("IDFromMD: %v", err)
+	}
+	if got := resp.GetID(); got != want {
+		t.Fatalf("IDFromMD() = %d, want %d", got, want)
+	}
+}
+
 func TestCanGetPeerInfo(t *testing.T) {
 	node := gorumstest.Node(t, serverFn)
 	nodeCtx := node.Context(t.Context())

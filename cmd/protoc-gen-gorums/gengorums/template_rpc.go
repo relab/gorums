@@ -12,8 +12,7 @@ var remoteCallComment = `
 var remoteCallVar = `
 {{$genFile := .GenFile}}
 {{$nodeContext := "NodeContext"}}
-{{$rpc := use "gorums.RemoteCall" .GenFile}}
-{{$_ := use "gorums.EnforceVersion" .GenFile}}
+{{$rpc := use "gorumsimpl.RemoteCall" .GenFile}}
 `
 
 var remoteCallSignature = `func {{$method}}(ctx *{{$nodeContext}}, in *{{$in}}) (*{{$out}}, error) {

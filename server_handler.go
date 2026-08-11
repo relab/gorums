@@ -2,11 +2,15 @@ package gorums
 
 import (
 	"context"
+	"fmt"
+	"slices"
 
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
 // Message wraps a wire-level [stream.Message] with its deserialized proto payload.
@@ -19,9 +23,6 @@ type Message struct {
 
 // MetadataEntry is a type alias for [stream.MetadataEntry].
 type MetadataEntry = stream.MetadataEntry
-
-// MetadataEntry_builder is a type alias for [stream.MetadataEntry_builder].
-type MetadataEntry_builder = stream.MetadataEntry_builder
 
 type (
 	// Handler processes a request and returns a response.
@@ -64,7 +65,7 @@ func (ctx *ServerContext) SendMessage(out *Message) {
 			out.SetPayload(payload)
 		} else {
 			// Encode the marshal error into the response envelope; don't close the stream.
-			out = MessageWithError(nil, out, err)
+			out = messageWithError(nil, out, err)
 		}
 	}
 	if ctx.send != nil {
@@ -72,11 +73,11 @@ func (ctx *ServerContext) SendMessage(out *Message) {
 	}
 }
 
-// PeerConfig returns the [Config] of the peers the server was configured
-// with via [WithPeers], or nil if it was not used. It is the full peer set, not
-// the currently reachable subset, so quorum sizes derived from it inside a
-// handler do not shift as peers connect and disconnect. Use
-// [ServerContext.ConnectedPeers] to observe reachability.
+// PeerConfig returns the [Config] of the peers configured with [WithPeers],
+// or nil if [WithPeers] was not used. It is the same configuration as
+// [Server.PeerConfig], so a handler can fan out calls to the server's peers.
+// Call [ServerContext.Release] before invoking calls on it, so that inbound
+// processing is not blocked while waiting for the responses.
 func (ctx *ServerContext) PeerConfig() Config {
 	if ctx.srv == nil {
 		return nil
@@ -84,20 +85,10 @@ func (ctx *ServerContext) PeerConfig() Config {
 	return ctx.srv.PeerConfig()
 }
 
-// ConnectedPeers returns the currently reachable subset of
-// [ServerContext.PeerConfig]; see [Server.ConnectedPeers].
-func (ctx *ServerContext) ConnectedPeers() Config {
-	if ctx.srv == nil {
-		return nil
-	}
-	return ctx.srv.ConnectedPeers()
-}
-
-// ConnectedClients returns a [Config] of all connected clients capable of
-// receiving reverse-direction calls from the server.
-// An empty (non-nil) Config is returned if no client peers are connected.
-// The returned slice is replaced atomically on each connect/disconnect;
-// thus, retaining a reference to an old configuration is safe.
+// ConnectedClients returns a [Config] of the clients currently connected to
+// this server that can receive back-channel calls. It is the same
+// configuration as [Server.ConnectedClients]. An empty (non-nil)
+// configuration is returned when no clients are connected.
 func (ctx *ServerContext) ConnectedClients() Config {
 	if ctx.srv == nil {
 		return nil
@@ -105,11 +96,38 @@ func (ctx *ServerContext) ConnectedClients() Config {
 	return ctx.srv.ConnectedClients()
 }
 
+// unmarshalRequest unmarshals the request proto message from the message.
+// It uses the method name in the message to look up the Input type from the proto registry.
+func unmarshalRequest(in *stream.Message) (proto.Message, error) {
+	// get method descriptor from registry
+	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(in.GetMethod()))
+	if err != nil {
+		return nil, fmt.Errorf("gorums: could not find method descriptor for %s", in.GetMethod())
+	}
+	methodDesc := desc.(protoreflect.MethodDescriptor)
+
+	// get the request message type (Input type)
+	msgType, err := protoregistry.GlobalTypes.FindMessageByName(methodDesc.Input().FullName())
+	if err != nil {
+		return nil, fmt.Errorf("gorums: could not find message type %s", methodDesc.Input().FullName())
+	}
+	req := msgType.New().Interface()
+
+	// unmarshal message from the Message.Payload field
+	payload := in.GetPayload()
+	if len(payload) > 0 {
+		if err := proto.Unmarshal(payload, req); err != nil {
+			return nil, fmt.Errorf("gorums: could not unmarshal request: %w", err)
+		}
+	}
+	return req, nil
+}
+
 // NewResponseMessage creates a new response envelope based on the provided proto
 // message. The response includes the message ID and method from the request
 // to facilitate routing the response back to the caller on the client side.
 // The payload, error status, and metadata entries are left empty; the error status
-// of the response can be set using [MessageWithError], and the payload will
+// of the response can be set using [messageWithError], and the payload will
 // be marshaled by [ServerContext.SendMessage]. This function is safe for concurrent use.
 //
 // This function should only be used in generated code.
@@ -123,7 +141,7 @@ func NewResponseMessage(in *Message, resp proto.Message) *Message {
 		MessageSeqNo: in.GetMessageSeqNo(), // needed in RouteResponse to lookup the response channel
 		Method:       in.GetMethod(),       // needed in UnmarshalResponse to look up the response type in the proto registry
 		// Payload is left empty; SendMessage will marshal resp into the payload when sending the message
-		// Status is left empty; it can be set by MessageWithError if needed
+		// Status is left empty; it can be set by messageWithError if needed
 	}
 	return &Message{
 		Proto:   resp,
@@ -131,11 +149,11 @@ func NewResponseMessage(in *Message, resp proto.Message) *Message {
 	}
 }
 
-// MessageWithError ensures a response envelope exists and sets the error status.
+// messageWithError ensures a response envelope exists and sets the error status.
 // If out is nil, a new response is created based on the in request envelope;
 // otherwise, out is modified in place. This is used by the server to send error
 // responses back to the client.
-func MessageWithError(in, out *Message, err error) *Message {
+func messageWithError(in, out *Message, err error) *Message {
 	if out == nil {
 		out = NewResponseMessage(in, nil)
 	}
@@ -172,8 +190,7 @@ func chainInterceptors(final Handler, interceptors ...ServerInterceptor) Handler
 		return final
 	}
 	handler := final
-	for i := len(interceptors) - 1; i >= 0; i-- {
-		curr := interceptors[i]
+	for _, curr := range slices.Backward(interceptors) {
 		next := handler
 		handler = func(ctx ServerContext, in *Message) (*Message, error) {
 			return curr(ctx, in, next)

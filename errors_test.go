@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/relab/gorums/internal/conn"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -18,43 +19,43 @@ func TestQuorumCallErrorIs(t *testing.T) {
 	}{
 		{
 			name:   "SameCauseError",
-			err:    QuorumCallError{cause: ErrIncomplete},
+			err:    conn.NewQuorumCallError(ErrIncomplete, nil),
 			target: ErrIncomplete,
 			want:   true,
 		},
 		{
 			name:   "SameCauseQCError",
-			err:    QuorumCallError{cause: ErrIncomplete},
-			target: QuorumCallError{cause: ErrIncomplete},
+			err:    conn.NewQuorumCallError(ErrIncomplete, nil),
+			target: conn.NewQuorumCallError(ErrIncomplete, nil),
 			want:   true,
 		},
 		{
 			name:   "DifferentError",
-			err:    QuorumCallError{cause: ErrIncomplete},
+			err:    conn.NewQuorumCallError(ErrIncomplete, nil),
 			target: errors.New("incomplete call"),
 			want:   false,
 		},
 		{
 			name:   "DifferentQCError",
-			err:    QuorumCallError{cause: ErrIncomplete},
-			target: QuorumCallError{cause: errors.New("incomplete call")},
+			err:    conn.NewQuorumCallError(ErrIncomplete, nil),
+			target: conn.NewQuorumCallError(errors.New("incomplete call"), nil),
 			want:   false,
 		},
 		{
 			name:   "ContextCanceled",
-			err:    QuorumCallError{cause: context.Canceled},
+			err:    conn.NewQuorumCallError(context.Canceled, nil),
 			target: context.Canceled,
 			want:   true,
 		},
 		{
 			name:   "ContextCanceledQC",
-			err:    QuorumCallError{cause: context.Canceled},
-			target: QuorumCallError{cause: context.Canceled},
+			err:    conn.NewQuorumCallError(context.Canceled, nil),
+			target: conn.NewQuorumCallError(context.Canceled, nil),
 			want:   true,
 		},
 		{
 			name:   "ContextDeadlineExceeded",
-			err:    QuorumCallError{cause: context.DeadlineExceeded},
+			err:    conn.NewQuorumCallError(context.DeadlineExceeded, nil),
 			target: context.DeadlineExceeded,
 			want:   true,
 		},
@@ -76,46 +77,34 @@ func TestQuorumCallErrorAccessors(t *testing.T) {
 		wantNodeErrors int
 	}{
 		{
-			name: "NoErrors",
-			qcErr: QuorumCallError{
-				cause:  ErrIncomplete,
-				errors: nil,
-			},
+			name:           "NoErrors",
+			qcErr:          conn.NewQuorumCallError(ErrIncomplete, nil),
 			wantCause:      ErrIncomplete,
 			wantNodeErrors: 0,
 		},
 		{
 			name: "SingleError",
-			qcErr: QuorumCallError{
-				cause: ErrIncomplete,
-				errors: []nodeError{
-					{nodeID: 1, cause: status.Error(codes.Unavailable, "node down")},
-				},
-			},
+			qcErr: conn.NewQuorumCallError(ErrIncomplete, []conn.NodeError{
+				conn.NewNodeError(1, status.Error(codes.Unavailable, "node down")),
+			}),
 			wantCause:      ErrIncomplete,
 			wantNodeErrors: 1,
 		},
 		{
 			name: "MultipleErrors",
-			qcErr: QuorumCallError{
-				cause: ErrIncomplete,
-				errors: []nodeError{
-					{nodeID: 1, cause: status.Error(codes.Unavailable, "node down")},
-					{nodeID: 3, cause: status.Error(codes.DeadlineExceeded, "timeout")},
-					{nodeID: 5, cause: status.Error(codes.Unavailable, "connection refused")},
-				},
-			},
+			qcErr: conn.NewQuorumCallError(ErrIncomplete, []conn.NodeError{
+				conn.NewNodeError(1, status.Error(codes.Unavailable, "node down")),
+				conn.NewNodeError(3, status.Error(codes.DeadlineExceeded, "timeout")),
+				conn.NewNodeError(5, status.Error(codes.Unavailable, "connection refused")),
+			}),
 			wantCause:      ErrIncomplete,
 			wantNodeErrors: 3,
 		},
 		{
 			name: "SendFailure",
-			qcErr: QuorumCallError{
-				cause: ErrSendFailure,
-				errors: []nodeError{
-					{nodeID: 2, cause: errors.New("send failed")},
-				},
-			},
+			qcErr: conn.NewQuorumCallError(ErrSendFailure, []conn.NodeError{
+				conn.NewNodeError(2, errors.New("send failed")),
+			}),
 			wantCause:      ErrSendFailure,
 			wantNodeErrors: 1,
 		},
@@ -138,14 +127,11 @@ func TestQuorumCallErrorUnwrap(t *testing.T) {
 	timeoutErr := status.Error(codes.DeadlineExceeded, "timeout")
 	connectionErr := errors.New("connection refused")
 
-	qcErr := QuorumCallError{
-		cause: ErrIncomplete,
-		errors: []nodeError{
-			{nodeID: 1, cause: unavailableErr},
-			{nodeID: 3, cause: timeoutErr},
-			{nodeID: 5, cause: connectionErr},
-		},
-	}
+	qcErr := conn.NewQuorumCallError(ErrIncomplete, []conn.NodeError{
+		conn.NewNodeError(1, unavailableErr),
+		conn.NewNodeError(3, timeoutErr),
+		conn.NewNodeError(5, connectionErr),
+	})
 
 	// Test Unwrap returns all node error causes
 	unwrapped := qcErr.Unwrap()
@@ -195,13 +181,10 @@ func (e customError) Error() string { return e.msg }
 
 func TestQuorumCallErrorUnwrapWithAs(t *testing.T) {
 	customErr := customError{msg: "custom node error"}
-	qcErr := QuorumCallError{
-		cause: ErrIncomplete,
-		errors: []nodeError{
-			{nodeID: 1, cause: customErr},
-			{nodeID: 2, cause: status.Error(codes.Unavailable, "down")},
-		},
-	}
+	qcErr := conn.NewQuorumCallError(ErrIncomplete, []conn.NodeError{
+		conn.NewNodeError(1, customErr),
+		conn.NewNodeError(2, status.Error(codes.Unavailable, "down")),
+	})
 
 	// Test errors.As can find the custom error in wrapped errors
 	var target customError
@@ -210,5 +193,31 @@ func TestQuorumCallErrorUnwrapWithAs(t *testing.T) {
 	}
 	if target.msg != "custom node error" {
 		t.Errorf("extracted customError.msg = %q, want %q", target.msg, "custom node error")
+	}
+}
+
+// TestPublicTransportErrorsInspectable verifies that the exported transport
+// sentinels carry the documented gRPC Unavailable code, are distinct under
+// errors.Is, and remain matchable after a node error is aggregated into a
+// QuorumCallError — the supported public inspection contract for callers that
+// need to distinguish stream-down, closed-node, and queue-full failures.
+func TestPublicTransportErrorsInspectable(t *testing.T) {
+	for _, e := range []error{ErrStreamDown, ErrNodeClosed, ErrSendQueueFull} {
+		if status.Code(e) != codes.Unavailable {
+			t.Errorf("%v code = %v, want %v", e, status.Code(e), codes.Unavailable)
+		}
+	}
+	if errors.Is(ErrStreamDown, ErrNodeClosed) ||
+		errors.Is(ErrStreamDown, ErrSendQueueFull) ||
+		errors.Is(ErrNodeClosed, ErrSendQueueFull) {
+		t.Error("exported transport sentinels are not distinct under errors.Is")
+	}
+
+	qce := conn.NewQuorumCallError(ErrIncomplete, []conn.NodeError{conn.NewNodeError(1, ErrStreamDown)})
+	if !errors.Is(qce, ErrStreamDown) {
+		t.Error("errors.Is(QuorumCallError{ErrStreamDown}, ErrStreamDown) = false, want true")
+	}
+	if errors.Is(qce, ErrNodeClosed) {
+		t.Error("errors.Is(QuorumCallError{ErrStreamDown}, ErrNodeClosed) = true, want false")
 	}
 }

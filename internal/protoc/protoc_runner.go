@@ -1,3 +1,5 @@
+// Package protoc provides a small helper for invoking the protoc compiler,
+// used by the code-generation tooling and tests to regenerate .pb.go files.
 package protoc
 
 import (

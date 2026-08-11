@@ -1,7 +1,10 @@
-package gorums
+package impl
 
 import (
+	"errors"
 	"sync"
+
+	"github.com/relab/gorums/internal/conn"
 )
 
 // LevelNotSet is the zero value level used to indicate that no level
@@ -13,11 +16,7 @@ type watcher struct {
 	ch    chan struct{}
 }
 
-// Correctable is a generic type for correctable quorum calls.
-// It encapsulates the state of a correctable call and provides methods
-// for checking the status or waiting for completion at specific levels.
-//
-// Type parameter Resp is the response type from nodes.
+// Correctable represents the progressive result of a correctable quorum call.
 type Correctable[Resp any] struct {
 	mu       sync.Mutex
 	reply    Resp
@@ -35,12 +34,12 @@ func (c *Correctable[Resp]) Get() (Resp, int, error) {
 	return c.reply, c.level, c.err
 }
 
-// Done returns a channel that will close when the correctable call is completed.
+// Done returns a channel that closes when the call completes.
 func (c *Correctable[Resp]) Done() <-chan struct{} {
 	return c.donech
 }
 
-// Watch returns a channel that will close when the correctable call has reached a specified level.
+// Watch returns a channel that closes when the call reaches level.
 func (c *Correctable[Resp]) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.mu.Lock()
@@ -57,15 +56,6 @@ func (c *Correctable[Resp]) Watch(level int) <-chan struct{} {
 // Its level increases with each successful response and completes at threshold.
 // A response skipped by a request transform ([ErrSkipNode]) counts toward
 // neither the level nor the final node-error count.
-// Use this for correctable quorum patterns where you want to observe
-// intermediate states.
-//
-// Example:
-//
-//	corr := ReadQC(ctx, req).Correctable(2)
-//	// Wait for level 2 to be reached
-//	<-corr.Watch(2)
-//	resp, level, err := corr.Get()
 func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
 	// Mark dispatched before spawning the goroutine so a later Intercept panics
 	// deterministically; the actual send is triggered lazily by ranging r.seq.
@@ -80,12 +70,15 @@ func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
 		var (
 			lastResp Resp
 			count    int
-			errs     []nodeError
+			errs     []conn.NodeError
 		)
 
 		for result := range r.seq {
+			if errors.Is(result.Err, ErrSkipNode) {
+				continue
+			}
 			if result.Err != nil {
-				errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
+				errs = append(errs, conn.NewNodeError(result.NodeID, result.Err))
 				continue
 			}
 
@@ -101,7 +94,7 @@ func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
 		}
 
 		// If we didn't reach the threshold, mark as done with error
-		corr.update(lastResp, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs})
+		corr.update(lastResp, count, true, conn.NewQuorumCallError(ErrIncomplete, errs))
 	}()
 
 	return corr

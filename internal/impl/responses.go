@@ -1,4 +1,4 @@
-package gorums
+package impl
 
 import (
 	"errors"
@@ -6,10 +6,11 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/relab/gorums/internal/conn"
 	"github.com/relab/gorums/internal/stream"
 )
 
-// NodeResponse is a type alias for stream.NodeResponse.
+// NodeResponse contains a node's response value or error.
 type NodeResponse[T any] = stream.NodeResponse[T]
 
 // mapToCallResponse converts a NodeResponse[*stream.Message] to a NodeResponse[Resp].
@@ -27,7 +28,7 @@ func mapToCallResponse[Resp proto.Message](channelResp NodeResponse[*stream.Mess
 		} else if val, ok := respMsg.(Resp); ok {
 			callResp.Value = val
 		} else {
-			callResp.Err = ErrTypeMismatch
+			callResp.Err = stream.ErrTypeMismatch
 		}
 	}
 	return callResp
@@ -37,21 +38,10 @@ func mapToCallResponse[Resp proto.Message](channelResp NodeResponse[*stream.Mess
 // Iterator Helpers
 // -------------------------------------------------------------------------
 
-// ResponseSeq is an iterator that yields NodeResponse[T] values from a quorum call.
+// ResponseSeq yields the responses from a quorum call.
 type ResponseSeq[T proto.Message] iter.Seq[NodeResponse[T]]
 
-// IgnoreErrors returns an iterator that yields only successful responses,
-// discarding any responses with errors. This is useful when you want to process
-// only valid responses from nodes.
-//
-// Example:
-//
-//	responses := QuorumCall(ctx, Request_builder{Num: uint64(42)}.Build())
-//	var sum int32
-//	for resp := range responses.IgnoreErrors() {
-//	    // resp is guaranteed to be a successful response
-//		sum += resp.Value.GetValue()
-//	}
+// IgnoreErrors returns a sequence containing only successful responses.
 func (seq ResponseSeq[Resp]) IgnoreErrors() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		for result := range seq {
@@ -64,19 +54,7 @@ func (seq ResponseSeq[Resp]) IgnoreErrors() ResponseSeq[Resp] {
 	}
 }
 
-// Filter returns an iterator that yields only the responses for which the
-// provided keep function returns true. This is useful for verifying or filtering
-// responses from servers before further processing.
-//
-// Example:
-//
-//	responses := QuorumCall(ctx, req)
-//	// Filter to only responses from a specific node
-//	for resp := range responses.Filter(func(r NodeResponse[Resp]) bool {
-//		return r.NodeID == 1
-//	}) {
-//		// process resp
-//	}
+// Filter returns a sequence containing the responses for which keep returns true.
 func (seq ResponseSeq[Resp]) Filter(keep func(NodeResponse[Resp]) bool) ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		for result := range seq {
@@ -92,16 +70,7 @@ func (seq ResponseSeq[Resp]) Filter(keep func(NodeResponse[Resp]) bool) Response
 // CollectN collects up to n values from the iterator into a map by node ID.
 // It returns early if n entries are collected or the iterator is exhausted.
 // When a node response carries an error, the zero value of Resp is stored for
-// that node ID; use IgnoreErrors first if you want to skip errored nodes
-// entirely.
-//
-// Example:
-//
-//	responses := QuorumCall(ctx, req)
-//	// Collect 2 successful responses only
-//	replies := responses.IgnoreErrors().CollectN(2)
-//	// or collect the first 2 responses regardless of error
-//	replies = responses.CollectN(2)
+// that node ID; use [ResponseSeq.IgnoreErrors] to skip errored nodes entirely.
 func (seq ResponseSeq[Resp]) CollectN(n int) map[uint32]Resp {
 	replies := make(map[uint32]Resp, n)
 	for result := range seq {
@@ -115,16 +84,7 @@ func (seq ResponseSeq[Resp]) CollectN(n int) map[uint32]Resp {
 
 // CollectAll collects all values from the iterator into a map by node ID.
 // When a node response carries an error, the zero value of Resp is stored for
-// that node ID; use IgnoreErrors first if you want to skip errored nodes
-// entirely.
-//
-// Example:
-//
-//	responses := QuorumCall(ctx, req)
-//	// Collect all successful responses only
-//	replies := responses.IgnoreErrors().CollectAll()
-//	// or collect all responses regardless of error (zero value stored on error)
-//	replies = responses.CollectAll()
+// that node ID; use [ResponseSeq.IgnoreErrors] to skip errored nodes entirely.
 func (seq ResponseSeq[Resp]) CollectAll() map[uint32]Resp {
 	replies := make(map[uint32]Resp)
 	for result := range seq {
@@ -137,17 +97,7 @@ func (seq ResponseSeq[Resp]) CollectAll() map[uint32]Resp {
 // Response Methods
 // -------------------------------------------------------------------------
 
-// Responses provides access to quorum call responses and terminal methods.
-// It is returned by quorum call functions and allows fluent-style API usage:
-//
-//	resp, err := ReadQuorumCall(ctx, req).Majority()
-//	// or
-//	resp, err := ReadQuorumCall(ctx, req).First()
-//	// or
-//	replies := ReadQuorumCall(ctx, req).IgnoreErrors().CollectAll()
-//
-// Type parameter:
-//   - Resp: The response message type
+// Responses provides response iteration and aggregation for a quorum call.
 type Responses[Resp proto.Message] struct {
 	seq   ResponseSeq[Resp]
 	size  int
@@ -181,25 +131,9 @@ func (r *Responses[Resp]) Size() int {
 	return r.size
 }
 
-// Results returns the underlying response iterator that yields node responses as they arrive.
-// It returns a single-use iterator. Users can use this to implement custom aggregation logic.
-// This method triggers lazy sending of requests, and calling [Call.Intercept]
-// after it panics.
-//
-// The iterator will:
-//   - Yield responses as they arrive from nodes
-//   - Continue until the context is canceled or all expected responses have been received
-//   - Allow early termination by breaking from the range loop
-//
-// Example usage:
-//
-//	for result := range ReadQuorumCall(ctx, req).Results() {
-//	    if result.Err != nil {
-//	        // Handle node error
-//	        continue
-//	    }
-//	    // Process result.Value
-//	}
+// Results returns a single-use sequence that yields responses as they arrive.
+// Iteration dispatches the call and ends after every node responds or the
+// context is canceled. Calling [Call.Intercept] after Results panics.
 func (r *Responses[Resp]) Results() ResponseSeq[Resp] {
 	r.markDispatched()
 	return r.seq
@@ -214,8 +148,7 @@ func (r *Responses[Resp]) sendNow() {
 // Terminal Methods (Aggregators)
 // -------------------------------------------------------------------------
 
-// First returns the first successful response received from any node.
-// This is useful for read-any patterns where any single response is sufficient.
+// First returns the first successful response.
 func (r *Responses[Resp]) First() (Resp, error) {
 	return r.Threshold(1)
 }
@@ -240,14 +173,14 @@ func (r *Responses[Resp]) All() (Resp, error) {
 func (r *Responses[Resp]) Threshold(threshold int) (resp Resp, err error) {
 	var (
 		count int
-		errs  []nodeError
+		errs  []conn.NodeError
 	)
 	for result := range r.seq {
 		if errors.Is(result.Err, ErrSkipNode) {
 			continue
 		}
 		if result.Err != nil {
-			errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
+			errs = append(errs, conn.NewNodeError(result.NodeID, result.Err))
 			continue
 		}
 		if count == 0 {
@@ -260,5 +193,5 @@ func (r *Responses[Resp]) Threshold(threshold int) (resp Resp, err error) {
 			return resp, nil
 		}
 	}
-	return resp, QuorumCallError{cause: ErrIncomplete, errors: errs}
+	return resp, conn.NewQuorumCallError(ErrIncomplete, errs)
 }
