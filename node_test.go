@@ -34,7 +34,7 @@ func TestNodeSort(t *testing.T) {
 
 	t.Run("ByID", func(t *testing.T) {
 		ns := slices.Clone(nodes)
-		slices.SortFunc(ns, ID)
+		slices.SortFunc(ns, ByID)
 		for i := 1; i < len(ns); i++ {
 			if ns[i].id < ns[i-1].id {
 				t.Error("by id: not sorted")
@@ -45,7 +45,7 @@ func TestNodeSort(t *testing.T) {
 
 	t.Run("ByLastNodeError", func(t *testing.T) {
 		ns := slices.Clone(nodes)
-		slices.SortFunc(ns, LastNodeError)
+		slices.SortFunc(ns, ByLastError)
 		for i := 1; i < len(ns); i++ {
 			if ns[i].LastErr() == nil && ns[i-1].LastErr() != nil {
 				t.Error("by error: not sorted")
@@ -57,10 +57,10 @@ func TestNodeSort(t *testing.T) {
 	t.Run("ByLastNodeErrorThenID", func(t *testing.T) {
 		ns := slices.Clone(nodes)
 		slices.SortFunc(ns, func(a, b *Node) int {
-			if c := LastNodeError(a, b); c != 0 {
+			if c := ByLastError(a, b); c != 0 {
 				return c
 			}
-			return ID(a, b)
+			return ByID(a, b)
 		})
 		// Expect: 42 (no err), 100 (no err), 99 (err), 101 (err).
 		wantIDs := []uint32{42, 100, 99, 101}
@@ -81,7 +81,7 @@ func TestNodeSort(t *testing.T) {
 			makeNodeWithLatency(3, -1*time.Second), // no measurement
 			makeNodeWithLatency(4, 20*time.Millisecond),
 		}
-		slices.SortFunc(ns, Latency)
+		slices.SortFunc(ns, ByLatency)
 		// Expected: 2 (10ms), 4 (20ms), 1 (30ms), 3 (no data).
 		wantIDs := []uint32{2, 4, 1, 3}
 		for i, n := range ns {
@@ -99,7 +99,7 @@ func TestNodeSort(t *testing.T) {
 			makeNodeWithLatency(2, -1*time.Second),
 			makeNodeWithLatency(3, -1*time.Second),
 		}
-		slices.SortStableFunc(ns, Latency)
+		slices.SortStableFunc(ns, ByLatency)
 		wantIDs := []uint32{1, 2, 3}
 		for i, n := range ns {
 			if n.id != wantIDs[i] {
@@ -116,10 +116,10 @@ func TestNodeSort(t *testing.T) {
 			makeNodeWithLatency(7, 20*time.Millisecond),
 		}
 		slices.SortFunc(ns, func(a, b *Node) int {
-			if r := Latency(a, b); r != 0 {
+			if r := ByLatency(a, b); r != 0 {
 				return r
 			}
-			return ID(a, b)
+			return ByID(a, b)
 		})
 		// Expected: 5 (10ms), 7 (20ms, lower id), 10 (20ms, higher id).
 		wantIDs := []uint32{5, 7, 10}
@@ -146,7 +146,7 @@ func TestConfigurationWatch(t *testing.T) {
 		makeNodeWithLatency(5, 50*time.Millisecond),
 	}
 	const quorumSize = 3
-	fastTop3 := func(c Config) Config { return c.SortBy(Latency)[:quorumSize] }
+	fastTop3 := func(c Config) Config { return c.Sort(ByLatency)[:quorumSize] }
 
 	t.Run("EmitsInitialSnapshot", func(t *testing.T) {
 		// Use a very long interval so only the initial emission fires.
@@ -183,7 +183,7 @@ func TestConfigurationWatch(t *testing.T) {
 		n2 := makeNodeWithLatency(2, 30*time.Millisecond)
 		n3 := makeNodeWithLatency(3, 20*time.Millisecond)
 		cfg := Config{n1, n2, n3}
-		top2 := func(c Config) Config { return c.SortBy(Latency)[:2] }
+		top2 := func(c Config) Config { return c.Sort(ByLatency)[:2] }
 
 		const interval = 20 * time.Millisecond
 		updates := cfg.Watch(t.Context(), interval, top2)

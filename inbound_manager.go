@@ -362,8 +362,8 @@ func (im *inboundManager) rebuildConfig() {
 			clientCfg = append(clientCfg, node)
 		}
 	}
-	slices.SortFunc(inboundCfg, ID)
-	slices.SortFunc(clientCfg, ID)
+	slices.SortFunc(inboundCfg, ByID)
+	slices.SortFunc(clientCfg, ByID)
 	im.inboundCfg = inboundCfg
 	im.clientConfig = clientCfg
 
@@ -375,7 +375,7 @@ func (im *inboundManager) rebuildConfig() {
 				cfg = append(cfg, node)
 			}
 		}
-		slices.SortFunc(cfg, ID)
+		slices.SortFunc(cfg, ByID)
 	}
 	cfgChanged := !slices.Equal(im.config, cfg)
 	im.config = cfg
