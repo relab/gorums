@@ -8,14 +8,15 @@ package metadata
 
 import (
 	gorums "github.com/relab/gorums"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
 	// Verify that this generated code is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(11 - gorums.MinVersion)
+	_ = gorumsimpl.EnforceVersion(11 - gorumsimpl.MinVersion)
 	// Verify that the gorums runtime is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(gorums.MaxVersion - 11)
+	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 11)
 )
 
 // The type aliases below are useful Gorums types that we make accessible
@@ -40,12 +41,12 @@ type (
 
 // IDFromMD returns the 'id' field from the metadata.
 func IDFromMD(ctx *NodeContext, in *emptypb.Empty) (*NodeID, error) {
-	return gorums.RemoteCall[*emptypb.Empty, *NodeID](ctx, in, "metadata.MetadataTest.IDFromMD")
+	return gorumsimpl.RemoteCall[*emptypb.Empty, *NodeID](ctx, in, "metadata.MetadataTest.IDFromMD")
 }
 
 // WhatIP returns the address of the client that calls it.
 func WhatIP(ctx *NodeContext, in *emptypb.Empty) (*IPAddr, error) {
-	return gorums.RemoteCall[*emptypb.Empty, *IPAddr](ctx, in, "metadata.MetadataTest.WhatIP")
+	return gorumsimpl.RemoteCall[*emptypb.Empty, *IPAddr](ctx, in, "metadata.MetadataTest.WhatIP")
 }
 
 // MetadataTest is the server-side API for the MetadataTest Service

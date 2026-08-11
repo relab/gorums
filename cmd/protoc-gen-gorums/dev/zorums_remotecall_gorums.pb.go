@@ -7,18 +7,18 @@
 package dev
 
 import (
-	gorums "github.com/relab/gorums"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 )
 
 const (
 	// Verify that this generated code is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(11 - gorums.MinVersion)
+	_ = gorumsimpl.EnforceVersion(11 - gorumsimpl.MinVersion)
 	// Verify that the gorums runtime is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(gorums.MaxVersion - 11)
+	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 11)
 )
 
 // GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
 // they are added to the _grpc.pb.go generated file.
 func GRPCCall(ctx *NodeContext, in *Request) (*Response, error) {
-	return gorums.RemoteCall[*Request, *Response](ctx, in, "dev.ZorumsService.GRPCCall")
+	return gorumsimpl.RemoteCall[*Request, *Response](ctx, in, "dev.ZorumsService.GRPCCall")
 }
