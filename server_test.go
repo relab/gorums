@@ -272,7 +272,8 @@ func TestNewLocalServersAssignsSequentialNodeIDs(t *testing.T) {
 }
 
 // TestNewLocalServersPeerConfigSize verifies that each server's peer
-// configuration includes every node in the symmetric group.
+// configuration includes every node in the symmetric group, without stream
+// deduplication enabled.
 func TestNewLocalServersPeerConfigSize(t *testing.T) {
 	const n = 4
 	servers, stop, err := gorums.NewLocalServers(n, gorums.WithLocalDialOptions(gorumstest.InsecureDialOptions(t)))
