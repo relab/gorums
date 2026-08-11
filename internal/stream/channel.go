@@ -156,9 +156,11 @@ type Channel struct {
 // local send. Use this whenever a remote peer depends on this dialed stream
 // staying registered on its inbound side. Any symmetric peer (a server calling
 // its peers via WithPeers) drops out of the remote's connected
-// configuration when the stream it dialed goes idle and dies. A stream lost
-// while this side has nothing to send would otherwise leave the peer stalled
-// until the next local send.
+// configuration when the stream it dialed goes idle and dies; under stream
+// deduplication the peer additionally reuses this stream for its own calls and
+// cannot re-dial it at all. In both cases a stream lost while this side has
+// nothing to send would otherwise leave the peer stalled until the next local
+// send.
 //
 // onStreamChange, if non-nil, is invoked with true when the stream is
 // established and false when it is lost, on transitions only. It runs while
@@ -517,7 +519,8 @@ func (c *Channel) cancelPendingMsgs(err error) {
 // moment it has the response, landing the cancellation between Send returning
 // and the sender's stop call, and the watcher goroutine spawned by that
 // cancellation may then run arbitrarily late; with nothing left to unblock,
-// clearing would sever a healthy stream that later requests depend on.
+// clearing would sever a healthy stream that later requests (and, under
+// stream deduplication, the remote peer sharing this stream) depend on.
 //
 // One narrow window remains: between Send returning and the sender acquiring
 // sendGuard to set sendDone, a watcher can win the guard, observe sendDone
@@ -677,8 +680,9 @@ const (
 // With eagerReconnect set, the receiver also re-establishes a lost stream
 // itself, with capped exponential backoff, instead of leaving reconnection to
 // the sender's next request: a symmetric peer depends on this dialed stream to
-// stay registered on its inbound side, so on a node with nothing to send the
-// peer would otherwise stall until this node's next request.
+// stay registered on its inbound side (and under stream deduplication reuses it
+// for its own calls and cannot re-dial it), so on a node with nothing to send
+// the peer would otherwise stall until this node's next request.
 func (c *Channel) receiver() {
 	reconnectDelay := eagerReconnectBaseDelay
 	for {
