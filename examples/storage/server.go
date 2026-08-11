@@ -31,7 +31,7 @@ func runServer(address string, peers []string, srvOpt gorums.ServerOption) error
 	if err != nil {
 		return err
 	}
-	insecureDial := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
+	insecureDial := gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
 	srv := gorums.NewServer(
 		gorums.WithAddr(address),
 		gorums.WithPeers(myID, peerList, insecureDial),
@@ -63,7 +63,7 @@ func runServer(address string, peers []string, srvOpt gorums.ServerOption) error
 // It returns the server addresses and a stop function. The caller must
 // call stop when the cluster is no longer needed.
 func runLocalCluster(srvOpts gorums.ServerOption) ([]string, func(), error) {
-	dialOpts := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
+	dialOpts := gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
 	servers, stop, err := gorums.NewLocalServers(4,
 		gorums.WithLocalServerOptions(srvOpts),
 		gorums.WithLocalDialOptions(dialOpts),
