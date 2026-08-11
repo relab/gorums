@@ -417,7 +417,7 @@ func TestAcceptPeerReplacesExistingStream(t *testing.T) {
 	im.AcceptPeer(inboundCtx(t.Context(), 3), second)
 
 	checkIDs(t, im.Config(), []uint32{1, 3}, "after replacement")
-	node := im.nodes[3]
+	node := im.knownNodes[3]
 	if ch := node.channel.Load(); ch == nil {
 		t.Fatal("channel should not be nil after replacement")
 	}
@@ -448,14 +448,14 @@ func TestAcceptPeerStaleCleanupDoesNotDetachReplacement(t *testing.T) {
 	// Stale cleanup from the first connection must not detach the replacement.
 	cleanupFirst()
 	checkIDs(t, im.Config(), []uint32{1, 2}, "after stale cleanup")
-	if im.nodes[2].channel.Load() == nil {
+	if im.knownNodes[2].channel.Load() == nil {
 		t.Fatal("stale cleanup detached the replacement channel")
 	}
 
 	// Current cleanup should detach the active channel.
 	cleanupSecond()
 	checkIDs(t, im.Config(), []uint32{1}, "after current cleanup")
-	if im.nodes[2].channel.Load() != nil {
+	if im.knownNodes[2].channel.Load() != nil {
 		t.Fatal("current cleanup should detach the active channel")
 	}
 }
