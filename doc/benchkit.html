@@ -1,0 +1,2426 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>benchkit — Reference</title>
+    <style>
+        :root {
+            --bg: #fbfbfd;
+            --panel: #ffffff;
+            --ink: #1d1d22;
+            --muted: #5b5b66;
+            --line: #e4e4ea;
+            --accent: #3a5bd9;
+            --accent-soft: #eef1fc;
+            --good: #1b7f4b;
+            --good-bg: #e9f6ee;
+            --bad: #b3331f;
+            --bad-bg: #fbece9;
+            --warn: #8a6d12;
+            --warn-bg: #fcf6e3;
+            --code: #f4f4f7;
+            --rec: #1f5ed1;
+            --rec-bg: #eaf0fe;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        html {
+            scroll-behavior: smooth
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--ink);
+            font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .wrap {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 48px 28px 96px
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 248px minmax(0, 1fr);
+            align-items: start
+        }
+
+        .sidebar {
+            position: sticky;
+            top: 0;
+            align-self: start;
+            height: 100vh;
+            overflow-y: auto;
+            background: var(--panel);
+            border-right: 1px solid var(--line);
+            padding: 28px 20px
+        }
+
+        .sidebar .brand {
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: -.01em
+        }
+
+        .sidebar .brand small {
+            display: block;
+            font-weight: 400;
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 3px
+        }
+
+        .sidebar nav {
+            margin-top: 18px
+        }
+
+        .sidebar nav a {
+            display: block;
+            padding: 5px 10px;
+            border-radius: 6px;
+            color: var(--muted);
+            font-size: 13.5px;
+            line-height: 1.35
+        }
+
+        .sidebar nav a:hover {
+            background: var(--accent-soft);
+            color: var(--ink);
+            text-decoration: none
+        }
+
+        .sidebar nav a.active {
+            background: var(--accent);
+            color: #fff;
+            font-weight: 600
+        }
+
+        .sidebar nav a.cross {
+            margin-top: 10px;
+            padding-top: 12px;
+            border-top: 1px solid var(--line);
+            color: var(--accent)
+        }
+
+        h2[id] {
+            scroll-margin-top: 16px
+        }
+
+        @media (max-width:860px) {
+            .layout {
+                grid-template-columns: 1fr
+            }
+
+            .sidebar {
+                position: static;
+                height: auto;
+                border-right: none;
+                border-bottom: 1px solid var(--line)
+            }
+
+            .sidebar nav a {
+                display: inline-block
+            }
+        }
+
+        header.title {
+            margin-bottom: 8px
+        }
+
+        h1 {
+            font-size: 32px;
+            line-height: 1.2;
+            margin: 0 0 6px;
+            letter-spacing: -.02em
+        }
+
+        .sub {
+            color: var(--muted);
+            font-size: 16px;
+            margin: 0 0 4px
+        }
+
+        .meta {
+            color: var(--muted);
+            font-size: 13px;
+            margin-top: 10px
+        }
+
+        h2 {
+            font-size: 23px;
+            margin: 52px 0 10px;
+            letter-spacing: -.01em;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--line)
+        }
+
+        h3 {
+            font-size: 18px;
+            margin: 30px 0 8px
+        }
+
+        h4 {
+            font-size: 15px;
+            margin: 20px 0 6px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .06em
+        }
+
+        p {
+            margin: 10px 0
+        }
+
+        ul,
+        ol {
+            margin: 10px 0;
+            padding-left: 24px
+        }
+
+        li {
+            margin: 5px 0
+        }
+
+        code {
+            background: var(--code);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font: 13.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace
+        }
+
+        pre {
+            background: #1e1f26;
+            color: #e6e6ee;
+            padding: 16px 18px;
+            border-radius: 10px;
+            overflow-x: auto;
+            font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace
+        }
+
+        pre .c {
+            color: #8b94a8
+        }
+
+        pre .k {
+            color: #c0a0f0
+        }
+
+        pre .s {
+            color: #9ad08c
+        }
+
+        a {
+            color: var(--accent);
+            text-decoration: none
+        }
+
+        a:hover {
+            text-decoration: underline
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 22px 24px;
+            margin: 18px 0;
+            box-shadow: 0 1px 2px rgba(20, 20, 40, .03)
+        }
+
+        .lead {
+            font-size: 17px;
+            color: #33333c
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 14px 0;
+            font-size: 14.5px
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 9px 12px;
+            border-bottom: 1px solid var(--line);
+            vertical-align: top
+        }
+
+        th {
+            background: #f6f6fa;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+            color: var(--muted)
+        }
+
+        td.pro {
+            color: var(--good)
+        }
+
+        td.con {
+            color: var(--bad)
+        }
+
+        .tag {
+            display: inline-block;
+            font-size: 11.5px;
+            font-weight: 700;
+            padding: 2px 9px;
+            border-radius: 999px;
+            letter-spacing: .03em;
+            vertical-align: middle
+        }
+
+        .tag.done {
+            background: var(--good-bg);
+            color: var(--good)
+        }
+
+        .tag.later {
+            background: var(--warn-bg);
+            color: var(--warn)
+        }
+
+        .tag.bug {
+            background: var(--bad-bg);
+            color: var(--bad)
+        }
+
+        .tag.prop {
+            background: var(--rec-bg);
+            color: var(--rec)
+        }
+
+        .callout {
+            border-left: 4px solid var(--accent);
+            background: var(--accent-soft);
+            padding: 14px 18px;
+            border-radius: 0 10px 10px 0;
+            margin: 16px 0
+        }
+
+        .callout.rec {
+            border-color: var(--rec);
+            background: var(--rec-bg)
+        }
+
+        .callout.warn {
+            border-color: var(--warn);
+            background: var(--warn-bg)
+        }
+
+        .callout h4 {
+            margin: 0 0 6px;
+            color: inherit
+        }
+
+        .callout p {
+            margin: 4px 0
+        }
+
+        .diagram {
+            background: #1e1f26;
+            color: #dfe3ee;
+            border-radius: 12px;
+            padding: 20px 22px;
+            overflow-x: auto;
+            font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            white-space: pre;
+            margin: 18px 0
+        }
+
+        .legend {
+            font-size: 13px;
+            color: var(--muted);
+            margin-top: -6px
+        }
+
+        .toc {
+            columns: 2;
+            column-gap: 36px;
+            font-size: 14.5px
+        }
+
+        .toc a {
+            display: block;
+            padding: 3px 0;
+            color: var(--ink)
+        }
+
+        .toc a:hover {
+            color: var(--accent)
+        }
+
+        .kv {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 4px 16px;
+            font-size: 14.5px
+        }
+
+        .kv dt {
+            color: var(--muted)
+        }
+
+        .kv dd {
+            margin: 0
+        }
+
+        hr {
+            border: 0;
+            border-top: 1px solid var(--line);
+            margin: 40px 0
+        }
+
+        .small {
+            font-size: 13px;
+            color: var(--muted)
+        }
+
+        .grid2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px
+        }
+
+        .command-block {
+            position: relative;
+            margin: 12px 0 18px
+        }
+
+        .command-block pre {
+            margin: 0;
+            padding: 14px 112px 14px 18px;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere
+        }
+
+        .command-toolbar {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            z-index: 1
+        }
+
+        .copy-command {
+            border: 1px solid rgba(255, 255, 255, .15);
+            background: rgba(255, 255, 255, .08);
+            color: #eef1fc;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font: 12px/1.2 inherit;
+            cursor: pointer
+        }
+
+        .copy-command:hover {
+            border-color: rgba(255, 255, 255, .35);
+            background: rgba(255, 255, 255, .14);
+            color: #ffffff
+        }
+
+        .copy-command:focus-visible {
+            outline: 2px solid #9ad08c;
+            outline-offset: 2px
+        }
+
+        @media print {
+            .command-toolbar {
+                display: none
+            }
+        }
+
+        @media(max-width:720px) {
+
+            .toc,
+            .grid2 {
+                columns: 1;
+                grid-template-columns: 1fr
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="brand">benchkit<small>Reference</small></div>
+            <nav>
+                <a href="#overview">1. Package map</a>
+                <a href="#rationale">2. Design rationale</a>
+                <a href="#arch">3. Run architecture</a>
+                <a href="#stats">4. Statistics &amp; stores</a>
+                <a href="#events">5. Event stream</a>
+                <a href="#ticker">6. Ticker</a>
+                <a href="#ramp">7. Rate ramping</a>
+                <a href="#harness">8. Run harness</a>
+                <a href="#flags">9. Flag contract</a>
+                <a href="#trim">10. Read-time trimming</a>
+                <a href="#schema">11. Proto schema</a>
+                <a href="#file">12. Result file format</a>
+                <a href="#sweep">13. sweep</a>
+                <a href="#plot">14. Plotting</a>
+                <a href="#recipes">15. Sweep recipes</a>
+                <a href="#paper-plan">16. Paper experiment plan</a>
+                <a href="#tasks">17. Tasks &amp; roadmap</a>
+                <a href="benchkit-troubleshooting.html" class="cross">&#8627; Troubleshooting</a>
+            </nav>
+        </aside>
+        <div class="wrap">
+
+            <header class="title">
+                <h1>benchkit — Reference</h1>
+            <p class="sub">Documentation for the <code>benchkit</code> benchmarking toolkit: run harness, statistics,
+                time-series events, rate ramping, the result schema, and the <code>sweep</code> / <code>plot</code>
+                tooling that consumes it.</p>
+            <p class="meta">Documentation · gorums repository · <code>doc/benchkit.html</code></p>
+        </header>
+
+        <div class="panel">
+            <p class="lead" style="margin-top:0"><code>benchkit</code> is the benchmarking toolkit for gorums.
+                It provides the measurement control plane (<code>Control</code> service), the run harness, the
+                statistics library, the result schema, and the time-series event stream. <code>benchmark/</code>
+                defines the concrete gorums benchmarks on top of it; <code>cmd/benchmark</code> is the node binary;
+                <code>cmd/sweep</code> orchestrates multi-configuration runs across a cluster and, with
+                <code>-plot</code>, turns the results into CSV tables and a Typst report.</p>
+            <p><strong>Module layout.</strong> All of the above lives in <code>benchkit/</code>, a second Go module in
+                the gorums repository with module path <code>github.com/relab/gorums/benchkit</code>. It imports
+                gorums; gorums never imports it, which keeps the root <code>go.mod</code> free of benchmarking and
+                SSH orchestration dependencies. Paths on this page are relative to that module root, so run
+                <code>make</code> targets from the repository root and <code>sweep</code> itself from
+                <code>benchkit/</code>.</p>
+        </div>
+
+        <h2 id="overview">1. Package map</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:30%">Location</th>
+                    <th>Responsibility</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>.</code> (package <code>benchkit</code>)</td>
+                    <td>Control service, run harness, statistics, sample stores, ticker, event buffer, pacer,
+                        clock-sync, result schema, report I/O, time-series CSV rendering.</td>
+                </tr>
+                <tr>
+                    <td><code>proto/</code></td>
+                    <td>The <code>.proto</code> sources: <code>proto/benchkit/{benchkit,control}.proto</code> and
+                        <code>proto/benchmark/benchmark.proto</code>. Generated with <code>-I proto</code>, so the
+                        import paths protoc records stay <code>benchkit/benchkit.proto</code> and
+                        <code>benchmark/benchmark.proto</code>, and generated code is written back beside the
+                        packages that own it.</td>
+                </tr>
+                <tr>
+                    <td><code>benchmark/</code></td>
+                    <td>The concrete gorums benchmarks (QuorumCall, AsyncQuorumCall, SlowServer, Multicast, and the
+                        symmetric peer-to-peer variants) plus their server and symmetric-topology setup.</td>
+                </tr>
+                <tr>
+                    <td><code>cmd/benchmark/</code></td>
+                    <td>Node binary. Registers the standard flags, builds the targets, runs the selected benchmarks, and
+                        writes a result file. Built with <code>make benchmark</code>.</td>
+                </tr>
+                <tr>
+                    <td><code>cmd/sweep/</code></td>
+                    <td>Cartesian sweep orchestrator: builds/deploys the binary over SSH, launches nodes, collects
+                        result files, prints an aggregated summary table, and — with <code>-plot</code> — generates
+                        the Typst report (see <a href="#plot">§14</a>). Imports <code>benchkit</code> for the result
+                        schema, the read-time trim, the latency statistics, and the time-series renderer. Built with
+                        <code>make sweep</code>.</td>
+                </tr>
+                <tr>
+                    <td><code>cmd/sweep/typst/gorumsplot.typ</code></td>
+                    <td>The cetz-plot helper library, embedded in the <code>sweep</code> binary and copied into each
+                        report directory beside the generated <code>report.typ</code>. See <a href="#plot">§14</a>.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <hr>
+
+        <h2 id="rationale">2. Design rationale</h2>
+        <p class="lead">Why benchkit is shaped the way it is.</p>
+
+        <p><code>sweep</code> touches a benchmark binary through exactly two protocol-neutral contracts: the
+            <strong>CLI flag contract</strong> it launches a node with (<a href="#flags">&sect;9</a>) and the
+            <strong>result-file format</strong> it reads back (<a href="#file">&sect;12</a>). It launches processes
+            over SSH, waits for them to exit, downloads result files, and prints an aggregated table &mdash;
+            indifferent to whether the workload is a gorums quorum call, a PBFT commit, or a Paxos round.
+            Stabilizing those two contracts is what lets sweep drive any protocol without importing its code.</p>
+
+        <p>Behind the binary, the measurement control plane is split from the workload. The <code>Control</code>
+            service (<code>Start</code> / <code>Stop</code> / <code>ClockSync</code>) is workload-agnostic and lives
+            in the neutral <code>benchkit</code> package alongside the statistics library, the result schema, the run
+            harness, the pacer, and clock-offset correction. A protocol author writes only their workload
+            <code>.proto</code> and a workload callback for <code>harness.Run</code>, and reuses everything else
+            unchanged. <code>benchmark/</code> is itself just the gorums consumer of that neutral surface.</p>
+
+        <div class="grid2">
+          <div class="panel">
+            <h4 style="margin-top:0">Reusable across protocols</h4>
+            <ul style="margin-bottom:0">
+              <li>The <code>Control</code> service + server</li>
+              <li><code>Stats</code>, offset correction, aggregation</li>
+              <li>The result schema (canonical)</li>
+              <li>The run harness (flags + lifecycle + output)</li>
+              <li>The pacer / rate limiting and the event stream</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h4 style="margin-top:0">Protocol-specific</h4>
+            <ul style="margin-bottom:0">
+              <li>The workload <code>.proto</code> &amp; RPCs</li>
+              <li>The workload callback registered with the harness</li>
+              <li>The consensus / replication machinery itself</li>
+            </ul>
+          </div>
+        </div>
+
+        <p>Several observability capabilities are modelled on the <code>relab/hotstuff</code> harness &mdash; the
+            per-interval time series, the typed event stream, bounded-memory (hdr) statistics, and in-run rate
+            ramping (<a href="#events">&sect;5</a>, <a href="#stats">&sect;4</a>, <a href="#ramp">&sect;7</a>). The
+            out-of-band "live controller" orchestration model was considered and deliberately not adopted: the
+            fire-and-collect model keeps sweep language-neutral and simple, which is the property that lets it drive
+            foreign binaries at all.</p>
+
+        <hr>
+
+        <h2 id="arch">3. Run architecture</h2>
+
+        <p>A benchmark binary runs <em>one continuous measurement</em> from <code>t=0</code> to <code>t=end</code> and
+            records everything it observes. A single run produces two data products from the same
+            <code>Stats.AddLatency</code> call, so workload handlers need no special wiring:</p>
+
+        <div class="grid2">
+            <div class="panel">
+                <h4 style="margin-top:0">Aggregate store</h4>
+                <ul style="margin-bottom:0">
+                    <li>Covers the entire run; every sample is retained in <code>StatsMode_EXACT</code> (the
+                        default).</li>
+                    <li>Backing store is selectable: <code>exact</code> samples or a bounded-memory <code>hdr</code>
+                        histogram (<a href="#stats">§4</a>).</li>
+                    <li>Becomes the flat measured fields of <code>Result</code> (throughput, latencies, and the
+                        statistics derived from them).</li>
+                </ul>
+            </div>
+            <div class="panel">
+                <h4 style="margin-top:0">Interval event stream</h4>
+                <ul style="margin-bottom:0">
+                    <li>Also covers the whole run, sampled at the ticker interval (<a href="#ticker">§6</a>).</li>
+                    <li>Each tick emits a <code>ThroughputInterval</code> and a <code>LatencyInterval</code>
+                        (per-interval Welford, O(1)), time-stamped by <code>offset</code>.</li>
+                    <li>Events accumulate in memory and are attached to the per-benchmark <code>Result</code> as a
+                        repeated <code>events</code> field — no separate file.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="diagram">  harness timeline (single continuous run)
+   ─────────────────────────────────────────────────────────────────────────
+  t=0                                                                    t=end
+   │                                                                       │
+   ├───────────────────── continuous measurement ──────────────────────────┤
+   │                                                                       │
+   │  aggregate store : ▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪    │
+   │  interval stream : ▪──▪──▪──▪──▪──▪──▪──▪──▪──▪──▪──▪──▪──▪──▪──▪──▪   │
+   │  events          : START ─ Tput/Lat(k) ─ … ─ (RATE_STEP) ─ … ─ STOP   │
+   ─────────────────────────────────────────────────────────────────────────
+        </div>
+        <p class="legend">Figure 1 — One continuous run. Both the aggregate store and the interval stream cover the
+            whole run from t=0. Presentation tools may drop a startup window at read time (<a href="#trim">§10</a>).</p>
+
+        <p>Integration point: <code>Stats.AddLatency</code> feeds both the aggregate store and the per-interval Welford
+            accumulator in one lock acquisition. <code>Stats.TickInterval</code> atomically snapshots and resets the
+            per-interval state plus a cumulative op-count. The <code>Ticker</code> goroutine calls
+            <code>TickInterval</code> on each tick and appends events to an in-memory <code>EventBuffer</code>; on
+            completion the harness attaches the buffer to the <code>Result</code> via <code>Result.SetEvents</code>.</p>
+
+        <hr>
+
+        <h2 id="stats">4. Statistics &amp; sample stores</h2>
+
+        <p><code>Stats</code> serializes all access under a mutex. It holds an aggregate <code>SampleStore</code> plus a
+            separate per-interval Welford accumulator that is always O(1) and independent of the chosen store mode.
+            All derived statistics are computed by the <code>Result</code> layer (<code>stats.go</code>): from the raw
+            <code>Samples()</code> in exact mode, and from the persisted histogram in hdr mode.</p>
+
+        <h3>The <code>SampleStore</code> interface — <code>benchkit/store.go</code></h3>
+        <pre>
+<span class="c">// SampleStore accumulates latency samples (nanoseconds) for one run.
+// Implementations are not thread-safe; callers serialize access.
+// Derived statistics are computed by the Result layer: from Samples()
+// in exact mode, from the persisted histogram in hdr mode.</span>
+<span class="k">type</span> SampleStore <span class="k">interface</span> {
+    Add(ns int64)
+    Count() uint64
+    Samples() []int64              <span class="c">// raw samples; nil in hdr mode</span>
+    Reset()
+}</pre>
+
+        <h3>Stats modes</h3>
+        <p>The aggregate store mode is the proto <code>StatsMode</code> enum (<a href="#schema">§11</a>) directly —
+            there is no separate Go-only store-mode type.</p>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:24%">Mode (<code>StatsMode</code>)</th>
+                    <th>Memory</th>
+                    <th>Provides</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>StatsMode_EXACT</code> (default)</td>
+                    <td>O(n) — 8 B/op</td>
+                    <td>Exact percentiles and the full distribution (raw samples on the <code>Result</code>).</td>
+                </tr>
+                <tr>
+                    <td><code>StatsMode_HDR</code></td>
+                    <td>O(1) — ~216 KiB</td>
+                    <td>Approximate percentiles, mean, and stddev from a log-linear histogram
+                        (<code>benchkit.Histogram</code>, three significant figures ≈ 0.1% relative error); no raw
+                        samples (<code>Samples()</code> is nil). The occupied buckets are persisted on the
+                        <code>Result</code> as a <code>LatencyHistogram</code> (<a href="#schema">§11</a>).</td>
+                </tr>
+            </tbody>
+        </table>
+        <p>The hdr store is an in-house implementation of the HdrHistogram design (<code>benchkit/hdr.go</code>):
+            bucket widths grow with the value's magnitude, resolving every sample to the configured significant
+            figures in O(1) record time and constant memory. Its API mirrors the common HdrHistogram bindings
+            (<code>RecordValue</code>, <code>ValueAtQuantile</code>, <code>Mean</code>, <code>StdDev</code>,
+            <code>TotalCount</code>, <code>Min</code>, <code>Max</code>), so switching to a library implementation
+            later is mechanical. The layout is fixed at nanosecond resolution up to a one-minute ceiling (clamped) —
+            a per-op latency near the ceiling would already have hit the <code>benchSlack</code> timeout.</p>
+        <p><code>newSampleStore(mode)</code> returns an <code>hdrStore</code> for <code>StatsMode_HDR</code> and an
+            <code>exactStore</code> otherwise. The <code>&amp;Stats{}</code> zero value lazily initializes to
+            <code>StatsMode_EXACT</code> on first use, so direct <code>&amp;Stats{}</code> call sites get exact
+            behavior. Only the client-side store is mode-selectable: the <code>Control</code> server's
+            <code>Stats</code> is always exact, so server-measured latency samples are unaffected by
+            <code>-stats-mode</code>.</p>
+
+        <h3>Construction and the interval accumulator</h3>
+        <pre>
+<span class="k">func</span> NewStats(mode StatsMode) *Stats
+
+<span class="k">func</span> (s *Stats) AddLatency(l time.Duration) {
+    ns := l.Nanoseconds()
+    s.mu.Lock()
+    s.sampleStore().Add(ns)   <span class="c">// aggregate store (exact / hdr)</span>
+    s.intervalUpdate(ns)      <span class="c">// per-interval Welford (always O(1))</span>
+    s.mu.Unlock()
+}
+
+<span class="c">// TickInterval atomically snapshots and resets the per-interval Welford
+// accumulator and the op-delta counter. Called by the Ticker each tick.</span>
+<span class="k">func</span> (s *Stats) TickInterval() (mean, stddev float64, count, opDelta uint64)</pre>
+        <p>Other <code>Stats</code> methods: <code>Start</code>/<code>End</code> bracket the measurement window;
+            <code>AddOp</code> increments the op counter without recording latency (server-measured sends);
+            <code>AddLatencyBySender</code> buckets samples per sender for clock-offset correction;
+            <code>Ops</code> returns the operations recorded since the last <code>Clear</code>;
+            <code>GetResult</code> / <code>GetResultCorrected</code> build a <code>Result</code> from the accumulated
+            state.</p>
+
+        <hr>
+
+        <h2 id="events">5. Event stream</h2>
+
+        <p>The interval event stream is embedded in the result: each per-benchmark <code>Result</code> carries a
+            repeated <code>events</code> field, and the per-node <code>Report</code> container (written once per node)
+            holds them all. Because the event stream shares the aggregate side's per-benchmark, write-once lifecycle, a
+            binary whose <code>-benchmarks</code> regexp matches several benchmarks keeps each benchmark's event data
+            separate.</p>
+
+        <h3>Event messages — <code>benchkit/benchkit.proto</code></h3>
+        <pre>
+<span class="c">// ThroughputInterval: ops-completed count and elapsed time for one tick.</span>
+<span class="k">message</span> ThroughputInterval {
+  uint64 ops      = 1;  <span class="c">// operations completed during this interval</span>
+  int64  duration = 2;  <span class="c">// actual elapsed interval, nanoseconds</span>
+}
+
+<span class="c">// LatencyInterval: the Welford accumulator state for one tick.</span>
+<span class="k">message</span> LatencyInterval {
+  double mean   = 1;  <span class="c">// mean latency, nanoseconds</span>
+  double stddev = 2;  <span class="c">// sample stddev, nanoseconds</span>
+  uint64 count  = 3;  <span class="c">// samples in this interval</span>
+}
+
+<span class="c">// PhaseMarker: a lifecycle transition.</span>
+<span class="k">message</span> PhaseMarker {
+  <span class="k">enum</span> Phase {
+    START     = 0;  <span class="c">// t=0; rate carries the initial target ops/s (default)</span>
+    RATE_STEP = 1;  <span class="c">// rate ramp step; rate carries the new target</span>
+    STOP      = 2;  <span class="c">// run finished</span>
+  }
+  Phase phase = 1;
+  int64 rate  = 2;  <span class="c">// target ops/s at START and RATE_STEP; 0 = unlimited</span>
+}
+
+<span class="c">// Event: one time-stamped entry. Field 15 is reserved for a
+// google.protobuf.Any escape hatch (protocol-specific events).</span>
+<span class="k">message</span> Event {
+  int64 offset = 1;  <span class="c">// nanoseconds since START (monotonic)</span>
+  <span class="k">oneof</span> payload {
+    ThroughputInterval throughput = 2;
+    LatencyInterval    latency    = 3;
+    PhaseMarker        phase      = 4;
+    <span class="c">// 15 reserved for google.protobuf.Any extension</span>
+  }
+}</pre>
+        <p>The <code>oneof</code> over the three well-known event types keeps the binary encoding compact and lets
+            consumers type-switch exhaustively. Field 15 is reserved (in a comment) for a
+            <code>google.protobuf.Any</code> escape hatch should a protocol author need to emit a custom event without
+            changing the shared schema.</p>
+
+        <h3>The event buffer — <code>benchkit/event_buffer.go</code></h3>
+        <p>The buffer is a nil-safe in-memory accumulator: all methods are no-ops on a nil receiver. The
+            <code>Ticker</code> owns the buffer (<a href="#ticker">§6</a>) and is its only emitter; the type and its
+            emit methods are unexported (consumers that need synthetic event streams construct <code>Event</code>
+            values directly via the generated builders, as the timeseries tests do):</p>
+        <pre>
+<span class="k">func</span> newEventBuffer() *eventBuffer
+<span class="k">func</span> (b *eventBuffer) emitPhase(now time.Time, phase PhaseMarker_Phase, rate int64)
+<span class="k">func</span> (b *eventBuffer) emitThroughput(now time.Time, ops uint64, duration time.Duration)
+<span class="k">func</span> (b *eventBuffer) emitLatency(now time.Time, mean, stddev float64, count uint64)
+<span class="k">func</span> (b *eventBuffer) Events() []*Event   <span class="c">// nil on a nil receiver</span></pre>
+        <p>The monotonic-offset base is set by the <code>START</code> phase marker (or the first emit); negative
+            offsets clamp to zero.</p>
+
+        <hr>
+
+        <h2 id="ticker">6. Ticker</h2>
+
+        <p>The <code>Ticker</code> (<code>benchkit/ticker.go</code>) drives the interval stream. It ticks at the
+            configured interval, snapshots the per-interval Welford state from <code>Stats</code>, emits the interval
+            events to the <code>EventBuffer</code> it owns, and accumulates a second-level Welford over per-interval
+            throughput for a whole-run coefficient of variation.</p>
+        <pre>
+<span class="c">// NewTicker allocates an EventBuffer when interval > 0; interval == 0
+// disables event collection entirely (no buffer, no goroutine).</span>
+<span class="k">func</span> NewTicker(interval time.Duration, stats *Stats) *Ticker
+
+<span class="c">// Start emits START (carrying the initial rate) and spawns the goroutine
+// when interval > 0.</span>
+<span class="k">func</span> (t *Ticker) Start(rate int64)
+
+<span class="c">// RateStep emits RATE_STEP with the new offered load (rate ramping, §7).</span>
+<span class="k">func</span> (t *Ticker) RateStep(rate int64)
+
+<span class="c">// Stop stops the goroutine, emits STOP, and returns the whole-run
+// throughput CV (0 if fewer than two intervals).</span>
+<span class="k">func</span> (t *Ticker) Stop() (throughputCV float64)
+
+<span class="c">// Events returns the buffered events for Result.SetEvents; nil when
+// interval == 0.</span>
+<span class="k">func</span> (t *Ticker) Events() []*Event</pre>
+        <p>The lifecycle is <code>Start → (RateStep)* → Stop</code>. On each tick the goroutine snapshots
+            <code>TickInterval</code>, computes interval throughput = <code>opDelta / elapsed</code>, emits a
+            <code>ThroughputInterval</code>, and emits a <code>LatencyInterval</code> only when the interval recorded at
+            least one sample. On shutdown the goroutine flushes the partial interval between the last tick and
+            <code>Stop</code> (an empty tail emits nothing), so the summed interval ops always equal the recorded ops;
+            the tail interval can be much shorter than the tick interval, so consumers derive per-interval throughput
+            from the recorded <code>duration</code>, never the configured interval. The whole-run CV returned by
+            <code>Stop</code> is available for logging; the persisted time series lets consumers compute a CV over any
+            window they choose (<a href="#trim">§10</a>).</p>
+
+        <hr>
+
+        <h2 id="ramp">7. Rate ramping</h2>
+
+        <p>The harness can step the offered load within a single run, tracing a throughput/latency saturation curve in
+            one execution. Combined with the interval time series, each rate step becomes a labelled stretch of
+            intervals that <code>plot</code>'s <code>SaturationCurvePlotter</code> reads.</p>
+
+        <p>Ramping is controlled by two <code>Options</code> fields and is active only when both are set:</p>
+        <pre>
+<span class="k">type</span> Options <span class="k">struct</span> {
+    <span class="c">// … shared fields …</span>
+    RateStep    int  <span class="c">// ops/s added per step; 0 = disabled</span>
+    RateStepMax int  <span class="c">// ceiling ops/s; 0 = disabled</span>
+}</pre>
+        <p>The step duration is <em>derived</em>, not configured: the ramp has one offered-load level per
+            <code>RateStep</code> increment from the start rate up to and including <code>RateStepMax</code>
+            (a partial final increment still counts as a level), and <code>Duration</code> is divided evenly across
+            the levels. A ramp therefore always spans exactly the configured duration and ends exactly at the
+            configured ceiling — there is no way to configure a ramp that idles at the ceiling or truncates before
+            reaching it.</p>
+        <p><code>runMeasure</code> (in <code>harness.go</code>) implements the loop. When ramping is disabled it runs
+            the whole <code>Duration</code> at <code>opts.Rate</code> via a single <code>RunPhase</code>. When enabled
+            it runs one phase per level, calling <code>ticker.RateStep(newRate)</code> before each transition. The
+            ramp starts at <code>Rate</code> when set, and at <code>RateStep</code> when <code>Rate</code> is unset,
+            so the offered load always climbs from the first step; the START marker carries the actual starting rate.
+            The aggregate <code>Result</code> spans the full run across all steps; per-step detail lives in the event
+            stream.</p>
+
+        <hr>
+
+        <h2 id="harness">8. Run harness</h2>
+
+        <p>A benchmark is a named, runnable <code>Bench</code>. The harness <code>Run</code> stamps the shared run
+            metadata (<code>RunConfig</code>) onto each returned <code>Result</code>, so a <code>Bench.Run</code>
+            closure only fills in the measured fields.</p>
+        <pre>
+<span class="k">type</span> Bench <span class="k">struct</span> {
+    Name        string
+    Description string
+    Run         <span class="k">func</span>(Options) (*Result, error)
+}
+
+<span class="c">// Run selects benches matching sel, runs each with opts, stamps RunConfig
+// metadata, and returns results sorted by benchmark name.</span>
+<span class="k">func</span> Run(sel *regexp.Regexp, opts Options, benches []Bench) ([]*Result, error)</pre>
+
+        <h3>The <code>Measurement</code> lifecycle helper</h3>
+        <p>Every runner wires up observability through one helper
+            (<code>benchkit/measurement.go</code>), so all of them honor <code>-stats-mode</code> (the aggregate store)
+            and <code>-interval</code> (the event stream) identically:</p>
+        <pre>
+<span class="c">// StartMeasurement creates Stats + Ticker, emits START at opts.Rate, and
+// starts the clock. Record samples through the exported Stats field.</span>
+<span class="k">func</span> StartMeasurement(opts Options) *Measurement
+
+<span class="c">// Finish ends the run and returns the client-measured Result (built from
+// Stats) with the event stream attached.</span>
+<span class="k">func</span> (m *Measurement) Finish() *Result
+
+<span class="c">// Attach ends the run and attaches the event stream to a Result built
+// elsewhere (server-measured paths). The client Stats then carries only the
+// op count, via Stats.AddOp, for the throughput time-series.</span>
+<span class="k">func</span> (m *Measurement) Attach(result *Result)</pre>
+        <p><code>Finish</code> and <code>Attach</code> also record the run's <code>MeasurementMode</code>
+            (client-measured vs server-measured) on the result, so downstream consumers never infer it.</p>
+
+        <h3>Reusable lifecycles</h3>
+        <p>Two helpers build a <code>Bench.Run</code> closure for the common measurement shapes; both wrap a measurement
+            <em>core</em> that owns just the paced send window, leaving the control-plane lifecycle around it to the
+            helper. Both accept optional <code>LifecycleOption</code> hooks, and a hook error fails the run:
+            <code>WithQuiesce</code> registers a drain hook invoked after the measurement window closes and before
+            <code>Control.Stop</code> collects the server-side statistics, so in-flight operations are observed by
+            the boundary measurement; <code>WithVerify</code> registers a correctness check over the per-server
+            <code>Control.Stop</code> replies (nil in a local client-measured run, where there are no remote
+            replies).</p>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:26%">Helper</th>
+                    <th>Lifecycle</th>
+                    <th>Used by</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>ClientMeasured</code></td>
+                    <td><code>StartRemote</code> → <code>MeasureLatency</code> (paced client-timed window from t=0) →
+                        <code>StopRemote</code> to collect server memory stats.</td>
+                    <td>QuorumCall, SlowServer</td>
+                </tr>
+                <tr>
+                    <td><code>ServerMeasured</code></td>
+                    <td><code>Control.Start</code> → <code>MeasureOneWay</code> (paced one-way send window) wrapped in
+                        <code>RunOffsetCorrected</code> for clock correction → <code>Control.Stop</code> to collect
+                        server latency samples.</td>
+                    <td>Multicast</td>
+                </tr>
+            </tbody>
+        </table>
+        <p><code>ServerMeasured</code> reports client-side memory cost per <em>send</em>: it divides the client's
+            memory delta by the client's own op count (<code>Stats.Ops</code>), not by the aggregated server op count,
+            which for multicast would be N× the sends and under-report the per-send cost.</p>
+
+        <h3>Measurement cores</h3>
+        <p>The two cores are the reusable send window underneath the helpers. Each takes the run configuration(s) and a
+            per-configuration <code>setup</code>/send closure and drives <code>runMeasure</code> (so both inherit rate
+            ramping and the ticker stream); yielding one configuration drives the coordinator case and yielding one per
+            peer system drives the symmetric case in a single shared phase:</p>
+        <dl class="kv">
+            <dt><code>MeasureLatency</code></dt>
+            <dd>Client-measured core. Builds a timed doOp per configuration that records each op via
+                <code>Stats.AddLatency</code>, runs the window, and returns the <code>Finish</code>ed
+                <code>Result</code>. Backs <code>ClientMeasured</code> (one config) and
+                <code>runSymmetricQuorumCall</code> (one config per system).</dd>
+            <dt><code>MeasureOneWay</code></dt>
+            <dd>Server-measured core. Wraps each one-way send into a doOp that records a client op via
+                <code>Stats.AddOp</code> (the op count feeds only the throughput series; latency is measured server
+                side) and returns the <code>Measurement</code> plus a window closure for the caller to feed into
+                <code>RunOffsetCorrected</code> and then <code>Attach</code>. Backs <code>ServerMeasured</code> (one
+                send) and <code>runSymmetricMulticast</code> (one send per system).</dd>
+        </dl>
+
+        <h3>Shared primitives</h3>
+        <dl class="kv">
+            <dt><code>StartRemote</code> / <code>StopRemote</code></dt>
+            <dd>The client-measured control-plane lifecycle: <code>StartRemote</code> resets the remote servers'
+                counters and <code>StopRemote</code> collects their per-op memory stats into the result. Both are
+                no-ops in local mode, where in-process server memstats cannot be separated from the client. Shared by
+                <code>ClientMeasured</code> and <code>runAsyncQCBenchmark</code>.</dd>
+            <dt><code>RunPhase</code></dt>
+            <dd>Launches <code>numG</code> paced worker goroutines per <code>doOp</code> in one errgroup until
+                <code>endTime</code>; multiple <code>doOps</code> fan out concurrent send targets (the symmetric
+                runners).</dd>
+            <dt><code>RunOffsetCorrected</code></dt>
+            <dd>Estimate offsets → measure → estimate again → build per-node corrected results → aggregate. Generic over
+                the offset type so it serves both the coordinator and symmetric callers. The aggregation
+                (<code>AggregateServerResults</code>) sums ops and throughput and concatenates samples, but takes the
+                <em>maximum</em> <code>total_time</code> across servers — the measurement window's wall-clock time, not
+                a sum.</dd>
+            <dt><code>BenchContext</code></dt>
+            <dd>A context bounded by <code>Duration + benchSlack</code> so a stuck RPC fails rather than hangs.</dd>
+            <dt><code>CollectReplies</code></dt>
+            <dd>Drains a <code>ResponseSeq</code> into a per-node map, joining every node's error rather than dropping
+                failures.</dd>
+        </dl>
+
+        <p>The custom runner <code>runAsyncQCBenchmark</code> (in <code>benchmark/benchmark.go</code>) does not fit the
+            window cores — it fires from completion callbacks rather than a fixed worker pool, paced by a shared
+            <code>RatedGate</code> — but still uses <code>StartMeasurement</code> plus <code>StartRemote</code> /
+            <code>StopRemote</code>, so every runner honors <code>-interval</code> and <code>-stats-mode</code> and
+            emits a time-series stream. The symmetric runners are thin wrappers over the cores:
+            <code>runSymmetricQuorumCall</code> over <code>MeasureLatency</code> and
+            <code>runSymmetricMulticast</code> over <code>MeasureOneWay</code>.</p>
+
+        <hr>
+
+        <h2 id="flags">9. Flag contract</h2>
+
+        <p><code>StandardFlags</code> (<code>benchkit/flags.go</code>) is the CLI contract every sweep-driven benchmark
+            binary accepts; <code>RegisterFlags</code> registers it and <code>Options()</code> maps it to run
+            <code>Options</code>. A protocol binary adds its own flags to the same <code>FlagSet</code>.</p>
+        <table>
+            <thead>
+                <tr><th style="width:24%">Flag</th><th>Default</th><th>Meaning</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>-benchmarks</code></td><td><code>.*</code></td><td>Regexp selecting benchmarks to run. When invoked directly this is a full Go regexp (<code>QuorumCall</code> matches all variants as a substring; use <code>^QuorumCall$</code> for an exact match). <code>cmd/sweep</code> passes a comma-separated list of exact names and automatically anchors each as <code>^name$</code> — never use <code>|</code> as a separator there.</td></tr>
+                <tr><td><code>-self</code></td><td>—</td><td>This node's listen address; non-empty triggers distributed mode.</td></tr>
+                <tr><td><code>-remotes</code></td><td>—</td><td>Comma-separated peer addresses.</td></tr>
+                <tr><td><code>-workers</code></td><td><code>1</code></td><td>Concurrent worker goroutines.</td></tr>
+                <tr><td><code>-payload</code></td><td><code>0</code></td><td>Request/response payload size, bytes.</td></tr>
+                <tr><td><code>-rate</code></td><td><code>0</code></td><td>Target sends/s per node; 0 = unlimited (saturating).</td></tr>
+                <tr><td><code>-time</code></td><td><code>1s</code></td><td>Measurement duration.</td></tr>
+                <tr><td><code>-output</code></td><td>—</td><td>Result file path.</td></tr>
+                <tr><td><code>-verbose</code></td><td><code>false</code></td><td>Log connection progress.</td></tr>
+                <tr><td><code>-stats-mode</code></td><td><code>exact</code></td><td><code>exact</code> | <code>hdr</code> aggregate store.</td></tr>
+                <tr><td><code>-interval</code></td><td><code>500ms</code></td><td>Ticker interval; 0 disables events.</td></tr>
+                <tr><td><code>-rate-step</code></td><td><code>0</code></td><td>Rate increment per ramp step; 0 = disabled.</td></tr>
+                <tr><td><code>-rate-step-max</code></td><td><code>0</code></td><td>Ceiling ops/s for the ramp; 0 = disabled. Step duration is derived (<a href="#ramp">§7</a>).</td></tr>
+                <tr><td><code>-stream-mode</code></td><td><code>dual</code></td><td>Symmetric stream topology: <code>dual</code> (dedicated outbound streams) or <code>dedup</code> (reuse inbound peer streams via <code>WithStreamDedup</code>).</td></tr>
+                <tr><td><code>-call-timeout</code></td><td><code>0</code></td><td>Per-call deadline for quorum-call workloads; a call stalled behind an unresponsive peer fails with <code>DeadlineExceeded</code> instead of hanging until run end. 0 = disabled.</td></tr>
+                <tr><td><code>-cpuprofile</code></td><td>—</td><td>CPU profile output path; empty = disabled.</td></tr>
+                <tr><td><code>-memprofile</code></td><td>—</td><td>Heap profile output path; empty = disabled.</td></tr>
+                <tr><td><code>-trace</code></td><td>—</td><td>Execution trace output path; empty = disabled.</td></tr>
+                <tr><td><code>-fault-kill-after</code></td><td><code>0</code></td><td>Fault injection: exit cleanly after this duration; 0 = disabled.</td></tr>
+            </tbody>
+        </table>
+        <p>The profiling flags feed <code>benchkit.StartProfilers</code> (<code>benchkit/profiling.go</code>), so
+            every binary built on the contract can produce profiles without extra wiring.
+            <code>cmd/benchmark</code> adds gorums-specific extras on top of the contract: <code>-config-size</code>,
+            <code>-quorum-size</code>, <code>-max-async</code>, <code>-send-buffer</code>/<code>-recv-buffer</code>,
+            <code>-server</code>, <code>-server-stats</code>, <code>-list</code>, <code>-label</code>, and
+            <code>-compare</code>.</p>
+
+        <h3>How the flags interact</h3>
+        <div class="callout">
+            <h4><code>-workers</code> × <code>-rate</code></h4>
+            <p><code>-workers</code> caps concurrency (the number of in-flight operations); <code>-rate</code> sets the
+                offered load. With <code>-rate 0</code> the run is <em>closed-loop</em>: every worker fires its next op
+                as soon as the previous one completes, so throughput ≈ workers / latency and the system saturates. With
+                <code>-rate &gt; 0</code> the run is <em>open-loop</em>: the rate is split equally across the workers,
+                each pacing its sends on an absolute schedule (<code>Pacer</code>), staggered so sends do not burst.</p>
+            <p>The two are coupled through latency: sustaining rate <code>R</code> with per-op latency <code>L</code>
+                requires roughly <code>workers ≥ R × L</code> in-flight slots. If workers are too few, the pacers fall
+                behind their schedules and the run degrades to closed-loop saturation while the START marker still
+                claims the offered rate. The harness detects this: a paced run that attempts fewer than 95% of its
+                scheduled sends prints a warning on stderr naming the worker-sizing fix. Size <code>-workers</code>
+                for the worst-case latency of the highest rate (including the top of a ramp).</p>
+        </div>
+        <div class="callout">
+            <h4><code>-stats-mode</code> × <code>-interval</code></h4>
+            <p>The two are independent recorders of the same samples: <code>-stats-mode</code> picks the aggregate
+                store for the whole run, <code>-interval</code> controls the time-resolved event stream. Every mode is
+                self-sufficient — an hdr run carries its whole-run distribution in the histogram even with
+                <code>-interval 0</code> — so the flags compose freely. The only coupling is at read time: hdr runs
+                have no raw samples, so <em>trimmed</em> statistics come from the interval events
+                (<a href="#trim">§10</a>); without events an hdr run reports whole-run numbers only.</p>
+        </div>
+        <p><code>-fault-kill-after</code> arms <code>benchkit.ArmFaultInjection</code>, which schedules a clean
+            <code>os.Exit(0)</code> via <code>time.AfterFunc</code> — a crash-stop fault, not an error. Under sweep,
+            the dead node's missing result file is logged as a warning and the summary reports the surviving nodes; to
+            kill only a subset of nodes, run the doomed node(s) manually or pass the flag via
+            <code>-extra-args</code> (which applies to every node).</p>
+
+        <hr>
+
+        <h2 id="trim">10. Read-time trimming</h2>
+
+        <p>The binary records the whole run; consumers may compute statistics over a trimmed view that excludes the
+            startup transient. The mechanism is an <strong>index map from the event stream</strong>: the raw latency
+            samples are not individually time-stamped, but the event stream is, so a time threshold maps to a
+            sample-index cut via the cumulative per-interval op counts.</p>
+
+        <p>A consumer chooses a trim threshold <code>T</code> (e.g. <code>-trim 1s</code>; default <code>0</code> = no
+            trim), walks the events summing <code>ThroughputInterval.ops</code> for intervals with
+            <code>offset &lt; T</code>, and uses that sum as the sample-index cut <code>k</code>. Summary statistics are
+            recomputed over <code>latencies[k:]</code> and the time-series plots drop intervals before <code>T</code>.
+            The mechanism is exported as <code>benchkit.Summarize(r *Result, trim time.Duration) Summary</code>
+            (<code>benchkit/summary.go</code>), which every consumer calls, <code>sweep</code> included.</p>
+
+        <div class="callout">
+            <h4>Validity by measurement style</h4>
+            <p><strong>Client-measured</strong> benchmarks call <code>AddLatency</code> exactly once per completed op,
+                in completion order, so the sample index equals the cumulative op count and the cut is exact.
+                <strong>Server-measured</strong> benchmarks increment the op counter via <code>AddOp</code> while
+                latency samples arrive server-side and are clock-corrected afterwards; ops and samples are not 1:1, so
+                the index map does not apply and these runs trim at interval granularity only (mean/stddev/throughput
+                from the event stream; whole-run percentiles). In <code>hdr</code> mode there are no raw samples and
+                the histogram has no time dimension, so throughput trims at interval granularity while the
+                distribution stays whole-run.</p>
+            <p><code>Summarize</code> reads <code>RunConfig.measurement_mode</code> and <code>stats_mode</code>
+                (<a href="#schema">§11</a>) and applies the index-map cut only when the run is
+                <code>CLIENT_MEASURED</code> and <code>EXACT</code>.</p>
+        </div>
+        <p>The throughput coefficient of variation is derived at read time over the trimmed interval throughputs;
+            there is no <code>throughput_cv</code> field in the schema, so the CV in a summary row is always consistent
+            with the trim window used for the other columns of that row.</p>
+
+        <hr>
+
+        <h2 id="schema">11. Proto schema</h2>
+
+        <p>The schema lives in a single file, <code>benchkit/benchkit.proto</code>. Configuration metadata is grouped
+            in a <code>RunConfig</code> message; the measured fields stay flat on <code>Result</code>; the event stream
+            rides inside <code>Result</code>. Duration/offset fields carry the unit in the comment, not a
+            <code>_ns</code> suffix.</p>
+
+        <pre>
+<span class="k">edition</span> = <span class="s">"2024"</span>;
+<span class="k">package</span> benchkit;
+<span class="k">option</span> features.field_presence = IMPLICIT;
+<span class="k">option</span> go_package = <span class="s">"github.com/relab/gorums/benchkit"</span>;
+
+<span class="c">// MeasurementMode: who timed each op (decides index-map trim validity).
+// StatsMode: which aggregate store (exact has raw samples; hdr a histogram).
+// Zero value is a meaningful default (client-measured, exact); no UNSPECIFIED.</span>
+<span class="k">enum</span> MeasurementMode { CLIENT_MEASURED = 0; SERVER_MEASURED = 1; }
+<span class="k">enum</span> StatsMode       { EXACT = 0; HDR = 2; <span class="k">reserved</span> 1; }  <span class="c">// 1 was WELFORD; removed</span>
+
+<span class="c">// RunConfig: configuration metadata for one run.</span>
+<span class="k">message</span> RunConfig {
+  string name      = 1;  <span class="c">// benchmark name, e.g. "QuorumCall"</span>
+  int32  num_nodes = 2;  <span class="c">// nodes in the configuration</span>
+  string mode      = 3;  <span class="c">// "local" or "remote"</span>
+  int64  duration  = 4;  <span class="c">// configured run duration, nanoseconds</span>
+  int32  workers   = 5;  <span class="c">// concurrent worker goroutines</span>
+  int32  payload   = 6;  <span class="c">// payload size, bytes</span>
+  int64  rate      = 7;  <span class="c">// target ops/s per node; 0 = unlimited</span>
+  int64  interval  = 8;  <span class="c">// ticker interval, nanoseconds; 0 = events disabled</span>
+  MeasurementMode measurement_mode = 9;   <span class="c">// client- vs server-measured</span>
+  StatsMode       stats_mode       = 10;  <span class="c">// exact vs hdr aggregate store</span>
+  string          stream_mode      = 11;  <span class="c">// "dual" or "dedup" stream topology</span>
+  int32 quorum_size   = 12;  <span class="c">// replies awaited per quorum call; 0 if N/A</span>
+  int32 max_async     = 13;  <span class="c">// max in-flight async calls; 0 if N/A</span>
+  int64 rate_step     = 14;  <span class="c">// ramp increment, ops/s; 0 = no ramp</span>
+  int64 rate_step_max = 15;  <span class="c">// ramp ceiling, ops/s; 0 = no ramp</span>
+  int64 call_timeout  = 16;  <span class="c">// per-call deadline, nanoseconds; 0 = disabled</span>
+}
+
+<span class="c">// MemoryStat: per-server memory statistics.</span>
+<span class="k">message</span> MemoryStat { uint64 allocs = 1; uint64 memory = 2; }
+
+<span class="c">// Result: one benchmark's complete output for one node.</span>
+<span class="k">message</span> Result {
+  RunConfig config = 1;  <span class="c">// how the run was configured</span>
+
+  <span class="c">// Aggregate measured results over the whole run.</span>
+  uint64 total_ops     = 2;
+  int64  total_time    = 3;  <span class="c">// elapsed wall time, nanoseconds</span>
+  double throughput    = 4;  <span class="c">// ops/s over the whole run</span>
+  uint64 allocs_per_op = 5;
+  uint64 mem_per_op    = 6;  <span class="c">// bytes per operation</span>
+  <span class="k">repeated</span> MemoryStat server_stats = 7;
+
+  <span class="c">// Raw per-op latency samples, nanoseconds; nil in hdr mode.
+  // Signed: clock-offset correction can yield negatives.</span>
+  <span class="k">repeated</span> int64 latencies = 8;
+
+  <span class="c">// Time series covering the whole run; empty when interval = 0.</span>
+  <span class="k">repeated</span> Event events = 9;
+
+  <span class="c">// Latency distribution for StatsMode_HDR runs; nil otherwise.</span>
+  LatencyHistogram histogram = 10;
+
+  <span class="c">// Field 11 held the retired StreamStats message (stream-topology
+  // statistics); reserved so older result files never fail to decode.</span>
+  <span class="k">reserved</span> 11;
+
+  <span class="c">// Ops that returned an error and were counted but not aborted on
+  // (client-measured runs). Total attempts = total_ops + failed_ops.</span>
+  uint64 failed_ops = 12;
+}
+
+<span class="c">// LatencyHistogram: the bounded-memory distribution of an hdr run, as
+// ascending weighted (value, count) pairs — value is the bucket's
+// median-equivalent latency in nanoseconds. Consumers treat the pairs as
+// a weighted sample set: quantiles, mean, and stddev are computed over
+// them without knowing the producer's bucket layout.</span>
+<span class="k">message</span> LatencyHistogram {
+  <span class="k">repeated</span> int64  value = 1;
+  <span class="k">repeated</span> uint64 count = 2;
+}
+
+<span class="c">// Report: the per-node container, written once per node.</span>
+<span class="k">message</span> Report {
+  string         label   = 1;  <span class="c">// "baseline" / "experiment"</span>
+  <span class="k">repeated</span> Result results = 2;  <span class="c">// one per matched benchmark</span>
+}
+
+<span class="c">// Event / ThroughputInterval / LatencyInterval / PhaseMarker: see §5.</span></pre>
+
+        <p><code>RunConfig</code> is separable "how the run was set up" metadata, read via one hop
+            (<code>r.GetConfig().GetName()</code>); measured fields are the primary content of a <code>Result</code>
+            and stay flat (<code>r.GetThroughput()</code>, <code>r.GetLatencies()</code>,
+            <code>r.GetEvents()</code>).</p>
+
+        <p>The same file also defines the <em>reduced</em> schema a consumer writes after aggregating a whole sweep —
+            <code>PlotData</code>, <code>PlotRun</code>, <code>PlotBenchmark</code>, <code>PlotNode</code>, and
+            <code>LatencySummary</code> (<a href="#plot">§14</a>). A producer never writes these; they live here so
+            the reduction reuses <code>RunConfig</code> for a run's dimensions instead of restating them, and so a
+            consumer compiles one schema rather than two overlapping ones.</p>
+
+        <hr>
+
+        <h2 id="file">12. Result file format &amp; contract</h2>
+
+        <p>This section is the contract between a benchmark binary (the producer, in any language) and the tools that
+            read its results (<code>sweep</code>, <code>plot</code>, or any other consumer). Stabilizing it is what
+            lets <code>sweep</code> summarize any protocol's run without importing the producer's code. The proto
+            messages themselves (<a href="#schema">§11</a>) are the single source of truth for field numbers, types,
+            and comments; this section covers what the proto cannot express — framing, conversion, aggregation, and
+            producer/consumer obligations.</p>
+
+        <h3>On-disk encoding</h3>
+        <p>Each node writes one binary file (<code>benchkit.WriteReport</code> / <code>LoadReport</code> /
+            <code>DecodeReport</code> in <code>report.go</code>):</p>
+        <pre>
+[8 bytes]   magic sentinel <span class="s">"BKRSv2\n\x00"</span>  (0x42 4B 52 53 76 32 0A 00)
+[remaining] binary-encoded Report message (proto.Marshal)</pre>
+        <p>The sentinel exists for <em>identification</em>, not versioning: <code>proto.Unmarshal</code> accepts
+            almost any byte string without error, so the sentinel is what lets a consumer reject a non-benchkit (or
+            truncated) file cleanly instead of decoding garbage into a zero-valued <code>Report</code>. The
+            <code>v2</code> digits bump <em>only</em> if the framing itself changes (e.g. a length-delimited stream of
+            messages), which protobuf wire compatibility cannot absorb. The sentinel is defined once, in
+            <code>benchkit/report.go</code>. A consumer that reads the file itself — <code>sweep</code> skips absent
+            files rather than failing on them — decodes the bytes with <code>DecodeReport</code> instead of
+            re-declaring the sentinel, so producer and consumer cannot drift apart.</p>
+
+        <h3>Schema sharing and evolution</h3>
+        <p>The file embeds no descriptor. <code>benchkit/benchkit.proto</code> is a small, gorums-free file (no
+            imports), so a consumer outside this repository can compile it standalone with plain
+            <code>protoc-gen-go</code> into its own package, sharing only the schema, not the code. Consumers inside
+            the <code>benchkit</code> module, <code>sweep</code> included, import the generated types directly: two
+            descriptor sets registering the same file names in one binary would panic at <code>init</code>. The schema
+            evolves under standard protobuf wire-compatibility rules with <em>no</em> version bump: add fields with new, never-reused
+            numbers; consumers ignore fields they were not compiled with, and absent fields read back as zero. A
+            protocol may define its own result message that reuses the common field names and numbers.</p>
+
+        <h3>Converting to protojson</h3>
+        <p>Local <code>sweep</code> runs write a protojson <code>.json</code> sibling next to each collected
+            <code>.binpb</code> file for manual inspection; the magic sentinel is not
+            carried into the <code>.json</code>. Driver runs instead reduce successful <code>.binpb</code> files to a
+            compact, normalized <code>plotdata/plotdata.binpb</code> on the driver and transfer that file by default,
+            while failed-run <code>.binpb</code> files are still downloaded for diagnosis. Note that protojson encodes
+            <code>int64</code>/<code>uint64</code> fields (including <code>latencies</code>) as JSON <em>strings</em>, not
+            numbers, so a consumer parses them from strings into integers; <code>throughput</code> is a
+            <code>double</code> and stays a JSON number.</p>
+
+        <h3>Producer and consumer obligations</h3>
+        <p>A producer writes one <code>Report</code> per node, with <code>label</code> identifying the run or node,
+            and populates per benchmark at least <code>config.name</code>, <code>throughput</code> (per node), and
+            <code>latencies</code> (nanoseconds; nil when the stats mode keeps no raw samples — check
+            <code>RunConfig.stats_mode</code>), filling metadata and event fields when known. Those three fields are
+            also all a summarizing consumer needs; everything else may be ignored. A consumer aggregates a run's
+            per-node files as follows: <code>throughput</code> is reported per node and <em>summed</em> across nodes;
+            latency percentiles are <em>recomputed from the merged sample set</em> across all nodes, never averaged
+            from per-node percentiles. The startup transient is not removed by the producer; consumers trim at read
+            time (<a href="#trim">§10</a>). A producer must also write all diagnostic output to <em>stderr</em>
+            (in-module code uses <code>benchkit.Logf</code>): a launcher that leaves stdout unread lets the SSH
+            channel's flow-control window fill and block the process (see
+            <a href="benchkit-troubleshooting.html#stdout-rule">troubleshooting §4.6</a>).</p>
+
+        <p><code>report.go</code> also provides <code>PrintComparison</code> for the <code>-compare</code> path
+            (baseline vs experiment, percentage deltas).</p>
+
+        <hr>
+
+        <h2 id="sweep">13. sweep</h2>
+
+        <p><code>cmd/sweep</code> runs the Cartesian product of <code>-n × -workers × -payload × -rate ×
+            -send-buffer × -recv-buffer × -benchmarks × -stream-mode × -reps</code> over a set of SSH hosts. For each run it kills lingering processes, launches one
+            benchmark binary per node, waits, downloads the per-node <code>.binpb</code> result files for local runs,
+            writes a protojson <code>.json</code> sibling for each (for inspection), and prints a
+            summary table. In driver mode, successful runs are reduced to compact plot CSVs on the driver; failed-run
+            <code>.binpb</code> files are downloaded with the compact results. Per-run output files are named
+            <code>&lt;label&gt;_&lt;bench&gt;_N&lt;n&gt;_W&lt;w&gt;_P&lt;p&gt;[_R&lt;rate&gt;][_SB&lt;send&gt;][_RB&lt;recv&gt;]_S&lt;stream&gt;_r&lt;rep&gt;_&lt;host&gt;_&lt;port&gt;</code>.
+            The <code>_SB</code> and <code>_RB</code> components appear only when that buffer is swept.</p>
+
+        <h3>Flag reference</h3>
+        <table>
+            <thead>
+                <tr><th style="width:22%">Flag</th><th style="width:16%">Default</th><th>Meaning</th></tr>
+            </thead>
+            <tbody>
+                <tr><td colspan="3"><strong>Swept dimensions</strong> — comma-separated lists; the Cartesian product defines the runs</td></tr>
+                <tr><td><code>-n</code></td><td><code>9</code></td><td>Node counts to sweep.</td></tr>
+                <tr><td><code>-workers</code></td><td><code>1</code></td><td>Worker counts to sweep.</td></tr>
+                <tr><td><code>-payload</code></td><td><code>0</code></td><td>Payload sizes (bytes) to sweep.</td></tr>
+                <tr><td><code>-rate</code></td><td><code>0</code></td><td>Target sends/s per node to sweep; 0 = unlimited (saturating).</td></tr>
+                <tr><td><code>-send-buffer</code></td><td>binary default</td><td>Per-node send queue capacities to sweep. Unset leaves the binary's own default and adds no dimension.</td></tr>
+                <tr><td><code>-recv-buffer</code></td><td>binary default</td><td>Server receive queue capacities to sweep. Unset leaves the binary's own default and adds no dimension. A capacity of <code>0</code> is a real setting (unbuffered), distinct from unset.</td></tr>
+                <tr><td><code>-benchmarks</code></td><td><code>SymmetricQuorumCall</code></td><td>Exact benchmark names (each anchored as <code>^name$</code>; not a regexp — see <a href="#flags">§9</a>).</td></tr>
+                <tr><td><code>-stream-mode</code></td><td><code>dual</code></td><td>Symmetric stream topology to sweep: <code>dual</code> or <code>dedup</code>. The default <code>dual</code> mode preserves existing behavior. The special <code>baseline</code> mode labels runs of a prebuilt pre-dedup binary (requires <code>-binary</code>, cannot be mixed with other modes, and is never passed to the node command line).</td></tr>
+                <tr><td><code>-reps</code></td><td><code>1</code></td><td>Repetitions per parameter combination.</td></tr>
+                <tr><td colspan="3"><strong>Run setup</strong></td></tr>
+                <tr><td><code>-hosts</code></td><td>—</td><td>SSH host aliases: <code>bb[1-30]</code> ranges, globs, or comma-separated literals. Required except with <code>-collect</code> or a local <code>-explain-check</code>.</td></tr>
+                <tr><td><code>-config</code></td><td><code>~/.ssh/config</code></td><td>SSH config file used to resolve <code>-hosts</code> aliases.</td></tr>
+                <tr><td><code>-port</code></td><td><code>9000</code></td><td>Base port for benchmark nodes (extra nodes on a host use successive ports).</td></tr>
+                <tr><td><code>-duration</code></td><td><code>10s</code></td><td>Measurement duration per run (forwarded as the binary's <code>-time</code>).</td></tr>
+                <tr><td><code>-outdir</code></td><td><code>out</code></td><td>Root output directory for sweep runs.</td></tr>
+                <tr><td><code>-sweep</code></td><td><code>run</code></td><td>Label prefix for output filenames and, when set explicitly, the run directory name.</td></tr>
+                <tr><td><code>-binary</code> / <code>-build</code></td><td>auto-build</td><td>Pre-built linux/amd64 binary, or a build command with the <code>{{output}}</code> token (also via <code>$BENCHKIT_BUILD</code>); default <code>go build ./cmd/benchmark</code>.</td></tr>
+                <tr><td><code>-fd-limit</code></td><td><code>65536</code></td><td>Soft open-file limit (<code>ulimit -Sn</code>) applied to every node and the driven sweep; 0 keeps the host default.</td></tr>
+                <tr><td><code>-test</code></td><td><code>0</code></td><td>Quick smoke test with N nodes (5&nbsp;s, one worker, defaults elsewhere); 0 = full sweep.</td></tr>
+                <tr><td><code>-verbose</code></td><td><code>false</code></td><td>Pass <code>-verbose</code> to the nodes.</td></tr>
+                <tr><td colspan="3"><strong>Health checks &amp; summarizing</strong></td></tr>
+                <tr><td><code>-check</code></td><td><code>false</code></td><td>Run host diagnostics and exit (see <em>Diagnostics</em> below).</td></tr>
+                <tr><td><code>-netcheck</code></td><td><code>true</code></td><td>Ping-ring probe of every host link before the sweep; aborts on ≥ 5% packet loss.</td></tr>
+                <tr><td><code>-degraded-below</code></td><td><code>0.5</code></td><td>Flag a run <code>degraded</code> when a node's throughput falls below this fraction of the run median (0 disables); flagged nodes, the bound each crossed, and per-host TCP counter deltas are recorded in the manifest.</td></tr>
+                <tr><td><code>-degraded-above</code></td><td><code>2</code></td><td>Flag a run <code>degraded</code> when a node's throughput exceeds this multiple of the run median (0 disables). A symmetric benchmark cannot have one node doing several times its peers' work, so this is the signature of operations recorded without a network round trip.</td></tr>
+                <tr><td><code>-degraded-latency-below</code></td><td><code>0.2</code></td><td>Flag a run <code>degraded</code> when a node's median latency falls below this fraction of the run median (0 disables) — independent evidence of the same anomaly: a quorum call completing in a fraction of its peers' time did not do the round trip.</td></tr>
+                <tr><td><code>-trim</code></td><td><code>0</code></td><td>Read-time trim for the summary table and manifest (<a href="#trim">§10</a>); never forwarded to nodes.</td></tr>
+                <tr><td colspan="3"><strong>Pass-through to every node</strong> — appended only when set, so a foreign binary lacking them keeps working as long as the sweep does not ask for them</td></tr>
+                <tr><td><code>-interval</code>, <code>-stats-mode</code></td><td>binary default</td><td>Event stream and aggregate store (<a href="#flags">§9</a>).</td></tr>
+                <tr><td><code>-rate-step</code>, <code>-rate-step-max</code></td><td><code>0</code></td><td>Rate ramping (<a href="#ramp">§7</a>).</td></tr>
+                <tr><td><code>-extra-args</code></td><td>—</td><td>Arbitrary string appended verbatim to every node command (protocol-specific flags of foreign binaries).</td></tr>
+                <tr><td><code>-collect-profiles</code>, <code>-pgo</code></td><td><code>false</code></td><td>Profile collection and PGO merge (below).</td></tr>
+                <tr><td colspan="3"><strong>Cluster-local driver</strong> (<a href="#driver">below</a>)</td></tr>
+                <tr><td><code>-driver</code></td><td>—</td><td>Run the orchestration on this cluster-local host (<code>first</code> = first <code>-hosts</code> entry, excluded from the pool).</td></tr>
+                <tr><td><code>-detach</code></td><td><code>false</code></td><td>Start the driven run and exit once it is safe to disconnect; requires <code>-driver</code>.</td></tr>
+                <tr><td><code>-collect [path]</code></td><td>latest</td><td>Collect a finished run once. With no path, use the driver and path in <code>&lt;outdir&gt;/.sweep-last.json</code>; an explicit path requires <code>-driver</code>.</td></tr>
+                <tr><td><code>-collect-now [path]</code></td><td>latest</td><td>Collect a best-effort snapshot even while the run is active. Mutually exclusive with <code>-collect</code>.</td></tr>
+                <tr><td><code>-list</code></td><td><code>false</code></td><td>List active, completed, raw-pending, and recoverable driver runs, newest first.</td></tr>
+                <tr><td><code>-remote-dir</code></td><td><code>/tmp</code></td><td>Remote storage root; sweep uses <code>&lt;root&gt;/sweep-$USER</code> for binaries, results, caches, and driver runs.</td></tr>
+                <tr><td><code>-transfer</code></td><td><code>rsync</code></td><td>Transfer backend for driver uploads/downloads: rsync &ge;3.2.4 (default) or <code>sftp</code>.</td></tr>
+                <tr><td colspan="3"><strong>LLM failure triage</strong> (<a href="#recipes">§15</a>)</td></tr>
+                <tr><td><code>-explain</code>, <code>-explain-check</code></td><td><code>false</code></td><td>Triage failed runs after the sweep / verify the provider and exit.</td></tr>
+                <tr><td><code>-explain-provider</code>, <code>-explain-model</code></td><td><code>local</code>, —</td><td>Backend (<code>local</code> | <code>openai</code> | <code>claude</code>) and model (required with <code>-explain</code>).</td></tr>
+                <tr><td><code>-explain-max-log</code></td><td><code>65536</code></td><td>Head+tail byte cap on the node log in the triage prompt.</td></tr>
+            </tbody>
+        </table>
+        <p class="small">Three internal flags (<code>-driven</code>, <code>-git-sha</code>, <code>-ready-marker</code>)
+            are set automatically by the driver machinery and never passed by hand.</p>
+
+        <h3>Host resolution and node identity</h3>
+        <p><code>-hosts</code> names SSH aliases, but the nodes never see them: sweep resolves each connected host
+            once, controller-side, to one stable non-loopback peer IP (rejecting loopback/unspecified/multicast,
+            preferring IPv4) and passes numeric <code>ip:port</code> values in <code>-self</code> and
+            <code>-remotes</code>. This removes DNS from remote process startup entirely — a transient resolver
+            failure on one host used to abort the whole run (see
+            <a href="benchkit-troubleshooting.html#dns-peer-list">troubleshooting §4.2</a>). The alias is kept for
+            SSH, filenames, logs, and cleanup, and the manifest's <code>node_map</code> records the
+            alias↔address↔node-ID correspondence — needed because numeric-IP sorting can assign different Gorums
+            node IDs than hostname sorting would.</p>
+
+        <h3>Profile collection and PGO</h3>
+        <p><code>-collect-profiles</code> passes per-node <code>-cpuprofile</code>/<code>-memprofile</code> paths to
+            every node (the standard profiling flags, <a href="#flags">§9</a>) and downloads the resulting
+            <code>*.cpu.prof</code>/<code>*.mem.prof</code> files alongside the result files, with the same naming
+            scheme and remote cleanup. <code>-pgo</code> (implies <code>-collect-profiles</code>) merges every
+            collected CPU profile into <code>&lt;outdir&gt;/default.pgo</code> after the sweep — drop it into a main
+            package directory (or point <code>go build -pgo</code> at it) for profile-guided optimization. Execution
+            traces are deliberately not collected: a saturating multi-second run produces traces too large to ship
+            over the SSH path by default; pass <code>-extra-args '-trace=…'</code> and fetch manually when one is
+            needed.</p>
+
+        <h3>Per-run manifest</h3>
+        <p>Before launching a run's nodes, sweep writes <code>&lt;base&gt;.manifest.json</code> into the output
+            directory: the run configuration (label, benchmark filter, nodes, workers, payload, rate, stream mode, rep, duration,
+            trim), a timestamp, the repository HEAD (best effort), the deployed binary, the host:port assignments, and the
+            expected per-node result file names. The manifest is written up front so the directory is self-describing
+            even when a run fails, and it is the canonical way for consumers to group a run's per-node files —
+            the report generator discovers runs through it rather than parsing filenames. Manifest write
+            failures are logged and do not abort the run.</p>
+        <p>After the run, the manifest records the outcome: <code>status</code>, <code>failure_phase</code>
+            (setup / measurement / collection), <code>collected_files</code> / <code>missing_files</code>,
+            <code>node_map</code>, degraded-node flags with per-host TCP counter deltas, and the <code>-explain</code>
+            diagnosis when enabled. There is no automatic retry — a failed or degraded cell stays visible as such.
+            Field semantics and how to read them are covered in
+            <a href="benchkit-troubleshooting.html#artifacts">troubleshooting §2</a>, alongside the other per-run
+            artifacts (the interleaved node log <code>logs/&lt;base&gt;.log</code> and the failure snapshot
+            <code>logs/&lt;base&gt;_snapshot.txt</code>).</p>
+
+        <h3>Summary table — <code>cmd/sweep/summary.go</code></h3>
+        <p>After each run, sweep loads every node's result file and prints an aggregated table: throughput summed
+            across nodes, latency percentiles recomputed from the merged samples. Missing or unreadable files are
+            skipped with a warning so a partial run still reports what it collected.</p>
+        <pre>
+  BENCHMARK   THROUGHPUT   CV     MEAN    STDDEV    p50    p95    p99    NODES  SAMPLES</pre>
+        <p>The <code>-trim</code> flag is consumed entirely at read time — it is <em>not</em> forwarded to the nodes
+            (the binary always records the whole run, <a href="#trim">§10</a>). It drives this summary table and is
+            recorded in the per-run manifest, where <code>sweep -plot</code> picks it up and applies the same cut
+            (<a href="#plot">§14</a>), so the figures and the table describe the same steady-state window.
+            <code>benchkit.Summarize</code>
+            recomputes per-node throughput over the kept intervals, computes the throughput CV (σ/μ) over those
+            intervals, and cuts the latency slice at the sample index implied by the dropped intervals' cumulative op
+            counts — for client-measured exact runs, the case where the cut is valid. It returns a
+            <code>Summary</code> whose <code>CVValid</code> and <code>LatencyValid</code> flags tell
+            <code>mergeResults</code> which fields are meaningful. Each summary's <code>Dist</code> merges into one
+            <code>benchkit.LatencyDist</code> per benchmark, which answers the <code>MEAN</code>,
+            <code>STDDEV</code>, and percentile columns from the merged raw samples when any node contributed them
+            and from the merged <code>LatencyHistogram</code> weighted pairs otherwise (hdr runs) — whole-run
+            figures in that case, since the histogram has no time dimension (<a href="#trim">§10</a>). When a result
+            carries no events, the stored whole-run throughput and latencies are used and the CV column shows
+            <code>-</code>.</p>
+
+        <h3>Diagnostics</h3>
+        <p><code>sweep -check</code> exercises the same SSH path as a sweep and reports, per host: reachability, host
+            info (kernel, CPUs, load), busy benchmark ports, lingering benchmark processes, TCP retransmit health,
+            clock skew, remote storage/free space, and a concise count of disposable sweep artifacts left behind.
+            It never deletes those artifacts; driver-run details belong to <code>-list</code>. Run it before a long sweep. Independently, every sweep
+            starts with the <code>-netcheck</code> ping-ring probe (on by default) and aborts on ≥ 5% link loss —
+            note it runs on an idle network, so a link that only drops packets under load can pass it; the
+            <code>-degraded-below</code> flagging catches those after the fact (see
+            <a href="benchkit-troubleshooting.html#slow-node">troubleshooting §5</a>).</p>
+
+        <h3 id="driver">Cluster-local driver</h3>
+        <p>By default <code>sweep</code> runs on the developer's laptop and does all SSH from there: it uploads the
+            benchmark binary to every host and performs per-run launch / monitor / collect round-trips. When the
+            laptop is far from the cluster (e.g. driving the Stavanger <code>bb</code> cluster from abroad), the
+            binary is copied across the WAN once <em>per host</em> and every round-trip pays the full WAN RTT.
+            The <code>-driver</code> flag moves the orchestration onto a cluster-local host so that traffic stays on
+            the LAN and the benchmark binary crosses the WAN only once:</p>
+        <pre>
+<span class="c"># Run the orchestration on a dedicated head node (outside -hosts):</span>
+./cmd/sweep/sweep -hosts <span class="s">'bb[1-9]'</span> -driver bbhead -sweep e4 -n 9 -workers 1,2,4,8,16
+
+<span class="c"># Or use the first -hosts entry as the driver (excluded from the benchmark pool):</span>
+./cmd/sweep/sweep -hosts <span class="s">'bb[1-10]'</span> -driver first -sweep e4 -n 9 -workers 1,2,4,8,16</pre>
+        <p>The driver role lives in <code>sweep</code>, not the benchmark binary: the orchestration depends on
+            <code>iago</code> (SSH, upload, collection) and <code>cmd/benchmark</code> must stay free of that
+            dependency. The laptop cross-builds <code>sweep</code> and the benchmark binary for linux/amd64, ships
+            them plus a generated SSH config to the driver over the user's own <code>ssh</code>/<code>scp</code>,
+            and re-execs <code>sweep</code> there with the internal <code>-driven</code> flag. The driver then does
+            all the per-node SSH over the LAN. On completion, the laptop downloads the compact transfer directory:
+            manifests, logs, <code>plotdata/plotdata.binpb</code>, <code>plotdata/events.binpb</code>, and any
+            failed-run <code>.binpb</code> files.
+            Successful raw <code>.binpb</code> files remain in the driver work directory until explicitly collected.</p>
+        <p>At launch, sweep creates the concrete local output directory and writes <code>sweep.sh</code>,
+            <code>collect.sh</code>, and the latest-run pointer <code>&lt;outdir&gt;/.sweep-last.json</code>.
+            A plain <code>sweep -collect</code> checks once: if the run is active it exits with guidance instead of
+            waiting; <code>sweep -collect-now</code> downloads a snapshot and retains the remote run. After compact
+            collection, rerun <code>sweep -collect</code> to archive
+            the full raw <code>.binpb</code> dataset locally and remove the driver work directory. If the compact output
+            is enough, discard the remote work directory with the cleanup command printed by <code>sweep</code>.</p>
+        <p><code>-remote-dir</code> selects the remote storage root (for example <code>/local</code>).
+            Every host uses a per-user namespace below it, such as <code>/local/sweep-meling</code>. Use
+            <code>sweep -list</code> to inspect driver runs without making <code>-check</code> output unbounded.</p>
+        <p>Authentication to the peers uses the laptop's SSH agent, forwarded to the driver with <code>ssh -A</code>.
+            iago authenticates via <code>SSH_AUTH_SOCK</code> and dials every peer once at startup, so the forwarded
+            agent is only needed for the first few seconds of a run. After that the remote sweep — which is launched
+            <em>detached</em> (<code>setsid</code>) — survives a laptop disconnect. By default the launcher streams
+            its output live and prints a reconnect command; if the connection drops, reconnect and download the
+            results with <code>-driver &lt;host&gt; -collect &lt;remote-work-dir&gt;</code>. When the driver host is
+            one of <code>-hosts</code> (the <code>first</code> form), it is excluded from the benchmark pool so the
+            orchestrator does not perturb a co-located replica; a driver outside <code>-hosts</code> leaves the pool
+            unchanged.</p>
+        <p>Add <code>-detach</code> to start the run and exit immediately instead of streaming and waiting:</p>
+        <pre>
+./cmd/sweep/sweep -hosts <span class="s">'bb[1-9]'</span> -driver bbhead -detach -sweep e4 -n 9 -workers 1,2,4,8,16</pre>
+        <p><code>-detach</code> prints the same reconnect command and then returns, so closing the laptop lid right
+            after is an intentional clean exit rather than a dropped connection that surfaces as an error. Reconnect
+            the same way as an accidentally dropped run, with
+            <code>-driver &lt;host&gt; -collect &lt;remote-work-dir&gt;</code> — the two paths differ only in what the
+            launcher does before the run finishes, not in how the detached run itself behaves or how it is collected.
+            <code>-detach</code> requires <code>-driver</code> and cannot be combined with <code>-collect</code>.</p>
+        <p>The driven sweep authenticates to its peers using the laptop's SSH agent, forwarded to the driver; it
+            needs that agent only once, for the one-time dial of every peer at startup. So <code>-detach</code> does
+            not exit the instant the run starts — it keeps the laptop connected until the driven sweep signals that
+            dial is complete (it touches a <code>peers.dialed</code> marker in the work dir), then reports that it is
+            safe to disconnect. If <code>exit.code</code> appears <em>before</em> that marker, the run died before
+            dialing — normally because a peer denied SSH agent-forwarded authentication — and <code>-detach</code>
+            fails loudly with the console log tail instead of telling you it is safe to disconnect from a dead run.
+            The wait is bounded by a generous backstop (minutes) to cover a slow <code>-explain</code> preflight and
+            dialing a large cluster; it normally resolves in seconds. Waiting for the dial rather than a fixed timeout
+            is what makes <code>-detach</code> reliable regardless of cluster size: leaving before the dial completes
+            tears down the forwarded agent and the run fails with "no valid authentication methods".</p>
+        <div class="callout">
+            <h4>Why system <code>ssh</code>/<code>scp</code> for the laptop&#8596;driver hop, not iago?</h4>
+            <p>The driver must authenticate to the peers using the laptop's keys, which means the laptop&#8594;driver
+                connection has to forward the SSH agent. iago has no agent-forwarding support (it authenticates the
+                <em>laptop's</em> connection from <code>SSH_AUTH_SOCK</code> but never requests forwarding for the
+                remote session), so the control hop uses the system <code>ssh -A</code> / <code>scp</code> the user
+                already relies on (<code>ssh bbN</code>), which also inherits their working SSH config and
+                host-key state for free. iago is still used for everything <em>on</em> the driver (driver&#8594;peer
+                dial, upload, collection). The natural follow-up is to add agent forwarding to iago (a
+                <code>RequestAgentForwarding</code> option on the session); the laptop&#8596;driver upload/download
+                could then move to <code>iago.Upload</code>/<code>iago.Download</code> against a one-host group, and
+                the launcher would no longer shell out. Tracked as an iago enhancement.</p>
+        </div>
+        <p class="small">Mechanism note: detaching and following the run is a small shell bootstrap —
+            <code>setsid</code> puts the driven sweep in its own session (a dropped connection cannot
+            <code>SIGHUP</code> it), output is redirected to a log file, an exit-code sentinel marks completion,
+            and the launcher <code>tail -F</code>s the log until the sentinel appears. It needs nothing beyond
+            coreutils; tmux, systemd-run, or a Go-based daemon were considered and deferred as added
+            dependencies or added code for the same behavior.</p>
+        <div class="callout">
+            <h4>Requirements</h4>
+            <p>Plain <code>ssh &lt;host&gt;</code> must work from the laptop to the driver and from the driver to
+                each peer (the bbchain cluster resolves peers by hostname and permits inter-host SSH), and the
+                laptop's SSH agent must hold the key the peers accept. The driver needs <code>bash</code>,
+                <code>setsid</code>, <code>tar</code>, and <code>tail</code> (standard on Linux). The generated
+                config sets <code>StrictHostKeyChecking no</code> for the trusted cluster LAN, so the driver needs
+                no seeded <code>known_hosts</code>.</p>
+        </div>
+
+        <hr>
+
+        <h2 id="plot">14. Plotting</h2>
+
+        <p><code>sweep -plot &lt;dir&gt;</code> turns a collected sweep directory into a self-contained Typst report.
+            It reads the compact <code>plotdata/plotdata.binpb</code> when present (the driver transfer), falls back
+            to the legacy <code>plotdata/*.csv</code> pair for directories collected before that format existed, and
+            falls back further to decoding the raw <code>.binpb</code> result files (a local sweep with no compact
+            data). It writes a set of derived CSVs and a <code>report.typ</code> under <code>&lt;dir&gt;/report</code>,
+            copies the embedded helper library <code>gorumsplot.typ</code> beside it, and compiles
+            <code>report.pdf</code> when the <code>typst</code> binary is on <code>PATH</code> (otherwise it prints
+            the compile command). A local sweep and a driver collection run this automatically; re-run it by hand to
+            regenerate the report with different filters. Typst never reads <code>plotdata.binpb</code> directly —
+            only the small, per-figure CSVs under <code>report/</code> — so growing the sweep or the CDF resolution
+            does not slow down the Typst compile step.</p>
+
+        <h3>plotdata.binpb</h3>
+        <p><code>plotdata/plotdata.binpb</code> is a normalized <code>PlotData</code> message, defined in
+            <code>benchkit/benchkit.proto</code> alongside the raw result schema and so generated with it: run
+            identity (label, status, repetition) is stored once
+            per run and node identity once per node, instead of being repeated on every row the way the old CSV pair
+            did — a node's 200-point latency CDF is a single packed <code>double</code> vector, with each point's
+            cumulative probability implied by its position on the fixed grid rather than stored. The benchmark name
+            and sweep dimensions ride in a <code>RunConfig</code>, the same message the raw result files carry them
+            in, so there is one definition of a run's configuration rather than a parallel one for plotting. This
+            keeps the file small (tens of MB rather than hundreds) and fast to load, both across the network and when
+            <code>-plot</code> reads it back. Because <code>PlotData</code> has only one repeated field, two
+            <code>plotdata.binpb</code> files can be combined with a plain <code>cat</code>, the same as the old CSV
+            pair (see the merged-sweep recipe below). Run <code>sweep -export-csv &lt;dir&gt;</code> to regenerate a
+            human- and grep-friendly <code>plotdata/runs.csv</code> and <code>plotdata/nodes.csv</code> from it on
+            demand — <code>nodes.csv</code> has one row per node with its CDF as a space-separated vector column,
+            rather than one row per CDF point.</p>
+
+        <h3>events.binpb</h3>
+        <p><code>plotdata/events.binpb</code> is a <code>PlotEvents</code> message holding the time-series event
+            stream of <em>every</em> run, whatever its outcome, nested base → benchmark → node so a node is named
+            once however many events it recorded. It is the source of the within-run time-series figures. The streams
+            live in their own file rather than inside <code>PlotData</code> so the summary-only read paths
+            (<code>-plot</code>'s aggregates, <code>-export-csv</code>, <code>-explain</code>) keep reading the small
+            message, and a directory collected before the streams existed stays readable. A stream is a small
+            fraction of a raw result file — the bulk of that file is <code>latencies</code>, which the report never
+            reads — so keeping all of them costs tens of megabytes for a sweep of several hundred runs, and the
+            compact transfer no longer has to leave the time-series data behind on the driver.</p>
+
+        <p>The report covers two layers from one command:</p>
+        <ul>
+            <li><em>Cross-run figures</em>: how throughput, latency, goodput, and per-op cost change as a sweep
+                dimension (nodes, workers, payload, rate, stream mode) varies, plus throughput-latency curves,
+                per-node latency CDFs, node-health and degraded-share heatmaps, a run-status table, and — when the run
+                logs carry clock-offset diagnostics — an offset/drift CDF.</li>
+            <li><em>Within-run time series</em>: one figure per benchmark with a throughput-over-time and a
+                latency-over-time panel, plus a third panel holding the saturation curve when the run ramped its
+                offered rate. A run measured at a single rate has one saturation point per node, which the
+                cross-run throughput-vs-rate figure already shows, so that panel is left out. Up to six runs are
+                rendered, one per configuration, taking the configurations the per-node CDF grid selected,
+                alternating stream modes so both arms of a comparison are covered, and preferring the repetition its
+                panel shows. Selection depends only on the event stream, not on latency
+                data, so a throughput-only benchmark gets its trace.</li>
+        </ul>
+
+        <p>The report states an experiment once and then never repeats it. Under the centered title sits a single line
+            naming the sweep, every dimension it measured with the values that dimension took, and the run count and
+            duration from the manifests. Each figure heading carries the categorical identity all its panels share —
+            the benchmark, and the stream mode when the sweep compared only one — and each legend entry names only
+            what tells its series apart from the figure's others, with short dimension tags (<code>N15 P16384
+            R1000</code>). A run-scoped figure is headed by its run's compact configuration label; the run base
+            itself appears in the figure's data note, which names the CSVs it read. Within a panel grid the y-axis
+            label is printed in the first column only and the x-axis label only where no panel sits below, so a row
+            of facets sharing one unit spends the reclaimed width on the data. A figure's legend is fitted to its
+            panel grid's width, laying out as many entries to a row as fit rather than breaking after a fixed count,
+            and consecutive per-node figures over the same nodes share the legend of the first.</p>
+
+        <p>Figures are grouped into sections, each starting a page: <em>Scaling</em> (metric against a swept
+            dimension, plus goodput and per-operation cost), <em>Load curves</em> (throughput-latency),
+            <em>Stream-mode comparison</em> (the ratio figures), <em>Cluster health</em> (the heatmaps, the
+            run-outcome table, and the clock-offset CDF), <em>Per-node latency</em> (the CDF grid), <em>Within-run
+            time series</em>, and <em>Failed runs</em>. Each section opens with a note stating what its figures show
+            and, where the report has to choose which runs to draw, how it chose them.</p>
+
+        <p>Figures are drawn natively at compile time by <code>gorumsplot.typ</code>, a cetz-plot helper library
+            embedded in the <code>sweep</code> binary and copied into each report directory, so the report recompiles
+            anywhere Typst is installed. Each figure appears only when its data supports it: a metric-vs-dimension
+            figure when that dimension varies, the ratio figures when exactly two stream modes are comparable, the
+            offset CDF when the logs carry offset lines, and so on.</p>
+
+        <h3>Within-run time-series CSV columns</h3>
+        <p>Per benchmark, the report writes <code>&lt;bench&gt;_throughput.csv</code>,
+            <code>&lt;bench&gt;_latency.csv</code>, and <code>&lt;bench&gt;_saturation.csv</code> with these columns:</p>
+        <table>
+            <thead>
+                <tr><th>Plotter</th><th>Reads</th><th>CSV columns</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>ThroughputTimePlotter</code></td><td><code>ThroughputInterval</code>, <code>PhaseMarker</code></td><td><code>offset_s, throughput_ops_s, phase, node</code></td></tr>
+                <tr><td><code>LatencyTimePlotter</code></td><td><code>LatencyInterval</code>, <code>PhaseMarker</code></td><td><code>offset_s, mean_ns, stddev_ns, count, phase, node</code></td></tr>
+                <tr><td><code>SaturationCurvePlotter</code></td><td><code>PhaseMarker(RATE_STEP)</code>, <code>ThroughputInterval</code>, <code>LatencyInterval</code></td><td><code>offered_rate, throughput_ops_s, mean_latency_ns, node</code></td></tr>
+            </tbody>
+        </table>
+        <p>Multi-node input stays distinguishable: every row carries the node it came from (the
+            <code>Report</code> label, falling back to the filename stem), rows are grouped per node — each node's
+            series is contiguous, not globally sorted by offset — and the saturation curve keeps one set of rate
+            levels per node. The sweep's <code>-trim</code> flag drops interval events before that offset (phase
+            markers always pass through), consistent with the run summary.</p>
+
+        <h3>Cross-run figures</h3>
+        <p>The cross-run figures come from the rep-averaged <code>agg.csv</code>: <code>sweep -plot</code> discovers
+            runs through the per-run manifests (<a href="#sweep">§13</a>), reads the benchmark name and sweep
+            dimensions from each result's <code>config</code>, aggregates the per-node files of each run (throughput
+            summed across nodes, latency samples merged; hdr runs contribute their weighted histogram pairs instead),
+            applies the trim recorded in the manifest — the same interval/index-map cut as the run summary
+            (<a href="#trim">§10</a>) — and averages repetitions into a mean with a sample SD and 95% CI, keeping
+            <code>stream_mode</code> as a series dimension when present. Each figure is produced only when its varying
+            dimension actually varies in the data. The figures and the sweep dimension each one needs:</p>
+        <table>
+            <thead>
+                <tr><th style="width:32%">Figure</th><th>Shows</th><th>Requires variation in</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>throughput_vs_{nodes,workers,payload,rate,send_buffer,recv_buffer}</code></td><td>Aggregate throughput vs a sweep dimension, faceted by the fewest-valued other dimension</td><td>that dimension</td></tr>
+                <tr><td><code>latency_vs_{nodes,workers,payload,rate,send_buffer,recv_buffer}</code></td><td>Median (p50) latency vs a sweep dimension</td><td>that dimension</td></tr>
+                <tr><td><code>goodput_vs_payload</code>, <code>goodput_vs_nodes</code></td><td>Cluster byte throughput (throughput × payload) — the sustained bandwidth in bytes/s</td><td><code>-payload</code> (&gt; 0)</td></tr>
+                <tr><td><code>mem_per_op_vs_nodes</code>, <code>allocs_per_op_vs_nodes</code></td><td>Heap bytes/op and allocations/op vs N</td><td><code>-n</code></td></tr>
+                <tr><td><code>tl_curve_{workers,rate}</code></td><td>Latency vs achieved throughput, one panel per N, one point per level of the load dimension the curve traces along; split into scale-band figures when peak latencies span a wide range. A sweep that varies both load dimensions gets one figure per dimension</td><td><code>-workers</code> or <code>-rate</code> (per N)</td></tr>
+                <tr><td><code>throughput_ratio_vs_{nodes,workers,payload,rate,send_buffer,recv_buffer}</code>, <code>latency_ratio_vs_{nodes,workers,payload,rate,send_buffer,recv_buffer}</code></td><td>Non-baseline/baseline ratio vs a sweep dimension, faceted by the fewest-valued other dimension, with a parity reference line</td><td>exactly two <code>-stream-mode</code>s per configuration, that dimension varying within one comparable series, and — for the latency ratio — latency data in both modes</td></tr>
+                <tr><td><code>per_node_cdf</code></td><td>One figure whose panels are per-node latency CDFs, three to a row and fifteen to a page, one panel per run. Runs are the first repetition of a configuration (the full dimension tuple, buffer capacities included) selected to spread across the sweep: a configuration earns a panel when it is the first to measure some dimension value, so the panels cover every node count, payload, rate, and mode rather than crowding into whichever corner sorts first. The remaining panels are filled in run order, so the page is used</td><td>nothing — produced for any run with CDF data</td></tr>
+                <tr><td><code>node_health</code></td><td>Hosts × configurations heatmap of per-node throughput relative to each run's median; a slow host shows as a red cell, and a host absent from a configuration as a grey one. A color scale below the grid states the range</td><td>nothing — produced for any sweep</td></tr>
+                <tr><td><code>degraded_share</code></td><td>Heatmap of the degraded-repetition fraction, node count and mode on one axis and the remaining varying dimensions on the other, so one configuration label is split over two axes instead of crowding one</td><td>any degraded repetition</td></tr>
+                <tr><td><code>run_status</code></td><td>Table of run outcomes (succeeded/degraded/failed) per node count</td><td>any degraded or failed run</td></tr>
+                <tr><td><code>clock_offsets</code></td><td>Empirical CDF of the absolute clock offset and residual drift, parsed from the run logs</td><td>offset lines in the logs</td></tr>
+                <tr><td><code>failed_time_series_*</code></td><td>Under a &ldquo;Failed runs&rdquo; heading: the throughput and latency traces of failed runs, one representative per (configuration, error signature) group and at most three in total, each noting how the run failed and how many of its nodes wrote no result file at all. Whatever the cap drops is logged</td><td>a failed run with event data</td></tr>
+            </tbody>
+        </table>
+        <p>Three flags re-shape the report without re-running the sweep. <code>-exclude DIM=VALUE</code>
+            (comma-separated; dims: <code>nodes</code>, <code>workers</code>, <code>payload</code>, <code>rate</code>,
+            <code>send_buffer</code>, <code>recv_buffer</code>, <code>stream_mode</code>, <code>benchmark</code>)
+            drops matching data points — useful when one extreme
+            value stretches every axis and hides the differences among the rest, e.g. <code>-exclude nodes=58</code>
+            (a doubled-up node count). <code>-exclude-run NAME</code> drops a specific run by its base name.
+            The report also names, in its log, every repetition whose throughput differs from its configuration's
+            median by more than 1.4x in either direction — the analysis-side backstop behind the sweep's own
+            per-node bounds, for a directory collected before those bounds existed or with them disabled.
+            <code>-include-degraded</code> keeps degraded runs (a node outside the <code>-degraded-below</code>/<code>-degraded-above</code> bounds
+            of the run median) in the aggregate figures; by default they are excluded, which biases a mode's
+            aggregates upward when degradation clusters in that mode, so compare both variants before drawing
+            conclusions. The run-status and clock-offset diagnostics describe the whole directory and ignore these
+            per-configuration filters. When two or more stream modes are present, color encodes the mode and the line
+            dash is assigned from the remaining held-fixed dimensions only, so e.g. the dual and dedup lines of the
+            same payload read as one pair.</p>
+
+        <p><code>sweep -export-csv &lt;dir&gt;</code> is a separate, standalone conversion, not a report filter: it
+            regenerates <code>plotdata/runs.csv</code> and <code>plotdata/nodes.csv</code> from that directory's
+            <code>plotdata.binpb</code> and exits without touching <code>report/</code>. Reach for it when inspecting
+            or scripting against the collected data directly — grepping for a run or a node — rather than for
+            plotting.</p>
+
+        <p><code>sweep -export-compact &lt;work-dir&gt;</code> is the other standalone conversion, and the driver-side
+            half of a download: it rebuilds <code>plotdata/</code> and <code>compact-transfer/</code> from the raw
+            result files still in a finished run's work directory, then exits. Run it on the driver when a run's
+            compact transfer predates a change to what gets exported — the event streams, say — so the laptop can
+            download the rebuilt directory instead of the whole raw archive. Add <code>-collect-profiles</code> to
+            include the per-node profiles. Note that the driver's <code>/tmp</code> is not durable, so this works only
+            while the work directory survives.</p>
+
+        <hr>
+    <h2 id="recipes">15. Sweep recipes</h2>
+
+    <p>Commands to exercise the benchmarks and produce each figure family. All assume the repository root, SSH host
+        aliases like <code>bb1…bb30</code> in <code>~/.ssh/config</code> (see
+        <code>scripts/bbchain-ssh-config</code>), and the tools built via <code>make sweep</code> and (for local
+        runs) <code>make benchmark</code>. Quote bracketed host ranges so the shell does not expand them. Compiling
+        the report to PDF needs <a href="https://typst.app">Typst</a> installed; without it the sweep still writes
+        the CSVs and <code>report.typ</code>.</p>
+
+    <h3>Preflight and smoke test</h3>
+    <p>Run the host diagnostics first. The second command is a quick smoke test on three nodes.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -check</pre>
+    </div>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-3]' -test 3</pre>
+    </div>
+
+    <h3>Stream deduplication evaluation</h3>
+    <p>These recipes compare the same benchmark binary in <code>dual</code> and <code>dedup</code> stream modes.
+        They use the cluster-local driver and detach the run.</p>
+    <p>Smoke recipe:</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -driver first -detach -test 9 -sweep stream-dedup-smoke -stream-mode dual,dedup -benchmarks SymmetricQuorumCall,SymmetricMulticast</pre>
+    </div>
+    <p>Balanced N-scale recipe:</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -driver first -detach -sweep stream-dedup-nscale -n 5,9,15,21,27 -workers 1 -payload 0 -rate 0 -benchmarks SymmetricQuorumCall,SymmetricMulticast -stream-mode dual,dedup -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3</pre>
+    </div>
+    <p>Offered-load recipe:</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -driver first -detach -sweep stream-dedup-load -n 9,21,27 -workers 1,2,4,8,16,32 -payload 0 -rate 0 -benchmarks SymmetricQuorumCall -stream-mode dual,dedup -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3</pre>
+    </div>
+    <p>Payload recipe:</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -driver first -detach -sweep stream-dedup-payload -n 9,21 -workers 4 -payload 0,64,1024,16384 -rate 0 -benchmarks SymmetricQuorumCall,SymmetricMulticast -stream-mode dual,dedup -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3</pre>
+    </div>
+    <p>Collect recipe:</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -collect</pre>
+    </div>
+    <p>Plot recipe:</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -plot &lt;collected-outdir&gt;</pre>
+    </div>
+
+    <h3>Buffer sizing - <code>throughput_vs_send_buffer</code>, <code>throughput_vs_recv_buffer</code></h3>
+
+    <p>The send queue is the per-node queue of outbound requests
+        (<code>-send-buffer</code>, default 4096); the receive queue carries finished handler responses to the
+        goroutine that writes them back (<code>-recv-buffer</code>, default 0, unbuffered). Both are swept as
+        ordinary dimensions, so one detached invocation covers every capacity and the report plots throughput and
+        latency against them.</p>
+
+    <p>The receive queue only affects benchmarks whose handlers reply, so sweep it with two-way calls. The send
+        queue's depth is only exercised by a caller that pipelines, so include <code>AsyncMulticast</code> and set
+        <code>-max-async</code> above the largest capacity under test, or the async depth becomes the limiter
+        instead of the buffer.</p>
+
+    <p>Receive-side recipe:</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-8]' -driver first -detach -sweep recv-buffer -n 3,5,7 -workers 1,8,64 -recv-buffer 0,1,16,256 -benchmarks QuorumCall,SlowServer -duration 20s -trim 5s -reps 3</pre>
+    </div>
+
+    <p>Send-side recipe:</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-8]' -driver first -detach -sweep send-buffer -n 3,5,7 -workers 1,8 -send-buffer 64,256,1024,4096 -benchmarks Multicast,AsyncMulticast,SymmetricMulticast -duration 20s -trim 5s -reps 3 -extra-args '-max-async=8192'</pre>
+    </div>
+
+    <p>Both sides at once, as a grid:</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-8]' -driver first -detach -sweep buffers -n 5 -workers 8 -send-buffer 64,1024 -recv-buffer 0,16 -benchmarks QuorumCall,AsyncMulticast -duration 20s -trim 5s -reps 3 -extra-args '-max-async=8192'</pre>
+    </div>
+
+    <p>Measurements on an 8-node LAN cluster found both curves flat: across
+        <code>-recv-buffer 0,1,16,256</code> and <code>-send-buffer 64,256,1024,4096</code>, every difference in
+        throughput fell inside the 95% confidence interval. A queue only has to be deep enough that the goroutine
+        draining it never starves, which a saturating closed-loop client reaches at a small depth. Size these for
+        failure behavior rather than throughput: the send capacity is also the backlog at which a peer that stopped
+        draining fails two-way requests with <code>ErrSendQueueFull</code>, so it must stay above the number of
+        concurrent callers, and it is allocated eagerly at 64 bytes per slot per channel.</p>
+
+    <h3>Three-variant comparison: baseline vs dual vs dedup</h3>
+    <p>The <code>dual</code> series above measures the stream-dedup implementation with deduplication switched
+        off, which is not the same binary as the pre-dedup code. To separate the cost of the implementation from
+        the effect of the topology, add a <code>baseline</code> series built from a commit that predates stream
+        deduplication. A baseline sweep deploys that prebuilt binary via <code>-binary</code> and records
+        <code>stream_mode=baseline</code> in its manifests; the binary itself never sees the
+        <code>-stream-mode</code> flag. Baseline cannot be mixed with other modes in one invocation — one sweep
+        deploys exactly one binary — so it runs as a second sweep with the same dimensions. No branch switching
+        is needed while experiments run: the baseline binary is built once from a git worktree.</p>
+    <p>Build the baseline benchmark binary once, from the pre-dedup commit or branch you compare against:</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>git worktree add /tmp/gorums-baseline &lt;pre-dedup-ref&gt;
+GOOS=linux GOARCH=amd64 go -C /tmp/gorums-baseline build -o /tmp/benchmark-baseline ./cmd/benchmark
+git worktree remove /tmp/gorums-baseline</pre>
+    </div>
+    <p>Run the feature sweep (<code>dual,dedup</code>) and the baseline sweep with identical dimensions:</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -driver first -detach -sweep dedup-eval -n 5,9,15,21,27 -workers 1 -payload 0 -rate 0 -benchmarks SymmetricQuorumCall,SymmetricMulticast -stream-mode dual,dedup -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3
+./cmd/sweep/sweep -hosts 'bb[1-30]' -driver first -detach -sweep dedup-eval-baseline -n 5,9,15,21,27 -workers 1 -payload 0 -rate 0 -benchmarks SymmetricQuorumCall,SymmetricMulticast -stream-mode baseline -binary /tmp/benchmark-baseline -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3</pre>
+    </div>
+    <p>After collecting both runs, merge their <code>plotdata.binpb</code> files into one folder; every figure then
+        shows <code>baseline</code>, <code>dual</code>, and <code>dedup</code> as separate series because
+        <code>stream_mode</code> is a series dimension. <code>PlotData</code> has only one repeated field
+        (<code>runs</code>), so concatenating two serialized messages and reading the result back as one message
+        merges their runs — no header handling needed, unlike the old CSV pair:</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>mkdir -p combined/plotdata
+cat out/dedup-eval/plotdata/plotdata.binpb out/dedup-eval-baseline/plotdata/plotdata.binpb &gt; combined/plotdata/plotdata.binpb
+./cmd/sweep/sweep -plot combined</pre>
+    </div>
+    <p>Interpretation: a gap between <code>baseline</code> and <code>dual</code> flags overhead introduced by the
+        dedup implementation itself (it should be near zero); the <code>dual</code> vs <code>dedup</code> gap
+        isolates the effect of halving the stream count.</p>
+
+    <h3>Node scaling - <code>throughput_vs_nodes</code>, <code>latency_vs_nodes</code>, <code>mem_per_op_vs_nodes</code>, <code>allocs_per_op_vs_nodes</code></h3>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-25]' -sweep nscale \
+    -n 3,5,9,17,25 -workers 4 -duration 10s -trim 1s \
+    -benchmarks SymmetricQuorumCall,SymmetricMulticast</pre>
+    </div>
+    <p>One node per host is ideal; with fewer hosts than the largest <code>-n</code>, sweep packs extra nodes onto
+        hosts with successive ports. The default <code>-benchmarks</code> is <code>SymmetricQuorumCall</code>
+        alone; the recipe adds <code>SymmetricMulticast</code> for both symmetric benchmarks, and
+        <code>-benchmarks QuorumCall,Multicast</code> exercises the coordinator-style benchmarks instead
+        (every node coordinates against all peers). Sweep treats each comma-separated entry as an exact benchmark
+        name and anchors it automatically - it is not a regexp.</p>
+    <div class="callout warn">
+        <h4>Closed-loop runs with few workers measure latency scaling, not capacity</h4>
+        <p>The recipe above uses <code>-rate 0</code> (the default closed-loop mode): each worker fires its next op
+            immediately after the previous one completes. By Little's Law, aggregate throughput ≈ N × workers /
+            mean_latency. With a small fixed worker count (e.g. <code>-workers 4</code>), the
+            <code>throughput_vs_nodes</code> figure is therefore algebraically equivalent to the latency curve -
+            inverted and scaled by N - not a measurement of capacity.</p>
+        <p>Two structural artifacts follow. For <code>SymmetricQuorumCall</code>, the N=3 point is not comparable to
+            the rest of the series: a majority threshold of 2 out of 2 outbound peers means the call completes
+            after the fastest reply (the minimum order statistic), so p50 latency is far lower than at N=5 where the
+            3rd of 4 replies must arrive. For <code>SymmetricMulticast</code>, the latency measures time in the
+            gorums send queue (<code>SendTime</code> is stamped before the message is handed to the gRPC
+            transport), so high latency at small N reflects a deep per-stream queue rather than network delay; at
+            large N (17/25) the workers become the bottleneck and the throughput drop reflects worker blocking on
+            backpressure rather than network saturation.</p>
+        <p>For a true throughput ceiling, see <em>Getting a true throughput curve</em> below, or use E3, E4, or E6
+            in the paper experiment plan (§16).</p>
+    </div>
+
+    <h3>Concurrency scaling - <code>throughput_vs_workers</code>, <code>latency_vs_workers</code></h3>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep concurrency \
+    -n 9 -workers 1,2,4,8,16,32 -duration 10s -trim 1s</pre>
+    </div>
+
+    <h3>Throughput-latency curve - <code>tl_curve_{workers,rate}</code></h3>
+    <p>Needs variation in a load dimension — the worker count or the offered rate — per node count; sweeping the load
+        dimension and the node count yields one panel per N. A rate sweep at a fixed worker count gets the curve just
+        as a worker sweep does, traced along the rate instead.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-17]' -sweep tlcurve \
+    -n 5,9,17 -workers 1,2,4,8,16 -duration 10s -trim 1s</pre>
+    </div>
+
+    <h3>Payload scaling - <code>throughput_vs_payload</code></h3>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep payload \
+    -n 9 -payload 0,64,256,1024,4096,16384 -duration 10s -trim 1s</pre>
+    </div>
+
+    <h3>Paced (rate-limited) runs</h3>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep rate \
+    -n 9 -rate 1000,2000,5000,10000,0 -benchmarks SymmetricMulticast \
+    -duration 10s -trim 1s</pre>
+    </div>
+    <p>Rate 0 is the saturating reference point. <code>sweep -plot</code> treats rate as a sweep dimension:
+        with two or more non-zero rates it produces the <code>throughput_vs_rate</code> and
+        <code>latency_vs_rate</code> figures (rate 0 is excluded from the load axis), and in the other figures runs
+        differing in rate stay separate, with the legend annotating each series' rate.</p>
+
+    <h3>Getting a true throughput curve</h3>
+    <p>A node-scaling run at a fixed small worker count measures how latency changes with N, not how much work the
+        system can actually do. Three approaches give a honest capacity measurement.</p>
+    <p><strong>Worker sweep at fixed N (recommended for a first look).</strong> Vary <code>-workers</code> while
+        holding N constant. Throughput rises with workers until the system saturates, then plateaus; the plateau is
+        the capacity. This is what E3 and E4 measure - combine with node scaling to see both dimensions.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep workers-n9 \
+    -n 9 -workers 1,2,4,8,16,32,64 -duration 10s -trim 1s \
+    -benchmarks 'SymmetricQuorumCall,SymmetricMulticast' -reps 3</pre>
+    </div>
+    <p><strong>Rate sweep (open-loop).</strong> Hold workers fixed at a level above the saturation point (for
+        example <code>-workers 64</code>) and vary <code>-rate</code>. <code>sweep -plot</code> produces
+        <code>throughput_vs_rate</code> and <code>latency_vs_rate</code>; the knee where delivered throughput
+        diverges from offered rate is the saturation point. The pacer fall-behind warning (<a href="#flags">§9</a>)
+        tells you when workers are too few to sustain the requested rate.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep rate-n9 \
+    -n 9 -workers 64 \
+    -rate 5000,10000,20000,40000,80000,0 \
+    -benchmarks 'SymmetricQuorumCall,SymmetricMulticast' \
+    -duration 10s -trim 1s -reps 3</pre>
+    </div>
+    <p><strong>Rate ramp (single-run saturation curve).</strong> The rate-ramp flags (<a href="#ramp">§7</a>)
+        sweep offered load within one execution, tracing the complete saturation curve in a fraction of the wall
+        time. Use the saturation recipe below and size workers for the ceiling rate: sustaining <em>R</em> ops/s at
+        per-op latency <em>L</em> requires workers ≥ R × L (<a href="#flags">§9</a>).</p>
+
+    <h3>Error bands</h3>
+    <p>Add <code>-reps 3</code> (or more) to any recipe; <code>sweep -plot</code> averages repetitions and draws the
+        mean with a 95% CI band.</p>
+
+    <h3>Rendering the report</h3>
+    <p>A local sweep and a driver collection generate the report automatically. Regenerate it by hand — for example
+        to apply different filters — by pointing <code>sweep -plot</code> at the sweep directory; it writes the CSVs
+        and <code>report.typ</code> under <code>&lt;dir&gt;/report</code> and compiles <code>report.pdf</code> when
+        Typst is installed. Driver compact results are enough for the report; collect the retained raw
+        <code>.binpb</code> archive only when you need archival data or custom analysis.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -plot out/&lt;label&gt;</pre>
+    </div>
+
+    <h3 id="ramp-sweep">Saturation curve via rate ramping</h3>
+    <p>The ramp flags pass through sweep, so a distributed run traces the curve in one execution; the ramp starts
+        at <code>-rate-step</code> and climbs to <code>-rate-step-max</code>, dividing <code>-duration</code>
+        evenly across the levels (<a href="#ramp">§7</a>). The same flags also work for a standalone local
+        benchmark run.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep saturation \
+    -n 9 -benchmarks SymmetricQuorumCall -duration 10s \
+    -rate-step 1000 -rate-step-max 10000</pre>
+    </div>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -plot out/saturation</pre>
+    </div>
+    <p>The same ramp flags also work for a standalone local benchmark run, which writes one result file with the
+        rate-ramp event stream; build the local binary first.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>make benchmark</pre>
+    </div>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/benchmark/benchmark -benchmarks QuorumCall -config-size 4 -time 10s \
+    -rate 1000 -rate-step 1000 -rate-step-max 10000 \
+    -output out/ramp.binpb</pre>
+    </div>
+
+    <h3>Profile collection and PGO</h3>
+    <p><code>-collect-profiles</code> downloads each node's CPU and heap profiles next to its result file;
+        <code>-pgo</code> additionally merges the CPU profiles into <code>default.pgo</code>
+        (<a href="#sweep">§13</a>). Profile a saturating workload - the hot paths under load are what PGO should
+        optimize.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep profile \
+    -n 9 -workers 8 -duration 30s -pgo</pre>
+    </div>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>go tool pprof -top out/&lt;label&gt;/profile_*_bb1_9000.cpu.prof</pre>
+    </div>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>go build -pgo out/&lt;label&gt;/default.pgo -o cmd/benchmark/benchmark ./cmd/benchmark</pre>
+    </div>
+
+    <h3>Fault injection: kill nodes mid-run</h3>
+    <p><code>-fault-kill-after</code> (<a href="#flags">§9</a>) makes every node exit cleanly partway through;
+        the time series shows the cluster's throughput before and after the loss, and the summary reports the
+        surviving nodes. Passed via <code>-extra-args</code> it applies to all nodes, so use a duration shorter
+        than <code>-duration</code> and read the per-interval data rather than the aggregate.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-5]' -sweep faults \
+    -n 5 -benchmarks SymmetricQuorumCall -duration 15s \
+    -extra-args '-fault-kill-after=10s'</pre>
+    </div>
+    <p>To kill only a subset of nodes, start the doomed node(s) by hand with the flag and let sweep run the rest,
+        or script the launch directly against the benchmark binary.</p>
+
+    <h3>Foreign protocol binary</h3>
+    <p>Any binary that implements the flag contract (<a href="#flags">§9</a>) can be swept. Pass a prebuilt
+        linux/amd64 binary, or a build command with the <code>{{output}}</code> token.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep paxos \
+    -n 9 -binary ./paxos-linux-amd64 -benchmarks Commit \
+    -extra-args '-leader-timeout=500ms'</pre>
+    </div>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep paxos \
+    -build 'go build -o {{output}} ./cmd/paxos' -n 9</pre>
+    </div>
+
+    <h3>Long runs with bounded memory</h3>
+    <p>For multi-minute runs where the exact store's 8 B/op growth matters, switch the aggregate store to
+        <code>hdr</code>: constant memory with percentiles accurate to three significant figures
+        (<a href="#stats">§4</a>). The distribution is whole-run; <code>-trim</code> still applies to the
+        throughput columns via the event stream.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep soak \
+    -n 9 -workers 4 -duration 5m -stats-mode hdr -interval 1s -trim 5s</pre>
+    </div>
+
+    <h3>LLM failure triage</h3>
+    <p>Add <code>-explain</code> to a sweep to have a model diagnose its failed runs (<a href="#tasks">§17</a>).
+        The diagnosis is printed and written into each failed run's <code>manifest.json</code> as a
+        <code>diagnosis</code> field. With <code>-driver</code> the triage runs on the driver, which is the only
+        side of the firewall that can reach the UiS Ollama server; the diagnosed manifests then travel back with the
+        results. The API key comes from the environment, never a flag: on a plain run it must be set on the laptop,
+        and with <code>-driver</code> the laptop's <code>OLLAMA_API_KEY</code> is forwarded to the driver over the
+        SSH channel (never written to disk or the streamed log).</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>export OLLAMA_API_KEY=...   # from Open WebUI: Settings &#8594; Account
+./cmd/sweep/sweep -hosts 'bb[1-25]' -driver first -sweep nscale \
+    -n 3,5,9,17,25 -workers 4 -explain -explain-model llama3.3</pre>
+    </div>
+    <p>Because triage runs only after a sweep, a broken provider, model name, key, or endpoint would otherwise
+        surface only at the very end - too late to re-triage the failed runs cheaply. Two safeguards address this.
+        When <code>-explain</code> is set, the sweep runs a connectivity preflight before doing any work: it sends a
+        trivial prompt to the configured model and requires a non-empty reply. This runs where triage will run - on
+        the driver for a <code>-driver</code> sweep, the side that can reach the Ollama server - so an unreachable
+        endpoint, empty reply, or error page aborts the sweep at minute 0 instead of after the run. A missing key or
+        model is caught even earlier, in flag validation on the laptop, before anything is built or shipped.</p>
+    <p>For an on-demand check, <code>-explain-check</code> sends the same prompt and prints the reply and latency,
+        then exits. With <code>-driver</code> it ships the check to the driver - building and uploading just the
+        sweep binary, running the check there with the forwarded key, then removing the temp dir - so the laptop can
+        verify the firewalled UiS Ollama server it cannot reach itself. Without <code>-driver</code> it runs locally
+        against a provider the laptop can reach (OpenAI, Claude, or a local Ollama). Either way a missing key or
+        model fails fast, before anything is built or shipped.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre># from the laptop, checks the UiS Ollama server on the driver:
+OLLAMA_API_KEY=... ./cmd/sweep/sweep -hosts 'bb[1-25]' -driver first -explain-check -explain-model llama3.3
+
+# locally against a provider the laptop can reach:
+ANTHROPIC_API_KEY=... ./cmd/sweep/sweep -explain-check -explain-provider claude -explain-model claude-opus-4-8</pre>
+    </div>
+    <hr>
+    <h2 id="paper-plan">16. Paper experiment plan</h2>
+    <p class="lead">Seven independent sweep runs covering the key performance dimensions of Gorums.
+        Each run is self-contained so it can be rerun in isolation if needed.
+        All runs assume 30 cluster nodes <code>bb1…bb30</code> with SSH aliases configured as in
+        <code>scripts/bbchain-ssh-config</code>, tools built via <code>make sweep</code>, and
+        <a href="https://typst.app">Typst</a> installed to compile the report to PDF.</p>
+    <div class="callout warn">
+        <h4>Before any run</h4>
+        <p>Check cluster health and clock skew. Stale processes or large offsets invalidate latency measurements,
+            especially for server-measured benchmarks. A host with a lossy link contaminates every run it joins
+            (throughput understated, tail latency and CV inflated): the <code>-netcheck</code> preflight aborts on
+            hard loss, but exclude any host it or the degraded-run flagging names from <code>-hosts</code> until
+            its link is fixed (<a href="benchkit-troubleshooting.html#slow-node">troubleshooting §5</a>).</p>
+        <div class="command-block" style="margin:8px 0 0">
+            <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+            <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -check</pre>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width:6%">Run</th>
+                <th style="width:24%">Label</th>
+                <th style="width:28%">Swept dimension</th>
+                <th>Paper figures</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>E1</td><td><code>e1-coord-nscale</code></td><td>nodes (coordinator model)</td><td><code>throughput_vs_nodes</code>, <code>latency_vs_nodes</code>, <code>mem_per_op_vs_nodes</code>, <code>allocs_per_op_vs_nodes</code></td></tr>
+            <tr><td>E2</td><td><code>e2-sym-nscale</code></td><td>nodes (symmetric / P2P model)</td><td><code>throughput_vs_nodes</code>, <code>latency_vs_nodes</code>, <code>mem_per_op_vs_nodes</code>, <code>allocs_per_op_vs_nodes</code></td></tr>
+            <tr><td>E3</td><td><code>e3-tlcurve</code></td><td>nodes × workers</td><td><code>tl_curve_workers</code> (one panel per N)</td></tr>
+            <tr><td>E4</td><td><code>e4-concurrency</code></td><td>workers (fixed n=9)</td><td><code>throughput_vs_workers</code>, <code>latency_vs_workers</code></td></tr>
+            <tr><td>E5</td><td><code>e5-payload</code></td><td>payload size (fixed n=9)</td><td><code>throughput_vs_payload</code></td></tr>
+            <tr><td>E6</td><td><code>e6-saturation</code></td><td>rate ramp (saturation curve)</td><td><code>&lt;bench&gt;_saturation.csv</code> → the saturation panel of the time-series figure</td></tr>
+            <tr><td>E7</td><td><code>e7-async</code></td><td>workers: sync vs async QC</td><td><code>throughput_vs_workers</code>, <code>latency_vs_workers</code></td></tr>
+        </tbody>
+    </table>
+
+    <h3>E1 — Coordinator node scaling</h3>
+    <p>How do <code>QuorumCall</code> and <code>Multicast</code> throughput, latency, and memory cost per
+        operation scale with quorum size? Uses the coordinator topology (one client against N servers).</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-25]' -sweep e1-coord-nscale \
+    -n 3,5,9,13,17,25 -workers 4 -duration 10s -trim 1s \
+    -benchmarks 'QuorumCall,Multicast' -reps 3</pre>
+    </div>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -plot out/e1-coord-nscale</pre>
+    </div>
+    <p class="small">Needs up to 25 nodes. The cost figure requires server memory stats, which are collected
+        automatically by <code>StopRemote</code> in client-measured runs. The <code>-benchmarks</code> flag is a
+        comma-separated list of names (each runs as a separate sweep cell); do not use <code>|</code> here - that
+        is the benchmark binary's own regexp syntax and will be interpreted as a shell pipe by the remote node.</p>
+
+    <h3>E2 — Symmetric (peer-to-peer) node scaling</h3>
+    <p>Same dimensions as E1 but for the symmetric topology, where every node is both client and server.
+        Directly comparable to E1: a higher coordinator-model throughput at the same N reflects the coordination
+        overhead removed by the symmetric design.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-25]' -sweep e2-sym-nscale \
+    -n 3,5,9,13,17,25 -workers 4 -duration 10s -trim 1s \
+    -benchmarks 'SymmetricQuorumCall,SymmetricMulticast' -reps 3</pre>
+    </div>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -plot out/e2-sym-nscale</pre>
+    </div>
+    <p class="small">At <code>-workers 4</code> and <code>-rate 0</code>, the <code>throughput_vs_nodes</code>
+        figures reflect latency scaling under Little's Law (throughput ≈ N × 4 / mean_latency), not cluster
+        capacity. For <code>SymmetricQuorumCall</code>, interpret rising throughput at N≥5 as sub-linear latency
+        growth, not increased work capacity; the N=3 point is structurally incomparable (majority threshold 2/2
+        completes on the fastest reply). For <code>SymmetricMulticast</code>, the throughput drop at N≥17 reflects
+        workers blocking on gRPC backpressure as the fanout grows, not a network bottleneck; the one-way latency
+        (server-measured from <code>SendTime</code>) measures queue depth, not wire latency. E3 and E4 provide the
+        capacity measurements that E2 cannot.</p>
+
+    <h3>E3 — Throughput-latency curve</h3>
+    <p>Worker variation at several quorum sizes traces the achievable throughput-latency envelope. Each panel in the
+        figure shows one N-value; points within a panel are worker levels. Use <code>SymmetricQuorumCall</code> and
+        <code>QuorumCall</code> side-by-side to show both topologies in a single figure.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-17]' -sweep e3-tlcurve \
+    -n 5,9,17 -workers 1,2,4,8,16,32 -duration 10s -trim 1s \
+    -benchmarks 'SymmetricQuorumCall,QuorumCall' -reps 3</pre>
+    </div>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -plot out/e3-tlcurve</pre>
+    </div>
+    <p class="small">Needs up to 17 nodes. Workers must be sized for the worst-case latency at the highest
+        concurrency level (<a href="#flags">§9</a>).</p>
+
+    <h3>E4 — Concurrency scaling</h3>
+    <p>How does each benchmark type respond to increasing in-flight concurrency at a fixed quorum size? Covers all
+        four benchmark variants so the figure shows relative concurrency headroom of sync/async and
+        coordinator/symmetric designs.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep e4-concurrency \
+    -n 9 -workers 1,2,4,8,16,32,64 -duration 10s -trim 1s \
+    -benchmarks 'QuorumCall,AsyncQuorumCall,Multicast,SymmetricQuorumCall,SymmetricMulticast' -reps 3</pre>
+    </div>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -plot out/e4-concurrency</pre>
+    </div>
+
+    <h3>E5 — Payload scaling</h3>
+    <p>Message size impact on throughput. Shows where serialization and network bandwidth become the bottleneck.
+        Include all four main variants so the per-benchmark sensitivity to payload is visible in one figure.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep e5-payload \
+    -n 9 -workers 4 \
+    -payload 0,64,256,1024,4096,16384,65536 \
+    -duration 10s -trim 1s \
+    -benchmarks 'QuorumCall,AsyncQuorumCall,SymmetricQuorumCall,Multicast' -reps 3</pre>
+    </div>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -plot out/e5-payload</pre>
+    </div>
+    <p class="small">The <code>0</code>-byte point is the framework overhead floor with no user data. The
+        <code>65536</code>-byte point probes the network-bandwidth regime.</p>
+
+    <h3>E6 — Saturation curve via rate ramping</h3>
+    <p>A single run that sweeps offered load from a low baseline to a ceiling, tracing the throughput-latency
+        saturation curve without separate sweep configurations. The report draws it as the third panel of that run's
+        time-series figure, straight from the rate-ramp event stream; a run measured at one fixed rate has nothing to
+        trace there and gets two panels.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep e6-saturation \
+    -n 9 -workers 32 -duration 60s \
+    -benchmarks 'SymmetricQuorumCall,QuorumCall' \
+    -rate-step 500 -rate-step-max 15000</pre>
+    </div>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -plot out/e6-saturation</pre>
+    </div>
+    <p class="small">Workers must cover the worst-case latency at the ceiling rate: <code>workers ≥ rate_max × L</code>.
+        At 15 000 ops/s and ~1 ms latency, 32 workers provides headroom; revisit if the pacer fall-behind warning
+        fires (<a href="#flags">§9</a>). The ramp has one level per 500 ops/s step up to the ceiling — 30 levels —
+        so 60 s gives ~2 s per level; increase <code>-duration</code> (or coarsen <code>-rate-step</code>) for
+        smoother curves.</p>
+
+    <h3>E7 — Async vs synchronous QuorumCall</h3>
+    <p>Direct comparison of <code>QuorumCall</code> (blocking) and <code>AsyncQuorumCall</code> (non-blocking,
+        completion-callback driven) under increasing concurrency. Highlights the latency and throughput advantage of
+        the async API when many operations are in flight.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep e7-async \
+    -n 9 -workers 1,2,4,8,16,32,64 -duration 10s -trim 1s \
+    -benchmarks 'QuorumCall,AsyncQuorumCall' -reps 3</pre>
+    </div>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -plot out/e7-async</pre>
+    </div>
+
+    <h3>Rendering all runs</h3>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>./cmd/sweep/sweep -plot out/&lt;label&gt;</pre>
+    </div>
+    <p class="small">The CSVs, <code>report.typ</code>, and (when Typst is installed) <code>report.pdf</code> land in
+        <code>out/&lt;label&gt;/report/</code>.</p>
+
+    <div class="callout rec">
+        <h4>Reproducibility checklist</h4>
+        <p>Before including any figure in the paper: (1) confirm <code>sweep -check</code> showed clock skew below 1
+            ms; (2) confirm no pacer fall-behind warnings in the sweep log; (3) confirm CV (σ/μ of interval
+            throughputs) is low (≲ 5%) - visible in the summary table's CV column and in the time-series plots; (4)
+            confirm -reps ≥ 3 error bands are tight; (5) confirm no manifest carries <code>degraded_nodes</code>
+            and the node-health heatmap shows no dark rows — a sick host contaminates every aggregate it joins.</p>
+    </div>
+
+    <hr>
+
+
+        <h2 id="tasks">17. Remaining tasks &amp; roadmap</h2>
+        <p class="lead">Work not yet implemented: deferred features that were analyzed in depth, stage-2/3
+            capabilities, and new proposals.</p>
+
+        <h3>Depth &amp; observability</h3>
+
+        <h4>Correctness verification <span class="tag later">stage 2</span></h4>
+        <p>A workload verification token threaded through <code>Control.Stop</code>. The <code>WithVerify</code>
+            hook already exists in the harness (<a href="#harness">&sect;8</a>); wire a real agreement / state-hash
+            check for consensus workloads so a fast-but-wrong run is rejected rather than reported as a performance
+            result.</p>
+
+        <h4>Broader fault injection <span class="tag later">stage 2</span></h4>
+        <p><code>-fault-kill-after</code> currently kills every node at time T (<a href="#flags">&sect;9</a>).
+            Extend it to a subset of nodes and to failure-detector tuning (kill-primary for view-change studies),
+            still in the fire-and-collect model &mdash; no out-of-band controller required.</p>
+
+        <h4>Diagnostics follow-ups <span class="tag prop">idea</span></h4>
+        <p>Three gaps identified during cluster debugging, detailed in
+            <a href="benchkit-troubleshooting.html#open">troubleshooting &sect;6</a>: per-peer error detail when
+            <code>EstimateOffsets</code> fails (today only "k of N peers" is reported); time-scoped, severity-filtered
+            <code>dmesg</code>/<code>journalctl</code> capture in the failure snapshot before the kernel logs rotate
+            out; and a load-bearing variant of the <code>-netcheck</code> preflight, since the idle ping ring misses
+            links that only drop packets under connection churn.</p>
+
+        <h4>Out-of-band control plane <span class="tag later">stage 3</span></h4>
+        <p>A generic worker daemon driven by a central controller over a side channel &mdash; live metrics,
+            central timing, dynamic reconfiguration. Evaluate only if live metrics or central timing prove
+            necessary; it trades away the language-neutral binary contract that lets sweep drive foreign
+            binaries.</p>
+
+        <h4>Client / server role split <span class="tag later">revisit</span></h4>
+        <p>Distinct load-generating clients vs replicas, with independent counts and rates. Held for scheduling
+            reasons, not merit.</p>
+
+        <h3>Packaging &amp; format</h3>
+
+<h4>Streaming event append <span class="tag later">deferred</span></h4>
+        <p>The <code>eventBuffer</code> accumulates all events in a <code>[]*Event</code> slice in memory until the run
+            completes, then serializes them into <code>Result.events</code>. For sub-10 ms intervals on multi-minute runs,
+            this can reach tens of megabytes:</p>
+        <table>
+            <thead>
+                <tr><th>Interval</th><th>Duration</th><th>Events</th><th>Memory</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>500 ms (default)</td><td>10 s</td><td>~42</td><td>~2 KB</td></tr>
+                <tr><td>100 ms</td><td>10 s</td><td>~200</td><td>~10 KB</td></tr>
+                <tr><td>10 ms</td><td>10 s</td><td>~2,000</td><td>~100 KB</td></tr>
+                <tr><td>1 ms</td><td>10 s</td><td>~20,000</td><td>~1 MB</td></tr>
+                <tr><td>1 ms</td><td>5 min</td><td>~600,000</td><td>~30 MB</td></tr>
+                <tr><td>100 µs</td><td>10 s</td><td>~200,000</td><td>~10 MB</td></tr>
+            </tbody>
+        </table>
+        <p>A streaming append (e.g., a length-delimited event stream appended to the result file) would bound memory
+            to O(1) during the run. However, this requires framing changes: the current on-disk format is
+            <code>[8-byte magic] + proto.Marshal(Report)</code>, with all events embedded in <code>Report.events</code>.
+            Streaming requires either a side file for events (two files per node; <code>sweep</code> would join them
+            when generating the report), or a format bump to v3 with length-delimited event records appended after
+            the Report (touching <code>report.go</code>, <code>cmd/sweep/summary.go</code>, and the sweep
+            report generator). Implementation cost is ~300–500 lines across multiple files, mostly format
+            plumbing.</p>
+        <p>Value is narrow: only performance engineers running high-resolution soak tests (sub-10 ms intervals,
+            multi-minute duration) benefit. The default 500 ms interval produces only hundreds of events (kilobytes).
+            The recommendation: defer until a concrete need arises. The least-disruptive implementation is a side file
+            (no magic bump, no format change), accepting the two-file-per-node cost.</p>
+
+        <h4>Standalone benchkit module <span class="tag done">done</span></h4>
+        <p><code>benchkit</code> now lives in its own module, <code>github.com/relab/gorums/benchkit</code>, holding
+            the measurement library, the workloads built on it, and both commands. The dependency edge runs one way:
+            benchkit imports gorums, never the reverse, and the root <code>go.mod</code> carries no benchmarking or
+            orchestration dependencies.</p>
+        <p>This retired the reason sweep kept its own compiled-in copy of the result schema and its own
+            hand-synchronized forks of the read-time trim, the weighted-histogram statistics, and the time-series
+            renderer. Deleting the schema copy was not optional once sweep imported benchkit: both descriptor sets
+            register the same proto file name and message full names, so linking them into one binary panics at
+            <code>init</code>. The measurement forks were then verified equivalent and deleted, so no published
+            number moved; sweep now calls <code>Summarize</code> (<a href="#trim">§10</a>),
+            <code>DecodeReport</code> (<a href="#file">§12</a>), <code>LatencyDist</code>, and
+            <code>WriteTimeSeriesCSVs</code>, keeping only the report-pipeline glue around them.</p>
+
+        <h4>Protobuf result streaming &amp; lint config <span class="tag prop">idea</span></h4>
+        <p>Evaluate streaming protobuf result messages instead of the protojson <code>.json</code> sibling
+            (<a href="#file">&sect;12</a>), and add proto lint + formatting configuration for the schema files.</p>
+
+        <h3>Orchestration &amp; tooling</h3>
+
+        <h4>Failure-triage follow-ups <span class="tag prop">idea</span></h4>
+        <p>LLM failure triage (<code>-explain</code>) ships today: it diagnoses failed runs after a sweep and writes
+            the verdict back into each run's <code>manifest.json</code> (<a href="#sweep">§13</a>, recipe in
+            <a href="#recipes">§15</a>). Two extensions remain open: auto-triage of a single failed run mid-sweep
+            (before the remaining runs finish); and anomaly triage of <em>successful</em> runs flagged by their
+            statistics (high throughput CV, a pacer fall-behind warning, a single outlier node). The CV already
+            exists in the summary, so the latter is a natural follow-up.</p>
+
+        <h4>Pluggable deployment backend <span class="tag later">deferred</span></h4>
+        <p>sweep hard-wires SSH/<code>iago</code> as the way to launch nodes and collect files. The launcher role
+            &mdash; "start N nodes with this command; bring back these files" &mdash; is conceptually separable from
+            the statistics, the result schema, and the harness. A small launcher interface would let SSH stay the
+            default while a Docker/compose/k8s backend could be added later without touching the measurement code.
+            Kept as a seam to preserve, not a planned feature: Docker-based deployment is out of scope while the
+            cluster is SSH-reachable, and Go static binaries already give most of the reproducibility a container
+            would.</p>
+
+        <h3>Broader gorums / project tasks</h3>
+        <p>Tracked in <code>benchmark/todo.md</code>; the benchkit-adjacent ones:</p>
+        <ul>
+          <li><strong>Move reusable code to <code>iago</code></strong> (e.g. SSH-config resolution), avoiding
+              moving code that depends on the copied <code>resolveSSHConfigPath</code>.</li>
+          <li><strong>CloudLab access</strong> &mdash; request a cluster and add its SSH config, as a second test
+              bed.</li>
+          <li><strong>Expose sender node ID via <code>ServerCtx</code></strong> instead of the benchmark-specific
+              <code>TimedMsg.sender_id</code> field; if adopted, that wire field can be removed.</li>
+          <li><strong>DNS-free <code>WithNodeList</code></strong> &mdash; configuration construction currently
+              resolves hostnames (<code>normalizeAddr</code> uses <code>net.ResolveTCPAddr</code>) and the
+              server-side path panics on a transient resolver failure; sweep works around it with numeric peer
+              addresses (<a href="#sweep">&sect;13</a>). Preferred direction: make normalization syntactic
+              (literal hostnames, canonical numeric IPs), accepting weaker duplicate detection across aliases; an
+              explicit pre-resolved node-list option is the compatible fallback. A core API change to evaluate
+              separately.</li>
+          <li><strong>Exported-API review</strong> &mdash; unexport what need not be public; ensure naming, docs,
+              and examples are consistent across benchkit.</li>
+          <li><strong>PGO build wiring</strong> (the sweep already merges a <code>default.pgo</code>; close the
+              loop by building the shipped benchmark binary with it) and <code>httptrace</code>-style gRPC call
+              tracing.</li>
+        </ul>
+
+        <hr>
+        <p class="small">Reference documentation for the benchkit toolkit. Sections 1–14 describe the shipped
+            toolkit (the design rationale is §2); section 15 gives runnable recipes; section 16 is the paper
+            experiment plan; section 17 records remaining tasks and deferred features. Failure history and
+            log-analysis guidance live in <a href="benchkit-troubleshooting.html">benchkit-troubleshooting.html</a>.</p>
+
+        </div>
+    </div>
+<script>
+    (() => {
+        const links = Array.from(document.querySelectorAll('.sidebar nav a[href^="#"]'));
+        const byId = new Map(links.map((a) => [a.getAttribute('href').slice(1), a]));
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((e) => {
+                if (!e.isIntersecting) return;
+                links.forEach((l) => l.classList.remove('active'));
+                const a = byId.get(e.target.id);
+                if (a) a.classList.add('active');
+            });
+        }, { rootMargin: '-8% 0px -80% 0px', threshold: 0 });
+        document.querySelectorAll('h2[id]').forEach((h) => observer.observe(h));
+    })();
+</script>
+<script>
+    (() => {
+        function normalizeCommandText(text) {
+            const lines = text.replace(/\s+$/, '').split('\n');
+            let indent = null;
+            for (const line of lines) {
+                if (!line.trim()) {
+                    continue;
+                }
+                const leading = line.match(/^ */)[0].length;
+                indent = indent === null ? leading : Math.min(indent, leading);
+            }
+            if (indent === null) {
+                return '';
+            }
+            return lines.map((line) => line.slice(indent)).join('\n').trim();
+        }
+
+        async function copyText(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+                return;
+            }
+            const area = document.createElement('textarea');
+            area.value = text;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.left = '-9999px';
+            document.body.appendChild(area);
+            area.select();
+            try {
+                if (!document.execCommand('copy')) {
+                    throw new Error('copy failed');
+                }
+            } finally {
+                document.body.removeChild(area);
+            }
+        }
+
+        document.querySelectorAll('.command-block').forEach((block) => {
+            const pre = block.querySelector('pre');
+            const button = block.querySelector('.copy-command');
+            if (!pre || !button) {
+                return;
+            }
+            const label = button.textContent;
+            button.addEventListener('click', async () => {
+                try {
+                    await copyText(normalizeCommandText(pre.textContent));
+                    button.textContent = 'Copied';
+                } catch (err) {
+                    button.textContent = 'Copy failed';
+                }
+                window.setTimeout(() => {
+                    button.textContent = label;
+                }, 1200);
+            });
+        });
+    })();
+</script>
+</body>
+
+</html>

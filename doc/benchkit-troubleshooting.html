@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>benchkit — Troubleshooting & Log Analysis</title>
+    <style>
+        :root {
+            --bg: #fbfbfd;
+            --panel: #ffffff;
+            --ink: #1d1d22;
+            --muted: #5b5b66;
+            --line: #e4e4ea;
+            --accent: #3a5bd9;
+            --accent-soft: #eef1fc;
+            --good: #1b7f4b;
+            --good-bg: #e9f6ee;
+            --bad: #b3331f;
+            --bad-bg: #fbece9;
+            --warn: #8a6d12;
+            --warn-bg: #fcf6e3;
+            --code: #f4f4f7;
+            --rec: #1f5ed1;
+            --rec-bg: #eaf0fe;
+        }
+
+        * { box-sizing: border-box }
+        html { scroll-behavior: smooth }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--ink);
+            font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .wrap { max-width: 980px; margin: 0 auto; padding: 48px 28px 96px }
+
+        .layout { display: grid; grid-template-columns: 248px minmax(0, 1fr); align-items: start }
+        .sidebar {
+            position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+            background: var(--panel); border-right: 1px solid var(--line); padding: 28px 20px;
+        }
+        .sidebar .brand { font-size: 15px; font-weight: 700; letter-spacing: -.01em }
+        .sidebar .brand small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 3px }
+        .sidebar nav { margin-top: 18px }
+        .sidebar nav a { display: block; padding: 5px 10px; border-radius: 6px; color: var(--muted); font-size: 13.5px; line-height: 1.35 }
+        .sidebar nav a:hover { background: var(--accent-soft); color: var(--ink); text-decoration: none }
+        .sidebar nav a.active { background: var(--accent); color: #fff; font-weight: 600 }
+        .sidebar nav a.cross { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--accent) }
+        h2[id] { scroll-margin-top: 16px }
+        @media (max-width: 860px) {
+            .layout { grid-template-columns: 1fr }
+            .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line) }
+            .sidebar nav a { display: inline-block }
+        }
+
+        h1 { font-size: 32px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -.02em }
+        .sub { color: var(--muted); font-size: 16px; margin: 0 0 4px }
+        .meta { color: var(--muted); font-size: 13px; margin-top: 10px }
+
+        h2 { font-size: 23px; margin: 52px 0 10px; letter-spacing: -.01em; padding-bottom: 8px; border-bottom: 2px solid var(--line) }
+        h3 { font-size: 18px; margin: 30px 0 8px }
+        h4 { font-size: 14px; margin: 22px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em }
+
+        p { margin: 10px 0 }
+        ul, ol { margin: 10px 0; padding-left: 1.6em }
+        li { margin: 4px 0 }
+
+        code {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 0.875em;
+            background: var(--code);
+            border-radius: 3px;
+            padding: 1px 5px;
+        }
+
+        pre {
+            background: #1e1f26;
+            color: #cdd4e0;
+            border-radius: 6px;
+            padding: 16px 20px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.55;
+            margin: 14px 0;
+        }
+
+        pre code { background: none; padding: 0; font-size: inherit; color: inherit }
+        .c { color: #8b94a8 }
+        .k { color: #7eb8f7 }
+        .s { color: #98c379 }
+        .hi { color: #e06c75 }
+
+        table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px }
+        th { background: var(--accent-soft); color: var(--accent); text-align: left; padding: 8px 12px; font-weight: 600; border-bottom: 2px solid var(--line) }
+        td { padding: 7px 12px; border-bottom: 1px solid var(--line); vertical-align: top }
+        tr:last-child td { border-bottom: none }
+
+        .callout {
+            border-left: 4px solid var(--line);
+            background: var(--panel);
+            border-radius: 0 6px 6px 0;
+            padding: 12px 16px;
+            margin: 16px 0;
+        }
+        .callout.rec { border-color: var(--rec); background: var(--rec-bg) }
+        .callout.warn { border-color: #e0a800; background: var(--warn-bg) }
+        .callout.bad { border-color: var(--bad); background: var(--bad-bg) }
+        .callout.good { border-color: var(--good); background: var(--good-bg) }
+        .callout p { margin: 4px 0 }
+
+        .badge {
+            display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+            text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin-right: 6px;
+            vertical-align: middle;
+        }
+        .badge.fixed { background: var(--good-bg); color: var(--good) }
+        .badge.mitigated { background: var(--rec-bg); color: var(--rec) }
+        .badge.infra { background: var(--warn-bg); color: var(--warn) }
+        .badge.open { background: var(--bad-bg); color: var(--bad) }
+
+        .toc {
+            background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+            padding: 16px 20px; margin: 28px 0; display: inline-block; min-width: 300px;
+        }
+        .toc h4 { margin-top: 0 }
+        .toc ol { margin: 0; padding-left: 1.4em }
+        .toc li { margin: 5px 0 }
+        .toc a { color: var(--accent); text-decoration: none }
+        .toc a:hover { text-decoration: underline }
+
+        .timeline {
+            border-left: 3px solid var(--line);
+            padding-left: 20px;
+            margin: 16px 0;
+        }
+        .timeline-item { margin-bottom: 12px; position: relative }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -26px;
+            top: 6px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--line);
+        }
+        .timeline-item.ok::before { background: var(--good) }
+        .timeline-item.fail::before { background: var(--bad) }
+        .timeline-item.warn-item::before { background: #e0a800 }
+
+        hr { border: none; border-top: 1px solid var(--line); margin: 48px 0 24px }
+        .small { font-size: 13px; color: var(--muted) }
+    </style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+    <div class="brand">benchkit<small>Troubleshooting</small></div>
+    <nav>
+        <a href="#lifecycle">1. Run lifecycle</a>
+        <a href="#artifacts">2. Diagnostic artifacts</a>
+        <a href="#taxonomy">3. Failure taxonomy</a>
+        <a href="#catalog">4. Failure catalog</a>
+        <a href="#slow-node">5. Slow-node triage</a>
+        <a href="#open">6. Open improvements</a>
+        <a href="benchkit.html" class="cross">&#8627; benchkit reference</a>
+    </nav>
+</aside>
+<div class="wrap">
+
+<header>
+    <h1>benchkit &mdash; Troubleshooting &amp; Log Analysis</h1>
+    <p class="sub">How to read a failed or anomalous sweep run: the run lifecycle, the diagnostic artifacts,
+        the failure taxonomy, and a catalog of failure classes with their causes and remedies.</p>
+    <p class="meta">Companion to <a href="benchkit.html">benchkit.html</a> &nbsp;&middot;&nbsp; gorums repository
+        &nbsp;&middot;&nbsp; <code>doc/benchkit-troubleshooting.html</code></p>
+</header>
+
+<div class="callout rec">
+    <p><strong>Start here when a run fails.</strong> Every run leaves machine-readable artifacts you can inspect
+    without grepping <code>sweep.log</code>:</p>
+    <ul>
+        <li><code>&lt;base&gt;.manifest.json</code> &mdash; status plus <code>failure_phase</code>
+            (setup / measurement / collection), <code>collected_files</code>, <code>missing_files</code>,
+            <code>node_map</code>, and degraded-node flags (<a href="#artifacts">&sect;2</a>).</li>
+        <li><code>logs/&lt;base&gt;.log</code> &mdash; every node's output for that one run, interleaved in
+            chronological order.</li>
+        <li><code>logs/&lt;base&gt;_snapshot.txt</code> &mdash; a per-host snapshot (load, fd limits, sockets,
+            surviving processes) captured at the moment of failure.</li>
+    </ul>
+    <p>Read the manifest first: <code>failure_phase</code> plus <code>collected_files</code> classifies the run
+    (<a href="#taxonomy">&sect;3</a>), the per-run log gives the cross-node timeline, and the snapshot gives host
+    state. <code>sweep -explain</code> automates exactly this reading (<a href="benchkit.html#recipes">benchkit
+    &sect;15</a>).</p>
+</div>
+
+<h2 id="lifecycle">1. Run lifecycle &amp; exit synchronization</h2>
+
+<p>
+    <code>cmd/sweep</code> connects to each host via SSH, deploys the benchmark binary, and launches one process
+    per node for each parameter combination. The binary handles its own distributed coordination; the sweep only
+    launches, monitors, and collects. Knowing which phase a run died in is the first classification step, so the
+    phases are worth internalizing:
+</p>
+
+<div class="timeline">
+    <div class="timeline-item ok">
+        <strong>Sweep preflight (once per sweep).</strong>
+        <code>-netcheck</code> (on by default) has every host ping its ring successor and aborts the sweep when
+        any link shows &ge; 5% packet loss, catching a hard link fault in seconds before any benchmark time is
+        spent. Note the ring runs on an <em>idle</em> network: a link that only drops packets under load can
+        pass it (<a href="#slow-node">&sect;5</a>).
+    </div>
+    <div class="timeline-item ok">
+        <strong>Setup (per run).</strong>
+        Lingering processes from a prior sweep are killed (SIGTERM, escalating to SIGKILL), and a port preflight
+        skips the run within ~1&nbsp;s if a benchmark port is still busy, printing the <code>ss</code> line that
+        names the foreign listener. Each node is then launched over SSH, binds the <em>wildcard</em> address, and
+        enters <code>AwaitReady</code>: an outbound probe that sends each peer round-trip echoes until it
+        responds. The probe is progress-based &mdash; each response resets a 20&nbsp;s stall timer &mdash; so a
+        peer that died at startup is reported within ~20&nbsp;s instead of at the 2-minute overall deadline,
+        named by address with its last dial error. On probe failure the node prints a <code>[diag]</code>
+        self-diagnosis (<a href="#catalog">&sect;4.1</a>). A host whose own listener is unreachable passes its
+        own probe &mdash; only outbound connectivity is exercised locally &mdash; so that condition surfaces on
+        its <em>peers</em>, whose probes stall naming the host.
+    </div>
+    <div class="timeline-item ok">
+        <strong>Measurement.</strong>
+        All nodes run their measurement window simultaneously. Each node writes its <code>.binpb</code> result
+        file when its own window ends.
+    </div>
+    <div class="timeline-item ok">
+        <strong>Exit synchronization (symmetric topology).</strong>
+        There is no exit barrier. After finishing its window and trailing flush, a node multicasts a best-effort
+        <code>Done</code> signal to its peers and then waits until every peer has signaled Done <em>or</em> a
+        grace ceiling elapses, whichever comes first
+        (<code>SignalDone</code> / <code>AwaitPeersDoneOrGrace</code> in <code>benchmark/symmetric.go</code>).
+        The ceiling is <code>ExitGrace(N) = min(3s + 300ms&times;N, 20s)</code>. In a healthy run all nodes finish
+        within milliseconds of each other and exit via the Done signals long before the ceiling; the ceiling only
+        matters when a Done never arrives. Because the Done send ignores per-peer errors and the wait always
+        falls back to the ceiling, exit relies only on <em>outbound</em> reachability &mdash; the direction that
+        stayed healthy even on hosts with broken inbound (<a href="#catalog">&sect;4.1</a>).
+    </div>
+    <div class="timeline-item ok">
+        <strong>Straggler tolerance.</strong>
+        A node that is still running after its peers have finished and closed their listeners will see
+        <em>connection refused</em> or <em>incomplete call</em> errors. Once enough peers have signaled Done that
+        the failing phase could no longer succeed (<code>quorumRunOver</code> /
+        <code>anyPeerFinished</code>), the straggler treats this as the expected end of the run &mdash; it stops
+        cleanly and keeps its results &mdash; rather than exiting with an error. Failures <em>before</em> any peer
+        has signaled Done are still genuine faults and fail the run.
+    </div>
+    <div class="timeline-item ok">
+        <strong>Collection &amp; manifest.</strong>
+        When all processes have exited, the sweep downloads the result files (best-effort even after a failed
+        launch, so partial results are preserved), summarizes what it got, compares every node's throughput and
+        median latency against the run median (<code>-degraded-below</code> 0.5, <code>-degraded-above</code> 2,
+        <code>-degraded-latency-below</code> 0.2) and records the outcome in the
+        manifest. There is no automatic retry: a failed or degraded cell stays visible as such rather than being
+        silently replaced.
+    </div>
+</div>
+
+<h2 id="artifacts">2. Diagnostic artifacts</h2>
+
+<p>All artifacts live in the run's output directory and are named by the run base
+(<code>&lt;label&gt;_&lt;bench&gt;_N&lt;n&gt;_W&lt;w&gt;_P&lt;p&gt;[_R&lt;rate&gt;][_r&lt;rep&gt;]</code>), so
+everything about one run is discoverable from its manifest path alone.</p>
+
+<h3>The run manifest &mdash; <code>&lt;base&gt;.manifest.json</code></h3>
+<p>Written before launch (so the directory is self-describing even when the run fails) and updated with the
+outcome afterward. Fields beyond the run configuration, timestamp, repository HEAD, and deployed binary:</p>
+<table>
+    <thead>
+        <tr><th style="width:24%">Field</th><th>Meaning</th></tr>
+    </thead>
+    <tbody>
+        <tr><td><code>status</code>, <code>error</code></td>
+            <td><code>succeeded</code> / <code>failed</code> / <code>degraded</code>, with the launch error text
+            on failure.</td></tr>
+        <tr><td><code>failure_phase</code></td>
+            <td><code>setup</code> (no results at all), <code>measurement</code> (partial results), or
+            <code>collection</code> (nodes finished but files could not be retrieved). The first thing to read on
+            a failure.</td></tr>
+        <tr><td><code>collected_files</code>, <code>missing_files</code></td>
+            <td>How many expected <code>.binpb</code> files exist, and the basenames of the absent ones &mdash;
+            recorded on every terminal path, including success, so full coverage is confirmable from the manifest
+            alone.</td></tr>
+        <tr><td><code>node_map</code></td>
+            <td>Per node: SSH alias, advertised peer address, result file, and Gorums node ID. Needed because
+            sweep resolves aliases to numeric IPs before launch (<a href="#catalog">&sect;4.2</a>), and
+            numeric-IP sorting can assign different node IDs than hostname sorting.</td></tr>
+        <tr><td><code>degraded_nodes</code>, <code>tcp_stats</code></td>
+            <td>Nodes whose measurement fell outside the degradation bounds &mdash; too slow, too fast, or with a
+            median latency too low for the round trip the benchmark measures &mdash; each with the
+            <code>reason</code> it was flagged, its throughput, and <code>relative_to_median</code> for the metric
+            that tripped, plus every host's TCP counter deltas over the run. Degraded runs are excluded from aggregate plots but kept in per-node figures.</td></tr>
+        <tr><td><code>diagnosis</code></td>
+            <td>The LLM triage verdict when the sweep ran with <code>-explain</code>.</td></tr>
+    </tbody>
+</table>
+
+<h3>Per-run node log &mdash; <code>logs/&lt;base&gt;.log</code></h3>
+<p>All of one run's node output (stdout and stderr), interleaved in chronological order, for every run &mdash;
+success or failure. The chronological cross-node ordering is deliberate: the signature of an exit-skew failure is
+"fast nodes exit, then a slow node hits connection-refused against exactly those nodes", which per-node files
+would scatter across N files. <code>sweep.log</code> holds only the orchestration narrative (run headers,
+summaries, errors) and mirrors the console.</p>
+
+<h3>Host snapshot &mdash; <code>logs/&lt;base&gt;_snapshot.txt</code></h3>
+<p>Collected from every host of a failed run, before result collection (whose SSH round-trips would let evidence
+decay). Per host: uptime, load average, CPU count, fd limits, surviving benchmark processes, and the listener and
+connection state for each benchmark port (<code>ss -ltnp</code> / <code>ss -tan</code>). TIME_WAIT sockets
+persist ~60&nbsp;s after a connection closes, so the snapshot still shows who was talking to whom even though the
+processes have exited. Best-effort: a snapshot failure never masks the original run failure.</p>
+
+<h3>Node-health heatmap</h3>
+<p>The report's <code>node_health</code> figure (from <code>sweep -plot</code>): hosts &times; runs, colored by each
+node's throughput relative to the run median. A sick host shows as a red row across the sweep; a one-off hiccup shows
+as a single red cell. This is the fastest way to spot the infrastructure faults of <a href="#slow-node">&sect;5</a>.</p>
+
+<h2 id="taxonomy">3. Failure taxonomy</h2>
+
+<p>Failures fall into three classes, distinguishable from the manifest alone. This taxonomy doubles as the
+few-shot context for <code>sweep -explain</code>: a distilled form of it is embedded in the triage model's system
+prompt, so keeping this section accurate improves automated diagnoses, not just human ones.</p>
+
+<table>
+    <thead>
+        <tr><th style="width:18%">Class</th><th style="width:30%">Manifest signature</th><th>Typical causes</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Type A</strong> &mdash; setup</td>
+            <td><code>failure_phase: setup</code>; <code>collected_files: 0</code></td>
+            <td>A node stalled in <code>AwaitReady</code>: inbound unreachability, a dead peer process, a busy
+            port that slipped past the preflight. All nodes time out and exit; no results exist.</td>
+        </tr>
+        <tr>
+            <td><strong>Type B</strong> &mdash; measurement</td>
+            <td><code>failure_phase: measurement</code>; partial <code>collected_files</code></td>
+            <td>Nodes passed readiness but some failed mid-run: completion skew beyond what the Done/grace exit
+            absorbs, a mid-run crash, or clock-sync failure. The fast nodes' results were collected; the failing
+            nodes' are missing.</td>
+        </tr>
+        <tr>
+            <td><strong>Degraded</strong></td>
+            <td><code>status: degraded</code>; all files collected</td>
+            <td>The run completed but one or more nodes ran far below the run median &mdash; almost always a host
+            or link fault, not a gorums bug. Go to <a href="#slow-node">&sect;5</a>.</td>
+        </tr>
+    </tbody>
+</table>
+
+<h3>Reading a Type B failure</h3>
+<p>The pattern to look for in <code>logs/&lt;base&gt;.log</code>: the fast nodes print their throughput results
+and exit; tens of seconds later the stragglers log <code>quorum call error: incomplete call</code> or
+<code>dial tcp &lt;peer&gt;:9000: connect: connection refused</code> against exactly the nodes that exited. The
+<code>errors:&nbsp;0</code> variant of the incomplete-call message is the tell that the missing responders were
+<em>gone</em>, not returning errors. The root cause is whatever made the stragglers slow &mdash; check
+<code>degraded_nodes</code>/<code>tcp_stats</code> in the manifest and the load averages in the snapshot. Note
+that a rate-limited run with too few workers extends its <em>effective</em> window well beyond the nominal one
+(the pacer queue drains late), which manufactures exactly this skew; the pacer fall-behind warning in the node
+log names that condition.</p>
+
+<h2 id="catalog">4. Failure catalog</h2>
+
+<p>Current diagnostic guidance for the failure classes a sweep can still surface, and the producer contracts the
+tooling relies on. Each entry describes the log signature to look for and what it points at.</p>
+
+<h3>4.1 Readiness-probe diagnosis</h3>
+<p>A node that cannot reach its peers during setup stalls in <code>AwaitReady</code> and fails the run with
+<code>outbound peers not ready: no outbound peer responded</code>, naming the unreachable peer by address with
+its last dial error. A host whose own inbound is unreachable passes its own probe (only outbound connectivity is
+exercised locally), so that condition surfaces on its <em>peers</em>. When the probe fails the node prints a
+<code>[diag]</code> self-diagnosis; read it with this table (on a peer of the broken host, expect
+<code>self-dial ok</code>, pointing the blockage at the named host):</p>
+<table>
+    <thead>
+        <tr><th style="width:44%">Observation</th><th>Conclusion</th></tr>
+    </thead>
+    <tbody>
+        <tr><td><code>listener bound to</code> shows loopback or an unexpected IP</td>
+            <td>Wrong local bind; fix name resolution or bind the wildcard.</td></tr>
+        <tr><td>Self-dial fails although the bound address matches the advertised IP</td>
+            <td>Local firewall refusing connections, or the listener died.</td></tr>
+        <tr><td>Self-dial ok</td>
+            <td>The listener works from the host itself; the blockage is between the peers and this host
+            (network filtering, dropped SYNs, a lossy link &mdash; see <a href="#slow-node">&sect;5</a>).</td></tr>
+        <tr><td>Goroutine dump shows stream handlers blocked in <code>AcceptPeer</code>/<code>registerPeer</code></td>
+            <td>Peer streams reached the server but registration stalled: a gorums bug; open an issue with the
+            dump.</td></tr>
+        <tr><td>Goroutine dump shows an idle gRPC server</td>
+            <td>No peer connection ever reached the process; gorums is exonerated.</td></tr>
+    </tbody>
+</table>
+<p class="small">Nodes bind the wildcard address (<code>listener bound to [::]:9000</code>), so a host that maps
+its own name to <code>127.0.1.1</code> in <code>/etc/hosts</code> (the Debian convention on the bbchain hosts)
+cannot bind its listener to loopback. That convention still traps any <em>other</em> software on these hosts that
+binds by hostname. Probing caveat: never hold <code>nc -l -k 0.0.0.0 9000</code> on a host while a sweep runs
+&mdash; with <code>SO_REUSEADDR</code> it coexists with the benchmark listener and intercepts peer connections,
+invalidating both the run and the probe.</p>
+
+<h3 id="dns-peer-list">4.2 Peer addressing without DNS</h3>
+<p>sweep resolves each host alias once, controller-side, to one stable non-loopback IP (rejecting
+loopback/unspecified/multicast, preferring IPv4) and passes numeric <code>ip:port</code> values in
+<code>-self</code>/<code>-remotes</code>, so nodes perform no DNS at startup. The SSH alias is kept for launch,
+filenames, logs, and cleanup; the manifest's <code>node_map</code> records the
+alias&harr;address&harr;node-ID correspondence. This exists because <code>gorums.WithNodeList</code> normalizes
+addresses with <code>net.ResolveTCPAddr</code>: with hostname peer lists every process did N&times;N DNS lookups
+before readiness, and one transient resolver <code>SERVFAIL</code> aborted a process and stalled its peers.
+Removing DNS from <code>WithNodeList</code> itself remains a gorums API question, tracked in the roadmap
+(<a href="benchkit.html#tasks">benchkit &sect;17</a>) and in <a href="#open">&sect;6</a>.</p>
+
+<h3>4.3 Completion skew and the exit grace</h3>
+<p><strong>Symptom.</strong> Type B: fast nodes finish and exit; stragglers later hit connection-refused /
+incomplete-call / <code>clock sync incomplete: got offsets for k of N peers</code> against the exited peers and
+the run fails with partial results.</p>
+<p>The symmetric exit is a best-effort <code>Done</code> signal plus a grace-ceiling race
+(<a href="#lifecycle">&sect;1</a>), with the ceiling at <code>min(3s + 300ms&times;N, 20s)</code>. A straggler
+whose calls fail against peers that already signaled Done treats that as the expected end of the run and stops
+cleanly with its results (<code>quorumRunOver</code>/<code>anyPeerFinished</code>), and degraded-run flagging
+separates "one node was pathologically slow" from "the run is unusable". The straggler's clean stop is also why the
+flagging is two-sided: a straggler whose window outlives its peers' can report far <em>more</em> operations than
+they did, which <code>-degraded-above</code> catches. <strong>Residual risk:</strong> a
+straggler that has not yet reached its post-window phases when peers exit can still fail, and no grace budget
+survives a genuinely broken link. When this fires repeatedly the fix is operational: find and exclude the sick
+host (<a href="#slow-node">&sect;5</a>).</p>
+
+<h3 id="stdout-rule">4.4 Producer contract: diagnostics to stderr</h3>
+<p>All diagnostic output in a benchmark binary must go to <em>stderr</em> (in-module code uses
+<code>benchkit.Logf</code>), and never from code that runs under a lock. Unread stdout fills the SSH channel's
+64&nbsp;KB flow-control window, after which the remote process's <code>write()</code> blocks; a goroutine that
+blocks while holding a lock then stalls peer registration entirely. sweep drains both pipes into the per-run log,
+so the transport is safe from both ends, but the stderr rule is what keeps a foreign binary safe under any
+launcher that drains only stderr.</p>
+
+<h3>4.5 Operational checks and footguns</h3>
+<ul>
+    <li><strong>Busy ports and stale binaries.</strong> A busy benchmark port is skipped by the per-run port
+        preflight in ~1&nbsp;s with a message naming the listener; a peer that dies at startup fails the run in
+        ~20&nbsp;s via the progress-based stall check in <code>AwaitReady</code>. <code>sweep -check</code> reports
+        busy ports and lingering processes per host before a sweep, and sweep warns "rebuild with 'make sweep'"
+        when the running binary's embedded VCS revision differs from the repository HEAD.</li>
+    <li><strong>File-descriptor limits.</strong> A full N-node mesh holds N&minus;1 persistent gRPC connections
+        per node plus the clock-sync streams. sweep prefixes every node command (and the driven sweep itself)
+        with <code>ulimit&nbsp;-Sn</code>, controlled by <code>-fd-limit</code> (default 65536; 0 keeps the host
+        default); the failure snapshot records both limits per host.</li>
+    <li><strong>SSH-config footguns.</strong> SSH config is first-match-wins per key, so an empty
+        <code>Host bbN</code> stanza <em>after</em> <code>Host bb*</code> cannot override anything; overriding a
+        proxy for directly reachable hosts requires <code>ProxyJump none</code> in a stanza placed <em>before</em>
+        the wildcard. (iago shares one jump connection per unique proxy, so a <code>-check</code> across many
+        hosts behind a <code>ProxyJump</code> no longer trips the jump server's <code>MaxStartups</code> limit.)</li>
+</ul>
+
+<h2 id="slow-node">5. Triage ladder: a slow node</h2>
+
+<p>For the case where a run <em>completes</em> but one node ran far slower than its peers, dragging down cluster
+aggregates and inflating tail latency and CV. The sweep's built-in defenses &mdash; the <code>-netcheck</code>
+preflight, degraded-run flagging with per-run <code>tcp_stats</code>, and the node-health heatmap
+(<a href="#artifacts">&sect;2</a>) &mdash; find the suspect for you; this ladder finds the cause. Per-node skew
+grows with cluster size, so reproduce with the larger configurations and <code>-reps 3</code>. Each step is
+read-only and safe on a live cluster; <code>bbN</code> is the suspect, <code>bbH</code> a known-healthy
+comparison host.</p>
+
+<ol>
+    <li><strong>Is the signature loss-shaped?</strong> A node behind a lossy link has p99 pinned at
+        ~200&ndash;220&nbsp;ms &mdash; the Linux minimum TCP retransmission timeout. Check the per-node latency
+        CDF or the degraded manifest. p99 at ~200&nbsp;ms means packet loss (step 2); uniformly slow at all
+        percentiles means a host problem (step 4).</li>
+    <li><strong>Measure link loss directly.</strong>
+        <pre><code>ssh bbH 'ping -c 50 -i 0.1 -s 1400 -q &lt;bbN-ip&gt;'   <span class="c"># from a healthy peer</span>
+ssh bbN 'ping -c 50 -i 0.1 -q &lt;bbH-ip&gt;'           <span class="c"># reverse direction</span></code></pre>
+        Any loss on a healthy LAN is abnormal (a healthy pair shows 0%). Loss from multiple sources toward the
+        suspect places the fault on its link segment. To isolate the <em>direction</em> without root, compare the
+        kernel ICMP counters in <code>/proc/net/snmp</code> on both endpoints (<code>OutEchos</code> vs
+        <code>InEchos</code>, <code>OutEchoReps</code> vs <code>InEchoReps</code>): a lossy inbound path shows
+        requests vanishing while every reply that was sent arrives.</li>
+    <li><strong>Find where the loss happens.</strong>
+        <pre><code>ssh bbN 'netstat -s | grep -iE "retrans|timeout" | head'
+ssh bbN 'ethtool -S &lt;iface&gt; | grep -iE "err|drop|discard|crc" | grep -v ": 0$"'
+ssh bbN 'ethtool &lt;iface&gt; | grep -E "Speed|Duplex|Link detected"'
+ssh bbN 'ip -s link show &lt;iface&gt;'</code></pre>
+        <ul>
+            <li><code>TCPTimeouts</code> and slow-start retransmits orders of magnitude above healthy peers
+                (normalize by traffic volume): chronic loss confirmed.</li>
+            <li><code>rx_fcs_err_frames</code> growing: frames corrupted on the wire &mdash; bad cable, SFP
+                module, or switch port.</li>
+            <li>FCS counters <em>not</em> growing while loss is reproducible: packets vanish before the NIC
+                &mdash; switch port or cable; check switch-side TX/discard counters.</li>
+            <li>Speed below the expected rate: renegotiation fault; try <code>ethtool -r</code> or reseat.</li>
+        </ul>
+        A reboot fixes none of these; physical intervention (cable, transceiver, switch port) does.</li>
+    <li><strong>Rule out host-level causes.</strong>
+        <pre><code>ssh bbN 'cat /sys/devices/system/cpu/cpu*/thermal_throttle/core_throttle_count | sort | uniq -c'
+ssh bbN 'paste &lt;(cat /sys/class/thermal/thermal_zone*/type) &lt;(cat /sys/class/thermal/thermal_zone*/temp)'
+ssh bbN 'cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq | sort -n | uniq -c'
+ssh bbN 'uptime; free -m'</code></pre>
+        Growing throttle counts or package temperature near 100&deg;C mean cooling; frequencies capped far below
+        max mean a governor or firmware cap; high load with no benchmark running means a stray process
+        (<code>ps axu --sort=-%cpu | head</code>).</li>
+    <li><strong>Look at history.</strong> The hosts run <code>atop</code> with 10-minute samples:
+        <pre><code>ssh bbN 'atopsar -r /var/log/atop/atop_&lt;date&gt; -b &lt;HH:MM&gt; -e &lt;HH:MM&gt; -c'   <span class="c"># CPU</span>
+ssh bbN 'atopsar -r /var/log/atop/atop_&lt;date&gt; -b &lt;HH:MM&gt; -e &lt;HH:MM&gt; -i'   <span class="c"># network</span></code></pre>
+        This answers whether the host was busy, hot, or saturated during the exact run window.</li>
+</ol>
+
+<div class="callout warn">
+    <p><strong>Two link-fault signatures seen in practice</strong> (both cluster infrastructure, not gorums or
+    benchkit bugs; both need switch-side intervention):</p>
+    <ul>
+        <li><strong>Steady loss.</strong> ~25% packet loss, rate- and size-independent, present on an idle link,
+            entirely in the switch&rarr;host direction (the host's own transmissions were lossless); the host's
+            FCS counters did not grow during live loss, placing the drop at or before switch egress. Signature in
+            results: throughput at 3&ndash;7% of run median, p99 pinned at the RTO in every run. Caught by
+            <code>-netcheck</code> in seconds.</li>
+        <li><strong>Load-dependent loss.</strong> Loss concentrated at TCP connection setup and slow-start bursts
+            (SYN-retransmit and slow-start-retransmit storms in <code>tcp_stats</code>, healthy fast-retransmit
+            counts), invisible to an idle ping ring &mdash; the node passes <code>-netcheck</code>, then straggles
+            under the sweep's connection churn, inflating apparent B/op (retransmit buffering, not real work).
+            Caught by degraded-run flagging; confirm with step 3's counters under a short load burst.</li>
+    </ul>
+    <p>Excluding the flaky host from <code>-hosts</code> is the robust operational fix until the link is
+    repaired; no grace budget survives a genuinely broken link.</p>
+</div>
+
+<h2 id="open">6. Open diagnostic improvements</h2>
+
+<ul>
+    <li><strong>Per-peer clock-sync errors.</strong> <code>EstimateOffsets</code>
+        (<code>benchkit/clocksync.go</code>) still discards individual per-round per-peer errors and reports only
+        "got offsets for k of N peers". Logging the last error per missing peer would distinguish "this node
+        could not reach anyone" from "one specific peer was down".</li>
+    <li><strong>Kernel events in the failure snapshot.</strong> The snapshot lacks <code>dmesg</code> /
+        <code>journalctl</code> capture (OOM kills, NIC resets), which rotate out within a day. A time-scoped,
+        severity-filtered capture (<code>dmesg -T -l err --since=&lt;run start&gt;</code>;
+        <code>journalctl -k -p err --since=...</code>) would be compact &mdash; typically zero lines on a healthy
+        host. Requires passing the run start time into <code>collectFailureDiag</code> and verifying
+        <code>dmesg --since</code> support on the hosts.</li>
+    <li><strong>Netcheck under load.</strong> The idle ping ring misses load-dependent loss
+        (<a href="#slow-node">&sect;5</a>). A short bursty probe (or comparing SYN-retransmit deltas over the
+        first run) would close the gap.</li>
+    <li><strong>DNS-free <code>WithNodeList</code>.</strong> The sweep-side numeric-IP workaround
+        (<a href="#dns-peer-list">&sect;4.2</a>) leaves the core gorums behavior in place: configuration
+        construction resolves hostnames and the server-side path panics on failure. Making normalization
+        syntactic (or adding a pre-resolved option) is a core API change tracked in the roadmap.</li>
+</ul>
+
+<hr>
+<p class="small">Troubleshooting and log-analysis companion to <a href="benchkit.html">benchkit.html</a>.
+&sect;1&ndash;2 document the run lifecycle and diagnostic artifacts, &sect;3 the failure taxonomy (kept in sync
+with the <code>sweep -explain</code> system prompt), &sect;4 the failure catalog, &sect;5 the slow-node triage
+ladder, &sect;6 open improvements.</p>
+
+</div>
+</div>
+<script>
+    (() => {
+        const links = Array.from(document.querySelectorAll('.sidebar nav a[href^="#"]'));
+        const byId = new Map(links.map((a) => [a.getAttribute('href').slice(1), a]));
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((e) => {
+                if (!e.isIntersecting) return;
+                links.forEach((l) => l.classList.remove('active'));
+                const a = byId.get(e.target.id);
+                if (a) a.classList.add('active');
+            });
+        }, { rootMargin: '-8% 0px -80% 0px', threshold: 0 });
+        document.querySelectorAll('h2[id]').forEach((h) => observer.observe(h));
+    })();
+</script>
+</body>
+</html>
