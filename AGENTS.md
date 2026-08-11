@@ -29,6 +29,8 @@ gorums/
 │   └── gengorums/             # Compiler logic + templates
 ├── benchkit/                  # Separate module: measurement and benchmarking
 │   ├── proto/                 # .proto sources for the benchkit module
+│   ├── benchmark/             # Gorums workloads built on benchkit
+│   ├── cmd/benchmark/         # Benchmark node binary
 ├── examples/                  # Separate module: example implementations
 ├── internal/                  # Internal packages
 ├── doc/                       # Documentation
@@ -256,6 +258,7 @@ Before making significant changes, consult:
 ## Performance Considerations
 
 - Gorums is used in performance-critical distributed systems
+- Benchmarking tools are available in `benchkit/benchmark/` and `benchkit/cmd/benchmark/`
 - Profile before optimizing - use Go's pprof tools
 
 ## Communication with Project Maintainer
