@@ -26,10 +26,10 @@ type MetadataEntry_builder = stream.MetadataEntry_builder
 type (
 	// Handler processes a request and returns a response.
 	Handler func(ServerContext, *Message) (*Message, error)
-	// Interceptor intercepts and may modify incoming requests and outgoing responses.
+	// ServerInterceptor intercepts and may modify incoming requests and outgoing responses.
 	// It receives a ServerContext, the incoming Message, and a Handler representing
 	// the next element in the chain. It returns a Message and an error.
-	Interceptor func(ServerContext, *Message, Handler) (*Message, error)
+	ServerInterceptor func(ServerContext, *Message, Handler) (*Message, error)
 )
 
 // ServerContext is a context that is passed from the Gorums server to the handler.
@@ -167,7 +167,7 @@ func AsProto[T proto.Message](msg *Message) T {
 // returns a Handler that executes the chain. The execution order is the same as the
 // order of the interceptors in the slice: the first element is executed first, and
 // the last element calls the final handler (the server method).
-func chainInterceptors(final Handler, interceptors ...Interceptor) Handler {
+func chainInterceptors(final Handler, interceptors ...ServerInterceptor) Handler {
 	if len(interceptors) == 0 {
 		return final
 	}

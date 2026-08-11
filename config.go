@@ -49,7 +49,7 @@ func (c Config) Context(parent context.Context) *ConfigContext {
 //
 //	cfg, err := NewConfig(
 //	    gorums.WithNodeList([]string{"localhost:8080", "localhost:8081", "localhost:8082"}),
-//	    gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+//	    gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 //	)
 func NewConfig(nodes NodeSource, opts ...DialOption) (Config, error) {
 	if nodes == nil {

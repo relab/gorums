@@ -107,7 +107,7 @@ Remove QuorumSpec from configuration creation.
 **Before:**
 
 ```go
-mgr := NewManager(gorums.WithDialOptions(...))
+mgr := NewManager(gorums.WithGRPCDialOptions(...))
 cfg, err := mgr.NewConfiguration(
     &QSpec{quorumSize: 2},  // ❌ Remove QuorumSpec
     gorums.WithNodeList(addrs),
@@ -117,7 +117,7 @@ cfg, err := mgr.NewConfiguration(
 **After:**
 
 ```go
-mgr := gorums.NewManager(gorums.WithDialOptions(...))
+mgr := gorums.NewManager(gorums.WithGRPCDialOptions(...))
 cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 ```
 
@@ -126,7 +126,7 @@ Or use the convenience function that creates both:
 ```go
 cfg, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
-    gorums.WithDialOptions(...),
+    gorums.WithGRPCDialOptions(...),
 )
 ```
 

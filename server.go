@@ -18,7 +18,7 @@ type serverOptions struct {
 	sendBufferSize  uint
 	grpcOpts        []grpc.ServerOption
 	connectCallback func(context.Context)
-	interceptors    []Interceptor
+	interceptors    []ServerInterceptor
 	// Peer management options
 	myID             uint32
 	peerNodes        NodeSource   // Peers to track as they connect; set by WithPeers.
@@ -67,13 +67,13 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 	}
 }
 
-// WithInterceptors registers server-side interceptors to run for every incoming request.
+// WithServerInterceptors registers server-side interceptors to run for every incoming request.
 // Interceptors are executed for each registered handler. Interceptors may modify both
 // the request and/or response messages, or perform additional actions before or after
 // calling the next handler in the chain. Interceptors are executed in the order they are
 // provided: the first element is executed first, and the last element calls the actual
 // server method handler.
-func WithInterceptors(i ...Interceptor) ServerOption {
+func WithServerInterceptors(i ...ServerInterceptor) ServerOption {
 	return func(opts *serverOptions) {
 		opts.interceptors = append(opts.interceptors, i...)
 	}
@@ -125,7 +125,7 @@ type Server struct {
 	srv          *stream.Server
 	grpcServer   *grpc.Server
 	handlers     map[string]Handler
-	interceptors []Interceptor
+	interceptors []ServerInterceptor
 
 	mu         sync.Mutex   // guards lis
 	lis        net.Listener // active listener; set by Serve, ListenAndServe, or NewLocalServers

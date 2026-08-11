@@ -40,9 +40,9 @@ func newDialOptions() dialOptions {
 	}
 }
 
-// WithDialOptions returns a DialOption which sets any gRPC dial options
+// WithGRPCDialOptions returns a DialOption which sets any gRPC dial options
 // the client should use when initially connecting to each node in its pool.
-func WithDialOptions(opts ...grpc.DialOption) DialOption {
+func WithGRPCDialOptions(opts ...grpc.DialOption) DialOption {
 	return func(o *dialOptions) {
 		o.grpcDialOpts = append(o.grpcDialOpts, opts...)
 	}

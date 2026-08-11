@@ -24,7 +24,7 @@ func testLocalServers(t testing.TB, n int) []*Server {
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
 	srvs, stop, err := NewLocalServers(n, WithLocalDialOptions(
-		WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+		WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 	))
 	if err != nil {
 		t.Fatal(err)
