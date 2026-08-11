@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 )
@@ -14,13 +13,12 @@ type System struct {
 	closers []io.Closer
 	srv     *Server
 	lis     net.Listener
-	config  Configuration // auto-created outbound config; nil if not set
 }
 
 // NewSystem creates a new Gorums System listening on the specified address.
-// Accepts any [DialOption]s. Server options may be passed via [WithServerOptions].
-// If [WithOutboundNodes] is provided, an outbound [Configuration] is created
-// automatically and can be accessed via [System.OutboundConfig].
+// Accepts any [DialOption]s. Server options may be passed via [WithServerOptions];
+// pass [WithPeers] there to have the server build a peer [Configuration],
+// accessible via [System.OutboundConfig].
 func NewSystem(addr string, opts ...DialOption) (*System, error) {
 	dialOpts := newDialOptions()
 	for _, opt := range opts {
@@ -30,32 +28,21 @@ func NewSystem(addr string, opts ...DialOption) (*System, error) {
 	if err != nil {
 		return nil, err
 	}
-	sys := &System{
+	return &System{
 		srv: NewServer(dialOpts.srvOpts...),
 		lis: lis,
-	}
-	if dialOpts.outboundNodes != nil {
-		cfg, err := sys.newOutboundConfig(dialOpts.outboundNodes, opts...)
-		if err != nil {
-			_ = lis.Close()
-			return nil, fmt.Errorf("gorums: failed to create outbound config: %w", err)
-		}
-		sys.config = cfg
-		sys.closers = append(sys.closers, cfg)
-	}
-	return sys, nil
+	}, nil
 }
 
 // NewLocalSystems creates n Gorums systems listening on random localhost ports.
 //
 // Each system is assigned a node ID in the range 1..n and is configured to
-// communicate with the others using the generated local node list. An outbound
+// communicate with the others using the generated local node list. A peer
 // [Configuration] is created automatically for each system and is available via
 // [System.OutboundConfig].
 //
 // The opts may contain any [DialOption]s. Server options may be passed via
-// [WithServerOptions]. [WithOutboundNodes] is ignored by this function since
-// the local node list is computed internally.
+// [WithServerOptions].
 //
 // The returned systems are not started. Call [System.Serve] after registering
 // any services. The returned stop function stops all systems and should be
@@ -75,21 +62,11 @@ func NewLocalSystems(n int, opts ...DialOption) ([]*System, func(), error) {
 	systems := make([]*System, n)
 	for i := range n {
 		myID := uint32(i + 1)
-		sysSrvOpts := append([]ServerOption{WithConfig(myID, nodeList)}, dialOpts.srvOpts...)
-		sys := &System{
+		sysSrvOpts := append([]ServerOption{WithPeers(myID, nodeList, opts...)}, dialOpts.srvOpts...)
+		systems[i] = &System{
 			srv: NewServer(sysSrvOpts...),
 			lis: listeners[i],
 		}
-		cfg, err := sys.newOutboundConfig(nodeList, opts...)
-		if err != nil {
-			for j := range i {
-				_ = systems[j].Stop()
-			}
-			return nil, nil, fmt.Errorf("gorums: failed to create outbound config for system %d: %w", i+1, err)
-		}
-		sys.config = cfg
-		sys.closers = append(sys.closers, cfg)
-		systems[i] = sys
 	}
 	stop := func() {
 		for _, sys := range systems {
@@ -120,19 +97,10 @@ func allocateListeners(n int) ([]net.Listener, NodeListOption, error) {
 	return listeners, WithNodeList(addrs), nil
 }
 
-// newOutboundConfig creates an outbound [Configuration] for connecting to peers.
-// It always prepends a [WithServer] option so that the remote server can dispatch
-// server-initiated requests back through the bidirectional connection, regardless of
-// whether this system has peer tracking configured.
-func (s *System) newOutboundConfig(nodeList NodeListOption, dialOpts ...DialOption) (Configuration, error) {
-	return NewConfig(nodeList, append([]DialOption{WithServer(s.srv)}, dialOpts...)...)
-}
-
-// OutboundConfig returns the auto-created outbound [Configuration], or nil if none was created.
-// An outbound config is created automatically by [NewLocalSystems] and by [NewSystem] when
-// [WithOutboundNodes] is provided.
+// OutboundConfig returns the server's peer [Configuration], or nil if the
+// server was not configured with [WithPeers].
 func (s *System) OutboundConfig() Configuration {
-	return s.config
+	return s.srv.PeerConfig()
 }
 
 // Addr returns the address the system is listening on.

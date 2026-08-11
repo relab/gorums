@@ -616,7 +616,7 @@ func testPeerServer(t *testing.T) (*Server, []string) {
 	t.Helper()
 	var srv *Server
 	addrs := testStartServers(t, 1, func(_ int) ServerIface {
-		srv = NewServer(WithConfig(1, peerNodes()))
+		srv = NewServer(WithPeers(1, peerNodes(), testDialOptions(t)))
 		return srv
 	})
 	return srv, addrs
@@ -717,7 +717,7 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 		return NewResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
 	})
 	peerMD := metadata.Pairs(gorumsNodeIDKey, "2")
-	cfg, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithMetadata(peerMD), WithServer(clientSrv))
+	cfg, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithMetadata(peerMD), WithBackChannel(clientSrv))
 	if err != nil {
 		t.Fatalf("NewConfig() error: %v", err)
 	}
@@ -795,7 +795,7 @@ func testClientServer(t *testing.T) (*Server, []string) {
 // ClientConfig and may dispatch server-initiated calls to it.
 func connectAsPeerClient(t *testing.T, addrs []string) Configuration {
 	t.Helper()
-	cfg, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithServer(NewServer()))
+	cfg, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithBackChannel(NewServer()))
 	if err != nil {
 		t.Fatalf("NewConfig() error: %v", err)
 	}
@@ -903,7 +903,7 @@ func TestClientConfigServerCallsClient(t *testing.T) {
 		wg.Done()
 		return nil, nil
 	})
-	clientConfig, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithServer(clientSrv))
+	clientConfig, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithBackChannel(clientSrv))
 	if err != nil {
 		t.Fatalf("NewConfig() error: %v", err)
 	}
