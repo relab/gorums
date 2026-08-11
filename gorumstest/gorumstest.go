@@ -228,11 +228,12 @@ func Servers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface)
 }
 
 // Systems returns n started Gorums systems on random localhost ports (see
-// [gorums.NewLocalSystems]). Each system auto-creates an outbound
+// [gorums.NewLocalSystems]). Each system auto-creates a peer
 // [gorums.Configuration] over the group, accessible via
 // [gorums.System.OutboundConfig]. The systems are automatically stopped when
-// the test finishes via t.Cleanup.
-func Systems(t testing.TB, n int) []*gorums.System {
+// the test finishes via t.Cleanup. Any [gorums.ServerOption]s are applied to
+// every server.
+func Systems(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.System {
 	t.Helper()
 
 	// Skip goleak check for benchmarks
@@ -241,7 +242,10 @@ func Systems(t testing.TB, n int) []*gorums.System {
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
 
-	systems, stop, err := gorums.NewLocalSystems(n, InsecureDialOptions(t))
+	systems, stop, err := gorums.NewLocalSystems(n,
+		gorums.WithLocalServerOptions(opts...),
+		gorums.WithLocalDialOptions(InsecureDialOptions(t)),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

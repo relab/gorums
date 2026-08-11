@@ -8,7 +8,7 @@ import (
 
 // TestWithServerOptionsFiltersNil verifies that WithServerOptions silently drops
 // nil ServerOptions rather than storing them, which would cause a panic when
-// NewSystem or NewLocalSystems later calls NewServer with the collected options.
+// NewSystem later calls NewServer with the collected options.
 func TestWithServerOptionsFiltersNil(t *testing.T) {
 	opts := newDialOptions()
 	WithServerOptions(nil, WithBufferSizes(8, 8), nil)(&opts)
