@@ -47,7 +47,7 @@ func appendStringInterceptor(inStr, outStr string) gorums.ServerInterceptor {
 		req.Value += inStr
 
 		// We do not need to re-marshal into the payload here.
-		// The next handler in the chain will access req via gorums.AsProto(in) which reads in.Msg.
+		// The next handler in the chain will access req via gorums.AsProto(in) which reads in.Proto.
 
 		// call the next handler
 		out, err := next(ctx, in)

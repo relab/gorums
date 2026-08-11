@@ -13,7 +13,7 @@ import (
 // It is used by both server and client handler chains to carry the application-level
 // message alongside the stream-level envelope.
 type Message struct {
-	Msg proto.Message
+	Proto proto.Message
 	*stream.Message
 }
 
@@ -57,9 +57,9 @@ func (ctx *ServerContext) Release() {
 //
 // This function should only be used by generated code.
 func (ctx *ServerContext) SendMessage(out *Message) {
-	// If Msg is set, marshal it to payload before sending.
-	if out.Msg != nil && len(out.GetPayload()) == 0 {
-		payload, err := proto.Marshal(out.Msg)
+	// If Proto is set, marshal it to payload before sending.
+	if out.Proto != nil && len(out.GetPayload()) == 0 {
+		payload, err := proto.Marshal(out.Proto)
 		if err == nil {
 			out.SetPayload(payload)
 		} else {
@@ -126,7 +126,7 @@ func NewResponseMessage(in *Message, resp proto.Message) *Message {
 		// Status is left empty; it can be set by MessageWithError if needed
 	}
 	return &Message{
-		Msg:     resp,
+		Proto:   resp,
 		Message: msgBuilder.Build(),
 	}
 }
@@ -154,10 +154,10 @@ func MessageWithError(in, out *Message, err error) *Message {
 // the zero value of T is returned.
 func AsProto[T proto.Message](msg *Message) T {
 	var zero T
-	if msg == nil || msg.Msg == nil {
+	if msg == nil || msg.Proto == nil {
 		return zero
 	}
-	if req, ok := msg.Msg.(T); ok {
+	if req, ok := msg.Proto.(T); ok {
 		return req
 	}
 	return zero
