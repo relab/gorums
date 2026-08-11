@@ -20,15 +20,25 @@ type dialOptions struct {
 	sendBuffer    uint
 	metadata      metadata.MD
 	handler       stream.RequestHandler
-	localNodeID   uint32         // if non-zero, skip setting handler on this node ID
-	srvOpts       []ServerOption // applied only by NewSystem / NewLocalSystems
-	outboundNodes NodeListOption // applied only by NewSystem
+	localNodeID   uint32          // if non-zero, skip setting handler on this node ID
+	inboundMgr    *inboundManager // set by WithServer; enables eager reconnect for symmetric nodes
+	srvOpts       []ServerOption  // applied only by NewSystem / NewLocalSystems
+	outboundNodes NodeListOption  // applied only by NewSystem
 }
+
+// DefaultSendBufferSize is the per-node send queue capacity used when no
+// explicit size is configured. It is both the backlog threshold at which a peer
+// that stopped draining sends is treated as failed, since a full queue fails
+// two-way requests fast with [ErrSendQueueFull], and the depth to which one-way
+// calls dispatched asynchronously can pipeline. The queue is a buffered
+// channel, so each node allocates the full capacity whether or not traffic
+// flows.
+const DefaultSendBufferSize = 4096
 
 func newDialOptions() dialOptions {
 	return dialOptions{
 		backoff:    backoff.DefaultConfig,
-		sendBuffer: 0,
+		sendBuffer: DefaultSendBufferSize,
 	}
 }
 
@@ -55,11 +65,16 @@ func WithBackoff(backoff backoff.Config) DialOption {
 	}
 }
 
-// WithSendBufferSize allows for changing the size of the send buffer used by Gorums.
-// A larger buffer might achieve higher throughput for asynchronous calltypes, but at
-// the cost of latency.
+// WithSendBufferSize sets the per-node send queue capacity. A larger buffer
+// may achieve higher throughput for asynchronous call types, at the cost of
+// latency. Size 0 selects [DefaultSendBufferSize]: capacity 0 is not viable
+// under the full-queue fail-fast semantics, since every two-way request
+// enqueued while the sender is busy would fail.
 func WithSendBufferSize(size uint) DialOption {
 	return func(o *dialOptions) {
+		if size == 0 {
+			size = DefaultSendBufferSize
+		}
 		o.sendBuffer = size
 	}
 }
@@ -92,6 +107,7 @@ func WithServer(srv *Server) DialOption {
 	return func(o *dialOptions) {
 		o.handler = srv
 		o.localNodeID = srv.NodeID()
+		o.inboundMgr = srv.inboundManager
 		o.metadata = metadata.Join(o.metadata, metadataWithNodeID(srv.NodeID()))
 	}
 }

@@ -396,11 +396,17 @@ func (p *nilPeerNode) RouteInbound(ctx context.Context, msg *stream.Message, rel
 	}
 }
 
-// Enqueue sends the message directly on the inbound stream. On the first send
-// error the failure is latched and subsequent calls become no-ops, preventing
-// wasted sends while gRPC propagates the stream-context cancellation that
-// causes NodeStream to exit.
-func (p *nilPeerNode) Enqueue(req stream.Request) {
+// TrySend writes the message directly to the inbound stream.
+//
+// Unlike [Node.TrySend], this can still block: a plain client has no
+// gorums-owned send queue, only the raw gRPC stream, whose Send blocks under
+// HTTP/2 flow control with no non-blocking alternative. That is acceptable
+// here because a stuck Send only stalls this one client's own NodeStream
+// goroutine, not a lock shared with other connections.
+//
+// On the first send error the failure is latched and later calls become
+// no-ops, avoiding wasted sends while the stream shuts down.
+func (p *nilPeerNode) TrySend(req stream.Request) {
 	if p.failed.Load() {
 		return
 	}

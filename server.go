@@ -27,11 +27,17 @@ type serverOptions struct {
 type ServerOption func(*serverOptions)
 
 // WithBufferSizes configures the send and receive buffer sizes for the server.
-// The receiveSize controls how many messages the server queues before applying
-// backpressure. Similarly, sendSize controls how many messages the server queues
-// on its per-node channel for outgoing peer messages in the reverse direction.
+// The receiveSize is the capacity of the queue carrying finished handler
+// responses to the goroutine that writes them back on the stream; it bounds how
+// many requests one connection can have in flight. Its default is 0
+// (unbuffered), which lets a connection read its next request only once the
+// current handler's response has been picked up.
+//
+// The sendSize controls the capacity of the server's per-node send queue for
+// outgoing peer messages in the reverse direction, with the same full-queue
+// semantics as [WithSendBufferSize]: two-way requests fail fast, one-way
+// requests and responses block. A sendSize of 0 selects [DefaultSendBufferSize].
 // Larger values may increase throughput at the cost of higher latency.
-// The default for both is 0 (unbuffered).
 func WithBufferSizes(receiveSize, sendSize uint) ServerOption {
 	return func(o *serverOptions) {
 		o.recvBufferSize = receiveSize
@@ -111,7 +117,12 @@ type Server struct {
 func NewServer(opts ...ServerOption) *Server {
 	var serverOpts serverOptions
 	for _, opt := range opts {
-		opt(&serverOpts)
+		if opt != nil {
+			opt(&serverOpts)
+		}
+	}
+	if serverOpts.sendBufferSize == 0 {
+		serverOpts.sendBufferSize = DefaultSendBufferSize
 	}
 	// Allocate s first so it can serve as the selfHandler for the inboundManager.
 	// HandleRequest only accesses s.handlers and s.interceptors, both of which are

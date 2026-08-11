@@ -12,7 +12,7 @@ type PeerAcceptor interface {
 }
 
 // PeerNode represents a peer from the perspective of stream dispatch.
-// It is implemented by Node and nilPeerNode in the gorums package.
+// It is implemented by peerNode and nilPeerNode in the gorums package.
 type PeerNode interface {
 	// RouteInbound handles a message received from the peer.
 	// Messages with a server-initiated ID (high bit set) are responses to
@@ -22,7 +22,13 @@ type PeerNode interface {
 	// release is always called — immediately for server-initiated messages,
 	// or by the handler for client-initiated requests.
 	RouteInbound(ctx context.Context, msg *Message, release func(), send func(*Message))
-	Enqueue(req Request)
+	// TrySend delivers a reply to the peer without blocking on a full send
+	// queue: see [Server.NodeStream] for why a handler's reply must never be
+	// able to block here. An implementation with no queue to fail fast against
+	// may still block on the underlying transport; that is safe as long as it
+	// only stalls this one peer's connection, not a lock other connections
+	// depend on.
+	TrySend(req Request)
 }
 
 // Server handles NodeStream connections.
@@ -44,6 +50,13 @@ func NewServer(buffer uint, onConnect func(context.Context), acceptor PeerAccept
 
 // NodeStream handles a connection to a single client. The stream is aborted if there
 // is any error with sending or receiving.
+//
+// The goroutine below delivers each handler's reply via TrySend, not the
+// blocking Enqueue. A handler holds mut until it returns, and it returns only
+// once this goroutine takes its reply off finished. If TrySend could block,
+// this goroutine would stop draining finished, the handler would never
+// return, mut would never unlock, and the Recv loop below could never read
+// the next inbound frame: the connection would deadlock.
 func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 	var mut sync.Mutex // used to achieve mutex between request handlers
 	finished := make(chan *Message, s.buffer)
@@ -65,7 +78,7 @@ func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 			case <-ctx.Done():
 				return
 			case streamOut := <-finished:
-				peerNode.Enqueue(Request{Ctx: ctx, Msg: streamOut})
+				peerNode.TrySend(Request{Ctx: ctx, Msg: streamOut})
 			}
 		}
 	}()
