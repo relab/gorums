@@ -1473,27 +1473,27 @@ sub-configurations, and what to watch out for when doing so.
 
 ### The Latency Comparator
 
-`gorums.Latency` is a comparator function compatible with `slices.SortFunc` and `Config.SortBy`.
+`gorums.ByLatency` is a comparator function compatible with `slices.SortFunc` and `Config.Sort`.
 The comparator orders nodes ascending by their current latency estimates;
 nodes without any measurements (freshly created, never sent traffic) are sorted last.
 
 ```go
 // Sort all nodes by ascending latency.
-sorted := cfg.SortBy(gorums.Latency)
+sorted := cfg.Sort(gorums.ByLatency)
 
 // Pick the two fastest nodes.
-fast2 := cfg.SortBy(gorums.Latency)[:2]
+fast2 := cfg.Sort(gorums.ByLatency)[:2]
 ```
 
 Comparators can be chained for multi-key ordering.
 For example, healthy nodes first, then by latency within each group:
 
 ```go
-sorted := cfg.SortBy(func(a, b *gorums.Node) int {
-    if r := gorums.LastNodeError(a, b); r != 0 {
+sorted := cfg.Sort(func(a, b *gorums.Node) int {
+    if r := gorums.ByLastError(a, b); r != 0 {
         return r
     }
-    return gorums.Latency(a, b)
+    return gorums.ByLatency(a, b)
 })
 ```
 
@@ -1508,7 +1508,7 @@ const f = 2  // tolerated failures (n = 2f+1)
 quorumSize := n/2 + 1  // simple majority for crash-fault tolerance = 3
 
 // Re-derive the fast sub-configuration periodically (see guidance below).
-fastCfg := allNodesCfg.SortBy(gorums.Latency)[:quorumSize]
+fastCfg := allNodesCfg.Sort(gorums.ByLatency)[:quorumSize]
 fastCfgCtx := fastCfg.Context(ctx)
 
 reply, err := ReadQC(fastCfgCtx, &ReadRequest{Key: "x"}).Majority()
@@ -1520,7 +1520,7 @@ first, then pick the fastest of those that remain:
 ```go
 var qcErr gorums.QuorumCallError
 if errors.As(err, &qcErr) {
-    fastCfg = cfg.WithoutErrors(qcErr).SortBy(gorums.Latency)[:quorumSize]
+    fastCfg = cfg.WithoutErrors(qcErr).Sort(gorums.ByLatency)[:quorumSize]
 }
 ```
 
@@ -1530,7 +1530,7 @@ if errors.As(err, &qcErr) {
 
 ### How Often to Re-Sort
 
-`SortBy` returns a snapshot of the ordering at one point in time.
+`Sort` returns a snapshot of the ordering at one point in time.
 Latency measurements change as network conditions shift; the snapshot does not
 auto-update.
 
@@ -1540,7 +1540,7 @@ As a rule of thumb:
   A periodic goroutine or a lazy re-sort at the start of each request batch
   both work well.
 * **On every single call** is usually unnecessary and wastes allocations.
-  Each `SortBy` clones the node slice.
+  Each `Sort` clones the node slice.
 * **After a failed quorum call**, always re-evaluate: a node that caused the
   failure should be excluded via `WithoutErrors` before re-sorting.
 * **After a topology change** (node added or removed), derive the sub-configuration
@@ -1550,7 +1550,7 @@ A simple periodic refresh pattern using `Config.Watch`:
 
 ```go
 updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Config) gorums.Config {
-    return c.SortBy(gorums.Latency)[:quorumSize]
+    return c.Sort(gorums.ByLatency)[:quorumSize]
 })
 fastCfg := <-updates // initial snapshot, available before the first tick
 
@@ -1587,7 +1587,7 @@ updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Config) gorums.Co
     mu.Lock()
     qcErr := lastQCErr
     mu.Unlock()
-    return c.WithoutErrors(qcErr).SortBy(gorums.Latency)[:quorumSize]
+    return c.WithoutErrors(qcErr).Sort(gorums.ByLatency)[:quorumSize]
 })
 ```
 
@@ -1601,7 +1601,7 @@ on it:
 
 * **No traffic → no measurement.** The estimate is only updated on successful
   responses. A node that has never received a response returns a negative value.
-  `SortBy(gorums.Latency)` pushes such nodes to the end of the slice, so you
+  `Sort(gorums.ByLatency)` pushes such nodes to the end of the slice, so you
   will not accidentally pick an unmeasured node when slicing the front.
 
 * **Staleness.** If traffic to a node stops, the estimate holds its last
