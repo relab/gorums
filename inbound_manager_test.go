@@ -712,7 +712,7 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 
 	// Client connects as peer 2 with handlers registered on a server via WithServer.
 	clientSrv := NewServer()
-	clientSrv.RegisterHandler(mock.TestMethod, func(_ ServerCtx, in *Message) (*Message, error) {
+	clientSrv.RegisterHandler(mock.TestMethod, func(_ ServerContext, in *Message) (*Message, error) {
 		req := AsProto[*pb.StringValue](in)
 		return NewResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
 	})
@@ -882,11 +882,11 @@ func TestClientConfigMixedMode(t *testing.T) {
 }
 
 // TestClientConfigServerCallsClient verifies that a server dispatches a reverse-direction
-// multicast to a connected client via [ServerCtx.ConnectedClients].
+// multicast to a connected client via [ServerContext.ConnectedClients].
 func TestClientConfigServerCallsClient(t *testing.T) {
 	// Register the server handler before starting so it is present before clients arrive.
 	srv := NewServer()
-	srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, _ *Message) (*Message, error) {
+	srv.RegisterHandler(mock.TestMethod, func(ctx ServerContext, _ *Message) (*Message, error) {
 		if clients := ctx.ConnectedClients(); len(clients) > 0 {
 			_ = Multicast(clients.Context(ctx), pb.String("ping"), mock.Stream)
 		}
@@ -899,7 +899,7 @@ func TestClientConfigServerCallsClient(t *testing.T) {
 
 	// Client: a Server whose reverse-direction mock.Stream handler is wired in via WithServer.
 	clientSrv := NewServer()
-	clientSrv.RegisterHandler(mock.Stream, func(_ ServerCtx, _ *Message) (*Message, error) {
+	clientSrv.RegisterHandler(mock.Stream, func(_ ServerContext, _ *Message) (*Message, error) {
 		wg.Done()
 		return nil, nil
 	})

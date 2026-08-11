@@ -21,7 +21,7 @@ func DefaultServer(i int) gorums.ServerIface {
 func defaultTestServer(i int, opts ...gorums.ServerOption) gorums.ServerIface {
 	srv := gorums.NewServer(opts...)
 	ts := testSrv{val: int32((i + 1) * 10)}
-	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		resp, err := ts.Test(ctx, req)
 		if err != nil {
@@ -29,7 +29,7 @@ func defaultTestServer(i int, opts ...gorums.ServerOption) gorums.ServerIface {
 		}
 		return gorums.NewResponseMessage(in, resp), nil
 	})
-	srv.RegisterHandler(mock.GetValueMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler(mock.GetValueMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.Int32Value](in)
 		resp, err := ts.GetValue(ctx, req)
 		if err != nil {
@@ -44,11 +44,11 @@ type testSrv struct {
 	val int32
 }
 
-func (testSrv) Test(_ gorums.ServerCtx, _ *pb.StringValue) (*pb.StringValue, error) {
+func (testSrv) Test(_ gorums.ServerContext, _ *pb.StringValue) (*pb.StringValue, error) {
 	return pb.String(""), nil
 }
 
-func (ts testSrv) GetValue(_ gorums.ServerCtx, _ *pb.Int32Value) (*pb.Int32Value, error) {
+func (ts testSrv) GetValue(_ gorums.ServerContext, _ *pb.Int32Value) (*pb.Int32Value, error) {
 	return pb.Int32(ts.val), nil
 }
 
@@ -57,7 +57,7 @@ func (ts testSrv) GetValue(_ gorums.ServerCtx, _ *pb.Int32Value) (*pb.Int32Value
 // [Node], or [Servers].
 func EchoServerFn(_ int) gorums.ServerIface {
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		resp, err := echoSrv{}.Test(ctx, req)
 		if err != nil {
@@ -72,7 +72,7 @@ func EchoServerFn(_ int) gorums.ServerIface {
 // echoSrv implements a simple echo server handler for testing
 type echoSrv struct{}
 
-func (echoSrv) Test(_ gorums.ServerCtx, req *pb.StringValue) (*pb.StringValue, error) {
+func (echoSrv) Test(_ gorums.ServerContext, req *pb.StringValue) (*pb.StringValue, error) {
 	return pb.String("echo: " + req.GetValue()), nil
 }
 
@@ -81,7 +81,7 @@ func (echoSrv) Test(_ gorums.ServerCtx, req *pb.StringValue) (*pb.StringValue, e
 // argument to [Config], [Node], or [Servers].
 func StreamServerFn(_ int) gorums.ServerIface {
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.Stream, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler(mock.Stream, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		val := req.GetValue()
 
@@ -103,7 +103,7 @@ func StreamServerFn(_ int) gorums.ServerIface {
 // argument to [Config], [Node], or [Servers].
 func StreamBenchmarkServerFn(_ int) gorums.ServerIface {
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.Stream, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler(mock.Stream, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		val := req.GetValue()
 

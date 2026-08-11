@@ -22,7 +22,7 @@ const quorumCallMethod = "dev.ZorumsService.QuorumCall"
 
 func quorumCallServer(_ int) gorums.ServerIface {
 	srv := gorums.NewServer()
-	srv.RegisterHandler(quorumCallMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler(quorumCallMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*dev.Request](in)
 		resp := &dev.Response{}
 		resp.SetResult(int64(len(req.GetValue())))
