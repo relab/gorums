@@ -176,9 +176,11 @@ func (c *CallContext[Req, Resp]) send() {
 }
 
 // sendShared marshals the request payload once and enqueues it to all nodes.
-// Every outbound node has its own stream and router, so a single message with
-// one client-initiated ID is shared across all of them, avoiding per-node
-// message construction.
+// Regular outbound nodes each have their own stream and router, so a single
+// message with one client-initiated ID is shared across all of them, avoiding
+// per-node message construction. A shared dedup node sends on a stream that
+// also carries the remote peer's client-initiated IDs, so it gets its own
+// message with an ID from the server-initiated ID space to avoid collisions.
 func (c *CallContext[Req, Resp]) sendShared() {
 	payload, err := proto.Marshal(c.request)
 	if err != nil {
@@ -188,8 +190,15 @@ func (c *CallContext[Req, Resp]) sendShared() {
 		}
 		return
 	}
+	// sharedMsg is one message instance reused across all ordinary nodes;
+	// a node with a shared (deduplicated) stream needs a fresh server-space
+	// ID per send, so each such node gets its own message instead.
 	var sharedMsg *stream.Message
 	for _, n := range c.config {
+		if n.IsShared() {
+			c.enqueue(n, stream.NewMessageFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload))
+			continue
+		}
 		if sharedMsg == nil {
 			sharedMsg = stream.NewMessageFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload)
 		}
