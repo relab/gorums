@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/gorumstest"
 )
 
 type testSrv struct{}
@@ -24,7 +25,7 @@ func serverFn(_ int) gorums.ServerIface {
 
 // TestUnresponsiveServer checks that the client is not blocked when the server is not receiving messages
 func TestUnresponsiveServer(t *testing.T) {
-	node := gorums.TestNode(t, serverFn)
+	node := gorumstest.Node(t, serverFn)
 
 	for range 100 {
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)

@@ -1,13 +1,60 @@
 package gorums
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/relab/gorums/internal/testutils/mock"
+	"go.uber.org/goleak"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
+
+// testSystems returns n started Gorums systems on random localhost ports.
+// It is the in-package counterpart of gorumstest.Systems, which this file
+// cannot use: gorumstest imports gorums, so importing it from package gorums's
+// own tests would create an import cycle.
+func testSystems(t testing.TB, n int) []*System {
+	t.Helper()
+	if _, ok := t.(*testing.B); !ok {
+		t.Cleanup(func() { goleak.VerifyNone(t) })
+	}
+	systems, stop, err := NewLocalSystems(n, WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(stop)
+	for _, sys := range systems {
+		go sys.Serve()
+	}
+	return systems
+}
+
+// testWaitUntil polls predicate until it returns true or timeout elapses.
+// It is the in-package counterpart of gorumstest.WaitUntil.
+func testWaitUntil(t testing.TB, timeout time.Duration, predicate func() bool) bool {
+	t.Helper()
+	if predicate() {
+		return true
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return predicate()
+		case <-ticker.C:
+			if predicate() {
+				return true
+			}
+		}
+	}
+}
 
 func TestCallOptionsIgnoreErrors(t *testing.T) {
 	tests := []struct {
@@ -30,7 +77,7 @@ func TestCallOptionsIgnoreErrors(t *testing.T) {
 func TestCallOptionsIgnoreErrorsResourceLeak(t *testing.T) {
 	// Previously leaked because fire-and-forget multicast still registered in router.
 	// Now fixed: no replyChan → no ResponseChan → no Register.
-	systems := TestSystems(t, 3)
+	systems := testSystems(t, 3)
 	for _, sys := range systems {
 		sys.RegisterService(nil, func(srv *Server) {
 			srv.RegisterHandler(mock.TestMethod, func(_ ServerCtx, _ *Message) (*Message, error) {
@@ -44,11 +91,11 @@ func TestCallOptionsIgnoreErrorsResourceLeak(t *testing.T) {
 		})
 	}
 	cfg := systems[0].OutboundConfig()
-	ctx := TestContext(t, 5*time.Second)
+	ctx := testTimeoutContext(t, 5*time.Second)
 	for i := range 1000 {
 		Multicast(cfg.Context(ctx), pb.String(fmt.Sprintf("mc-%d", i)), mock.TestMethod, IgnoreErrors())
 	}
-	TestWaitUntil(t, 5*time.Second, func() bool {
+	testWaitUntil(t, 5*time.Second, func() bool {
 		for _, node := range cfg.Nodes() {
 			if node.PendingCount() > 0 {
 				return false

@@ -8,14 +8,15 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func TestRPCCallSuccess(t *testing.T) {
-	node := gorums.TestNode(t, gorums.DefaultTestServer)
+	node := gorumstest.Node(t, gorumstest.DefaultServer)
 
-	ctx := gorums.TestContext(t, 5*time.Second)
+	ctx := gorumstest.Context(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
 	response, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
 	if err != nil {
@@ -27,12 +28,12 @@ func TestRPCCallSuccess(t *testing.T) {
 }
 
 func TestRPCCallDownedNode(t *testing.T) {
-	node := gorums.TestNode(t, gorums.DefaultTestServer, gorums.WithPreConnect(t, func(stopServers func()) {
+	node := gorumstest.Node(t, gorumstest.DefaultServer, gorumstest.WithPreConnect(t, func(stopServers func()) {
 		stopServers()
 		time.Sleep(300 * time.Millisecond) // wait for servers to fully stop
 	}))
 
-	ctx := gorums.TestContext(t, 5*time.Second)
+	ctx := gorumstest.Context(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
 	response, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
 	if err == nil {
@@ -44,7 +45,7 @@ func TestRPCCallDownedNode(t *testing.T) {
 }
 
 func TestRPCCallTimedOut(t *testing.T) {
-	node := gorums.TestNode(t, gorums.DefaultTestServer)
+	node := gorumstest.Node(t, gorumstest.DefaultServer)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 0*time.Second)
 	time.Sleep(50 * time.Millisecond)
@@ -60,9 +61,9 @@ func TestRPCCallTimedOut(t *testing.T) {
 }
 
 func TestRPCCallTypeMismatch(t *testing.T) {
-	node := gorums.TestNode(t, gorums.DefaultTestServer)
+	node := gorumstest.Node(t, gorumstest.DefaultServer)
 
-	ctx := gorums.TestContext(t, 5*time.Second)
+	ctx := gorumstest.Context(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
 	response, err := gorums.RPCCall[*pb.StringValue, *pb.Int32Value](nodeCtx, pb.String(""), mock.TestMethod)
 	if err != gorums.ErrTypeMismatch {
@@ -74,7 +75,7 @@ func TestRPCCallTypeMismatch(t *testing.T) {
 }
 
 func TestRPCCallConcurrentAccess(t *testing.T) {
-	node := gorums.TestNode(t, gorums.DefaultTestServer)
+	node := gorumstest.Node(t, gorumstest.DefaultServer)
 
 	concurrency := 10
 	errCh := make(chan error, concurrency)
