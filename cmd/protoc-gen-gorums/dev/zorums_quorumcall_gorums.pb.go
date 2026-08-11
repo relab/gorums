@@ -8,47 +8,48 @@ package dev
 
 import (
 	gorums "github.com/relab/gorums"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
 	// Verify that this generated code is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(11 - gorums.MinVersion)
+	_ = gorumsimpl.EnforceVersion(11 - gorumsimpl.MinVersion)
 	// Verify that the gorums runtime is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(gorums.MaxVersion - 11)
+	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 11)
 )
 
 // QuorumCall plain.
 func QuorumCall(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *Response] {
-	return gorums.QuorumCall[*Request, *Response](
+	return gorumsimpl.QuorumCall[*Request, *Response](
 		ctx, in, "dev.ZorumsService.QuorumCall",
 	)
 }
 
 // QuorumCallEmpty for testing imported message type.
 func QuorumCallEmpty(ctx *ConfigContext, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response] {
-	return gorums.QuorumCall[*emptypb.Empty, *Response](
+	return gorumsimpl.QuorumCall[*emptypb.Empty, *Response](
 		ctx, in, "dev.ZorumsService.QuorumCallEmpty",
 	)
 }
 
 // QuorumCallEmpty2 for testing imported message type.
 func QuorumCallEmpty2(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *emptypb.Empty] {
-	return gorums.QuorumCall[*Request, *emptypb.Empty](
+	return gorumsimpl.QuorumCall[*Request, *emptypb.Empty](
 		ctx, in, "dev.ZorumsService.QuorumCallEmpty2",
 	)
 }
 
 // QuorumCallStream plain.
 func QuorumCallStream(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *Response] {
-	return gorums.QuorumCallStream[*Request, *Response](
+	return gorumsimpl.QuorumCallStream[*Request, *Response](
 		ctx, in, "dev.ZorumsService.QuorumCallStream",
 	)
 }
 
 // QuorumCallStreamWithEmpty for testing imported message type.
 func QuorumCallStreamWithEmpty(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *emptypb.Empty] {
-	return gorums.QuorumCallStream[*Request, *emptypb.Empty](
+	return gorumsimpl.QuorumCallStream[*Request, *emptypb.Empty](
 		ctx, in, "dev.ZorumsService.QuorumCallStreamWithEmpty",
 	)
 }
@@ -56,7 +57,7 @@ func QuorumCallStreamWithEmpty(ctx *ConfigContext, in *Request) *gorums.Call[*Re
 // QuorumCallStreamWithEmpty2 for testing imported message type; with same return
 // type as QuorumCallStream: Response.
 func QuorumCallStreamWithEmpty2(ctx *ConfigContext, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response] {
-	return gorums.QuorumCallStream[*emptypb.Empty, *Response](
+	return gorumsimpl.QuorumCallStream[*emptypb.Empty, *Response](
 		ctx, in, "dev.ZorumsService.QuorumCallStreamWithEmpty2",
 	)
 }

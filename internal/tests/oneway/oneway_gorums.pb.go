@@ -8,13 +8,14 @@ package oneway
 
 import (
 	gorums "github.com/relab/gorums"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 )
 
 const (
 	// Verify that this generated code is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(11 - gorums.MinVersion)
+	_ = gorumsimpl.EnforceVersion(11 - gorumsimpl.MinVersion)
 	// Verify that the gorums runtime is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(gorums.MaxVersion - 11)
+	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 11)
 )
 
 // The type aliases below are useful Gorums types that we make accessible
@@ -47,7 +48,7 @@ type (
 //	err := Unicast(ctx, in).Send()
 //	h := Unicast(ctx, in).Async(); err := h.Wait()
 func Unicast(ctx *NodeContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorums.Unicast(ctx, in, "oneway.OnewayTest.Unicast")
+	return gorumsimpl.Unicast(ctx, in, "oneway.OnewayTest.Unicast")
 }
 
 // Multicast is a multicast call invoked on all nodes in the configuration in ctx.
@@ -60,7 +61,7 @@ func Unicast(ctx *NodeContext, in *Request) *gorums.OnewayCall[*Request] {
 //	err := Multicast(ctx, in).Send()
 //	h := Multicast(ctx, in).Async(); err := h.Wait()
 func Multicast(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorums.Multicast(ctx, in, "oneway.OnewayTest.Multicast")
+	return gorumsimpl.Multicast(ctx, in, "oneway.OnewayTest.Multicast")
 }
 
 // OnewayTest is the server-side API for the OnewayTest Service

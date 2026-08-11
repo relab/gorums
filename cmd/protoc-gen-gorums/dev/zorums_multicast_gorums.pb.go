@@ -8,14 +8,15 @@ package dev
 
 import (
 	gorums "github.com/relab/gorums"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
 	// Verify that this generated code is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(11 - gorums.MinVersion)
+	_ = gorumsimpl.EnforceVersion(11 - gorumsimpl.MinVersion)
 	// Verify that the gorums runtime is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(gorums.MaxVersion - 11)
+	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 11)
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -28,7 +29,7 @@ var _ emptypb.Empty
 //	err := Multicast(ctx, in).Send()
 //	h := Multicast(ctx, in).Async(); err := h.Wait()
 func Multicast(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast")
+	return gorumsimpl.Multicast(ctx, in, "dev.ZorumsService.Multicast")
 }
 
 // Multicast2 is testing whether multiple streams work.
@@ -38,7 +39,7 @@ func Multicast(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
 //	err := Multicast2(ctx, in).Send()
 //	h := Multicast2(ctx, in).Async(); err := h.Wait()
 func Multicast2(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast2")
+	return gorumsimpl.Multicast(ctx, in, "dev.ZorumsService.Multicast2")
 }
 
 // Multicast3 is testing imported message type.
@@ -48,7 +49,7 @@ func Multicast2(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
 //	err := Multicast3(ctx, in).Send()
 //	h := Multicast3(ctx, in).Async(); err := h.Wait()
 func Multicast3(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast3")
+	return gorumsimpl.Multicast(ctx, in, "dev.ZorumsService.Multicast3")
 }
 
 // Multicast4 is testing imported message type.
@@ -58,5 +59,5 @@ func Multicast3(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
 //	err := Multicast4(ctx, in).Send()
 //	h := Multicast4(ctx, in).Async(); err := h.Wait()
 func Multicast4(ctx *ConfigContext, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty] {
-	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast4")
+	return gorumsimpl.Multicast(ctx, in, "dev.ZorumsService.Multicast4")
 }
