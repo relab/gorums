@@ -217,7 +217,7 @@ func createClientServerSystems(t *testing.T) (*gorums.System, *gorums.Server, go
 
 	// The client dials the server; WithServer wires up the back-channel dispatcher.
 	nodeList := gorums.WithNodeList([]string{sys.Addr()})
-	cfg, err := gorums.NewConfig(nodeList, gorums.WithServer(clientSrv), gorumstest.InsecureDialOptions(t))
+	cfg, err := gorums.NewConfig(nodeList, gorums.WithBackChannel(clientSrv), gorumstest.InsecureDialOptions(t))
 	if err != nil {
 		t.Fatal(err)
 	}

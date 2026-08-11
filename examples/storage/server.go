@@ -31,10 +31,10 @@ func runServer(address string, peers []string, srvOpt gorums.ServerOption) error
 	if err != nil {
 		return err
 	}
+	insecureDial := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
 	sys, err := gorums.NewSystem(address,
-		gorums.WithServerOptions(srvOpt, gorums.WithConfig(myID, peerList)),
-		gorums.WithOutboundNodes(peerList),
-		gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+		gorums.WithServerOptions(srvOpt, gorums.WithPeers(myID, peerList, insecureDial)),
+		insecureDial,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create system on %q: %w", address, err)
