@@ -50,6 +50,6 @@ func invokeQuorumCall[Req, Resp msg](
 	opts ...CallOption,
 ) *Responses[Resp] {
 	callOpts := getCallOptions(opts...)
-	clientCtx := newQuorumCallClientCtx[Req, Resp](ctx, req, method, streaming, callOpts.interceptors)
+	clientCtx := newQuorumCallContext[Req, Resp](ctx, req, method, streaming, callOpts.interceptors)
 	return NewResponses(clientCtx)
 }
