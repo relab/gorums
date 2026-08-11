@@ -63,31 +63,32 @@ func metadataWithNodeID(id uint32) metadata.MD {
 // Clients that specify node ID 0 in their metadata are assumed to be capable
 // of receiving reverse-direction calls from the server. These clients are
 // accepted with auto-generated IDs and included in the ClientConfig.
-// Client nodes are removed from the nodes map when they disconnect, while
-// known peer nodes persist in the map to allow for reconnection.
+// Client nodes are removed from clientNodes when they disconnect, while
+// known peer nodes persist in knownNodes to allow for reconnection.
 //
 // inboundManager is safe for concurrent use.
 type inboundManager struct {
 	mu             sync.RWMutex
 	myID           uint32                // this server's own NodeID; always present in inboundCfg
-	nodes          map[uint32]*Node      // pre-created for known peers; client peers added on connect
+	knownNodes     map[uint32]*Node      // pre-created configured peers, including self when configured
+	clientNodes    map[uint32]*Node      // dynamically assigned peer-capable clients
 	config         Configuration         // auto-updated slice of known peer servers, sorted by ID
 	clientConfig   Configuration         // auto-updated slice of client peers, sorted by ID
 	nextMsgID      atomic.Uint64         // counter for server-initiated message IDs
 	sendBufferSize uint                  // send buffer size for inbound channels
 	handler        stream.RequestHandler // handler for dispatching incoming requests on all inbound nodes
 	onConfigChange func(Configuration)   // optional; called after each known-peer config change
-	nextClientID   uint32                // next ID to assign to a client peer
+	nextClientID   uint64                // next candidate ID for a client peer; uint64 represents exhaustion
 	configCh       chan struct{}         // closed and replaced on each config/clientConfig change; protected by mu
 	stopCh         chan struct{}         // closed on shutdown to unblock waiters; never replaced
 	stopOnce       sync.Once             // ensures stopCh is closed exactly once
 }
 
 // clientIDStart is the starting ID for dynamically assigned client peers.
-// Chosen to be high enough to avoid collisions with typical known-peer IDs.
+// Chosen to keep dynamically assigned IDs away from typical known-peer IDs.
 // The available ID space is [clientIDStart, math.MaxUint32], giving approximately
-// 4.3 billion unique IDs before exhaustion. acceptClient rejects new peers if the
-// counter reaches math.MaxUint32 to prevent silent wraparound.
+// 4.3 billion candidate IDs before exhaustion. Configured peers may use IDs in
+// this range; the allocator skips every occupied known-peer or client ID.
 const clientIDStart = 1 << 20
 
 // newInboundManager creates an inboundManager for this server whose NodeID is myID.
@@ -101,7 +102,8 @@ const clientIDStart = 1 << 20
 func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfigChange func(Configuration), handler stream.RequestHandler) *inboundManager {
 	im := &inboundManager{
 		myID:           myID,
-		nodes:          make(map[uint32]*Node),
+		knownNodes:     make(map[uint32]*Node),
+		clientNodes:    make(map[uint32]*Node),
 		sendBufferSize: sendBuffer,
 		handler:        handler,
 		onConfigChange: onConfigChange,
@@ -125,7 +127,7 @@ func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfi
 func (im *inboundManager) Nodes() []*Node {
 	im.mu.RLock()
 	defer im.mu.RUnlock()
-	return slices.SortedFunc(maps.Values(im.nodes), func(a, b *Node) int {
+	return slices.SortedFunc(maps.Values(im.knownNodes), func(a, b *Node) int {
 		return cmp.Compare(a.ID(), b.ID())
 	})
 }
@@ -185,7 +187,7 @@ func (im *inboundManager) newNode(id uint32, addr string) (*Node, error) {
 	} else {
 		node = newInboundNode(id, addr, im.getMsgID, im.handler)
 	}
-	im.nodes[id] = node
+	im.knownNodes[id] = node
 	return node, nil
 }
 
@@ -197,7 +199,7 @@ func (im *inboundManager) isKnown(id uint32) bool {
 	}
 	im.mu.RLock()
 	defer im.mu.RUnlock()
-	_, ok := im.nodes[id]
+	_, ok := im.knownNodes[id]
 	return ok
 }
 
@@ -243,14 +245,14 @@ func (im *inboundManager) AcceptPeer(streamCtx context.Context, inboundStream st
 func (im *inboundManager) registerPeer(streamCtx context.Context, inboundStream stream.BidiStream, id uint32) (stream.PeerNode, func(), error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
-	node := im.nodes[id]
+	node := im.knownNodes[id]
 	detach := node.attachStream(streamCtx, inboundStream, im.sendBufferSize)
 	im.rebuildConfig()
 
 	return node, func() {
 		im.mu.Lock()
 		defer im.mu.Unlock()
-		_, ok := im.nodes[id]
+		_, ok := im.knownNodes[id]
 		if !ok {
 			return
 		}
@@ -261,34 +263,51 @@ func (im *inboundManager) registerPeer(streamCtx context.Context, inboundStream 
 }
 
 // acceptClient creates a new node with an auto-assigned ID for an unknown
-// connecting client. The node is added to the nodes map and the configuration
+// connecting client. The node is added to clientNodes and the configuration
 // is rebuilt. The returned cleanup function removes the client node entirely
 // when the stream ends (unlike known peers which persist for reconnection).
 func (im *inboundManager) acceptClient(streamCtx context.Context, inboundStream stream.BidiStream) (stream.PeerNode, func(), error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
-	if im.nextClientID == ^uint32(0) {
-		return nil, func() {}, fmt.Errorf("gorums: dynamic client ID space exhausted")
+	id, err := im.nextAvailableClientID()
+	if err != nil {
+		return nil, func() {}, err
 	}
-	id := im.nextClientID
-	im.nextClientID++
 	node := newInboundNode(id, "client", im.getMsgID, im.handler)
 	detach := node.attachStream(streamCtx, inboundStream, im.sendBufferSize)
-	im.nodes[id] = node
+	im.clientNodes[id] = node
 	im.rebuildConfig()
 
 	return node, func() {
 		im.mu.Lock()
 		defer im.mu.Unlock()
-		_, ok := im.nodes[id]
+		_, ok := im.clientNodes[id]
 		if !ok {
 			return
 		}
 		if detach() {
-			delete(im.nodes, id)
+			delete(im.clientNodes, id)
 			im.rebuildConfig()
 		}
 	}, nil
+}
+
+// nextAvailableClientID returns the next unoccupied dynamic client ID.
+// The caller must hold im.mu.
+func (im *inboundManager) nextAvailableClientID() (uint32, error) {
+	const maxNodeID = uint64(1<<32 - 1)
+	for im.nextClientID <= maxNodeID {
+		id := uint32(im.nextClientID)
+		im.nextClientID++
+		if _, exists := im.knownNodes[id]; exists {
+			continue
+		}
+		if _, exists := im.clientNodes[id]; exists {
+			continue
+		}
+		return id, nil
+	}
+	return 0, fmt.Errorf("gorums: dynamic client ID space exhausted")
 }
 
 // rebuildConfig rebuilds inbound and client configurations from the current nodes map.
@@ -296,17 +315,16 @@ func (im *inboundManager) acceptClient(streamCtx context.Context, inboundStream 
 // or if it is myID. A node is included in ClientConfig if it is a connected client peer.
 // Callers must hold the lock.
 func (im *inboundManager) rebuildConfig() {
-	cfg := make(Configuration, 0, len(im.nodes))
-	clientCfg := make(Configuration, 0)
-	for id, node := range im.nodes {
-		if id >= clientIDStart {
-			if node.channel.Load() != nil {
-				clientCfg = append(clientCfg, node)
-			}
-		} else {
-			if id == im.myID || node.channel.Load() != nil {
-				cfg = append(cfg, node)
-			}
+	cfg := make(Configuration, 0, len(im.knownNodes))
+	for id, node := range im.knownNodes {
+		if id == im.myID || node.channel.Load() != nil {
+			cfg = append(cfg, node)
+		}
+	}
+	clientCfg := make(Configuration, 0, len(im.clientNodes))
+	for _, node := range im.clientNodes {
+		if node.channel.Load() != nil {
+			clientCfg = append(clientCfg, node)
 		}
 	}
 	slices.SortFunc(cfg, ID)
