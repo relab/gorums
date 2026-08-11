@@ -19,7 +19,7 @@ runtime_deps			:= internal/stream/stream.pb.go internal/stream/stream_grpc.pb.go
 benchkit_deps			:= benchkit/benchkit.pb.go benchkit/control.pb.go benchkit/control_gorums.pb.go
 benchmark_deps			:= $(benchkit_deps) benchkit/benchmark/benchmark.pb.go benchkit/benchmark/benchmark_gorums.pb.go
 
-.PHONY: all dev tools bootstrapgorums installgorums benchmark benchkit test compiletests genproto benchtest bench lint deadcode modernize goplscheck
+.PHONY: all dev tools bootstrapgorums installgorums benchmark sweep test compiletests genproto benchtest bench lint deadcode modernize goplscheck
 
 all: dev benchmark compiletests
 
@@ -35,6 +35,9 @@ benchmark: installgorums $(benchmark_deps)
 	@go build -C benchkit -o cmd/benchmark/benchmark ./cmd/benchmark
 
 benchkit: installgorums $(benchkit_deps)
+
+sweep: $(benchkit_deps)
+	@go build -C benchkit/cmd/sweep -o sweep .
 
 # The benchkit module's generated code is written back into the module root
 # rather than next to its .proto file, so these cannot use the pattern rules.
@@ -171,7 +174,7 @@ goplscheck:
 			exit 1; \
 		fi
 
-# Regenerate all Gorums and protobuf generated files across the repo (dev, benchkit, benchmark, internal/tests, examples).
+# Regenerate all Gorums and protobuf generated files across the repo (dev, benchmark, internal/tests, examples).
 # This will force regeneration even though the proto files have not changed.
 genproto: installgorums dev
 	@echo "Regenerating all proto files (dev, benchkit, benchmark, internal/tests, examples)"
