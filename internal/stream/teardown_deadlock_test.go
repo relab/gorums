@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// TestReceiverDispatchNotWedgedByReentrantReply reproduces the back-channel
+// TestReceiverDispatchNotWedgedByReentrantReply reproduces the stream-dedup
 // teardown deadlock: a server-initiated (back-channel) request is dispatched to
 // a handler while the router's dispatch lock is held; the handler replies on the
 // same channel, whose send queue is full because the transport is not draining.
