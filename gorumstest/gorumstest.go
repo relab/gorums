@@ -231,8 +231,8 @@ func Servers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface)
 // group on random localhost ports (see [gorums.NewLocalServers]). Each
 // server auto-creates a peer [gorums.Config] over the group, accessible
 // via [gorums.Server.PeerConfig]. The servers are automatically stopped
-// when the test finishes via t.Cleanup. Any [gorums.ServerOption]s are
-// applied to every server.
+// when the test finishes via t.Cleanup. Any [gorums.ServerOption]s (for
+// example [gorums.WithStreamDedup]) are applied to every server.
 func LocalServers(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.Server {
 	t.Helper()
 

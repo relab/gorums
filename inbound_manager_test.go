@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	"go.uber.org/goleak"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -69,12 +71,38 @@ func testTimeoutContext(t testing.TB, timeout time.Duration) context.Context {
 	return ctx
 }
 
+// mockBidiStream is a minimal stream.BidiStream for testing InboundManager.
+// Recv blocks until a message is sent or the stream is closed.
+type mockBidiStream struct {
+	ch chan *stream.Message
+}
+
+func newMockBidiStream() *mockBidiStream {
+	return &mockBidiStream{ch: make(chan *stream.Message, 10)}
+}
+
+func (m *mockBidiStream) close() { close(m.ch) }
+
+func (*mockBidiStream) Send(*stream.Message) error { return nil }
+func (m *mockBidiStream) Recv() (*stream.Message, error) {
+	msg, ok := <-m.ch
+	if !ok {
+		return nil, io.EOF
+	}
+	return msg, nil
+}
+
 // testNode is a minimal NodeSource for use in tests.
 type testNode struct {
 	addr string
 }
 
 func (n testNode) Addr() string { return n.addr }
+
+// inboundCtx returns a context carrying nodeID metadata, rooted at parent.
+func inboundCtx(parent context.Context, id uint32) context.Context {
+	return metadata.NewIncomingContext(parent, conn.MetadataWithNodeID(id))
+}
 
 // checkIDs asserts that cfg.NodeIDs() equals wantIDs, reporting label in any
 // failure message.
@@ -153,6 +181,116 @@ func connectAsPeer(t *testing.T, peerID uint32, addrs []string) Config {
 	}
 	t.Cleanup(testCloser(t, cfg))
 	return cfg
+}
+
+// TestConfigurationExtendUsesKnownDedupPeer verifies that extending a dedup
+// configuration with a lower-ID peer from the server's peer configuration
+// yields a born-shared node whether or not that peer is currently connected:
+// the node borrows the peer's inbound channel slot and never dials. A
+// connected peer backs the shared node with its live inbound stream; a
+// disconnected peer leaves it without a channel until the peer connects.
+func TestConfigurationExtendUsesKnownDedupPeer(t *testing.T) {
+	peers := map[uint32]testNode{
+		1: {"127.0.0.1:9081"},
+		2: {"127.0.0.1:9082"},
+	}
+	tests := []struct {
+		name      string
+		connected bool
+	}{
+		{name: "ConnectedInbound", connected: true},
+		{name: "DisconnectedInbound"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			insecureDialOpts := WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
+			srv := NewServer(WithPeers(2, WithNodes(peers), insecureDialOpts), WithStreamDedup())
+			t.Cleanup(srv.Stop)
+			if tt.connected {
+				peerStream := newMockBidiStream()
+				t.Cleanup(peerStream.close)
+				_, cleanup, err := srv.im.AcceptPeer(inboundCtx(t.Context(), 1), peerStream)
+				if err != nil {
+					t.Fatalf("AcceptPeer: %v", err)
+				}
+				t.Cleanup(cleanup)
+			}
+
+			initial, err := NewConfig(WithNodes(map[uint32]testNode{2: peers[2]}), insecureDialOpts, withServer(srv), conn.WithStreamDedup())
+			if err != nil {
+				t.Fatalf("initial configuration: %v", err)
+			}
+			t.Cleanup(testCloser(t, initial))
+
+			extended, err := initial.Extend(WithNodes(map[uint32]testNode{1: peers[1]}))
+			if err != nil {
+				t.Fatalf("Extend: %v", err)
+			}
+			var added *Node
+			for _, node := range extended {
+				if node.ID() == 1 {
+					added = node
+					break
+				}
+			}
+			if added == nil {
+				t.Fatal("extended configuration does not contain node 1")
+			}
+			if !added.IsShared() {
+				t.Fatal("node 1 IsShared = false, want born-shared node for known lower-ID peer")
+			}
+			if added.IsOutbound() {
+				t.Fatal("born-shared node created a redundant outbound channel")
+			}
+			if got := added.IsInbound(); got != tt.connected {
+				t.Fatalf("node 1 IsInbound = %t, want %t", got, tt.connected)
+			}
+		})
+	}
+}
+
+// TestStreamDedupBorrowValidatesPeerAddress verifies that building a
+// deduplicated outbound node fails when the lower-ID node it would borrow from
+// is not a configured peer, or is a configured peer at a different address.
+// Without this check a dedup node could silently carry its calls onto a peer
+// channel that reaches a different process.
+func TestStreamDedupBorrowValidatesPeerAddress(t *testing.T) {
+	peers := map[uint32]testNode{
+		2: {"127.0.0.1:9082"},
+		3: {"127.0.0.1:9083"}, // self (localID 3)
+	}
+	insecureDialOpts := WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
+	srv := NewServer(WithPeers(3, WithNodes(peers), insecureDialOpts), WithStreamDedup())
+	t.Cleanup(srv.Stop)
+
+	tests := []struct {
+		name    string
+		nodes   map[uint32]testNode
+		wantErr string
+	}{
+		{
+			name:    "AddressMismatch",
+			nodes:   map[uint32]testNode{2: {"127.0.0.1:9999"}},
+			wantErr: "does not match peer address",
+		},
+		{
+			name:    "MissingPeer",
+			nodes:   map[uint32]testNode{1: {"127.0.0.1:9081"}},
+			wantErr: "is not a configured peer",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := NewConfig(WithNodes(tt.nodes), insecureDialOpts, withServer(srv), conn.WithStreamDedup())
+			if err == nil {
+				t.Cleanup(testCloser(t, cfg))
+				t.Fatalf("newConfig succeeded; want error containing %q", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("newConfig error = %q, want it to contain %q", err, tt.wantErr)
+			}
+		})
+	}
 }
 
 // TestSelfNodeIDStreamRejectedEndToEnd verifies that a client presenting the
