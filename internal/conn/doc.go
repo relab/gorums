@@ -4,7 +4,8 @@
 // connected: [Node] and [Config] and their contexts ([NodeContext],
 // [ConfigContext]); the [NodeSource] builders ([WithNodes], [WithNodeList]);
 // the outbound connection manager and the inbound peer manager
-// ([InboundManager]); and dial options ([DialOptions]). It also
+// ([InboundManager]); dial options ([DialOptions]); and stream deduplication,
+// where a higher-ID peer borrows a lower-ID peer's dialed stream. It also
 // defines the call result errors that reference nodes ([QuorumCallError],
 // [NodeError]).
 //

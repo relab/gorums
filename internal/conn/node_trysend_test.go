@@ -49,7 +49,7 @@ func (s *blockingBidiStream) Recv() (*stream.Message, error) {
 func (s *blockingBidiStream) close() { close(s.closed) }
 
 // TestPeerNodeTrySendDoesNotBlockOnStuckTransport reproduces the server-side
-// half of the back-channel teardown deadlock (see
+// half of the stream-dedup teardown deadlock (see
 // stream.Server.NodeStream): a handler processing a client-initiated request
 // hands its reply to a goroutine that drains a bounded "finished" channel by
 // calling peerNode.TrySend. If that call could block on a stuck or
@@ -57,7 +57,7 @@ func (s *blockingBidiStream) close() { close(s.closed) }
 // back up, and the next handler's own reply would block while holding the
 // connection's ordering lock — wedging the receive loop exactly as an
 // unbounded back-channel reply blocked the client-side receiver before the
-// non-blocking reply fix (see internal/stream/teardown_deadlock_test.go).
+// stream-dedup fix (see internal/stream/teardown_deadlock_test.go).
 //
 // This exercises the real chain the drain goroutine depends on: peerNode ->
 // Node.trySend -> stream.Transport.TrySend -> stream.Channel.TrySend.
