@@ -175,7 +175,7 @@ message WriteRequest {
 
 For the `unicast` and `multicast` call types, the response message type will be unused by Gorums.
 
-> **Reserved message names:** The following names are reserved by Gorums and cannot be used as proto message type names in your `.proto` files: `Configuration`, `Node`, `NodeContext`, `ConfigContext`.
+> **Reserved message names:** The following names are reserved by Gorums and cannot be used as proto message type names in your `.proto` files: `Config`, `Node`, `NodeContext`, `ConfigContext`.
 > Using any of these names will cause a compile error in the generated code because Gorums injects type aliases with these names into every generated `_gorums.pb.go` file.
 
 ### Compiling the Service Definition
@@ -329,7 +329,7 @@ func ExampleStorageServer(port int) {
 ## Implementing the StorageClient
 
 Next, we write client code to call RPCs on our servers.
-The first thing we need to do is to create a `Configuration` using `gorums.NewConfig`.
+The first thing we need to do is to create a `Config` using `gorums.NewConfig`.
 `NewConfig` establishes connections to the given nodes and returns a configuration
 ready for making RPC calls.
 
@@ -369,7 +369,7 @@ func ExampleStorageClient() {
 A configuration is a set of nodes on which RPC calls can be invoked.
 `WithNodeList` assigns a unique identifier to each node by address.
 
-The `Configuration` type has several useful methods for combining and filtering configurations.
+The `Config` type has several useful methods for combining and filtering configurations.
 Inspect the package documentation or source code for details.
 
 We can now invoke the WriteUnicast RPC on each `node` in the configuration:
@@ -430,7 +430,7 @@ Each terminal method blocks until the threshold is met or the context is cancele
 ### Using Terminal Methods
 
 ```go
-func ExampleTerminalMethods(config *Configuration) {
+func ExampleTerminalMethods(config *Config) {
   ctx := context.Background()
   cfgCtx := config.Context(ctx)
 
@@ -1115,7 +1115,7 @@ func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCt
 }
 ```
 
-## Server Configuration Callbacks
+## Server Config Callbacks
 
 Two server options expose hooks that fire at connection or configuration change time.
 Both are passed to `gorums.NewServer` as `ServerOption` values.
@@ -1175,7 +1175,7 @@ config, err := gorums.NewConfig(
 **Signature:**
 
 ```go
-gorums.WithPeerChange(func(cfg gorums.Configuration) { ... })
+gorums.WithPeerChange(func(cfg gorums.Config) { ... })
 ```
 
 **When it runs:** after every change to the connected-peer configuration.
@@ -1200,7 +1200,7 @@ ready := make(chan struct{}, 1)
 
 gorumsSrv := gorums.NewServer(
     gorums.WithPeers(myNodeID, gorums.WithNodeList(peerAddrs), dialOpts...),
-    gorums.WithPeerChange(func(cfg gorums.Configuration) {
+    gorums.WithPeerChange(func(cfg gorums.Config) {
         if len(cfg) >= quorumSize {
             select {
             case ready <- struct{}{}:
@@ -1217,7 +1217,7 @@ log.Println("quorum ready, starting to serve")
 
 The self-node is always present in `cfg`, so a three-node cluster (`quorumSize = 2`) will fire the signal as soon as a single remote peer connects.
 
-## Waiting for Configuration
+## Waiting for Config
 
 `Server.WaitForPeers` and `Server.WaitForClients` block until a condition on the configuration is satisfied, or until the context is cancelled or the server is stopped.
 They replace the need to poll `ConnectedPeers()` in a loop and eliminate the latency and CPU overhead of polling.
@@ -1226,7 +1226,7 @@ They replace the need to poll `ConnectedPeers()` in a loop and eliminate the lat
 // Block until all three known peers are connected.
 ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 defer cancel()
-if err := srv.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+if err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
     return cfg.Size() == 3
 }); err != nil {
     log.Fatal("peers did not connect in time:", err)
@@ -1241,7 +1241,7 @@ The condition is checked immediately against the current configuration, so the c
 Use this when you need a quorum of static cluster members to be present before beginning to serve requests.
 
 ```go
-err := srv.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
     return cfg.Size() >= quorumSize
 })
 ```
@@ -1252,7 +1252,7 @@ err := srv.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
 Use this when a server should not proceed until a minimum number of clients have registered.
 
 ```go
-err := srv.WaitForClients(ctx, func(cfg gorums.Configuration) bool {
+err := srv.WaitForClients(ctx, func(cfg gorums.Config) bool {
     return cfg.Size() >= expectedClients
 })
 ```
@@ -1300,7 +1300,7 @@ Gorums defines several sentinel errors that commonly appear as the cause of a `Q
 Here's how to properly handle errors from a quorum call:
 
 ```go
-func handleQuorumCall(config *gorums.Configuration, req *ReadRequest) {
+func handleQuorumCall(config *gorums.Config, req *ReadRequest) {
   ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
   defer cancel()
 
@@ -1473,7 +1473,7 @@ sub-configurations, and what to watch out for when doing so.
 
 ### The Latency Comparator
 
-`gorums.Latency` is a comparator function compatible with `slices.SortFunc` and `Configuration.SortBy`.
+`gorums.Latency` is a comparator function compatible with `slices.SortFunc` and `Config.SortBy`.
 The comparator orders nodes ascending by their current latency estimates;
 nodes without any measurements (freshly created, never sent traffic) are sorted last.
 
@@ -1497,7 +1497,7 @@ sorted := cfg.SortBy(func(a, b *gorums.Node) int {
 })
 ```
 
-### Using a Smaller Fast Configuration
+### Using a Smaller Fast Config
 
 The most practical use of latency-based selection is reducing the quorum size to the fastest subset of nodes.
 Sending to fewer nodes lowers tail latency without weakening correctness, as long as the subset still meets your quorum threshold.
@@ -1546,10 +1546,10 @@ As a rule of thumb:
 * **After a topology change** (node added or removed), derive the sub-configuration
   from the new full configuration rather than sorting an outdated one.
 
-A simple periodic refresh pattern using `Configuration.Watch`:
+A simple periodic refresh pattern using `Config.Watch`:
 
 ```go
-updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Configuration) gorums.Configuration {
+updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Config) gorums.Config {
     return c.SortBy(gorums.Latency)[:quorumSize]
 })
 fastCfg := <-updates // initial snapshot, available before the first tick
@@ -1583,7 +1583,7 @@ var lastQCErr gorums.QuorumCallError // zero value excludes no nodes
 //       mu.Lock(); lastQCErr = qcErr; mu.Unlock()
 //   }
 
-updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Configuration) gorums.Configuration {
+updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Config) gorums.Config {
     mu.Lock()
     qcErr := lastQCErr
     mu.Unlock()
@@ -1753,7 +1753,7 @@ The `nread` and `nwrite` commands trigger server-side nested quorum calls and ne
 A server handler (the server method itself) can act as a client and issue its own quorum calls to other nodes.
 These are called *nested quorum calls*, because one quorum call triggers another from inside the server handler.
 
-`ServerCtx.PeerConfig()` returns the `Configuration` of the peers the server was configured with via `gorums.WithPeers`.
+`ServerCtx.PeerConfig()` returns the `Config` of the peers the server was configured with via `gorums.WithPeers`.
 This makes it straightforward for a handler to fan out a sub-request to the rest of the cluster.
 It is the full peer set, not the reachable subset, so a quorum size derived from it inside a handler does not shift as peers connect and disconnect; use `ctx.ConnectedPeers()` to observe reachability.
 
@@ -1843,7 +1843,7 @@ The client sees a single quorum call, but internally each receiving node fans ou
 
 ## Reverse Direction Calls with ServerCtx.ConnectedClients
 
-`ServerCtx.ConnectedClients()` returns a `Configuration` of all currently connected *client peers* — nodes that connected to this server dynamically, rather than being pre-configured with `WithPeers`.
+`ServerCtx.ConnectedClients()` returns a `Config` of all currently connected *client peers* — nodes that connected to this server dynamically, rather than being pre-configured with `WithPeers`.
 A handler can use this configuration to make outbound calls back towards those clients, reversing the usual direction of communication.
 
 This pattern is particularly useful when clients are behind a firewall and cannot accept inbound connections.

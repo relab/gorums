@@ -252,14 +252,14 @@ func TestNodeID(t *testing.T) {
 
 // checkIDs asserts that cfg.NodeIDs() equals wantIDs, reporting label in any
 // failure message.
-func checkIDs(t *testing.T, cfg Configuration, wantIDs []uint32, label string) {
+func checkIDs(t *testing.T, cfg Config, wantIDs []uint32, label string) {
 	t.Helper()
 	if got := cfg.NodeIDs(); !slices.Equal(got, wantIDs) {
 		t.Errorf("%s: config IDs = %v; want %v", label, got, wantIDs)
 	}
 }
 
-// TestAcceptPeerUpdatesConfig checks that the Configuration is correctly
+// TestAcceptPeerUpdatesConfig checks that the Config is correctly
 // updated through sequences of peer connections and disconnections
 // (via AcceptPeer and its returned cleanup function), including out-of-order
 // connection, stream breakage followed by reconnect, and idempotent cleanups.
@@ -469,7 +469,7 @@ func TestOnConfigChangeCallbackFiringOnConstruction(t *testing.T) {
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
 		3: {"127.0.0.1:9083"},
-	}), 0, func(cfg Configuration) {
+	}), 0, func(cfg Config) {
 		calls = append(calls, slices.Clone(cfg.NodeIDs()))
 	}, nil)
 
@@ -490,7 +490,7 @@ func TestOnConfigChangeCallbackPeerConnectDisconnect(t *testing.T) {
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
 		3: {"127.0.0.1:9083"},
-	}), 0, func(cfg Configuration) {
+	}), 0, func(cfg Config) {
 		snapshots = append(snapshots, slices.Clone(cfg.NodeIDs()))
 	}, nil)
 
@@ -525,7 +525,7 @@ func TestOnConfigChangeCallbackMultiplePeers(t *testing.T) {
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
 		3: {"127.0.0.1:9083"},
-	}), 0, func(cfg Configuration) {
+	}), 0, func(cfg Config) {
 		snapshots = append(snapshots, slices.Clone(cfg.NodeIDs()))
 	}, nil)
 
@@ -566,7 +566,7 @@ func TestOnConfigChangeCallbackIdempotentCleanup(t *testing.T) {
 	im := newInboundManager(1, WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
-	}), 0, func(_ Configuration) {
+	}), 0, func(_ Config) {
 		callCount++
 	}, nil)
 
@@ -589,8 +589,8 @@ func TestOnConfigChangeCallbackIdempotentCleanup(t *testing.T) {
 }
 
 // mustWaitForInbound blocks until cond returns true for srv's inbound peer
-// Configuration, or fails the test after a 2-second timeout.
-func mustWaitForInbound(t *testing.T, srv *Server, cond func(Configuration) bool) {
+// Config, or fails the test after a 2-second timeout.
+func mustWaitForInbound(t *testing.T, srv *Server, cond func(Config) bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
@@ -600,8 +600,8 @@ func mustWaitForInbound(t *testing.T, srv *Server, cond func(Configuration) bool
 }
 
 // mustWaitForClients blocks until cond returns true for srv's client-peer
-// Configuration, or fails the test after a 2-second timeout.
-func mustWaitForClients(t *testing.T, srv *Server, cond func(Configuration) bool) {
+// Config, or fails the test after a 2-second timeout.
+func mustWaitForClients(t *testing.T, srv *Server, cond func(Config) bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
@@ -622,8 +622,8 @@ func testPeerServer(t *testing.T) (*Server, []string) {
 	return srv, addrs
 }
 
-func equalNodeIDs(ids []uint32) func(Configuration) bool {
-	return func(cfg Configuration) bool {
+func equalNodeIDs(ids []uint32) func(Config) bool {
+	return func(cfg Config) bool {
 		return slices.Equal(cfg.NodeIDs(), ids)
 	}
 }
@@ -636,11 +636,11 @@ func peerNodes() NodeListOption {
 	})
 }
 
-// connectAsPeer creates a Configuration that identifies itself as peerID by sending
+// connectAsPeer creates a Config that identifies itself as peerID by sending
 // gorumsNodeIDKey metadata, connects to addrs, and returns the configuration.
-// Configuration cleanup is registered via t.Cleanup; callers may also close it
+// Config cleanup is registered via t.Cleanup; callers may also close it
 // explicitly (e.g., to test disconnect) — Close is idempotent.
-func connectAsPeer(t *testing.T, peerID uint32, addrs []string) Configuration {
+func connectAsPeer(t *testing.T, peerID uint32, addrs []string) Config {
 	t.Helper()
 	peerMD := metadata.Pairs(gorumsNodeIDKey, strconv.FormatUint(uint64(peerID), 10))
 	cfg, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithMetadata(peerMD))
@@ -789,11 +789,11 @@ func testClientServer(t *testing.T) (*Server, []string) {
 	return srv, addrs
 }
 
-// connectAsPeerClient creates a Configuration that advertises back-channel
+// connectAsPeerClient creates a Config that advertises back-channel
 // capability by sending the gorums-node-id key (via [WithServer]),
 // connects to addrs, and returns the configuration. The server will include it in
 // ClientConfig and may dispatch server-initiated calls to it.
-func connectAsPeerClient(t *testing.T, addrs []string) Configuration {
+func connectAsPeerClient(t *testing.T, addrs []string) Config {
 	t.Helper()
 	cfg, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithBackChannel(NewServer()))
 	if err != nil {
@@ -814,7 +814,7 @@ func TestClientConfigConnects(t *testing.T) {
 	connectAsPeerClient(t, addrs)
 
 	// Client peer should appear with auto-assigned ID >= clientIDStart.
-	mustWaitForClients(t, srv, func(cfg Configuration) bool { return len(cfg) > 0 })
+	mustWaitForClients(t, srv, func(cfg Config) bool { return len(cfg) > 0 })
 	cfg := srv.ConnectedClients()
 	if len(cfg) != 1 {
 		t.Fatalf("ClientConfig has %d nodes; want 1", len(cfg))
@@ -832,7 +832,7 @@ func TestClientConfigDisconnects(t *testing.T) {
 	cfg := connectAsPeerClient(t, addrs)
 
 	// Wait for the client peer to appear.
-	mustWaitForClients(t, srv, func(cfg Configuration) bool { return len(cfg) > 0 })
+	mustWaitForClients(t, srv, func(cfg Config) bool { return len(cfg) > 0 })
 	if len(srv.ConnectedClients()) != 1 {
 		t.Fatalf("ClientConfig has %d nodes; want 1", len(srv.ConnectedClients()))
 	}
@@ -843,7 +843,7 @@ func TestClientConfigDisconnects(t *testing.T) {
 	}
 
 	// Wait for config to become empty.
-	mustWaitForClients(t, srv, func(cfg Configuration) bool { return len(cfg) == 0 })
+	mustWaitForClients(t, srv, func(cfg Config) bool { return len(cfg) == 0 })
 	checkIDs(t, srv.ConnectedClients(), []uint32{}, "after disconnect")
 }
 
@@ -863,7 +863,7 @@ func TestClientConfigMixedMode(t *testing.T) {
 	connectAsPeerClient(t, addrs)
 
 	// Wait for 1 dynamic node.
-	mustWaitForClients(t, srv, func(cfg Configuration) bool { return len(cfg) == 1 })
+	mustWaitForClients(t, srv, func(cfg Config) bool { return len(cfg) == 1 })
 	dynCfg := srv.ConnectedClients()
 	if len(dynCfg) != 1 {
 		t.Fatalf("ClientConfig has %d nodes; want 1", len(dynCfg))
@@ -910,7 +910,7 @@ func TestClientConfigServerCallsClient(t *testing.T) {
 	t.Cleanup(testCloser(t, clientConfig))
 
 	// Wait for the client to appear in the server's ClientConfig.
-	mustWaitForClients(t, srv, func(cfg Configuration) bool { return len(cfg) > 0 })
+	mustWaitForClients(t, srv, func(cfg Config) bool { return len(cfg) > 0 })
 
 	// Trigger: client multicasts TestMethod to the server; server fans it back via ClientConfig.
 	ctx := testTimeoutContext(t, 2*time.Second)

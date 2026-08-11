@@ -93,7 +93,7 @@ func WithMetadata(md metadata.MD) DialOption {
 // servers it dials. It panics if srv is nil.
 //
 // A server that calls its own peers does not need this option: [WithPeers]
-// installs the back channel on the peer [Configuration] it builds.
+// installs the back channel on the peer [Config] it builds.
 //
 // NodeID semantics:
 //   - If srv.NodeID() == 0, the remote treats this connection as an anonymous

@@ -192,7 +192,7 @@ Use integration mode for performance benchmarking and network-specific validatio
 Gorums provides custom protobuf options defined in `gorums.proto`:
 
 - Method-level options for quorum call types
-- Configuration options for RPC behavior
+- Config options for RPC behavior
 - See `doc/user-guide.md` for details
 
 ## Documentation

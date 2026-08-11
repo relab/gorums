@@ -57,7 +57,7 @@ func metadataWithNodeID(id uint32) metadata.MD {
 
 // inboundManager manages server-side awareness of connected peers. It is
 // configured at construction time with a fixed set of known peers, registers
-// them as they connect, and maintains an auto-updated [Configuration] that
+// them as they connect, and maintains an auto-updated [Config] that
 // can be used for server-initiated quorum calls, multicast, and other call types.
 //
 // Clients that specify node ID 0 in their metadata are assumed to be capable
@@ -72,14 +72,14 @@ type inboundManager struct {
 	myID           uint32                // this server's own NodeID; always present in inboundCfg
 	knownNodes     map[uint32]*Node      // pre-created configured peers, including self when configured
 	clientNodes    map[uint32]*Node      // dynamically assigned peer-capable clients
-	peerConfig     Configuration         // the server's peer Configuration; set once by setPeerConfig
-	config         Configuration         // auto-updated connectivity-filtered subset of peerConfig, sorted by ID
-	inboundCfg     Configuration         // auto-updated slice of known peers with an inbound stream, sorted by ID
-	clientConfig   Configuration         // auto-updated slice of client peers, sorted by ID
+	peerConfig     Config                // the server's peer Config; set once by setPeerConfig
+	config         Config                // auto-updated connectivity-filtered subset of peerConfig, sorted by ID
+	inboundCfg     Config                // auto-updated slice of known peers with an inbound stream, sorted by ID
+	clientConfig   Config                // auto-updated slice of client peers, sorted by ID
 	nextMsgID      atomic.Uint64         // counter for server-initiated message IDs
 	sendBufferSize uint                  // send buffer size for inbound channels
 	handler        stream.RequestHandler // handler for dispatching incoming requests on all inbound nodes
-	onConfigChange func(Configuration)   // optional; called after each known-peer config change
+	onConfigChange func(Config)          // optional; called after each known-peer config change
 	nextClientID   uint64                // next candidate ID for a client peer; uint64 represents exhaustion
 	configCh       chan struct{}         // closed and replaced on each config/clientConfig change; protected by mu
 	stopCh         chan struct{}         // closed on shutdown to unblock waiters; never replaced
@@ -101,7 +101,7 @@ const clientIDStart = 1 << 20
 // installed on the self-node (if present) to enable in-process dispatch without
 // a network round-trip. Panics on configuration errors (invalid addresses,
 // duplicate nodes, etc.)
-func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfigChange func(Configuration), handler stream.RequestHandler) *inboundManager {
+func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfigChange func(Config), handler stream.RequestHandler) *inboundManager {
 	im := &inboundManager{
 		myID:           myID,
 		knownNodes:     make(map[uint32]*Node),
@@ -134,10 +134,10 @@ func (im *inboundManager) Nodes() []*Node {
 	})
 }
 
-// ConnectedPeers returns the current connected-peer [Configuration]; see
+// ConnectedPeers returns the current connected-peer [Config]; see
 // [Server.ConnectedPeers]. Before setPeerConfig installs a peer configuration,
 // it falls back to the inbound view.
-func (im *inboundManager) ConnectedPeers() Configuration {
+func (im *inboundManager) ConnectedPeers() Config {
 	if im == nil {
 		return nil
 	}
@@ -146,11 +146,11 @@ func (im *inboundManager) ConnectedPeers() Configuration {
 	return im.config
 }
 
-// setPeerConfig installs the server's peer [Configuration], from which the
+// setPeerConfig installs the server's peer [Config], from which the
 // connected-peer view is derived. It is called once by [NewServer] after the
 // peer configuration is built; stream-state changes observed before that are
 // picked up by the rebuild here.
-func (im *inboundManager) setPeerConfig(cfg Configuration) {
+func (im *inboundManager) setPeerConfig(cfg Config) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	im.peerConfig = cfg
@@ -170,18 +170,18 @@ func (im *inboundManager) peerStreamChanged(uint32, bool) {
 // inboundPeers returns the known peers with an inbound stream open to this
 // server, plus the local node. Test-only: production code observes
 // connectivity through ConnectedPeers.
-func (im *inboundManager) inboundPeers() Configuration {
+func (im *inboundManager) inboundPeers() Config {
 	im.mu.RLock()
 	defer im.mu.RUnlock()
 	return im.inboundCfg
 }
 
-// ConnectedClients returns a [Configuration] of all connected clients capable of
+// ConnectedClients returns a [Config] of all connected clients capable of
 // receiving reverse-direction calls from the server.
-// An empty (non-nil) Configuration is returned if no client peers are connected.
+// An empty (non-nil) Config is returned if no client peers are connected.
 // The returned slice is replaced atomically on each connect/disconnect;
 // thus, retaining a reference to an old configuration is safe.
-func (im *inboundManager) ConnectedClients() Configuration {
+func (im *inboundManager) ConnectedClients() Config {
 	if im == nil {
 		return nil
 	}
@@ -350,13 +350,13 @@ func (im *inboundManager) nextAvailableClientID() (uint32, error) {
 // configuration is installed it falls back to the inbound view.
 // Callers must hold the lock.
 func (im *inboundManager) rebuildConfig() {
-	inboundCfg := make(Configuration, 0, len(im.knownNodes))
+	inboundCfg := make(Config, 0, len(im.knownNodes))
 	for id, node := range im.knownNodes {
 		if id == im.myID || node.channel.Load() != nil {
 			inboundCfg = append(inboundCfg, node)
 		}
 	}
-	clientCfg := make(Configuration, 0, len(im.clientNodes))
+	clientCfg := make(Config, 0, len(im.clientNodes))
 	for _, node := range im.clientNodes {
 		if node.channel.Load() != nil {
 			clientCfg = append(clientCfg, node)
@@ -369,7 +369,7 @@ func (im *inboundManager) rebuildConfig() {
 
 	cfg := inboundCfg
 	if im.peerConfig != nil {
-		cfg = make(Configuration, 0, len(im.peerConfig))
+		cfg = make(Config, 0, len(im.peerConfig))
 		for _, node := range im.peerConfig {
 			if node.ID() == im.myID || node.isUp() {
 				cfg = append(cfg, node)
@@ -418,10 +418,10 @@ func (im *inboundManager) waitForConfig(ctx context.Context, cond func() bool) e
 }
 
 // WaitForPeers blocks until cond returns true for the current connected-peer
-// [Configuration], or until ctx is cancelled or the server is stopped.
+// [Config], or until ctx is cancelled or the server is stopped.
 // The cond function receives the current connected-peer configuration and must
 // not acquire any additional locks.
-func (im *inboundManager) WaitForPeers(ctx context.Context, cond func(Configuration) bool) error {
+func (im *inboundManager) WaitForPeers(ctx context.Context, cond func(Config) bool) error {
 	return im.waitForConfig(ctx, func() bool {
 		return cond(im.config)
 	})
@@ -429,17 +429,17 @@ func (im *inboundManager) WaitForPeers(ctx context.Context, cond func(Configurat
 
 // waitForInbound blocks until cond returns true for the current inbound view.
 // Test-only counterpart of WaitForPeers.
-func (im *inboundManager) waitForInbound(ctx context.Context, cond func(Configuration) bool) error {
+func (im *inboundManager) waitForInbound(ctx context.Context, cond func(Config) bool) error {
 	return im.waitForConfig(ctx, func() bool {
 		return cond(im.inboundCfg)
 	})
 }
 
 // WaitForClients blocks until cond returns true for the current client-peer
-// [Configuration], or until ctx is cancelled or the server is stopped.
+// [Config], or until ctx is cancelled or the server is stopped.
 // The cond function receives the current client-peer configuration and must not
 // acquire any additional locks.
-func (im *inboundManager) WaitForClients(ctx context.Context, cond func(Configuration) bool) error {
+func (im *inboundManager) WaitForClients(ctx context.Context, cond func(Config) bool) error {
 	return im.waitForConfig(ctx, func() bool {
 		return cond(im.clientConfig)
 	})

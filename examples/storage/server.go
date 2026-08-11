@@ -46,7 +46,7 @@ func runServer(address string, peers []string, srvOpt gorums.ServerOption) error
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := srv.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+	if err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
 		return cfg.Size() == len(peers)
 	}); err != nil {
 		return fmt.Errorf("peers did not connect in time: %w", err)
@@ -82,7 +82,7 @@ func runLocalCluster(srvOpts gorums.ServerOption) ([]string, func(), error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	for _, srv := range servers {
-		if err := srv.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+		if err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
 			return cfg.Size() == len(servers)
 		}); err != nil {
 			stop()

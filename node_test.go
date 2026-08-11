@@ -138,7 +138,7 @@ func TestConfigurationWatch(t *testing.T) {
 	}
 
 	// allNodes has five nodes; top-3 by ascending latency are 2(10ms), 3(20ms), 1(30ms).
-	allNodes := Configuration{
+	allNodes := Config{
 		makeNodeWithLatency(1, 30*time.Millisecond),
 		makeNodeWithLatency(2, 10*time.Millisecond),
 		makeNodeWithLatency(3, 20*time.Millisecond),
@@ -146,7 +146,7 @@ func TestConfigurationWatch(t *testing.T) {
 		makeNodeWithLatency(5, 50*time.Millisecond),
 	}
 	const quorumSize = 3
-	fastTop3 := func(c Configuration) Configuration { return c.SortBy(Latency)[:quorumSize] }
+	fastTop3 := func(c Config) Config { return c.SortBy(Latency)[:quorumSize] }
 
 	t.Run("EmitsInitialSnapshot", func(t *testing.T) {
 		// Use a very long interval so only the initial emission fires.
@@ -182,8 +182,8 @@ func TestConfigurationWatch(t *testing.T) {
 		n1 := makeNodeWithLatency(1, 10*time.Millisecond)
 		n2 := makeNodeWithLatency(2, 30*time.Millisecond)
 		n3 := makeNodeWithLatency(3, 20*time.Millisecond)
-		cfg := Configuration{n1, n2, n3}
-		top2 := func(c Configuration) Configuration { return c.SortBy(Latency)[:2] }
+		cfg := Config{n1, n2, n3}
+		top2 := func(c Config) Config { return c.SortBy(Latency)[:2] }
 
 		const interval = 20 * time.Millisecond
 		updates := cfg.Watch(t.Context(), interval, top2)

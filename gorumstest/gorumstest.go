@@ -123,7 +123,7 @@ func startServers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerI
 //
 // This is the recommended way to set up tests that need both servers and a configuration.
 // It ensures proper cleanup and detects goroutine leaks.
-func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, opts ...Option) gorums.Configuration {
+func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, opts ...Option) gorums.Config {
 	t.Helper()
 
 	testOpts := extractTestOptions(opts)
@@ -160,12 +160,12 @@ func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, 
 	return cfg
 }
 
-// NoDialedConfig returns a [gorums.Configuration] over addrs whose nodes are
+// NoDialedConfig returns a [gorums.Config] over addrs whose nodes are
 // never actually dialed: gRPC connections are established lazily on the first
 // RPC, so tests that only need a valid configuration to construct calls,
 // without ever completing one, don't need a running server behind it. If addrs
 // is empty, a single unreachable sentinel address is used.
-func NoDialedConfig(t testing.TB, addrs ...string) gorums.Configuration {
+func NoDialedConfig(t testing.TB, addrs ...string) gorums.Config {
 	t.Helper()
 	if len(addrs) == 0 {
 		addrs = []string{"127.0.0.1:65535"}
@@ -229,7 +229,7 @@ func Servers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface)
 
 // LocalServers returns n started Gorums servers forming a symmetric peer
 // group on random localhost ports (see [gorums.NewLocalServers]). Each
-// server auto-creates a peer [gorums.Configuration] over the group, accessible
+// server auto-creates a peer [gorums.Config] over the group, accessible
 // via [gorums.Server.PeerConfig]. The servers are automatically stopped
 // when the test finishes via t.Cleanup. Any [gorums.ServerOption]s are
 // applied to every server.
