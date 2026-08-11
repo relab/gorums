@@ -1,0 +1,80 @@
+edition = "2024";
+
+package benchkit;
+
+import "gorums.proto";
+import "benchkit/benchkit.proto";
+
+option features.field_presence = IMPLICIT;
+option go_package = "github.com/relab/gorums/benchkit";
+
+// StartRequest starts a benchmarking campaign and selects the aggregate
+// latency backing store the server builds for the run, so a server-measured
+// benchmark honors the client's -stats-mode.
+message StartRequest {
+  StatsMode stats_mode = 1; // exact vs hdr aggregate store; 0 = exact (default)
+}
+
+// StartResponse is an empty message to acknowledge the start of a benchmarking campaign.
+message StartResponse {}
+
+// StopRequest is an empty message for stopping a benchmarking campaign.
+message StopRequest {}
+
+// ClockSyncRequest is an empty message for requesting the server's wall clock.
+message ClockSyncRequest {}
+
+// ClockSyncResponse carries the server's wall-clock reading, used for NTP-style
+// clock-offset estimation between peers when correcting one-way latencies.
+message ClockSyncResponse {
+  int64 server_time = 1; // nanoseconds; server's wall clock at handler entry
+}
+
+// DoneRequest is multicast to advise peers that the sender has finished its
+// own benchmark work and will issue no further calls.
+message DoneRequest {
+  // sender_id is the sender's Gorums node ID, used to de-duplicate signals
+  // and to name peers that have not yet signaled when diagnosing a timeout.
+  uint32 sender_id = 1;
+}
+
+// DoneResponse is an empty message; Done is a one-way advisory signal, but a
+// response type must be defined to satisfy the gRPC schema.
+message DoneResponse {}
+
+// The Result, Report, and MemoryStat data messages live in benchkit.proto, a
+// gorums-free file that consumers (e.g. sweep) can compile standalone without
+// pulling in gorums.proto. The Stop RPC below returns benchkit.Result.
+
+// Control is the protocol-neutral measurement control plane. Any gorums-based
+// protocol embeds it alongside its own workload service on the same listener.
+// The four RPCs never reference a workload, so they are shared by every
+// protocol that benchkit measures.
+service Control {
+  // Start resets the server-side op counter and Stats baseline.
+  rpc Start(StartRequest) returns (StartResponse) {
+    option (gorums.quorumcall) = true;
+  }
+
+  // Stop ends measurement and returns this server's Result. For server-measured
+  // benchmarks (e.g. Multicast) the Result carries latency samples; for
+  // client-measured benchmarks (e.g. QuorumCall) it carries only memory stats.
+  rpc Stop(StopRequest) returns (Result) {
+    option (gorums.quorumcall) = true;
+  }
+
+  // ClockSync returns the server's wall-clock time, enabling NTP-style
+  // clock-offset estimation between peers for one-way latency correction.
+  rpc ClockSync(ClockSyncRequest) returns (ClockSyncResponse) {
+    option (gorums.quorumcall) = true;
+  }
+
+  // Done is an advisory, one-way signal: a node multicasts it to all peers
+  // once it has finished its own benchmark work and trailing flush. It is
+  // not a barrier — a missing or delayed Done never blocks or fails a run,
+  // it only means the waiting peer falls back to its own timeout. See
+  // benchmark.AwaitPeersDoneOrGrace.
+  rpc Done(DoneRequest) returns (DoneResponse) {
+    option (gorums.multicast) = true;
+  }
+}
