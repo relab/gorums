@@ -28,6 +28,7 @@ z-scratch/
 .scratch/
 
 # Binary files
+benchkit/cmd/benchmark/benchmark
 examples/storage/storage
 
 # Gorums generated backup files
