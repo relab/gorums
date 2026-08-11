@@ -443,7 +443,7 @@ func (r repl) parseConfiguration(cfgStr string) (pb.Config, error) {
 	for _, i := range indices {
 		nodes = append(nodes, cfgNodes[i])
 	}
-	slices.SortFunc(nodes, gorums.ID)
+	slices.SortFunc(nodes, gorums.ByID)
 	return pb.Config(nodes), nil
 }
 
