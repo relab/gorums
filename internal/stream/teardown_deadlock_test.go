@@ -329,11 +329,11 @@ func (f *fakeNodeStream) release()        { close(f.released) }
 func (f *fakeNodeStream) close()          { f.closeOnce.Do(func() { close(f.closed) }) }
 
 // The remaining methods satisfy grpc.ServerStream; NodeStream never calls them.
-func (f *fakeNodeStream) SetHeader(metadata.MD) error  { return nil }
-func (f *fakeNodeStream) SendHeader(metadata.MD) error { return nil }
-func (f *fakeNodeStream) SetTrailer(metadata.MD)       {}
-func (f *fakeNodeStream) SendMsg(any) error            { return nil }
-func (f *fakeNodeStream) RecvMsg(any) error            { return nil }
+func (*fakeNodeStream) SetHeader(metadata.MD) error  { return nil }
+func (*fakeNodeStream) SendHeader(metadata.MD) error { return nil }
+func (*fakeNodeStream) SetTrailer(metadata.MD)       {}
+func (*fakeNodeStream) SendMsg(any) error            { return nil }
+func (*fakeNodeStream) RecvMsg(any) error            { return nil }
 
 var _ Gorums_NodeStreamServer = (*fakeNodeStream)(nil)
 
@@ -356,6 +356,10 @@ type echoPeerNode struct {
 }
 
 func (p echoPeerNode) RouteInbound(_ context.Context, msg *Message, release func(), send func(*Message)) {
+	// The reply is produced off the caller's goroutine on purpose: RouteInbound
+	// runs on the receive loop, which this test requires to stay unblocked. The
+	// goroutine is the behavior under test, so it cannot move to the caller.
+	// skipcq: GO-E1007
 	go func() {
 		defer release()
 		p.dispatched <- msg.GetMessageSeqNo()
