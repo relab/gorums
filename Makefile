@@ -176,8 +176,7 @@ goplscheck:
 genproto: installgorums dev
 	@echo "Regenerating all proto files (dev, benchkit, benchmark, internal/tests, examples)"
 	@$(MAKE) -B -s dev
-	@$(MAKE) -B -s $(benchkit_deps)
-	@$(MAKE) -B -s benchmark
+	@$(MAKE) -B -s $(benchmark_deps)
 	@$(MAKE) -B -s --no-print-directory -C ./internal/tests all
 	@$(MAKE) -B -s --no-print-directory -C ./examples all
 
