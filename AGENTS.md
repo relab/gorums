@@ -27,14 +27,19 @@ gorums/
 ├── cmd/protoc-gen-gorums/     # Compiler plugin for code generation
 │   ├── dev/                   # Static code + generated code examples
 │   └── gengorums/             # Compiler logic + templates
+├── benchkit/                  # Separate module: measurement and benchmarking
+│   ├── proto/                 # .proto sources for the benchkit module
 ├── examples/                  # Separate module: example implementations
 ├── internal/                  # Internal packages
 ├── doc/                       # Documentation
 └── *.go                       # Core library files
 ```
 
-The repository holds two modules: `github.com/relab/gorums` at the root and
-`github.com/relab/gorums/examples`, joined by `go.work`.
+The repository holds three modules: `github.com/relab/gorums` at the root,
+`github.com/relab/gorums/benchkit`, and `github.com/relab/gorums/examples`.
+They are joined by `go.work`.
+The dependency edge runs one way: benchkit imports gorums, never the reverse.
+Keep the root `go.mod` free of benchmarking and orchestration dependencies.
 
 ## Development Rules
 
