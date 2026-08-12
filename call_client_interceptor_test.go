@@ -161,7 +161,7 @@ func TestCustomInterceptorWithMapRequest(t *testing.T) {
 			CountingInterceptor[*pb.StringValue, *pb.StringValue](&count),
 			// Built-in: transform request (identity transform for this test)
 			gorums.MapRequest[*pb.StringValue, *pb.StringValue](
-				func(req *pb.StringValue, node *gorums.Node) *pb.StringValue {
+				func(req *pb.StringValue, _ *gorums.Node) *pb.StringValue {
 					return req
 				},
 			),
