@@ -16,14 +16,14 @@ func makeTestEvents(t *testing.T) []*Event {
 	b := newEventBuffer()
 
 	start := time.Unix(1, 0)
-	const halfSec = 500 * time.Millisecond
+	const sampleInterval = 500 * time.Millisecond
 	b.emitPhase(start, PhaseMarker_START, 100)
-	b.emitThroughput(start.Add(500*time.Millisecond), 50, halfSec)
+	b.emitThroughput(start.Add(500*time.Millisecond), 50, sampleInterval)
 	b.emitLatency(start.Add(500*time.Millisecond), 200.0, 30.0, 50)
-	b.emitThroughput(start.Add(1500*time.Millisecond), 100, halfSec)
+	b.emitThroughput(start.Add(1500*time.Millisecond), 100, sampleInterval)
 	b.emitLatency(start.Add(1500*time.Millisecond), 150.0, 20.0, 100)
 	b.emitPhase(start.Add(2000*time.Millisecond), PhaseMarker_RATE_STEP, 200)
-	b.emitThroughput(start.Add(2500*time.Millisecond), 180, halfSec)
+	b.emitThroughput(start.Add(2500*time.Millisecond), 180, sampleInterval)
 	b.emitPhase(start.Add(3000*time.Millisecond), PhaseMarker_STOP, 0)
 
 	return b.Events()
