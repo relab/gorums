@@ -109,6 +109,9 @@ func collectNodeMeasurements(outdir, base string, nodes []nodeAssignment, trim t
 		server      bool // true if any result is SERVER_MEASURED
 		client      bool
 	}
+	// serverMeasuredOnly reports whether an entry carries a server-side
+	// measurement and no client-side one.
+	serverMeasuredOnly := func(n nodeEntry) bool { return n.server && !n.client }
 	var list []nodeEntry
 	for _, node := range nodes {
 		data, err := os.ReadFile(filepath.Join(outdir, resultFilename(base, node, resultExt)))
@@ -138,7 +141,7 @@ func collectNodeMeasurements(outdir, base string, nodes []nodeAssignment, trim t
 
 	serverOnly := 0
 	for _, n := range list {
-		if n.server && !n.client {
+		if serverMeasuredOnly(n) {
 			serverOnly++
 		}
 	}
@@ -147,7 +150,7 @@ func collectNodeMeasurements(outdir, base string, nodes []nodeAssignment, trim t
 	useServerOnly := serverOnly >= 2
 	measurements := make(map[string]nodeMeasurement, len(list))
 	for _, n := range list {
-		if useServerOnly && !(n.server && !n.client) {
+		if useServerOnly && !serverMeasuredOnly(n) {
 			continue
 		}
 		measurements[n.host] = n.measurement
