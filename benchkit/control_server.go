@@ -50,11 +50,17 @@ func (c *Control) SelfID() uint32 { return c.selfID }
 // signals (sender IDs 1..total) and returns the channel that closes once
 // every one of them has signaled. Call sites that never need the signal
 // (e.g. local or coordinator mode) simply never call ArmDone: Done is a
-// no-op and DoneCh returns nil until armed.
+// no-op and DoneCh returns nil until armed. Arming for no peers at all
+// returns an already-closed channel, since there is nothing to wait for.
 func (c *Control) ArmDone(total int) <-chan struct{} {
-	c.doneSeen = make([]atomic.Bool, total+1) // index 0 unused; IDs are 1..total
+	c.doneSeen = make([]atomic.Bool, max(total, 0)+1) // index 0 unused; IDs are 1..total
 	c.doneLeft.Store(int32(total))
 	c.doneCh = make(chan struct{})
+	if total <= 0 {
+		// Done closes doneCh only when a signal drives doneLeft to zero, and no
+		// signal can arrive: every sender ID is out of doneSeen's range.
+		close(c.doneCh)
+	}
 	return c.doneCh
 }
 

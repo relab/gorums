@@ -1,6 +1,7 @@
 package benchkit
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -89,6 +90,27 @@ func TestControlDoneClosesChannelWhenAllSendersSignal(t *testing.T) {
 	case <-doneCh:
 	default:
 		t.Fatal("DoneCh open after 3/3 signals, want closed")
+	}
+}
+
+// TestControlArmDoneWithoutPeers verifies that arming for no peers yields an
+// already-closed channel. No sender ID is in range, so Done can never drive
+// doneLeft to zero, and a caller waiting on the channel would block forever.
+func TestControlArmDoneWithoutPeers(t *testing.T) {
+	for _, total := range []int{0, -1} {
+		t.Run(fmt.Sprintf("total=%d", total), func(t *testing.T) {
+			ctrl := NewControl()
+			doneCh := ctrl.ArmDone(total)
+
+			select {
+			case <-doneCh:
+			default:
+				t.Fatalf("DoneCh open after ArmDone(%d), want closed", total)
+			}
+
+			// A stray signal must not close the channel a second time.
+			ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 1}.Build())
+		})
 	}
 }
 
