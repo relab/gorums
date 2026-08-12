@@ -1,3 +1,6 @@
+// Package strconv provides generic helpers for parsing and formatting integer
+// types, so callers can convert to and from strings without per-type
+// boilerplate.
 package strconv
 
 import (

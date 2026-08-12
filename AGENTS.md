@@ -27,11 +27,14 @@ gorums/
 ├── cmd/protoc-gen-gorums/     # Compiler plugin for code generation
 │   ├── dev/                   # Static code + generated code examples
 │   └── gengorums/             # Compiler logic + templates
-├── examples/                  # Example implementations
+├── examples/                  # Separate module: example implementations
 ├── internal/                  # Internal packages
 ├── doc/                       # Documentation
 └── *.go                       # Core library files
 ```
+
+The repository holds two modules: `github.com/relab/gorums` at the root and
+`github.com/relab/gorums/examples`, joined by `go.work`.
 
 ## Development Rules
 
@@ -41,11 +44,15 @@ gorums/
 - STOP and ASK if unsure about design decisions
 - ALWAYS write tests for new features and bug fixes
 - Large changes must be broken into small, manageable units to be committed separately
-- NEVER make unrelated changes in the same commit (e.g., code + documentation + formatting)
+- Use scoped commits: each commit should contain one coherent change, including any tests and documentation required by that change.
+- NEVER mix unrelated code, documentation, or formatting changes in the same commit.
 - Issues, designs, reviews, plans, specifications, and task notes are private local artifacts.
   Store them under `.scratch/<feature>/`; never stage or commit them.
 - If you discover a separate issue while working, add or update its numbered file under `.scratch/<feature>/issues/` instead of expanding the current change.
-- COMMIT messages must follow conventional commit style (at most 75 characters wide), must be human readable plain text and easily copyable, and must not contain any markdown links or formatting.
+- At the end of a session, provide a proposed commit message for each scoped commit in a separate plain-text fenced block that can be copied verbatim.
+- Commit messages must use a clear, human-readable subject of at most 75 characters and must not contain Markdown links or formatting.
+- Scoped commit prefixes are required: package-name: descriptive subject. For example: `gorums: add quorum call timeout option`.
+- NEVER add a `Co-Authored-By` trailer naming an AI agent to a commit message.
 
 ### Code Generation Workflow
 
@@ -68,13 +75,16 @@ These files are generated from templates. Instead:
 ### Testing Requirements
 
 - Use the `github.com/relab/gorums/gorumstest` package for common test setup.
-- Use `gorumstest.Config` for a multi-server configuration, `gorumstest.Node` for a single server node, `gorumstest.Servers` for server addresses, and `gorumstest.Systems` for symmetric in-process server groups.
+- Use `gorumstest.Config` for a multi-server configuration, `gorumstest.Node` for a single server node, `gorumstest.Servers` for server addresses, and `gorumstest.LocalServers` for symmetric in-process server groups.
 - Use `gorumstest.NoDialedConfig` when a test needs configuration construction without dialing servers.
 - Use `gorumstest.Context` for test-scoped timeouts and `gorumstest.WaitUntil` for bounded polling.
 - Use `gorumstest.DialOptions` or `gorumstest.InsecureDialOptions` for test connections, and use `gorumstest.WithStopFunc` or `gorumstest.WithPreConnect` when a failure-path test needs server lifecycle control.
-- These helpers own listener allocation, cleanup ordering, and goroutine-leak checks.
+- These helpers own listener allocation, cleanup ordering, and goroutine-leak checks. They keep listeners open for their intended lifetime, which makes repeated runs with `go test -count=N` race-free.
 - If the provided `gorumstest` helpers are insufficient, add a focused helper to that package and document its contract and usage.
-- Tests in package `gorums` itself cannot import `gorumstest`, since that would create an import cycle; they build on `internal/testutils/servers` directly.
+- NEVER hand-roll listener or port allocation in tests (e.g., binding `net.Listen("tcp", ":0")`, reading `.Addr()`, closing the listener, and later re-binding that port).
+  The bind-release-rebind pattern races other binders and has caused `-count` flakiness.
+  If a test genuinely needs behavior the framework cannot express,
+  STOP and ask the maintainer for permission before introducing an alternative approach, and document why in the test.
 - Always write table-driven tests when same logic needs to be tested with multiple inputs
 - Organize related tests using subtests
 - Test names should be capitalized, like TestFileNameFeatureName, e.g., TestQuorumCallFeatureName, for some feature in `quorumcall_test.go`
@@ -88,28 +98,47 @@ These files are generated from templates. Instead:
 
 ### Testing Strategy
 
-- Follow Test Driven Development (TDD) when adding features or fixing bugs:
-  1. Write failing test
-  2. Confirm test fails
-  3. Write minimal code to pass test
-  4. Confirm test passes
-  5. Refactor if needed
+Follow Test Driven Development (TDD) when adding features or fixing bugs:
+
+1. Write failing test
+2. Confirm test fails
+3. Write minimal code to pass test
+4. Confirm test passes
+5. Refactor if needed
 
 ### Code Style and Conventions
 
 - **Match existing code style** - consistency within files is paramount
 - **Follow Go conventions** - use `gofmt`, follow effective Go practices
+- Before wrapping up a session that changes Go code, run `make modernize`, review its changes, and run `make goplscheck`.
+- Resolve every `make goplscheck` diagnostic in non-generated Go source before considering the work complete.
+  This check includes hint-level gopls simplifications that `go fix` and the standalone modernize suite do not cover.
+  Apply the corresponding gopls quick fix or make the equivalent source edit, then rerun the check.
+- Never edit generated files to satisfy modernization diagnostics; update the generator or its inputs and regenerate instead.
 - **Use Go's standard library**
   - use up-to-date standard library features when relevant
   - use recent versions of packages: slices, maps, sync, rand/v2
   - use for-range iterators with yield when applicable
   - use generics when appropriate
 - **Use meaningful names** - reflect domain concepts, not implementation details
+- **Name by type, consistently** - use the same variable/parameter name for a given type across the codebase (e.g. `nodes NodeSource`, `callCtx *CallContext[...]`); do not reuse a generic name like `opt`/`opts` for a value whose type is not itself a functional option
+- **Limit concept sprawl** - consolidate overlapping ideas under one general concept, name, or abstraction whenever their contracts align
 - **Preserve comments** unless they are demonstrably incorrect
-- **Add documentation**
-  - Each exported function, type, and method must have a clear comment explaining its purpose and usage following Go doc conventions
-  - Non-exported functions, types, and methods should have comments if their purpose is not immediately clear
-  - Each Go package (typically in doc.go) should have a comment block describing its purpose:
+- **No forwarding functions/methods** - never add an exported function or method whose only body is a call to an unexported one of the same shape (e.g. `func Foo() T { return foo() }`) purely to expose it.
+  Export the unexported one directly (rename it, update its doc comment) and change call sites to use the exported name.
+  The only exception is when the wrapper adds real behavior (validation, combining multiple calls, adapting a signature) beyond exposing the name.
+
+### Add documentation
+
+- Each exported function, type, and method must have a succinct Go doc comment describing its purpose and usage
+- Non-exported functions, types, and methods should have comments if their purpose is not immediately clear
+- Keep comments clear and readable. Describe the current contract and important constraints; leave out algorithmic steps, change history, and alternative designs to tests, commit messages, or private work artifacts.
+- State behavior directly and positively instead of contrasting it with hypothetical behavior.
+- Go source files must not reference repository Markdown paths. Replace such references with a short, self-contained explanation of the relevant constraint.
+- When a doc comment references another declaration (in the same or a different package),
+  use Go's doc comment link syntax with square brackets - `[Identifier]`, `[Type.Method]`, or `[pkg.Identifier]` -
+  so it renders as a clickable link (see <https://go.dev/doc/comment#links>); never mention another function or type by bare name in prose
+- Each Go package (typically in doc.go) should have a comment block describing its purpose:
 
   ```go
   // Package gorums provides quorum call abstractions for distributed systems.
@@ -192,7 +221,7 @@ Use integration mode for performance benchmarking and network-specific validatio
 Gorums provides custom protobuf options defined in `gorums.proto`:
 
 - Method-level options for quorum call types
-- Config options for RPC behavior
+- Configuration options for RPC behavior
 - See `doc/user-guide.md` for details
 
 ## Documentation
@@ -205,9 +234,8 @@ Before making significant changes, consult:
 - `doc/user-guide.md` - Understanding the API and usage patterns
 - `doc/dev-guide.md` - Development workflow and architecture
 - `.scratch/README.md`, when present - Private work index and local issue conventions
-
 - `README.md` - Project overview and getting started
-- When editing markdown files, use one sentences per line, so that diffs are easier to read.
+- When editing markdown files, use one sentence per line, so that diffs are easier to read.
 
 ## Common Pitfalls to Avoid
 

@@ -80,10 +80,10 @@ func TestNewResponseMessage(t *testing.T) {
 				t.Fatalf("NewResponseMessage returned nil, want non-nil")
 			}
 			if (tt.want.Proto == nil) != (got.Proto == nil) {
-				t.Errorf("Proto field: want nil=%v, got nil=%v", tt.want.Proto == nil, got.Proto == nil)
+				t.Errorf("Msg field: want nil=%v, got nil=%v", tt.want.Proto == nil, got.Proto == nil)
 			} else if tt.want.Proto != nil && got.Proto != nil {
 				if diff := cmp.Diff(tt.want.Proto, got.Proto, protocmp.Transform()); diff != "" {
-					t.Errorf("Proto field mismatch (-want, +got):\n%s", diff)
+					t.Errorf("Msg field mismatch (-want, +got):\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tt.want.Message, got.Message, protocmp.Transform()); diff != "" {

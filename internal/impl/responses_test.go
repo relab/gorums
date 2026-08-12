@@ -1,18 +1,19 @@
-package gorums
+package impl
 
 import (
 	"errors"
 	"testing"
 
+	"github.com/relab/gorums/internal/conn"
 	"github.com/relab/gorums/internal/stream"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// makeClientCtx is a helper to create a CallContext with mock responses for unit tests.
+// makeCallContext is a helper to create a CallContext with mock responses for unit tests.
 // It creates a channel with the provided responses and returns a CallContext.
-func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, responses []NodeResponse[proto.Message]) *CallContext[Req, Resp] {
+func makeCallContext[Req, Resp proto.Message](t *testing.T, numNodes int, responses []NodeResponse[proto.Message]) *CallContext[Req, Resp] {
 	t.Helper()
 
 	resultChan := make(chan NodeResponse[*stream.Message], len(responses))
@@ -35,7 +36,7 @@ func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, response
 
 	config := make(Config, numNodes)
 	for i := range numNodes {
-		config[i] = &Node{id: uint32(i + 1)}
+		config[i] = conn.NewNodeForTest(uint32(i+1), nil)
 	}
 
 	c := &CallContext[Req, Resp]{
@@ -166,11 +167,36 @@ func TestTerminalMethods(t *testing.T) {
 			wantErr:     true,
 			wantErrType: ErrIncomplete,
 		},
+		// ErrSkipNode must count toward neither success nor failure.
+		{
+			name:     "Majority_AllSkipped_Incomplete",
+			numNodes: 3,
+			responses: []NodeResponse[proto.Message]{
+				{NodeID: 1, Value: nil, Err: ErrSkipNode},
+				{NodeID: 2, Value: nil, Err: ErrSkipNode},
+				{NodeID: 3, Value: nil, Err: ErrSkipNode},
+			},
+			call:        respType.Majority,
+			wantErr:     true,
+			wantErrType: ErrIncomplete,
+		},
+		{
+			name:     "All_OneSkipped_Incomplete",
+			numNodes: 3,
+			responses: []NodeResponse[proto.Message]{
+				{NodeID: 1, Value: pb.String("response1"), Err: nil},
+				{NodeID: 2, Value: pb.String("response2"), Err: nil},
+				{NodeID: 3, Value: nil, Err: ErrSkipNode},
+			},
+			call:        respType.All,
+			wantErr:     true,
+			wantErrType: ErrIncomplete,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, tt.numNodes, tt.responses)
-			responses := newResponses(clientCtx)
+			callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, tt.numNodes, tt.responses)
+			responses := newResponses(callCtx)
 
 			result, err := tt.call(responses)
 
@@ -223,8 +249,8 @@ func TestTerminalMethodsThreshold(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, tt.numNodes, tt.responses)
-			responses := newResponses(clientCtx)
+			callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, tt.numNodes, tt.responses)
+			responses := newResponses(callCtx)
 
 			result, err := tt.call(responses, tt.threshold)
 
@@ -250,8 +276,8 @@ func TestIteratorMethods(t *testing.T) {
 			{NodeID: 2, Value: nil, Err: errors.New("node error")},
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
 		}
-		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := newResponses(clientCtx)
+		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
+		r := newResponses(callCtx)
 
 		var count int
 		for range r.Results().IgnoreErrors() {
@@ -268,8 +294,8 @@ func TestIteratorMethods(t *testing.T) {
 			{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
 		}
-		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := newResponses(clientCtx)
+		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
+		r := newResponses(callCtx)
 
 		// Filter to only node 2
 		var count int
@@ -292,8 +318,8 @@ func TestIteratorMethods(t *testing.T) {
 			{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
 		}
-		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := newResponses(clientCtx)
+		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
+		r := newResponses(callCtx)
 
 		collected := r.Results().CollectN(2)
 		if len(collected) != 2 {
@@ -307,8 +333,8 @@ func TestIteratorMethods(t *testing.T) {
 			{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
 		}
-		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := newResponses(clientCtx)
+		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
+		r := newResponses(callCtx)
 
 		collected := r.Results().CollectAll()
 		if len(collected) != 3 {
@@ -342,8 +368,8 @@ func TestCustomAggregation(t *testing.T) {
 			{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
 		}
-		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := newResponses(clientCtx)
+		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
+		r := newResponses(callCtx)
 
 		// Call the aggregation function directly
 		result, err := majorityQF(r)
@@ -375,8 +401,8 @@ func TestCustomAggregation(t *testing.T) {
 			{NodeID: 2, Value: pb.String("beta"), Err: nil},
 			{NodeID: 3, Value: pb.String("gamma"), Err: nil},
 		}
-		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := newResponses(clientCtx)
+		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
+		r := newResponses(callCtx)
 
 		// Call the aggregation function directly - returns []string from *Responses[*pb.StringValue]
 		result, err := collectAllValues(r)
@@ -408,8 +434,8 @@ func TestCustomAggregation(t *testing.T) {
 			{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
 		}
-		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := newResponses(clientCtx)
+		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
+		r := newResponses(callCtx)
 
 		// Call the aggregation function directly
 		count, err := filterAndCount(r)
@@ -443,8 +469,8 @@ func TestCustomAggregation(t *testing.T) {
 			{NodeID: 1, Value: pb.String("response1"), Err: nil},
 			{NodeID: 2, Value: nil, Err: errors.New("node 2 failed")},
 		}
-		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 2, responses)
-		r := newResponses(clientCtx)
+		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 2, responses)
+		r := newResponses(callCtx)
 
 		// Call the aggregation function directly
 		_, err := requireAllSuccess(r)
@@ -452,4 +478,66 @@ func TestCustomAggregation(t *testing.T) {
 			t.Error("Expected error, got nil")
 		}
 	})
+}
+
+// TestCorrectableSkipNodeSemantics verifies that Correctable treats
+// ErrSkipNode consistently with the terminal methods: a skipped node must
+// count toward neither the reached level nor the node-error count.
+func TestCorrectableSkipNodeSemantics(t *testing.T) {
+	responses := []NodeResponse[proto.Message]{
+		{NodeID: 1, Value: pb.String("response1"), Err: nil},
+		{NodeID: 2, Value: nil, Err: ErrSkipNode},
+		{NodeID: 3, Value: pb.String("response3"), Err: nil},
+	}
+	callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
+	r := newResponses(callCtx)
+
+	// Threshold of 3 can never be reached: only 2 of 3 nodes produced a
+	// real response, and the skipped node must not pad the count.
+	corr := r.Correctable(3)
+	<-corr.Done()
+
+	_, level, err := corr.Get()
+	if level != 2 {
+		t.Errorf("level = %d, want 2 (the skipped node must not count)", level)
+	}
+	if !errors.Is(err, ErrIncomplete) {
+		t.Fatalf("err = %v, want ErrIncomplete", err)
+	}
+	var qcErr conn.QuorumCallError
+	if errors.As(err, &qcErr) && qcErr.NumErrors() != 0 {
+		t.Errorf("NumErrors() = %d, want 0 (a skipped node is not a node error)", qcErr.NumErrors())
+	}
+}
+
+// TestAsyncThresholdDispatchedFlagIsRaceFree exercises AsyncThreshold's
+// concurrent writes to the dispatched flag against a concurrent read: the
+// initial sendNow marks it on the caller's goroutine, and ranging over r.seq
+// inside the spawned goroutine calls sendNow again, redundantly re-marking it.
+// Run with -race: a plain bool here is flagged as a data race against any
+// concurrent Intercept call, even though both writes agree on the value.
+func TestAsyncThresholdDispatchedFlagIsRaceFree(t *testing.T) {
+	responses := []NodeResponse[proto.Message]{
+		{NodeID: 1, Value: pb.String("response1"), Err: nil},
+		{NodeID: 2, Value: pb.String("response2"), Err: nil},
+	}
+	callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 2, responses)
+	r := newResponses(callCtx)
+
+	fut := r.AsyncThreshold(1)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Already dispatched by AsyncThreshold, so this always panics; the
+		// race is on the concurrent read of the flag that triggers it, not
+		// on the outcome.
+		defer func() { _ = recover() }()
+		callCtx.intercept()
+	}()
+
+	if _, err := fut.Get(); err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
+	<-done
 }

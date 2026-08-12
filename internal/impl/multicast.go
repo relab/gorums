@@ -1,6 +1,9 @@
-package gorums
+package impl
 
-import "google.golang.org/protobuf/proto"
+import (
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
+)
 
 // Multicast is a one-way call to every node in the configuration; no replies
 // are returned to the client. It returns an [OnewayCall] handle that dispatches
@@ -14,5 +17,12 @@ import "google.golang.org/protobuf/proto"
 //
 // This function should be used by generated code only.
 func Multicast[Req proto.Message](ctx *ConfigContext, req Req, method string) *OnewayCall[Req] {
-	return &OnewayCall[Req]{ctx: newOnewayCallContext(ctx, ctx.Config(), req, method)}
+	callCtx := &CallContext[Req, *emptypb.Empty]{
+		Context: ctx,
+		config:  ctx.Config(),
+		request: req,
+		method:  method,
+		oneway:  true,
+	}
+	return &OnewayCall[Req]{ctx: callCtx}
 }

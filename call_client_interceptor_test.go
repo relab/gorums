@@ -8,6 +8,7 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -69,7 +70,7 @@ func TestCustomLoggingInterceptor(t *testing.T) {
 	ctx := gorumstest.Context(t, 2*time.Second)
 
 	// Use the custom logging interceptor from this external package
-	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+	responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
@@ -91,7 +92,7 @@ func TestCustomFilterInterceptor(t *testing.T) {
 
 	// Use a filter interceptor that only keeps responses from node 1
 	// (In practice, this would filter based on response content)
-	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+	responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
@@ -118,7 +119,7 @@ func TestInterceptorChaining(t *testing.T) {
 	var count int
 
 	// Chain multiple custom interceptors
-	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+	responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
@@ -149,7 +150,7 @@ func TestCustomInterceptorWithMapRequest(t *testing.T) {
 	var count int
 
 	// Mix custom interceptor with built-in MapRequest
-	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+	responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
@@ -191,7 +192,7 @@ func BenchmarkQuorumCallMapRequest(b *testing.B) {
 		b.Run(fmt.Sprintf("NoTransform/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("benchmark payload"),
 					mock.TestMethod,
@@ -206,7 +207,7 @@ func BenchmarkQuorumCallMapRequest(b *testing.B) {
 		b.Run(fmt.Sprintf("MapRequestIdentity/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("benchmark payload"),
 					mock.TestMethod,
@@ -227,7 +228,7 @@ func BenchmarkQuorumCallMapRequest(b *testing.B) {
 		b.Run(fmt.Sprintf("MapRequestPerNode/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("benchmark payload"),
 					mock.TestMethod,

@@ -1,4 +1,4 @@
-package gorums
+package impl
 
 import "google.golang.org/protobuf/proto"
 

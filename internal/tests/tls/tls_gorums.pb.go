@@ -8,13 +8,14 @@ package tls
 
 import (
 	gorums "github.com/relab/gorums"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 )
 
 const (
 	// Verify that this generated code is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(11 - gorums.MinVersion)
+	_ = gorumsimpl.EnforceVersion(11 - gorumsimpl.MinVersion)
 	// Verify that the gorums runtime is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(gorums.MaxVersion - 11)
+	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 11)
 )
 
 // The type aliases below are useful Gorums types that we make accessible
@@ -39,7 +40,7 @@ type (
 
 // TestTLS is an RPC call invoked on the node in ctx.
 func TestTLS(ctx *NodeContext, in *Request) (*Response, error) {
-	return gorums.RemoteCall[*Request, *Response](ctx, in, "tls.TLS.TestTLS")
+	return gorumsimpl.RemoteCall[*Request, *Response](ctx, in, "tls.TLS.TestTLS")
 }
 
 // TLS is the server-side API for the TLS Service

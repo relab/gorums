@@ -8,14 +8,15 @@ package dev
 
 import (
 	gorums "github.com/relab/gorums"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
 	// Verify that this generated code is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(11 - gorums.MinVersion)
+	_ = gorumsimpl.EnforceVersion(11 - gorumsimpl.MinVersion)
 	// Verify that the gorums runtime is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(gorums.MaxVersion - 11)
+	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 11)
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -31,7 +32,7 @@ var _ emptypb.Empty
 //	err := Unicast(ctx, in).Send()
 //	h := Unicast(ctx, in).Async(); err := h.Wait()
 func Unicast(ctx *NodeContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorums.Unicast(ctx, in, "dev.ZorumsService.Unicast")
+	return gorumsimpl.Unicast(ctx, in, "dev.ZorumsService.Unicast")
 }
 
 // Unicast2 is a unicast call invoked on the node in ctx; no reply is
@@ -44,5 +45,5 @@ func Unicast(ctx *NodeContext, in *Request) *gorums.OnewayCall[*Request] {
 //	err := Unicast2(ctx, in).Send()
 //	h := Unicast2(ctx, in).Async(); err := h.Wait()
 func Unicast2(ctx *NodeContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorums.Unicast(ctx, in, "dev.ZorumsService.Unicast2")
+	return gorumsimpl.Unicast(ctx, in, "dev.ZorumsService.Unicast2")
 }

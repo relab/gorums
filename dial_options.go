@@ -1,79 +1,60 @@
 package gorums
 
 import (
+	"errors"
 	"log"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/relab/gorums/internal/stream"
+	"github.com/relab/gorums/internal/conn"
 )
 
 // DialOption provides a way to set different options on a new configuration.
-type DialOption func(*dialOptions)
-
-type dialOptions struct {
-	grpcDialOpts []grpc.DialOption
-	logger       *log.Logger
-	backoff      backoff.Config
-	sendBuffer   uint
-	metadata     metadata.MD
-	handler      stream.RequestHandler
-	localNodeID  uint32          // if non-zero, skip setting handler on this node ID
-	inboundMgr   *inboundManager // set by WithBackChannel; enables eager reconnect for symmetric nodes
-}
-
-// DefaultSendBufferSize is the per-node send queue capacity used when no
-// explicit size is configured. It is both the backlog threshold at which a peer
-// that stopped draining sends is treated as failed, since a full queue fails
-// two-way requests fast with [ErrSendQueueFull], and the depth to which one-way
-// calls dispatched asynchronously can pipeline. The queue is a buffered
-// channel, so each node allocates the full capacity whether or not traffic
-// flows.
-const DefaultSendBufferSize = 4096
-
-func newDialOptions() dialOptions {
-	return dialOptions{
-		backoff:    backoff.DefaultConfig,
-		sendBuffer: DefaultSendBufferSize,
-	}
-}
+type DialOption = conn.DialOption
 
 // WithGRPCDialOptions returns a DialOption which sets any gRPC dial options
 // the client should use when initially connecting to each node in its pool.
 func WithGRPCDialOptions(opts ...grpc.DialOption) DialOption {
-	return func(o *dialOptions) {
-		o.grpcDialOpts = append(o.grpcDialOpts, opts...)
+	return func(o *conn.DialOptions) {
+		o.GRPCDialOpts = append(o.GRPCDialOpts, opts...)
 	}
 }
 
 // WithLogger returns a DialOption which sets an optional error logger for
 // the configuration.
 func WithLogger(logger *log.Logger) DialOption {
-	return func(o *dialOptions) {
-		o.logger = logger
+	return func(o *conn.DialOptions) {
+		o.Logger = logger
 	}
 }
 
 // WithBackoff allows for changing the backoff delays used by Gorums.
 func WithBackoff(backoff backoff.Config) DialOption {
-	return func(o *dialOptions) {
-		o.backoff = backoff
+	return func(o *conn.DialOptions) {
+		o.Backoff = backoff
 	}
 }
 
-// WithSendBufferSize sets the per-node send queue capacity. A larger buffer
-// may achieve higher throughput for asynchronous call types, at the cost of
-// latency. Size 0 selects [DefaultSendBufferSize]: capacity 0 is not viable
-// under the full-queue fail-fast semantics, since every two-way request
-// enqueued while the sender is busy would fail.
+// DefaultSendBufferSize is the per-node send queue capacity Gorums uses when
+// [WithSendBufferSize] or [WithBufferSizes] is applied with size 0.
+const DefaultSendBufferSize = conn.DefaultSendBufferSize
+
+// WithSendBufferSize sets the capacity of the per-node send queue used by Gorums.
+// When the queue toward a peer is full, two-way requests (RPC, quorum calls)
+// fail fast with an Unavailable error (send queue full) so that quorum logic
+// can count the peer as failed, while one-way requests (Unicast, Multicast)
+// block until there is space, pacing the producer. The capacity is thus the
+// backlog threshold at which a peer that stopped draining sends is treated as
+// failed. Size 0 selects [DefaultSendBufferSize]; a larger value tolerates
+// longer peer hiccups at the cost of memory and queueing latency.
 func WithSendBufferSize(size uint) DialOption {
-	return func(o *dialOptions) {
+	return func(o *conn.DialOptions) {
 		if size == 0 {
-			size = DefaultSendBufferSize
+			size = conn.DefaultSendBufferSize
 		}
-		o.sendBuffer = size
+		o.SendBuffer = size
 	}
 }
 
@@ -81,39 +62,52 @@ func WithSendBufferSize(size uint) DialOption {
 // each node during connection establishment.
 // This metadata can be retrieved from the server-side method handlers.
 func WithMetadata(md metadata.MD) DialOption {
-	return func(o *dialOptions) {
-		o.metadata = metadata.Join(o.metadata, md)
+	return func(o *conn.DialOptions) {
+		o.Metadata = metadata.Join(o.Metadata, md)
 	}
 }
 
-// WithBackChannel returns a [DialOption] that installs srv as the back-channel
-// request handler and includes srv.NodeID() in the outgoing metadata, allowing
-// the remote endpoint to route server-initiated requests back over the
-// bidirectional connection. Use it for a client that must accept calls from the
-// servers it dials. It panics if srv is nil.
+// WithBackChannel returns a [DialOption] that installs srv as the handler for
+// calls the dialed servers send back over the configuration's connections.
+// Each dialed server tracks the caller as an anonymous client and can reach
+// its registered handlers through [ServerContext.ConnectedClients]. srv needs no
+// listener; its handlers are served entirely over the connections the
+// configuration dials.
 //
-// A server that calls its own peers does not need this option: [WithPeers]
-// installs the back channel on the peer [Config] it builds.
+// srv must not be configured with [WithPeers]; [NewConfig] returns an error
+// otherwise. A server in a peer group already answers its peers' calls over
+// the connections established by [WithPeers].
+func WithBackChannel(srv *Server) DialOption {
+	return func(o *conn.DialOptions) {
+		if srv == nil {
+			o.Err = errors.Join(o.Err, errors.New("gorums: WithBackChannel requires a non-nil server"))
+			return
+		}
+		if srv.NodeID() != 0 {
+			o.Err = errors.Join(o.Err, errors.New("gorums: WithBackChannel server must not be configured with WithPeers"))
+			return
+		}
+		withServer(srv)(o)
+	}
+}
+
+// withServer returns a [DialOption] that installs srv as the back-channel request
+// handler and includes srv.NodeID() in the outgoing metadata, allowing the remote
+// endpoint to route server-initiated requests back over the bidirectional connection.
+// It is used by [Server.newPeerConfig] to build the outbound configuration for
+// peers that call one another ([WithPeers]), and by [WithBackChannel] for clients.
 //
 // NodeID semantics:
 //   - If srv.NodeID() == 0, the remote treats this connection as an anonymous
-//     client and tracks reverse-direction calls via [ServerContext.ClientConfig].
+//     client and can perform back-channel calls via [ServerContext.ConnectedClients].
 //   - If srv.NodeID() > 0, the remote treats this connection as a known peer
-//     and routes requests via [ServerContext.Config].
-func WithBackChannel(srv *Server) DialOption {
-	if srv == nil {
-		panic("gorums: WithBackChannel called with nil server")
-	}
-	return withServer(srv)
-}
-
-// withServer is WithBackChannel without the nil check, for the server's own
-// peer configuration, where the server is known to be non-nil.
+//     and tracks it in [Server.ConnectedPeers], as when servers call one
+//     another.
 func withServer(srv *Server) DialOption {
-	return func(o *dialOptions) {
-		o.handler = srv
-		o.localNodeID = srv.NodeID()
-		o.inboundMgr = srv.inboundManager
-		o.metadata = metadata.Join(o.metadata, metadataWithNodeID(srv.NodeID()))
+	return func(o *conn.DialOptions) {
+		o.Handler = srv
+		o.LocalNodeID = srv.NodeID()
+		o.InboundMgr = srv.im
+		o.Metadata = metadata.Join(o.Metadata, conn.MetadataWithNodeID(srv.NodeID()))
 	}
 }

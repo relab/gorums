@@ -1,3 +1,6 @@
+// Package tls holds the end-to-end integration tests that exercise Gorums over
+// TLS-secured connections, including generation of the throwaway certificates
+// the tests dial with.
 package tls
 
 import (
