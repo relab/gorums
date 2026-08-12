@@ -138,7 +138,9 @@ func (c *OnewayCall[Req]) dispatch() {
 
 // collect gathers one send confirmation per node and reports the failures,
 // aggregating them for multicast and passing the single error through for
-// unicast. Nodes skipped by a request transform are not failures.
+// unicast. A node skipped by a request transform ([ErrSkipNode]) is dropped
+// from the multicast aggregate, since the sends to the other nodes still went
+// out. A skipped unicast sent nothing at all, so its [ErrSkipNode] is returned.
 func (c *OnewayCall[Req]) collect() error {
 	if c.unicast {
 		select {
