@@ -21,14 +21,28 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// Unicast is a unicast call invoked on the node in ctx.
-// No reply is returned to the client.
-func Unicast(ctx *NodeContext, in *Request, opts ...gorums.CallOption) error {
-	return gorums.Unicast(ctx, in, "dev.ZorumsService.Unicast", opts...)
+// Unicast is a unicast call invoked on the node in ctx; no reply is
+// returned to the client. It returns a one-way call handle; call Send to block
+// until the send completes and observe any send error, or Async to dispatch
+// without waiting.
+//
+// Example:
+//
+//	err := Unicast(ctx, in).Send()
+//	h := Unicast(ctx, in).Async(); err := h.Wait()
+func Unicast(ctx *NodeContext, in *Request) *gorums.OnewayCall[*Request] {
+	return gorums.Unicast(ctx, in, "dev.ZorumsService.Unicast")
 }
 
-// Unicast2 is a unicast call invoked on the node in ctx.
-// No reply is returned to the client.
-func Unicast2(ctx *NodeContext, in *Request, opts ...gorums.CallOption) error {
-	return gorums.Unicast(ctx, in, "dev.ZorumsService.Unicast2", opts...)
+// Unicast2 is a unicast call invoked on the node in ctx; no reply is
+// returned to the client. It returns a one-way call handle; call Send to block
+// until the send completes and observe any send error, or Async to dispatch
+// without waiting.
+//
+// Example:
+//
+//	err := Unicast2(ctx, in).Send()
+//	h := Unicast2(ctx, in).Async(); err := h.Wait()
+func Unicast2(ctx *NodeContext, in *Request) *gorums.OnewayCall[*Request] {
+	return gorums.Unicast(ctx, in, "dev.ZorumsService.Unicast2")
 }

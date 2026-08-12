@@ -28,19 +28,16 @@ var quorumCallVariables = `
 {{$configContext := "ConfigContext"}}
 {{$quorumCall := use "gorums.QuorumCall" .GenFile}}
 {{$quorumCallStream := use "gorums.QuorumCallStream" .GenFile}}
-{{$responses := use "gorums.Responses" .GenFile}}
-{{$callOption := use "gorums.CallOption" .GenFile}}
+{{$call := use "gorums.Call" .GenFile}}
 `
 
 var quorumCallSignature = `func {{$method}}(` +
-	`ctx *{{$configContext}}, in *{{$in}}, ` +
-	`opts ...{{$callOption}})` +
-	` *{{$responses}}[*{{$out}}] {
+	`ctx *{{$configContext}}, in *{{$in}})` +
+	` *{{$call}}[*{{$in}}, *{{$out}}] {
 `
 
 var quorumCallBody = `	return {{$quorumCall}}[*{{$in}}, *{{$out}}](
 		ctx, in, "{{$fullName}}",
-		opts...,
 	)
 }
 `
@@ -69,7 +66,6 @@ var quorumCallStreamComment = `
 
 var quorumCallStreamBody = `	return {{$quorumCallStream}}[*{{$in}}, *{{$out}}](
 		ctx, in, "{{$fullName}}",
-		opts...,
 	)
 }
 `

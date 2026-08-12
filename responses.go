@@ -9,16 +9,13 @@ import (
 	"github.com/relab/gorums/internal/stream"
 )
 
-// msg is a type alias for proto.Message intended to be used as a type parameter.
-type msg = proto.Message
-
 // NodeResponse is a type alias for stream.NodeResponse.
 type NodeResponse[T any] = stream.NodeResponse[T]
 
 // mapToCallResponse converts a NodeResponse[*stream.Message] to a NodeResponse[Resp].
 // This is necessary because the channel layer's response router returns a
 // NodeResponse[*stream.Message] while the calltype expects a NodeResponse[Resp].
-func mapToCallResponse[Resp msg](channelResp NodeResponse[*stream.Message]) NodeResponse[Resp] {
+func mapToCallResponse[Resp proto.Message](channelResp NodeResponse[*stream.Message]) NodeResponse[Resp] {
 	callResp := NodeResponse[Resp]{
 		NodeID: channelResp.NodeID,
 		Err:    channelResp.Err,
@@ -41,7 +38,7 @@ func mapToCallResponse[Resp msg](channelResp NodeResponse[*stream.Message]) Node
 // -------------------------------------------------------------------------
 
 // ResponseSeq is an iterator that yields NodeResponse[T] values from a quorum call.
-type ResponseSeq[T msg] iter.Seq[NodeResponse[T]]
+type ResponseSeq[T proto.Message] iter.Seq[NodeResponse[T]]
 
 // IgnoreErrors returns an iterator that yields only successful responses,
 // discarding any responses with errors. This is useful when you want to process
@@ -151,7 +148,7 @@ func (seq ResponseSeq[Resp]) CollectAll() map[uint32]Resp {
 //
 // Type parameter:
 //   - Resp: The response message type
-type Responses[Resp msg] struct {
+type Responses[Resp proto.Message] struct {
 	seq   ResponseSeq[Resp]
 	size  int
 	start starter
@@ -159,9 +156,19 @@ type Responses[Resp msg] struct {
 
 type starter interface {
 	sendNow()
+	markDispatched()
 }
 
-func NewResponses[Req, Resp msg](ctx *CallContext[Req, Resp]) *Responses[Resp] {
+// markDispatched marks the underlying call as dispatched without sending, so a
+// later Intercept panics. Async and correctable calls use this before starting
+// their goroutine.
+func (r *Responses[Resp]) markDispatched() {
+	r.start.markDispatched()
+}
+
+// newResponses builds the [Responses] handle returned by a quorum call from
+// its [CallContext].
+func newResponses[Req, Resp proto.Message](ctx *CallContext[Req, Resp]) *Responses[Resp] {
 	return &Responses[Resp]{
 		seq:   ctx.responseSeq,
 		size:  ctx.Size(),
@@ -176,7 +183,8 @@ func (r *Responses[Resp]) Size() int {
 
 // Results returns the underlying response iterator that yields node responses as they arrive.
 // It returns a single-use iterator. Users can use this to implement custom aggregation logic.
-// This method triggers lazy sending of requests.
+// This method triggers lazy sending of requests, and calling [Call.Intercept]
+// after it panics.
 //
 // The iterator will:
 //   - Yield responses as they arrive from nodes
@@ -193,6 +201,7 @@ func (r *Responses[Resp]) Size() int {
 //	    // Process result.Value
 //	}
 func (r *Responses[Resp]) Results() ResponseSeq[Resp] {
+	r.markDispatched()
 	return r.seq
 }
 
@@ -226,13 +235,18 @@ func (r *Responses[Resp]) All() (Resp, error) {
 
 // Threshold waits for a threshold number of successful responses.
 // It returns the first response once the threshold is reached.
+// A response skipped by a request transform ([ErrSkipNode]) counts toward
+// neither the successful-response count nor the reported node errors.
 func (r *Responses[Resp]) Threshold(threshold int) (resp Resp, err error) {
 	var (
 		count int
 		errs  []nodeError
 	)
 	for result := range r.seq {
-		if result.Err != nil && !errors.Is(result.Err, ErrSkipNode) {
+		if errors.Is(result.Err, ErrSkipNode) {
+			continue
+		}
+		if result.Err != nil {
 			errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
 			continue
 		}

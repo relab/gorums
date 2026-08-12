@@ -1,48 +1,18 @@
 package gorums
 
-import (
-	"errors"
-)
+import "google.golang.org/protobuf/proto"
 
-// Multicast is a one-way call; no replies are returned to the client.
+// Multicast is a one-way call to every node in the configuration; no replies
+// are returned to the client. It returns an [OnewayCall] handle that dispatches
+// the request only when it is consumed: [OnewayCall.Send] blocks until the send
+// completes for every node and reports any send failures, while
+// [OnewayCall.Async] dispatches without waiting and defers those failures to
+// [OnewayAsync.Wait].
 //
-// By default, this method blocks until messages have been sent to all nodes.
-// This ensures that send operations complete before the caller proceeds, which can
-// be useful for observing context cancellation or for pacing message sends.
-// If the sending fails, the error is returned to the caller.
+// Register per-node request transforms with [OnewayCall.Intercept] and
+// [MapRequest] before consuming the handle.
 //
-// With the IgnoreErrors call option, the method returns nil immediately after
-// enqueueing messages to all nodes (fire-and-forget semantics).
-//
-// Multicast supports request transformation interceptors via the gorums.Interceptors
-// option. Use gorums.MapRequest to transform requests per-node.
-//
-// This method should be used by generated code only.
-func Multicast[Req msg](ctx *ConfigContext, req Req, method string, opts ...CallOption) error {
-	callOpts := getCallOptions(opts...)
-	waitForSend := !callOpts.ignoreErrors
-
-	clientCtx := newMulticastCallContext(ctx, req, method, waitForSend, callOpts.interceptors)
-
-	// Send messages immediately (multicast doesn't use lazy sending)
-	clientCtx.sendNow()
-
-	// If waiting for send completion, drain the reply channel and return the first error.
-	if waitForSend {
-		var errs []nodeError
-		for range clientCtx.Size() {
-			select {
-			case r := <-clientCtx.replyChan:
-				if r.Err != nil && !errors.Is(r.Err, ErrSkipNode) {
-					errs = append(errs, nodeError{cause: r.Err, nodeID: r.NodeID})
-				}
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-		if len(errs) > 0 {
-			return QuorumCallError{cause: ErrSendFailure, errors: errs}
-		}
-	}
-	return nil
+// This function should be used by generated code only.
+func Multicast[Req proto.Message](ctx *ConfigContext, req Req, method string) *OnewayCall[Req] {
+	return &OnewayCall[Req]{ctx: newOnewayCallContext(ctx, ctx.Config(), req, method)}
 }

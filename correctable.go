@@ -53,8 +53,10 @@ func (c *Correctable[Resp]) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-// Correctable returns a Correctable that provides progressive updates
-// as responses arrive. The level increases with each successful response.
+// Correctable returns a call result that updates as responses arrive.
+// Its level increases with each successful response and completes at threshold.
+// A response skipped by a request transform ([ErrSkipNode]) counts toward
+// neither the level nor the final node-error count.
 // Use this for correctable quorum patterns where you want to observe
 // intermediate states.
 //
@@ -65,6 +67,10 @@ func (c *Correctable[Resp]) Watch(level int) <-chan struct{} {
 //	<-corr.Watch(2)
 //	resp, level, err := corr.Get()
 func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
+	// Mark dispatched before spawning the goroutine so a later Intercept panics
+	// deterministically; the actual send is triggered lazily by ranging r.seq.
+	r.markDispatched()
+
 	corr := &Correctable[Resp]{
 		level:  LevelNotSet,
 		donech: make(chan struct{}, 1),

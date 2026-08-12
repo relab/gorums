@@ -4,8 +4,8 @@ import (
 	context "context"
 	"fmt"
 	"slices"
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
@@ -15,10 +15,17 @@ import (
 
 const numCalls = 50
 
+// recvTimeout bounds how long a subtest waits for the messages it sent. A send
+// that succeeded still leaves the server free to drop or delay the message, so
+// an unbounded wait would hang the package until the test binary's timeout
+// instead of reporting the shortfall.
+const recvTimeout = 10 * time.Second
+
 type onewaySrv struct {
 	benchmark bool
-	wg        sync.WaitGroup
-	received  chan *oneway.Request
+	// received buffers the messages of one subtest, with headroom so that a
+	// straggler arriving after a failed subtest cannot block a handler.
+	received chan *oneway.Request
 }
 
 func (s *onewaySrv) Unicast(_ gorums.ServerContext, r *oneway.Request) {
@@ -26,7 +33,6 @@ func (s *onewaySrv) Unicast(_ gorums.ServerContext, r *oneway.Request) {
 		return
 	}
 	s.received <- r
-	s.wg.Done()
 }
 
 func (s *onewaySrv) Multicast(_ gorums.ServerContext, r *oneway.Request) {
@@ -34,88 +40,136 @@ func (s *onewaySrv) Multicast(_ gorums.ServerContext, r *oneway.Request) {
 		return
 	}
 	s.received <- r
-	s.wg.Done()
+}
+
+// cluster is a set of servers and the configuration addressing them, shared by
+// every subtest of a table that needs that many servers.
+type cluster struct {
+	cfg  oneway.Config
+	srvs []*onewaySrv
+}
+
+// reset discards messages left over from an earlier subtest so the next one
+// starts from a known state. A subtest that received everything it sent leaves
+// nothing behind.
+//
+// It drains until each channel is empty rather than taking len() once: a
+// straggler still in flight when reset runs would otherwise be left queued and
+// counted against the next subtest.
+func (c *cluster) reset() {
+	for _, srv := range c.srvs {
+	drain:
+		for {
+			select {
+			case <-srv.received:
+			default:
+				break drain
+			}
+		}
+	}
+}
+
+// received returns the messages that the given server received, sorted by
+// their Num field. Sorting avoids flakiness from multicast reordering. If
+// fewer than want messages arrive within [recvTimeout] it reports the
+// shortfall and returns nil, since every later message then compares against
+// the wrong expected value; a dropped one-way message surfaces this way.
+func (c *cluster) received(t *testing.T, i, want int) []uint64 {
+	t.Helper()
+	got := gorumstest.Collect(t, recvTimeout, want, c.srvs[i].received)
+	if len(got) != want {
+		t.Errorf("server %d received %d messages, expected %d", i, len(got), want)
+		return nil
+	}
+	nums := make([]uint64, len(got))
+	for j, r := range got {
+		nums[j] = r.GetNum()
+	}
+	slices.Sort(nums)
+	return nums
+}
+
+// clusters returns a lookup that lazily creates one shared cluster per
+// configuration size and resets it before each use. Sharing clusters across
+// the subtests of a table keeps the number of connections proportional to the
+// distinct sizes rather than to the number of subtests: with real TCP
+// listeners, every subtest would otherwise leave one socket per node in
+// TIME_WAIT, and a high -count run can exhaust the ephemeral port range.
+//
+// The lookup must be called from the goroutine running t, not from a subtest,
+// since it registers servers and cleanup on t. Only the first cluster
+// registers a goroutine leak check: cleanup functions run in reverse
+// registration order, so that check runs after every cluster has been torn
+// down, whereas a check registered by a later cluster would run while earlier
+// clusters are still serving.
+func clusters(t *testing.T) func(cfgSize int) *cluster {
+	cache := make(map[int]*cluster)
+	return func(cfgSize int) *cluster {
+		t.Helper()
+		if c, ok := cache[cfgSize]; ok {
+			c.reset()
+			return c
+		}
+		var opts []gorumstest.Option
+		if len(cache) > 0 {
+			opts = append(opts, gorumstest.SkipGoleak())
+		}
+		cfg, srvs := setupWithNodeMap(t, cfgSize, opts...)
+		c := &cluster{cfg: cfg, srvs: srvs}
+		cache[cfgSize] = c
+		return c
+	}
 }
 
 // setupWithNodeMap sets up servers and configuration with sequential node IDs
 // (1, 2, 3, ...) matching the server array indices. This is needed for tests like
 // TestMulticastPerNode that verify per-node message transformations based on node ID.
-func setupWithNodeMap(t testing.TB, cfgSize int) (cfg oneway.Config, srvs []*onewaySrv) {
+func setupWithNodeMap(t testing.TB, cfgSize int, opts ...gorumstest.Option) (cfg oneway.Config, srvs []*onewaySrv) {
 	t.Helper()
 	srvs = make([]*onewaySrv, cfgSize)
 	for i := range cfgSize {
-		srvs[i] = &onewaySrv{received: make(chan *oneway.Request, numCalls)}
+		srvs[i] = &onewaySrv{received: make(chan *oneway.Request, 2*numCalls)}
 	}
 	cfg = gorumstest.Config(t, cfgSize, func(i int) gorums.ServerIface {
 		srv := gorums.NewServer()
 		oneway.RegisterOnewayTestServer(srv, srvs[i])
 		return srv
-	})
+	}, opts...)
 	return cfg, srvs
 }
 
 func TestOnewayCalls(t *testing.T) {
 	tests := []struct {
-		name     string
-		calls    int
-		servers  int
-		sendWait bool
+		name    string
+		calls   int
+		servers int
+		unicast bool
 	}{
-		{name: "UnicastSendWaiting____", calls: numCalls, servers: 1, sendWait: true},
-		{name: "UnicastNoSendWaiting__", calls: numCalls, servers: 1, sendWait: false},
-		{name: "MulticastSendWaiting__", calls: numCalls, servers: 1, sendWait: true},
-		{name: "MulticastNoSendWaiting", calls: numCalls, servers: 1, sendWait: false},
-		{name: "MulticastSendWaiting__", calls: numCalls, servers: 3, sendWait: true},
-		{name: "MulticastNoSendWaiting", calls: numCalls, servers: 3, sendWait: false},
-		{name: "MulticastSendWaiting__", calls: numCalls, servers: 9, sendWait: true},
-		{name: "MulticastNoSendWaiting", calls: numCalls, servers: 9, sendWait: false},
+		{name: "Unicast__", calls: numCalls, servers: 1, unicast: true},
+		{name: "Multicast", calls: numCalls, servers: 1},
+		{name: "Multicast", calls: numCalls, servers: 3},
+		{name: "Multicast", calls: numCalls, servers: 9},
 	}
+	newCluster := clusters(t)
 	for _, test := range tests {
+		c := newCluster(test.servers)
 		t.Run(fmt.Sprintf("%s/Servers=%d", test.name, test.servers), func(t *testing.T) {
-			config, srvs := setupWithNodeMap(t, test.servers)
-			for i := range srvs {
-				srvs[i].wg.Add(test.calls)
-			}
-			for c := 1; c <= test.calls; c++ {
-				in := oneway.Request_builder{Num: uint64(c)}.Build()
-				if config.Size() == 1 {
-					node := config[0]
-					nodeCtx := node.Context(context.Background())
-					if test.sendWait {
-						if err := oneway.Unicast(nodeCtx, in); err != nil {
-							t.Error(err)
-						}
-					} else {
-						if err := oneway.Unicast(nodeCtx, in, gorums.IgnoreErrors()); err != nil {
-							t.Error(err)
-						}
-					}
+			for i := 1; i <= test.calls; i++ {
+				in := oneway.Request_builder{Num: uint64(i)}.Build()
+				var err error
+				if test.unicast {
+					err = oneway.Unicast(c.cfg[0].Context(context.Background()), in).Send()
 				} else {
-					cfgCtx := config.Context(context.Background())
-					if test.sendWait {
-						if err := oneway.Multicast(cfgCtx, in); err != nil {
-							t.Error(err)
-						}
-					} else {
-						if err := oneway.Multicast(cfgCtx, in, gorums.IgnoreErrors()); err != nil {
-							t.Error(err)
-						}
-					}
+					err = oneway.Multicast(c.cfg.Context(context.Background()), in).Send()
+				}
+				if err != nil {
+					t.Error(err)
 				}
 			}
 
 			// Check that each server received expected oneway messages
-			for i := range srvs {
-				srvs[i].wg.Wait()
-				close(srvs[i].received)
-				received := make([]uint64, 0, test.calls)
-				for r := range srvs[i].received {
-					received = append(received, r.GetNum())
-				}
-				// Sort received messages to avoid test flakiness
-				// due to message reordering in multicast tests
-				slices.Sort(received)
-				for j, got := range received {
+			for i := range c.srvs {
+				for j, got := range c.received(t, i, test.calls) {
 					want := uint64(j + 1)
 					if want != got {
 						t.Errorf("%s: received[%d] = %d, expected %d", test.name, j, got, want)
@@ -149,74 +203,40 @@ func TestMulticastPerNode(t *testing.T) {
 		name        string
 		calls       int
 		servers     int
-		sendWait    bool
 		ignoreNodes []uint32
 	}{
-		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 1, sendWait: false},
-		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 3, sendWait: false},
-		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 9, sendWait: false},
-		{name: "MulticastPerNodeSendWaiting", calls: numCalls, servers: 1, sendWait: true},
-		{name: "MulticastPerNodeSendWaiting", calls: numCalls, servers: 3, sendWait: true},
-		{name: "MulticastPerNodeSendWaiting", calls: numCalls, servers: 9, sendWait: true},
-		{name: "MulticastPerNodeNoSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: false, ignoreNodes: []uint32{0}},
-		{name: "MulticastPerNodeNoSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: false, ignoreNodes: []uint32{1}},
-		{name: "MulticastPerNodeNoSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: false, ignoreNodes: []uint32{0, 1}},
-		{name: "MulticastPerNodeNoSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: false, ignoreNodes: []uint32{0, 1, 2}},
-		{name: "MulticastPerNodeSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: true, ignoreNodes: []uint32{0}},
-		{name: "MulticastPerNodeSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: true, ignoreNodes: []uint32{1}},
-		{name: "MulticastPerNodeSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: true, ignoreNodes: []uint32{0, 1}},
-		{name: "MulticastPerNodeSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: true, ignoreNodes: []uint32{0, 1, 2}},
+		{name: "MulticastPerNode", calls: numCalls, servers: 1},
+		{name: "MulticastPerNode", calls: numCalls, servers: 3},
+		{name: "MulticastPerNode", calls: numCalls, servers: 9},
+		{name: "MulticastPerNodeIgnoreNodes", calls: numCalls, servers: 3, ignoreNodes: []uint32{0}},
+		{name: "MulticastPerNodeIgnoreNodes", calls: numCalls, servers: 3, ignoreNodes: []uint32{1}},
+		{name: "MulticastPerNodeIgnoreNodes", calls: numCalls, servers: 3, ignoreNodes: []uint32{0, 1}},
+		{name: "MulticastPerNodeIgnoreNodes", calls: numCalls, servers: 3, ignoreNodes: []uint32{0, 1, 2}},
 	}
+	newCluster := clusters(t)
 	for _, test := range tests {
+		c := newCluster(test.servers)
 		t.Run(fmt.Sprintf("%s/Servers=%d/IgnoredNodes=%v", test.name, test.servers, test.ignoreNodes), func(t *testing.T) {
-			config, srvs := setupWithNodeMap(t, test.servers)
-			nodeIDs := config.NodeIDs()
+			nodeIDs := c.cfg.NodeIDs()
 			// create a test-local ignore function to avoid data races between tests
 			ignore := makeIgnoreFunc(test.ignoreNodes)
 			mapFunc := makeMapFunc(ignore)
 
-			for i := range srvs {
-				if ignore(nodeIDs[i]) {
-					continue // don't check ignored nodes
-				}
-				srvs[i].wg.Add(test.calls)
-			}
-
-			for c := 1; c <= test.calls; c++ {
-				in := oneway.Request_builder{Num: uint64(c)}.Build()
-				cfgCtx := config.Context(context.Background())
+			for i := 1; i <= test.calls; i++ {
+				in := oneway.Request_builder{Num: uint64(i)}.Build()
+				cfgCtx := c.cfg.Context(context.Background())
 				mapInterceptor := gorums.MapRequest[*oneway.Request, *emptypb.Empty](mapFunc)
-				if test.sendWait {
-					if err := oneway.Multicast(cfgCtx, in,
-						gorums.Interceptors(mapInterceptor),
-					); err != nil {
-						t.Error(err)
-					}
-				} else {
-					if err := oneway.Multicast(cfgCtx, in,
-						gorums.Interceptors(mapInterceptor),
-						gorums.IgnoreErrors(),
-					); err != nil {
-						t.Error(err)
-					}
+				if err := oneway.Multicast(cfgCtx, in).Intercept(mapInterceptor).Send(); err != nil {
+					t.Error(err)
 				}
 			}
 
 			// Check that each server received expected oneway messages
-			for i := range srvs {
+			for i := range c.srvs {
 				if ignore(nodeIDs[i]) {
 					continue // don't check ignored nodes
 				}
-				srvs[i].wg.Wait()
-				close(srvs[i].received)
-				received := make([]uint64, 0, test.calls)
-				for r := range srvs[i].received {
-					received = append(received, r.GetNum())
-				}
-				// Sort received messages to avoid test flakiness
-				// due to message reordering in multicast tests
-				slices.Sort(received)
-				for j, got := range received {
+				for j, got := range c.received(t, i, test.calls) {
 					want := add(uint64(j+1), nodeIDs[i])
 					if want != got {
 						t.Errorf("%s: received[%d] = %d, expected %d, nodeID=%d", test.name, j, got, want, nodeIDs[i])
@@ -234,20 +254,13 @@ func BenchmarkUnicast(b *testing.B) {
 	}
 	node := cfg[0]
 	in := oneway.Request_builder{Num: 0}.Build()
-	b.Run("UnicastSendWaiting__", func(b *testing.B) {
-		for c := 1; c <= b.N; c++ {
-			in.SetNum(uint64(c))
-			nodeCtx := node.Context(context.Background())
-			oneway.Unicast(nodeCtx, in)
+	for c := 1; c <= b.N; c++ {
+		in.SetNum(uint64(c))
+		nodeCtx := node.Context(context.Background())
+		if err := oneway.Unicast(nodeCtx, in).Send(); err != nil {
+			b.Fatal(err)
 		}
-	})
-	b.Run("UnicastNoSendWaiting", func(b *testing.B) {
-		for c := 1; c <= b.N; c++ {
-			in.SetNum(uint64(c))
-			nodeCtx := node.Context(context.Background())
-			oneway.Unicast(nodeCtx, in, gorums.IgnoreErrors())
-		}
-	})
+	}
 }
 
 func BenchmarkMulticast(b *testing.B) {
@@ -256,18 +269,11 @@ func BenchmarkMulticast(b *testing.B) {
 		srv.benchmark = true
 	}
 	in := oneway.Request_builder{Num: 0}.Build()
-	b.Run("MulticastSendWaiting__", func(b *testing.B) {
-		for c := 1; c <= b.N; c++ {
-			in.SetNum(uint64(c))
-			cfgCtx := config.Context(context.Background())
-			oneway.Multicast(cfgCtx, in)
+	for c := 1; c <= b.N; c++ {
+		in.SetNum(uint64(c))
+		cfgCtx := config.Context(context.Background())
+		if err := oneway.Multicast(cfgCtx, in).Send(); err != nil {
+			b.Fatal(err)
 		}
-	})
-	b.Run("MulticastNoSendWaiting", func(b *testing.B) {
-		for c := 1; c <= b.N; c++ {
-			in.SetNum(uint64(c))
-			cfgCtx := config.Context(context.Background())
-			oneway.Multicast(cfgCtx, in, gorums.IgnoreErrors())
-		}
-	})
+	}
 }

@@ -22,21 +22,41 @@ const (
 var _ emptypb.Empty
 
 // Multicast plain. Response type is not needed here.
-func Multicast(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) error {
-	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast", opts...)
+//
+// Example:
+//
+//	err := Multicast(ctx, in).Send()
+//	h := Multicast(ctx, in).Async(); err := h.Wait()
+func Multicast(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
+	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast")
 }
 
 // Multicast2 is testing whether multiple streams work.
-func Multicast2(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) error {
-	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast2", opts...)
+//
+// Example:
+//
+//	err := Multicast2(ctx, in).Send()
+//	h := Multicast2(ctx, in).Async(); err := h.Wait()
+func Multicast2(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
+	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast2")
 }
 
 // Multicast3 is testing imported message type.
-func Multicast3(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) error {
-	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast3", opts...)
+//
+// Example:
+//
+//	err := Multicast3(ctx, in).Send()
+//	h := Multicast3(ctx, in).Async(); err := h.Wait()
+func Multicast3(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
+	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast3")
 }
 
 // Multicast4 is testing imported message type.
-func Multicast4(ctx *ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) error {
-	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast4", opts...)
+//
+// Example:
+//
+//	err := Multicast4(ctx, in).Send()
+//	h := Multicast4(ctx, in).Async(); err := h.Wait()
+func Multicast4(ctx *ConfigContext, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty] {
+	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast4")
 }
