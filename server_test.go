@@ -40,14 +40,14 @@ func TestServerCallback(t *testing.T) {
 	}
 }
 
-func appendStringInterceptor(inStr, outStr string) gorums.Interceptor {
-	return func(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func appendStringInterceptor(inStr, outStr string) gorums.ServerInterceptor {
+	return func(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		// update the underlying request gorums.Message's message field (pb.StringValue in this case)
 		req.Value += inStr
 
 		// We do not need to re-marshal into the payload here.
-		// The next handler in the chain will access req via gorums.AsProto(in) which reads in.Msg.
+		// The next handler in the chain will access req via gorums.AsProto(in) which reads in.Proto.
 
 		// call the next handler
 		out, err := next(ctx, in)
@@ -65,7 +65,7 @@ func appendStringInterceptor(inStr, outStr string) gorums.Interceptor {
 
 type interceptorSrv struct{}
 
-func (interceptorSrv) Test(_ gorums.ServerCtx, req *pb.StringValue) (*pb.StringValue, error) {
+func (interceptorSrv) Test(_ gorums.ServerContext, req *pb.StringValue) (*pb.StringValue, error) {
 	return pb.String(req.GetValue() + "server-"), nil
 }
 
@@ -73,12 +73,12 @@ func TestServerInterceptorsChain(t *testing.T) {
 	// set up a server with two interceptors: i1, i2
 	interceptorServerFn := func(_ int) gorums.ServerIface {
 		interceptorSrv := &interceptorSrv{}
-		s := gorums.NewServer(gorums.WithInterceptors(
+		s := gorums.NewServer(gorums.WithServerInterceptors(
 			appendStringInterceptor("i1in-", "i1out"),
 			appendStringInterceptor("i2in-", "i2out-"),
 		))
 		// register final handler which appends "final-" to the request value
-		s.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+		s.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 			req := gorums.AsProto[*pb.StringValue](in)
 			resp, err := interceptorSrv.Test(ctx, req)
 			if err != nil {
@@ -92,7 +92,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 
 	ctx := gorumstest.Context(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
-	res, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String("client-"), mock.TestMethod)
+	res, err := gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String("client-"), mock.TestMethod)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestWithBufferSizesProcessesRequests(t *testing.T) {
 			for i := range concurrency {
 				wg.Go(func() {
 					nodeCtx := node.Context(ctx)
-					_, errs[i] = gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
+					_, errs[i] = gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
 				})
 			}
 			wg.Wait()
@@ -148,7 +148,7 @@ func TestWithBufferSizesProcessesRequests(t *testing.T) {
 // underlying TCP connection is broken.
 func TestTCPReconnection(t *testing.T) {
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		return gorums.NewResponseMessage(in, req), nil
 	})
@@ -173,7 +173,7 @@ func TestTCPReconnection(t *testing.T) {
 	// Send first message
 	ctx := gorumstest.Context(t, time.Second)
 	nodeCtx := node.Context(ctx)
-	_, err = gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String("1"), mock.TestMethod)
+	_, err = gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String("1"), mock.TestMethod)
 	if err != nil {
 		t.Fatalf("First call failed: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestTCPReconnection(t *testing.T) {
 	// Sending now should fail or timeout
 	ctx2 := gorumstest.Context(t, 200*time.Millisecond)
 	nodeCtx2 := node.Context(ctx2)
-	_, err = gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx2, pb.String("2"), mock.TestMethod)
+	_, err = gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx2, pb.String("2"), mock.TestMethod)
 	if err == nil {
 		// It might succeed if it just queued it? But we wait for response.
 	} else {
@@ -202,7 +202,7 @@ func TestTCPReconnection(t *testing.T) {
 	}
 
 	srv2 := gorums.NewServer()
-	srv2.RegisterHandler(mock.TestMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv2.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		return gorums.NewResponseMessage(in, req), nil
 	})
@@ -217,7 +217,7 @@ func TestTCPReconnection(t *testing.T) {
 	// Send message again
 	ctx3 := gorumstest.Context(t, 2*time.Second)
 	nodeCtx3 := node.Context(ctx3)
-	_, err = gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx3, pb.String("3"), mock.TestMethod)
+	_, err = gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx3, pb.String("3"), mock.TestMethod)
 	if err != nil {
 		t.Errorf("Call after reconnection failed: %v", err)
 	}

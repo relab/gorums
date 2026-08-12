@@ -13,26 +13,27 @@ import (
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// testSystems returns n started Gorums systems on random localhost ports.
-// It is the in-package counterpart of gorumstest.Systems, which this file
-// cannot use: gorumstest imports gorums, so importing it from package gorums's
-// own tests would create an import cycle.
-func testSystems(t testing.TB, n int) []*System {
+// testLocalServers returns n started Gorums servers forming a symmetric peer
+// group on random localhost ports. It is the in-package counterpart of
+// gorumstest.LocalServers, which this file cannot use: gorumstest imports
+// gorums, so importing it from package gorums's own tests would create an
+// import cycle.
+func testLocalServers(t testing.TB, n int) []*Server {
 	t.Helper()
 	if _, ok := t.(*testing.B); !ok {
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
-	systems, stop, err := NewLocalSystems(n, WithLocalDialOptions(
-		WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+	srvs, stop, err := NewLocalServers(n, WithLocalDialOptions(
+		WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 	))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(stop)
-	for _, sys := range systems {
-		go sys.Serve()
+	for _, srv := range srvs {
+		go srv.ListenAndServe()
 	}
-	return systems
+	return srvs
 }
 
 // testWaitUntil polls predicate until it returns true or timeout elapses.
@@ -79,20 +80,18 @@ func TestCallOptionsIgnoreErrors(t *testing.T) {
 func TestCallOptionsIgnoreErrorsResourceLeak(t *testing.T) {
 	// Previously leaked because fire-and-forget multicast still registered in router.
 	// Now fixed: no replyChan → no ResponseChan → no Register.
-	systems := testSystems(t, 3)
-	for _, sys := range systems {
-		sys.RegisterService(nil, func(srv *Server) {
-			srv.RegisterHandler(mock.TestMethod, func(_ ServerCtx, _ *Message) (*Message, error) {
-				return nil, nil
-			})
+	servers := testLocalServers(t, 3)
+	for _, srv := range servers {
+		srv.RegisterHandler(mock.TestMethod, func(_ ServerContext, _ *Message) (*Message, error) {
+			return nil, nil
 		})
 	}
-	for _, sys := range systems {
-		sys.WaitForPeers(t.Context(), func(cfg Configuration) bool {
+	for _, srv := range servers {
+		srv.WaitForPeers(t.Context(), func(cfg Config) bool {
 			return cfg.Size() == 3
 		})
 	}
-	cfg := systems[0].OutboundConfig()
+	cfg := servers[0].PeerConfig()
 	ctx := testTimeoutContext(t, 5*time.Second)
 	for i := range 1000 {
 		Multicast(cfg.Context(ctx), pb.String(fmt.Sprintf("mc-%d", i)), mock.TestMethod, IgnoreErrors())
@@ -114,7 +113,7 @@ func TestCallOptionsIgnoreErrorsResourceLeak(t *testing.T) {
 }
 
 func BenchmarkGetCallOptions(b *testing.B) {
-	interceptor := func(_ *ClientCtx[msg, msg], next ResponseSeq[msg]) ResponseSeq[msg] { return next }
+	interceptor := func(_ *CallContext[msg, msg], next ResponseSeq[msg]) ResponseSeq[msg] { return next }
 	tests := []struct {
 		numOpts int
 	}{

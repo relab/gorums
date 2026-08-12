@@ -41,10 +41,10 @@ func (qs *QSpec) ReadQF(_ *ReadRequest, replies map[uint32]*State) (*State, bool
     return newestState(replies), true
 }
 
-// Configuration created with QuorumSpec
+// Config created with QuorumSpec
 cfg, _ := mgr.NewConfiguration(&QSpec{2}, gorums.WithNodeList(addrs))
 
-// Method calls on Configuration
+// Method calls on Config
 reply, err := cfg.Read(ctx, &ReadRequest{})
 ```
 
@@ -70,7 +70,7 @@ func newestValue(responses *gorums.Responses[*ReadResponse]) (*ReadResponse, err
     return newest, nil
 }
 
-// Configuration created without QuorumSpec
+// Config created without QuorumSpec
 config, _ := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 
 // Generic function with ConfigContext
@@ -96,18 +96,18 @@ make genproto
 
 This generates new `*_gorums.pb.go` files with:
 
-- Type aliases for `Manager`, `Configuration`, `Node`
+- Type aliases for `Manager`, `Config`, `Node`
 - Generic functions for quorum calls (e.g., `ReadQC`, `WriteQC`)
 - Terminal methods on `*gorums.Responses[T]`
 
-### Step 2: Update Configuration Creation
+### Step 2: Update Config Creation
 
 Remove QuorumSpec from configuration creation.
 
 **Before:**
 
 ```go
-mgr := NewManager(gorums.WithDialOptions(...))
+mgr := NewManager(gorums.WithGRPCDialOptions(...))
 cfg, err := mgr.NewConfiguration(
     &QSpec{quorumSize: 2},  // ❌ Remove QuorumSpec
     gorums.WithNodeList(addrs),
@@ -117,7 +117,7 @@ cfg, err := mgr.NewConfiguration(
 **After:**
 
 ```go
-mgr := gorums.NewManager(gorums.WithDialOptions(...))
+mgr := gorums.NewManager(gorums.WithGRPCDialOptions(...))
 cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 ```
 
@@ -126,7 +126,7 @@ Or use the convenience function that creates both:
 ```go
 cfg, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
-    gorums.WithDialOptions(...),
+    gorums.WithGRPCDialOptions(...),
 )
 ```
 
@@ -184,7 +184,7 @@ func newestState(responses *gorums.Responses[*State]) (*State, error) {
 
 ### Step 4: Update Call Sites
 
-Change from Configuration methods to generic functions with ConfigContext.
+Change from Config methods to generic functions with ConfigContext.
 
 **Before:**
 
@@ -584,9 +584,9 @@ replies := responses.Results().IgnoreErrors().CollectAll()  // map[uint32]*Proto
 result, err := CustomAggregationQF(replies)  // Returns *CustomType
 ```
 
-## Configuration Manipulation
+## Config Manipulation
 
-Configuration manipulation APIs remain largely unchanged:
+Config manipulation APIs remain largely unchanged:
 
 ```go
 // Combine configurations
@@ -832,7 +832,7 @@ func firstValid(responses *gorums.Responses[*State]) (*State, error) {
 
 ### "Cannot use cfg.Read: undefined"
 
-**Problem:** Configuration no longer has RPC methods.
+**Problem:** Config no longer has RPC methods.
 
 **Solution:** Use generic functions with ConfigContext:
 

@@ -308,22 +308,22 @@ func (n *Node) LastErr() error {
 //   - A step-change in latency takes several round trips to settle because
 //     each new sample contributes only 20% of the new value.
 //
-// Use the [Latency] comparator with [Configuration.SortBy] to order nodes
+// Use the [ByLatency] comparator with [Config.Sort] to order nodes
 // by their current observed latency.
 func (n *Node) Latency() time.Duration {
 	return n.router.Latency()
 }
 
-// ID compares nodes by their identifier in increasing order.
-// It is compatible with [slices.SortFunc] and [Configuration.SortBy].
-var ID = func(a, b *Node) int {
+// ByID compares nodes by their identifier in increasing order.
+// It is compatible with [slices.SortFunc] and [Config.Sort].
+var ByID = func(a, b *Node) int {
 	return cmp.Compare(a.id, b.id)
 }
 
-// LastNodeError compares nodes by their LastErr() status.
+// ByLastError compares nodes by their LastErr() status.
 // Nodes with no error sort before nodes with an error.
-// It is compatible with [slices.SortFunc] and [Configuration.SortBy].
-var LastNodeError = func(a, b *Node) int {
+// It is compatible with [slices.SortFunc] and [Config.Sort].
+var ByLastError = func(a, b *Node) int {
 	aErr := a.LastErr()
 	bErr := b.LastErr()
 	switch {
@@ -336,10 +336,10 @@ var LastNodeError = func(a, b *Node) int {
 	}
 }
 
-// Latency compares nodes by their current latency estimate in ascending order.
+// ByLatency compares nodes by their current latency estimate in ascending order.
 // Nodes with no measurement yet (negative latency value) sort after nodes with a
-// measurement. It is compatible with [slices.SortFunc] and [Configuration.SortBy].
-var Latency = func(a, b *Node) int {
+// measurement. It is compatible with [slices.SortFunc] and [Config.Sort].
+var ByLatency = func(a, b *Node) int {
 	la, lb := a.Latency(), b.Latency()
 	// Note: cmp.Compare alone would sort negative sentinel values first
 	// (as the smallest numbers), making unmeasured nodes appear fastest.

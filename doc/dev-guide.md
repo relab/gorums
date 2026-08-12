@@ -23,7 +23,7 @@ That block currently consists of four type aliases:
 
 ```go
 type (
-    Configuration = gorums.Configuration
+    Config = gorums.Config
     Node          = gorums.Node
     NodeContext   = gorums.NodeContext
     ConfigContext = gorums.ConfigContext

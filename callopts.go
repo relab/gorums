@@ -41,7 +41,7 @@ func IgnoreErrors() CallOption {
 //	resp, err := ReadQC(ctx, req,
 //	    gorums.Interceptors(loggingInterceptor, filterInterceptor),
 //	).Majority()
-func Interceptors[Req, Resp proto.Message](interceptors ...QuorumInterceptor[Req, Resp]) CallOption {
+func Interceptors[Req, Resp proto.Message](interceptors ...ClientInterceptor[Req, Resp]) CallOption {
 	return func(o *callOptions) {
 		for _, interceptor := range interceptors {
 			o.interceptors = append(o.interceptors, interceptor)

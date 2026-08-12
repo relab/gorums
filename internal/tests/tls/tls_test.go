@@ -15,7 +15,7 @@ import (
 
 type testSrv struct{}
 
-func (testSrv) TestTLS(ctx gorums.ServerCtx, _ *Request) (resp *Response, err error) {
+func (testSrv) TestTLS(ctx gorums.ServerContext, _ *Request) (resp *Response, err error) {
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok || peerInfo.AuthInfo.AuthType() != "tls" {
 		return Response_builder{OK: false}.Build(), nil
@@ -44,7 +44,7 @@ func TestTLSConnection(t *testing.T) {
 		RegisterTLSServer(srv, &testSrv{})
 		return srv
 	}
-	node := gorumstest.Node(t, srvFn, gorums.WithDialOptions(
+	node := gorumstest.Node(t, srvFn, gorums.WithGRPCDialOptions(
 		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
 	))
 

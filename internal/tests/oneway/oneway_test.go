@@ -21,7 +21,7 @@ type onewaySrv struct {
 	received  chan *oneway.Request
 }
 
-func (s *onewaySrv) Unicast(_ gorums.ServerCtx, r *oneway.Request) {
+func (s *onewaySrv) Unicast(_ gorums.ServerContext, r *oneway.Request) {
 	if s.benchmark {
 		return
 	}
@@ -29,7 +29,7 @@ func (s *onewaySrv) Unicast(_ gorums.ServerCtx, r *oneway.Request) {
 	s.wg.Done()
 }
 
-func (s *onewaySrv) Multicast(_ gorums.ServerCtx, r *oneway.Request) {
+func (s *onewaySrv) Multicast(_ gorums.ServerContext, r *oneway.Request) {
 	if s.benchmark {
 		return
 	}
@@ -40,7 +40,7 @@ func (s *onewaySrv) Multicast(_ gorums.ServerCtx, r *oneway.Request) {
 // setupWithNodeMap sets up servers and configuration with sequential node IDs
 // (1, 2, 3, ...) matching the server array indices. This is needed for tests like
 // TestMulticastPerNode that verify per-node message transformations based on node ID.
-func setupWithNodeMap(t testing.TB, cfgSize int) (cfg oneway.Configuration, srvs []*onewaySrv) {
+func setupWithNodeMap(t testing.TB, cfgSize int) (cfg oneway.Config, srvs []*onewaySrv) {
 	t.Helper()
 	srvs = make([]*onewaySrv, cfgSize)
 	for i := range cfgSize {

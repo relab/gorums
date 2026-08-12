@@ -18,7 +18,7 @@ func TestRPCCallSuccess(t *testing.T) {
 
 	ctx := gorumstest.Context(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
-	response, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
+	response, err := gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
 	if err != nil {
 		t.Fatalf("Unexpected error, got: %v, want: %v", err, nil)
 	}
@@ -35,7 +35,7 @@ func TestRPCCallDownedNode(t *testing.T) {
 
 	ctx := gorumstest.Context(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
-	response, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
+	response, err := gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
 	if err == nil {
 		t.Fatalf("Expected error, got: %v, want: %v", err, fmt.Errorf("rpc error: code = Unavailable desc = stream is down"))
 	}
@@ -51,7 +51,7 @@ func TestRPCCallTimedOut(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	defer cancel()
 	nodeCtx := node.Context(ctx)
-	response, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
+	response, err := gorums.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
 	if err == nil {
 		t.Fatalf("Expected error, got: %v, want: %v", err, fmt.Errorf("context deadline exceeded"))
 	}
@@ -65,7 +65,7 @@ func TestRPCCallTypeMismatch(t *testing.T) {
 
 	ctx := gorumstest.Context(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
-	response, err := gorums.RPCCall[*pb.StringValue, *pb.Int32Value](nodeCtx, pb.String(""), mock.TestMethod)
+	response, err := gorums.RemoteCall[*pb.StringValue, *pb.Int32Value](nodeCtx, pb.String(""), mock.TestMethod)
 	if err != gorums.ErrTypeMismatch {
 		t.Fatalf("Expected error, got: %v, want: %v", err, gorums.ErrTypeMismatch)
 	}
@@ -82,7 +82,7 @@ func TestRPCCallConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	for range concurrency {
 		wg.Go(func() {
-			_, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](node.Context(t.Context()), pb.String(""), mock.TestMethod)
+			_, err := gorums.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(t.Context()), pb.String(""), mock.TestMethod)
 			if err != nil {
 				errCh <- err
 			}

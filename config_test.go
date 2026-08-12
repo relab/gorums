@@ -32,7 +32,7 @@ func (n testNode) Addr() string {
 func TestNewConfig(t *testing.T) {
 	tests := []struct {
 		name     string
-		opt      gorums.NodeListOption
+		opt      gorums.NodeSource
 		wantSize int
 		wantErr  string
 	}{
@@ -123,7 +123,7 @@ func TestNewConfig(t *testing.T) {
 }
 
 func TestEmptyConfiguration(t *testing.T) {
-	var empty gorums.Configuration
+	var empty gorums.Config
 
 	populated, err := gorums.NewConfig(gorums.WithNodeList(nodes), gorumstest.InsecureDialOptions(t))
 	if err != nil {
@@ -174,7 +174,7 @@ func TestEmptyConfiguration(t *testing.T) {
 	})
 
 	t.Run("Equal", func(t *testing.T) {
-		var otherEmpty gorums.Configuration
+		var otherEmpty gorums.Config
 		if !empty.Equal(otherEmpty) {
 			t.Fatal("empty.Equal(otherEmpty) = false, want true")
 		}
@@ -202,7 +202,7 @@ func TestEmptyConfiguration(t *testing.T) {
 	})
 
 	t.Run("UnionWithEmptyNil", func(t *testing.T) {
-		var otherEmpty gorums.Configuration
+		var otherEmpty gorums.Config
 		if got := empty.Union(otherEmpty); got != nil {
 			t.Fatalf("empty.Union(otherEmpty) = %v, want nil", got)
 		}
@@ -251,13 +251,13 @@ func TestConfigurationSortBy(t *testing.T) {
 	t.Cleanup(gorumstest.Closer(t, cfg))
 
 	t.Run("SortByID", func(t *testing.T) {
-		sorted := cfg.SortBy(gorums.ID)
+		sorted := cfg.Sort(gorums.ByID)
 		if sorted.Size() != cfg.Size() {
 			t.Fatalf("sorted.Size() = %d, want %d", sorted.Size(), cfg.Size())
 		}
 		for i := 1; i < sorted.Size(); i++ {
 			if sorted[i].ID() < sorted[i-1].ID() {
-				t.Errorf("SortBy(ID): not sorted at position %d (id %d < id %d)",
+				t.Errorf("Sort(ID): not sorted at position %d (id %d < id %d)",
 					i, sorted[i].ID(), sorted[i-1].ID())
 			}
 		}
@@ -270,7 +270,7 @@ func TestConfigurationSortBy(t *testing.T) {
 				t.Fatalf("expected no latency measurement on fresh node, got %v", n.Latency())
 			}
 		}
-		sorted := cfg.SortBy(gorums.Latency)
+		sorted := cfg.Sort(gorums.ByLatency)
 		if sorted.Size() != cfg.Size() {
 			t.Fatalf("sorted.Size() = %d, want %d", sorted.Size(), cfg.Size())
 		}
@@ -278,36 +278,36 @@ func TestConfigurationSortBy(t *testing.T) {
 		// Latency comparator returns 0 for every latency pair (the latencies are equal),
 		// so a stable sort must preserve the original order.
 		if got, want := sorted.NodeIDs(), cfg.NodeIDs(); !slices.Equal(got, want) {
-			t.Errorf("SortBy(Latency) with all-unmeasured nodes changed order: got %v, want %v", got, want)
+			t.Errorf("Sort(Latency) with all-unmeasured nodes changed order: got %v, want %v", got, want)
 		}
 	})
 
 	t.Run("ReturnsNewConfiguration", func(t *testing.T) {
-		sorted := cfg.SortBy(gorums.ID)
+		sorted := cfg.Sort(gorums.ByID)
 		cfgSlice := cfg.Nodes()
 		sortedSlice := sorted.Nodes()
 		if len(cfgSlice) > 0 && len(sortedSlice) > 0 && &cfgSlice[0] == &sortedSlice[0] {
-			t.Error("SortBy returned same backing array — violates immutability")
+			t.Error("Sort returned same backing array — violates immutability")
 		}
 	})
 
 	t.Run("Empty/ReturnsNil", func(t *testing.T) {
-		var empty gorums.Configuration
-		if got := empty.SortBy(gorums.ID); got != nil {
-			t.Fatalf("empty.SortBy(ID) = %v, want nil", got)
+		var empty gorums.Config
+		if got := empty.Sort(gorums.ByID); got != nil {
+			t.Fatalf("empty.Sort(ID) = %v, want nil", got)
 		}
-		if got := empty.SortBy(gorums.Latency); got != nil {
-			t.Fatalf("empty.SortBy(Latency) = %v, want nil", got)
+		if got := empty.Sort(gorums.ByLatency); got != nil {
+			t.Fatalf("empty.Sort(Latency) = %v, want nil", got)
 		}
 	})
 
 	t.Run("SortByLastNodeErrorThenLatency", func(t *testing.T) {
 		// Composing two comparators should not panic and must return a valid config.
-		sorted := cfg.SortBy(func(a, b *gorums.Node) int {
-			if r := gorums.LastNodeError(a, b); r != 0 {
+		sorted := cfg.Sort(func(a, b *gorums.Node) int {
+			if r := gorums.ByLastError(a, b); r != 0 {
 				return r
 			}
-			return gorums.Latency(a, b)
+			return gorums.ByLatency(a, b)
 		})
 		if sorted.Size() != cfg.Size() {
 			t.Fatalf("composed sort size = %d, want %d", sorted.Size(), cfg.Size())
@@ -335,7 +335,7 @@ func TestConfigurationExtend(t *testing.T) {
 	tests := []struct {
 		name         string
 		initialNodes []string
-		extendOpt    gorums.NodeListOption
+		extendOpt    gorums.NodeSource
 		wantSize     int
 		wantErr      string
 	}{
@@ -627,7 +627,7 @@ func TestConfigurationImmutability(t *testing.T) {
 	t.Cleanup(gorumstest.Closer(t, c1))
 
 	// Test Union with empty returns a clone, not the original
-	var emptyConfig gorums.Configuration
+	var emptyConfig gorums.Config
 	c2 := c1.Union(emptyConfig)
 	if !c1.Equal(c2) {
 		t.Errorf("c1.Equal(c2) = false, want true")

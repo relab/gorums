@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc"
@@ -17,12 +18,13 @@ type serverOptions struct {
 	sendBufferSize  uint
 	grpcOpts        []grpc.ServerOption
 	connectCallback func(context.Context)
-	interceptors    []Interceptor
+	interceptors    []ServerInterceptor
 	// Peer management options
 	myID             uint32
-	peerNodes        NodeListOption      // Peers to track as they connect; set by WithPeers.
-	onConfigChange   func(Configuration) // Callback registered via WithPeerChange.
-	outboundNodes    NodeListOption      // Nodes this server calls; set by WithPeers.
+	peerNodes        NodeSource   // Peers to track as they connect; set by WithPeers.
+	onConfigChange   func(Config) // Callback registered via WithPeerChange.
+	listenAddr       string       // Listener address recorded by WithAddr; bound by ListenAndServe.
+	outboundNodes    NodeSource   // Nodes this server calls; set by WithPeers.
 	outboundDialOpts []DialOption
 }
 
@@ -65,13 +67,13 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 	}
 }
 
-// WithInterceptors registers server-side interceptors to run for every incoming request.
+// WithServerInterceptors registers server-side interceptors to run for every incoming request.
 // Interceptors are executed for each registered handler. Interceptors may modify both
 // the request and/or response messages, or perform additional actions before or after
 // calling the next handler in the chain. Interceptors are executed in the order they are
 // provided: the first element is executed first, and the last element calls the actual
 // server method handler.
-func WithInterceptors(i ...Interceptor) ServerOption {
+func WithServerInterceptors(i ...ServerInterceptor) ServerOption {
 	return func(opts *serverOptions) {
 		opts.interceptors = append(opts.interceptors, i...)
 	}
@@ -79,18 +81,18 @@ func WithInterceptors(i ...Interceptor) ServerOption {
 
 // WithPeers configures the server to both track and call a fixed set of peer
 // servers. The myID parameter is this server's own node ID; it is always
-// present in the peer [Configuration] so that quorum thresholds account for
+// present in the peer [Config] so that quorum thresholds account for
 // the local replica, and calls to it are served in-process without a network
 // round-trip.
 //
-// The server builds the peer [Configuration] itself, available from
+// The server builds the peer [Config] itself, available from
 // [Server.PeerConfig], applying opts to the connections it establishes. To
 // observe which peers are currently reachable, use [Server.ConnectedPeers].
 //
 // The returned option only records the peer set; the [NewServer] call that
 // receives it panics if the node source is invalid, for example if it contains
 // a duplicate or malformed address.
-func WithPeers(myID uint32, nodes NodeListOption, opts ...DialOption) ServerOption {
+func WithPeers(myID uint32, nodes NodeSource, opts ...DialOption) ServerOption {
 	return func(o *serverOptions) {
 		o.myID = myID
 		o.peerNodes = nodes
@@ -100,12 +102,21 @@ func WithPeers(myID uint32, nodes NodeListOption, opts ...DialOption) ServerOpti
 }
 
 // WithPeerChange registers a callback invoked after each change to the peer
-// [Configuration] (peer connect or disconnect). The callback runs while
+// [Config] (peer connect or disconnect). The callback runs while
 // internal locks are held, so it must not call [Server.ConnectedPeers] or other
 // blocking methods; use it only to signal or copy, not for long work.
-func WithPeerChange(callback func(Configuration)) ServerOption {
+func WithPeerChange(callback func(Config)) ServerOption {
 	return func(o *serverOptions) {
 		o.onConfigChange = callback
+	}
+}
+
+// WithAddr records the address that [Server.ListenAndServe] binds.
+// It only stores the address; nothing is resolved or bound until
+// [Server.ListenAndServe] is called.
+func WithAddr(addr string) ServerOption {
+	return func(o *serverOptions) {
+		o.listenAddr = addr
 	}
 }
 
@@ -114,15 +125,19 @@ type Server struct {
 	srv          *stream.Server
 	grpcServer   *grpc.Server
 	handlers     map[string]Handler
-	interceptors []Interceptor
-	outbound     Configuration // peer config built by WithPeers; nil if unused
+	interceptors []ServerInterceptor
+
+	mu         sync.Mutex   // guards lis
+	lis        net.Listener // active listener; set by Serve, ListenAndServe, or NewLocalServers
+	listenAddr string       // address recorded by WithAddr
+	outbound   Config       // peer config built by WithPeers; nil if unused
 	*inboundManager
 }
 
 // NewServer returns a new instance of [Server].
 //
 // The server tracks connected clients that are capable of receiving reverse-direction
-// calls from the server; these clients are accessible via [ServerCtx.ConnectedClients]
+// calls from the server; these clients are accessible via [ServerContext.ConnectedClients]
 // and [Server.ConnectedClients]. If [WithPeers] is provided, the server additionally
 // tracks and calls a fixed set of peer servers, accessible via [Server.PeerConfig]
 // and, filtered by reachability, [Server.ConnectedPeers].
@@ -146,6 +161,7 @@ func NewServer(opts ...ServerOption) *Server {
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
 		handlers:     make(map[string]Handler),
 		interceptors: serverOpts.interceptors,
+		listenAddr:   serverOpts.listenAddr,
 	}
 	s.inboundManager = newInboundManager(
 		serverOpts.myID,
@@ -167,19 +183,19 @@ func NewServer(opts ...ServerOption) *Server {
 	return s
 }
 
-// newPeerConfig builds the outbound [Configuration] this server uses to call
+// newPeerConfig builds the outbound [Config] this server uses to call
 // other servers. It installs the server as the back-channel request handler so
 // the remote can dispatch requests back over the same connection.
-func (s *Server) newPeerConfig(nodes NodeListOption, dialOpts []DialOption) (Configuration, error) {
+func (s *Server) newPeerConfig(nodes NodeSource, dialOpts []DialOption) (Config, error) {
 	opts := append([]DialOption{withServer(s)}, dialOpts...)
 	return NewConfig(nodes, opts...)
 }
 
-// PeerConfig returns the [Configuration] of the peers configured with
+// PeerConfig returns the [Config] of the peers configured with
 // [WithPeers], or nil if [WithPeers] was not used. Calls on the returned
 // configuration reach the peers over connections this server establishes;
 // calls on the local node are served in-process.
-func (s *Server) PeerConfig() Configuration {
+func (s *Server) PeerConfig() Config {
 	return s.outbound
 }
 
@@ -203,7 +219,7 @@ func (s *Server) RegisterHandler(method string, handler Handler) {
 // It is responsible for releasing the mutex when the handler chain is done,
 // unless already released by the handler itself, or an interceptor in the chain.
 func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, release func(), send func(*stream.Message)) {
-	srvCtx := ServerCtx{
+	srvCtx := ServerContext{
 		Context: ctx,
 		release: release,
 		send:    send,
@@ -219,7 +235,7 @@ func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, rele
 	}
 
 	msg, err := unmarshalRequest(reqMsg)
-	in := &Message{Msg: msg, Message: reqMsg}
+	in := &Message{Proto: msg, Message: reqMsg}
 	if err != nil {
 		srvCtx.SendMessage(MessageWithError(in, nil, err))
 		return
@@ -235,9 +251,57 @@ func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, rele
 	srvCtx.SendMessage(MessageWithError(in, out, err))
 }
 
-// Serve starts serving on the listener.
+// Serve serves on the externally supplied listener and records it so that
+// [Server.Addr] reports its address and [Server.Stop] closes it. The server
+// takes lifecycle responsibility for the listener once Serve is called: Stop
+// closes it even though gRPC also closes it when Serve returns.
 func (s *Server) Serve(listener net.Listener) error {
+	s.setListener(listener)
 	return s.grpcServer.Serve(listener)
+}
+
+// ListenAndServe binds the address recorded by [WithAddr] and serves on it.
+// When the server was created by [NewLocalServers], it serves on the
+// preallocated listener instead. It returns a clear error if no listen address
+// was configured, or the bind error if the address is invalid or cannot be
+// bound. When the configured address uses port 0, [Server.Addr] reports the
+// actual bound address after this method creates the listener.
+func (s *Server) ListenAndServe() error {
+	s.mu.Lock()
+	lis := s.lis
+	s.mu.Unlock()
+	if lis == nil {
+		if s.listenAddr == "" {
+			return fmt.Errorf("gorums: ListenAndServe requires a listen address; use WithAddr")
+		}
+		var err error
+		lis, err = net.Listen("tcp", s.listenAddr)
+		if err != nil {
+			return err
+		}
+		s.setListener(lis)
+	}
+	return s.grpcServer.Serve(lis)
+}
+
+// setListener records lis as the server's active listener.
+func (s *Server) setListener(lis net.Listener) {
+	s.mu.Lock()
+	s.lis = lis
+	s.mu.Unlock()
+}
+
+// Addr returns the bound listener address once the server has a listener.
+// Before binding, it returns the address configured with [WithAddr].
+// If neither exists, it returns the empty string.
+func (s *Server) Addr() string {
+	s.mu.Lock()
+	lis := s.lis
+	s.mu.Unlock()
+	if lis != nil {
+		return lis.Addr().String()
+	}
+	return s.listenAddr
 }
 
 // GracefulStop waits for all RPCs to finish before stopping.
@@ -245,12 +309,23 @@ func (s *Server) GracefulStop() {
 	s.grpcServer.GracefulStop()
 }
 
-// Stop stops the server immediately and releases the resources it owns,
-// including the peer [Configuration] built by [WithPeers]. It does not use
-// gRPC graceful stop, because one-way methods do not respond and would block
-// indefinitely. Stop is safe to call more than once.
+// Stop stops the server immediately and releases the resources it owns. It
+// unblocks any [Server.WaitForPeers] and [Server.WaitForClients] callers, stops
+// the gRPC server, closes the listener owned by [Server.Serve],
+// [Server.ListenAndServe], or [NewLocalServers], and closes the peer
+// [Config] built by [WithPeers]. It does not use gRPC graceful stop,
+// because one-way methods do not respond and would block indefinitely. Stop is
+// safe to call before serving starts, and safe to call more than once.
 func (s *Server) Stop() {
+	// Unblock any WaitForPeers / WaitForClients callers.
+	s.inboundManager.close()
 	s.grpcServer.Stop()
+	s.mu.Lock()
+	lis := s.lis
+	s.mu.Unlock()
+	if lis != nil {
+		_ = lis.Close()
+	}
 	if s.outbound != nil {
 		_ = s.outbound.Close()
 	}

@@ -175,7 +175,7 @@ message WriteRequest {
 
 For the `unicast` and `multicast` call types, the response message type will be unused by Gorums.
 
-> **Reserved message names:** The following names are reserved by Gorums and cannot be used as proto message type names in your `.proto` files: `Configuration`, `Node`, `NodeContext`, `ConfigContext`.
+> **Reserved message names:** The following names are reserved by Gorums and cannot be used as proto message type names in your `.proto` files: `Config`, `Node`, `NodeContext`, `ConfigContext`.
 > Using any of these names will cause a compile error in the generated code because Gorums injects type aliases with these names into every generated `_gorums.pb.go` file.
 
 ### Compiling the Service Definition
@@ -222,11 +222,11 @@ And this is our server interface:
 
 ```go
 type StorageServer interface {
-	ReadRPC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
-	WriteUnicast(ctx gorums.ServerCtx, request *WriteRequest)
-	WriteMulticast(ctx gorums.ServerCtx, request *WriteRequest)
-	ReadQC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
-	ReadCorrectable(ctx gorums.ServerCtx, request *ReadRequest, send func(response *ReadResponse) error) error
+	ReadRPC(ctx gorums.ServerContext, request *ReadRequest) (response *ReadResponse, err error)
+	WriteUnicast(ctx gorums.ServerContext, request *WriteRequest)
+	WriteMulticast(ctx gorums.ServerContext, request *WriteRequest)
+	ReadQC(ctx gorums.ServerContext, request *ReadRequest) (response *ReadResponse, err error)
+	ReadCorrectable(ctx gorums.ServerContext, request *ReadRequest, send func(response *ReadResponse))
 }
 ```
 
@@ -247,13 +247,13 @@ type storageSrv struct {
   state *ReadResponse
 }
 
-func (srv *storageSrv) ReadRPC(_ gorums.ServerCtx, req *ReadRequest) (resp *ReadResponse, err error) {
+func (srv *storageSrv) ReadRPC(_ gorums.ServerContext, req *ReadRequest) (resp *ReadResponse, err error) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   return srv.state, nil
 }
 
-func (srv *storageSrv) WriteUnicast(_ gorums.ServerCtx, req *WriteRequest) {
+func (srv *storageSrv) WriteUnicast(_ gorums.ServerContext, req *WriteRequest) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   if req.GetTime().AsTime().After(srv.state.GetTime().AsTime()) {
@@ -261,7 +261,7 @@ func (srv *storageSrv) WriteUnicast(_ gorums.ServerCtx, req *WriteRequest) {
   }
 }
 
-func (srv *storageSrv) WriteMulticast(_ gorums.ServerCtx, req *WriteRequest) {
+func (srv *storageSrv) WriteMulticast(_ gorums.ServerContext, req *WriteRequest) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   if req.GetTime().AsTime().After(srv.state.GetTime().AsTime()) {
@@ -269,16 +269,16 @@ func (srv *storageSrv) WriteMulticast(_ gorums.ServerCtx, req *WriteRequest) {
   }
 }
 
-func (srv *storageSrv) ReadQC(_ gorums.ServerCtx, req *ReadRequest) (resp *ReadResponse, err error) {
+func (srv *storageSrv) ReadQC(_ gorums.ServerContext, req *ReadRequest) (resp *ReadResponse, err error) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   return srv.state, nil
 }
 
-func (srv *storageSrv) ReadCorrectable(_ gorums.ServerCtx, req *ReadRequest, send func(response *ReadResponse) error) error {
+func (srv *storageSrv) ReadCorrectable(_ gorums.ServerContext, req *ReadRequest, send func(response *ReadResponse)) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
-  return send(srv.state)
+  send(srv.state)
 }
 ```
 
@@ -291,12 +291,12 @@ There are some important things to note about implementing the server interfaces
   To guarantee messages from different senders are executed in-order at the different servers, you must use a total ordering protocol.
 * Errors should be returned using the [`status` package](https://pkg.go.dev/google.golang.org/grpc/status?tab=doc).
 * Handlers run synchronously, and hence a long-running handler will prevent other messages from being handled.
-  To help solve this problem, our `ServerCtx` objects have a `Release()` function that releases the handler's lock on the server,
+  To help solve this problem, our `ServerContext` objects have a `Release()` function that releases the handler's lock on the server,
   which allows the next request to be processed. After `ctx.Release()` has been called, the handler may run concurrently
   with the handlers for the next requests. The handler automatically calls `ctx.Release()` after returning.
 
   ```go
-  func (srv *storageSrv) ReadRPC(ctx gorums.ServerCtx, req *ReadRequest) (resp *ReadResponse, err error) {
+  func (srv *storageSrv) ReadRPC(ctx gorums.ServerContext, req *ReadRequest) (resp *ReadResponse, err error) {
     // any code running before this will be executed in-order
     ctx.Release()
     // after Release() has been called, a new request handler may be started,
@@ -329,7 +329,7 @@ func ExampleStorageServer(port int) {
 ## Implementing the StorageClient
 
 Next, we write client code to call RPCs on our servers.
-The first thing we need to do is to create a `Configuration` using `gorums.NewConfig`.
+The first thing we need to do is to create a `Config` using `gorums.NewConfig`.
 `NewConfig` establishes connections to the given nodes and returns a configuration
 ready for making RPC calls.
 
@@ -356,7 +356,7 @@ func ExampleStorageClient() {
   // Create a configuration including all nodes
   allNodesConfig, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
-    gorums.WithDialOptions(
+    gorums.WithGRPCDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
   )
@@ -369,7 +369,7 @@ func ExampleStorageClient() {
 A configuration is a set of nodes on which RPC calls can be invoked.
 `WithNodeList` assigns a unique identifier to each node by address.
 
-The `Configuration` type has several useful methods for combining and filtering configurations.
+The `Config` type has several useful methods for combining and filtering configurations.
 Inspect the package documentation or source code for details.
 
 We can now invoke the WriteUnicast RPC on each `node` in the configuration:
@@ -430,7 +430,7 @@ Each terminal method blocks until the threshold is met or the context is cancele
 ### Using Terminal Methods
 
 ```go
-func ExampleTerminalMethods(config *Configuration) {
+func ExampleTerminalMethods(config *Config) {
   ctx := context.Background()
   cfgCtx := config.Context(ctx)
 
@@ -653,7 +653,7 @@ func ExampleStorageClient() {
   // Create a configuration with all nodes
   config, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
-    gorums.WithDialOptions(
+    gorums.WithGRPCDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
   )
@@ -864,7 +864,7 @@ func RequireAllSuccess(resp *gorums.Responses[*Response]) (*Response, error) {
 Gorums provides interceptors to transform requests and responses on a per-node basis.
 Interceptors are passed as call options and can be chained together.
 
-### MapRequest Interceptor
+### MapRequest ClientInterceptor
 
 Transform requests before sending to each node:
 
@@ -880,7 +880,7 @@ resp, err := WriteQC(cfgCtx, req,
 ).Majority()
 ```
 
-### MapResponse Interceptor
+### MapResponse ClientInterceptor
 
 Transform responses received from each node:
 
@@ -919,12 +919,12 @@ Beyond the built-in `MapRequest` and `MapResponse` interceptors, you can create 
 A custom interceptor has the signature:
 
 ```go
-func(ctx *gorums.ClientCtx[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp]
+func(ctx *gorums.CallContext[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp]
 ```
 
 The interceptor receives:
 
-* `ctx` - the `ClientCtx` providing access to:
+* `ctx` - the `CallContext` providing access to:
   * `.Request()` - the original request
   * `.Config()` - the configuration being used
   * `.Method()` - the RPC method name
@@ -950,13 +950,13 @@ resp, err := ReadQC(cfgCtx, req,
 ).Majority()
 ```
 
-#### Example: Logging Interceptor
+#### Example: Logging ClientInterceptor
 
 Create a logging interceptor that wraps the response iterator:
 
 ```go
 func LoggingInterceptor[Req, Resp proto.Message](
-    ctx *gorums.ClientCtx[Req, Resp],
+    ctx *gorums.CallContext[Req, Resp],
     next gorums.ResponseSeq[Resp],
 ) gorums.ResponseSeq[Resp] {
     startTime := time.Now()
@@ -987,15 +987,15 @@ resp, err := ReadQC(cfgCtx, req,
 ).Majority()
 ```
 
-#### Example: Response Filtering Interceptor
+#### Example: Response Filtering ClientInterceptor
 
 Filter out responses that don't meet certain criteria:
 
 ```go
 func FilterInterceptor[Req, Resp proto.Message](
     shouldInclude func(Resp) bool,
-) gorums.QuorumInterceptor[Req, Resp] {
-    return func(ctx *gorums.ClientCtx[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
+) gorums.ClientInterceptor[Req, Resp] {
+    return func(ctx *gorums.CallContext[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
         return func(yield func(gorums.NodeResponse[Resp]) bool) {
             for resp := range next {
                 // Skip responses that don't pass the filter
@@ -1021,15 +1021,15 @@ resp, err := ReadQC(cfgCtx, req,
 ).Majority()
 ```
 
-#### Example: Counting Interceptor
+#### Example: Counting ClientInterceptor
 
 Count responses passing through the interceptor:
 
 ```go
 func CountingInterceptor[Req, Resp proto.Message](
     counter *int,
-) gorums.QuorumInterceptor[Req, Resp] {
-    return func(_ *gorums.ClientCtx[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
+) gorums.ClientInterceptor[Req, Resp] {
+    return func(_ *gorums.CallContext[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
         return func(yield func(gorums.NodeResponse[Resp]) bool) {
             for resp := range next {
                 *counter++
@@ -1042,26 +1042,26 @@ func CountingInterceptor[Req, Resp proto.Message](
 }
 ```
 
-**Note:** Custom interceptors can be defined in any package. The `ClientCtx` type and `QuorumInterceptor` signature are exported from the gorums package.
+**Note:** Custom interceptors can be defined in any package. The `CallContext` type and `ClientInterceptor` signature are exported from the gorums package.
 
 ### Server-Side Interceptors
 
 Gorums also supports server-side interceptors that wrap inbound RPC handlers, similar to gRPC server interceptors.
-A server-side interceptor implements the `gorums.Interceptor` signature:
+A server-side interceptor implements the `gorums.ServerInterceptor` signature:
 
 ```go
-type Interceptor func(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error)
+type ServerInterceptor func(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error)
 ```
 
 You can pass multiple interceptors when starting a Gorums server. They can perform logging, latency injection, metadata insertion, and request validation before sending the request to the handler.
 
 Below are several examples based on the `examples/interceptors` package.
 
-#### Server-Side Logging Interceptor
+#### Server-Side Logging ServerInterceptor
 
 ```go
-func LoggingInterceptor(addr string) gorums.Interceptor {
-    return func(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func LoggingInterceptor(addr string) gorums.ServerInterceptor {
+    return func(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
         req := gorums.AsProto[proto.Message](in)
         log.Printf("[%s]: LoggingInterceptor(incoming): Method=%s, Message=%s", addr, in.GetMethod(), req)
 
@@ -1081,13 +1081,13 @@ func LoggingInterceptor(addr string) gorums.Interceptor {
 Interceptors can inject arbitrary delays based on client properties or attach metadata to the incoming requests:
 
 ```go
-func DelayedInterceptor(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
     delay := 50 * time.Millisecond
     time.Sleep(delay)
     return next(ctx, in)
 }
 
-func MetadataInterceptor(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
     // Inject a custom metadata field for the handler
     entry := gorums.MetadataEntry_builder{
         Key:   "customKey",
@@ -1105,7 +1105,7 @@ A server interceptor can also stop a request from reaching the handler entirely.
 
 ```go
 // NoFooAllowedInterceptor rejects requests for messages with key "foo".
-func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
     if req, ok := gorums.AsProto[proto.Message](in).(T); ok {
         if req.GetKey() == "foo" {
             return nil, fmt.Errorf("requests for key 'foo' are not allowed")
@@ -1115,7 +1115,7 @@ func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCt
 }
 ```
 
-## Server Configuration Callbacks
+## Server Config Callbacks
 
 Two server options expose hooks that fire at connection or configuration change time.
 Both are passed to `gorums.NewServer` as `ServerOption` values.
@@ -1164,7 +1164,7 @@ The connecting client attaches the metadata with `WithMetadata`:
 config, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
     gorums.WithMetadata(metadata.New(map[string]string{"client-id": "replica-3"})),
-    gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+    gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 )
 ```
 
@@ -1175,7 +1175,7 @@ config, err := gorums.NewConfig(
 **Signature:**
 
 ```go
-gorums.WithPeerChange(func(cfg gorums.Configuration) { ... })
+gorums.WithPeerChange(func(cfg gorums.Config) { ... })
 ```
 
 **When it runs:** after every change to the connected-peer configuration.
@@ -1200,7 +1200,7 @@ ready := make(chan struct{}, 1)
 
 gorumsSrv := gorums.NewServer(
     gorums.WithPeers(myNodeID, gorums.WithNodeList(peerAddrs), dialOpts...),
-    gorums.WithPeerChange(func(cfg gorums.Configuration) {
+    gorums.WithPeerChange(func(cfg gorums.Config) {
         if len(cfg) >= quorumSize {
             select {
             case ready <- struct{}{}:
@@ -1217,7 +1217,7 @@ log.Println("quorum ready, starting to serve")
 
 The self-node is always present in `cfg`, so a three-node cluster (`quorumSize = 2`) will fire the signal as soon as a single remote peer connects.
 
-## Waiting for Configuration
+## Waiting for Config
 
 `Server.WaitForPeers` and `Server.WaitForClients` block until a condition on the configuration is satisfied, or until the context is cancelled or the server is stopped.
 They replace the need to poll `ConnectedPeers()` in a loop and eliminate the latency and CPU overhead of polling.
@@ -1226,7 +1226,7 @@ They replace the need to poll `ConnectedPeers()` in a loop and eliminate the lat
 // Block until all three known peers are connected.
 ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 defer cancel()
-if err := srv.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+if err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
     return cfg.Size() == 3
 }); err != nil {
     log.Fatal("peers did not connect in time:", err)
@@ -1241,7 +1241,7 @@ The condition is checked immediately against the current configuration, so the c
 Use this when you need a quorum of static cluster members to be present before beginning to serve requests.
 
 ```go
-err := srv.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
     return cfg.Size() >= quorumSize
 })
 ```
@@ -1252,7 +1252,7 @@ err := srv.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
 Use this when a server should not proceed until a minimum number of clients have registered.
 
 ```go
-err := srv.WaitForClients(ctx, func(cfg gorums.Configuration) bool {
+err := srv.WaitForClients(ctx, func(cfg gorums.Config) bool {
     return cfg.Size() >= expectedClients
 })
 ```
@@ -1283,7 +1283,7 @@ A `QuorumCallError` is returned when a quorum call fails.
 It provides the following methods:
 
 * **`Cause() error`** - Returns the underlying cause of the failure (e.g., `ErrIncomplete`, `ErrSendFailure`)
-* **`NodeErrors() int`** - Returns the number of nodes that failed
+* **`NumErrors() int`** - Returns the number of nodes that failed
 * **`Unwrap() []error`** - Supports error unwrapping for use with `errors.Is` and `errors.As`
 
 The error implements Go's standard error unwrapping interface, allowing `errors.Is()` and `errors.As()` to check both the direct cause and any wrapped node-specific errors.
@@ -1300,7 +1300,7 @@ Gorums defines several sentinel errors that commonly appear as the cause of a `Q
 Here's how to properly handle errors from a quorum call:
 
 ```go
-func handleQuorumCall(config *gorums.Configuration, req *ReadRequest) {
+func handleQuorumCall(config *gorums.Config, req *ReadRequest) {
   ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
   defer cancel()
 
@@ -1312,7 +1312,7 @@ func handleQuorumCall(config *gorums.Configuration, req *ReadRequest) {
     var qcErr gorums.QuorumCallError
     if errors.As(err, &qcErr) {
       log.Printf("Quorum call failed: %v", qcErr.Cause())
-      log.Printf("Failed nodes: %d", qcErr.NodeErrors())
+      log.Printf("Failed nodes: %d", qcErr.NumErrors())
 
       // Handle specific cause types
       if errors.Is(err, gorums.ErrIncomplete) {
@@ -1419,7 +1419,7 @@ func ExampleConfigClient() {
   // Create base configuration c1 from addrs, giving |c1| = 3.
   c1, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
-    gorums.WithDialOptions(
+    gorums.WithGRPCDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
   )
@@ -1473,31 +1473,31 @@ sub-configurations, and what to watch out for when doing so.
 
 ### The Latency Comparator
 
-`gorums.Latency` is a comparator function compatible with `slices.SortFunc` and `Configuration.SortBy`.
+`gorums.ByLatency` is a comparator function compatible with `slices.SortFunc` and `Config.Sort`.
 The comparator orders nodes ascending by their current latency estimates;
 nodes without any measurements (freshly created, never sent traffic) are sorted last.
 
 ```go
 // Sort all nodes by ascending latency.
-sorted := cfg.SortBy(gorums.Latency)
+sorted := cfg.Sort(gorums.ByLatency)
 
 // Pick the two fastest nodes.
-fast2 := cfg.SortBy(gorums.Latency)[:2]
+fast2 := cfg.Sort(gorums.ByLatency)[:2]
 ```
 
 Comparators can be chained for multi-key ordering.
 For example, healthy nodes first, then by latency within each group:
 
 ```go
-sorted := cfg.SortBy(func(a, b *gorums.Node) int {
-    if r := gorums.LastNodeError(a, b); r != 0 {
+sorted := cfg.Sort(func(a, b *gorums.Node) int {
+    if r := gorums.ByLastError(a, b); r != 0 {
         return r
     }
-    return gorums.Latency(a, b)
+    return gorums.ByLatency(a, b)
 })
 ```
 
-### Using a Smaller Fast Configuration
+### Using a Smaller Fast Config
 
 The most practical use of latency-based selection is reducing the quorum size to the fastest subset of nodes.
 Sending to fewer nodes lowers tail latency without weakening correctness, as long as the subset still meets your quorum threshold.
@@ -1508,7 +1508,7 @@ const f = 2  // tolerated failures (n = 2f+1)
 quorumSize := n/2 + 1  // simple majority for crash-fault tolerance = 3
 
 // Re-derive the fast sub-configuration periodically (see guidance below).
-fastCfg := allNodesCfg.SortBy(gorums.Latency)[:quorumSize]
+fastCfg := allNodesCfg.Sort(gorums.ByLatency)[:quorumSize]
 fastCfgCtx := fastCfg.Context(ctx)
 
 reply, err := ReadQC(fastCfgCtx, &ReadRequest{Key: "x"}).Majority()
@@ -1520,7 +1520,7 @@ first, then pick the fastest of those that remain:
 ```go
 var qcErr gorums.QuorumCallError
 if errors.As(err, &qcErr) {
-    fastCfg = cfg.WithoutErrors(qcErr).SortBy(gorums.Latency)[:quorumSize]
+    fastCfg = cfg.WithoutErrors(qcErr).Sort(gorums.ByLatency)[:quorumSize]
 }
 ```
 
@@ -1530,7 +1530,7 @@ if errors.As(err, &qcErr) {
 
 ### How Often to Re-Sort
 
-`SortBy` returns a snapshot of the ordering at one point in time.
+`Sort` returns a snapshot of the ordering at one point in time.
 Latency measurements change as network conditions shift; the snapshot does not
 auto-update.
 
@@ -1540,17 +1540,17 @@ As a rule of thumb:
   A periodic goroutine or a lazy re-sort at the start of each request batch
   both work well.
 * **On every single call** is usually unnecessary and wastes allocations.
-  Each `SortBy` clones the node slice.
+  Each `Sort` clones the node slice.
 * **After a failed quorum call**, always re-evaluate: a node that caused the
   failure should be excluded via `WithoutErrors` before re-sorting.
 * **After a topology change** (node added or removed), derive the sub-configuration
   from the new full configuration rather than sorting an outdated one.
 
-A simple periodic refresh pattern using `Configuration.Watch`:
+A simple periodic refresh pattern using `Config.Watch`:
 
 ```go
-updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Configuration) gorums.Configuration {
-    return c.SortBy(gorums.Latency)[:quorumSize]
+updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Config) gorums.Config {
+    return c.Sort(gorums.ByLatency)[:quorumSize]
 })
 fastCfg := <-updates // initial snapshot, available before the first tick
 
@@ -1583,11 +1583,11 @@ var lastQCErr gorums.QuorumCallError // zero value excludes no nodes
 //       mu.Lock(); lastQCErr = qcErr; mu.Unlock()
 //   }
 
-updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Configuration) gorums.Configuration {
+updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Config) gorums.Config {
     mu.Lock()
     qcErr := lastQCErr
     mu.Unlock()
-    return c.WithoutErrors(qcErr).SortBy(gorums.Latency)[:quorumSize]
+    return c.WithoutErrors(qcErr).Sort(gorums.ByLatency)[:quorumSize]
 })
 ```
 
@@ -1601,7 +1601,7 @@ on it:
 
 * **No traffic → no measurement.** The estimate is only updated on successful
   responses. A node that has never received a response returns a negative value.
-  `SortBy(gorums.Latency)` pushes such nodes to the end of the slice, so you
+  `Sort(gorums.ByLatency)` pushes such nodes to the end of the slice, so you
   will not accidentally pick an unmeasured node when slicing the front.
 
 * **Staleness.** If traffic to a node stops, the estimate holds its last
@@ -1748,12 +1748,12 @@ greeting = gorums
 
 The `nread` and `nwrite` commands trigger server-side nested quorum calls and nested multicasts, which are described in the following sections.
 
-## Nested Quorum Calls with ServerCtx.PeerConfig
+## Nested Quorum Calls with ServerContext.PeerConfig
 
 A server handler (the server method itself) can act as a client and issue its own quorum calls to other nodes.
 These are called *nested quorum calls*, because one quorum call triggers another from inside the server handler.
 
-`ServerCtx.PeerConfig()` returns the `Configuration` of the peers the server was configured with via `gorums.WithPeers`.
+`ServerContext.PeerConfig()` returns the `Config` of the peers the server was configured with via `gorums.WithPeers`.
 This makes it straightforward for a handler to fan out a sub-request to the rest of the cluster.
 It is the full peer set, not the reachable subset, so a quorum size derived from it inside a handler does not shift as peers connect and disconnect; use `ctx.ConnectedPeers()` to observe reachability.
 
@@ -1776,7 +1776,7 @@ Use `WaitForPeers` to wait for enough peers to connect before issuing calls.
 A symmetric server re-establishes an outbound stream proactively when it drops while idle, rather than waiting for the next local send.
 Without this, a peer would remain absent from the remote's `ConnectedPeers()` until that side happened to send something.
 
-The storage example uses `gorums.NewLocalSystems`, which calls `WithPeers` automatically for each system.
+The storage example uses `gorums.NewLocalServers`, which calls `WithPeers` automatically for each server.
 
 Register a `WithPeerChange` callback to react each time the connected-peer configuration changes.
 See [WithPeerChange Callback](#withpeerchange-callback) for details and an example.
@@ -1790,7 +1790,7 @@ Without `Release()`, the server would block all other inbound messages until the
 ```go
 // ReadNestedQC is a quorum-call handler that fans out a nested ReadQC
 // to all known connected peers and returns the most recent value.
-func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (*pb.ReadResponse, error) {
+func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadRequest) (*pb.ReadResponse, error) {
     config := ctx.PeerConfig()
     if len(config) == 0 {
         return nil, fmt.Errorf("read_nested_qc: requires a server peer configuration")
@@ -1805,7 +1805,7 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) 
 The same pattern applies to nested multicast:
 
 ```go
-func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerCtx, req *pb.WriteRequest) (*pb.WriteResponse, error) {
+func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerContext, req *pb.WriteRequest) (*pb.WriteResponse, error) {
     config := ctx.PeerConfig()
     if len(config) == 0 {
         return nil, fmt.Errorf("write_nested_multicast: requires server peer configuration")
@@ -1841,9 +1841,9 @@ sequenceDiagram
 
 The client sees a single quorum call, but internally each receiving node fans out to all of its peers and returns the freshest value found across the whole cluster.
 
-## Reverse Direction Calls with ServerCtx.ConnectedClients
+## Reverse Direction Calls with ServerContext.ConnectedClients
 
-`ServerCtx.ConnectedClients()` returns a `Configuration` of all currently connected *client peers* — nodes that connected to this server dynamically, rather than being pre-configured with `WithPeers`.
+`ServerContext.ConnectedClients()` returns a `Config` of all currently connected *client peers* — nodes that connected to this server dynamically, rather than being pre-configured with `WithPeers`.
 A handler can use this configuration to make outbound calls back towards those clients, reversing the usual direction of communication.
 
 This pattern is particularly useful when clients are behind a firewall and cannot accept inbound connections.
@@ -1876,7 +1876,7 @@ gorumsSrv := gorums.NewServer(
 For example, a local test cluster:
 
 ```go
-systems, stop, err := gorums.NewLocalSystems(4)
+servers, stop, err := gorums.NewLocalServers(4)
 ```
 
 > **Note:** The `nread` and `nwrite` commands in the storage REPL example use `ctx.PeerConfig()` (the static server-to-server direction) rather than `ctx.ConnectedClients()`.
@@ -1899,7 +1899,7 @@ clientSrv.RegisterHandler(pb.MyMethod, myHandler)
 config, err := gorums.NewConfig(
     gorums.WithNodeList(serverAddrs),
     gorums.WithBackChannel(clientSrv),
-    gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+    gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 )
 ```
 
@@ -1929,7 +1929,7 @@ The handler reads `ctx.ConnectedClients()` to reach all currently connected clie
 
 ```go
 // ReadNestedQC fans out a ReadQC to all clients that have connected.
-func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (*pb.ReadResponse, error) {
+func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadRequest) (*pb.ReadResponse, error) {
     config := ctx.ConnectedClients()
     if len(config) == 0 {
         return nil, fmt.Errorf("read_nested_qc: no client peers connected")
@@ -1939,7 +1939,7 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) 
 }
 ```
 
-The key difference from `ServerCtx.PeerConfig()` is the direction of each per-node connection:
+The key difference from `ServerContext.PeerConfig()` is the direction of each per-node connection:
 
 | Method               | Connection direction                            | Typical use case                                   |
 | -------------------- | ----------------------------------------------- | -------------------------------------------------- |

@@ -73,7 +73,7 @@ func parseInterceptors(ic string) gorums.ServerOption {
 	if ic == "" {
 		return nil
 	}
-	var ics []gorums.Interceptor
+	var ics []gorums.ServerInterceptor
 	for name := range strings.SplitSeq(ic, ",") {
 		switch strings.TrimSpace(name) {
 		case "logging":
@@ -88,5 +88,5 @@ func parseInterceptors(ic string) gorums.ServerOption {
 			log.Fatalf("Unknown interceptor: %s", name)
 		}
 	}
-	return gorums.WithInterceptors(ics...)
+	return gorums.WithServerInterceptors(ics...)
 }

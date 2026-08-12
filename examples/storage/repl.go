@@ -59,11 +59,11 @@ The command performs the write quorum call on node 0 and 2
 const delayOutput = 200 * time.Millisecond
 
 type repl struct {
-	cfg  pb.Configuration
+	cfg  pb.Config
 	term *term.Terminal
 }
 
-func newRepl(cfg pb.Configuration) *repl {
+func newRepl(cfg pb.Config) *repl {
 	return &repl{
 		cfg: cfg,
 		term: term.NewTerminal(struct {
@@ -92,7 +92,7 @@ func (r repl) ReadLine() (string, error) {
 
 // Repl runs an interactive Read-eval-print loop, that allows users to run commands that perform
 // RPCs and quorum calls using the configuration.
-func Repl(defaultCfg pb.Configuration) error {
+func Repl(defaultCfg pb.Config) error {
 	r := newRepl(defaultCfg)
 
 	fmt.Println(help)
@@ -313,7 +313,7 @@ func (repl) writeRPC(args []string, node *pb.Node) {
 	fmt.Println("Write OK")
 }
 
-func (repl) readQC(args []string, config pb.Configuration) {
+func (repl) readQC(args []string, config pb.Config) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
@@ -334,7 +334,7 @@ func (repl) readQC(args []string, config pb.Configuration) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (repl) creadQC(args []string, config pb.Configuration) {
+func (repl) creadQC(args []string, config pb.Config) {
 	if len(args) < 1 {
 		fmt.Println("Correctable Read requires a key to read.")
 		return
@@ -365,7 +365,7 @@ func (repl) creadQC(args []string, config pb.Configuration) {
 	fmt.Println("Correctable read finished")
 }
 
-func (repl) writeQC(args []string, config pb.Configuration) {
+func (repl) writeQC(args []string, config pb.Config) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
@@ -388,7 +388,7 @@ func (repl) writeQC(args []string, config pb.Configuration) {
 	fmt.Println("Write OK")
 }
 
-func (repl) readNestedQC(args []string, config pb.Configuration) {
+func (repl) readNestedQC(args []string, config pb.Config) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
@@ -409,7 +409,7 @@ func (repl) readNestedQC(args []string, config pb.Configuration) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (repl) writeNestedMulticast(args []string, config pb.Configuration) {
+func (repl) writeNestedMulticast(args []string, config pb.Config) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
@@ -432,7 +432,7 @@ func (repl) writeNestedMulticast(args []string, config pb.Configuration) {
 	fmt.Println("Nested write OK")
 }
 
-func (r repl) parseConfiguration(cfgStr string) (pb.Configuration, error) {
+func (r repl) parseConfiguration(cfgStr string) (pb.Config, error) {
 	indices, err := parseIndices(cfgStr, r.cfg.Size())
 	if err != nil {
 		return nil, err
@@ -443,8 +443,8 @@ func (r repl) parseConfiguration(cfgStr string) (pb.Configuration, error) {
 	for _, i := range indices {
 		nodes = append(nodes, cfgNodes[i])
 	}
-	slices.SortFunc(nodes, gorums.ID)
-	return pb.Configuration(nodes), nil
+	slices.SortFunc(nodes, gorums.ByID)
+	return pb.Config(nodes), nil
 }
 
 func parseIndices(cfgStr string, numNodes int) (indices []int, err error) {

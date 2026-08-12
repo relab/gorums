@@ -31,60 +31,59 @@ func runServer(address string, peers []string, srvOpt gorums.ServerOption) error
 	if err != nil {
 		return err
 	}
-	insecureDial := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
-	sys, err := gorums.NewSystem(address,
-		gorums.WithServerOptions(srvOpt, gorums.WithPeers(myID, peerList, insecureDial)),
-		insecureDial,
+	insecureDial := gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
+	srv := gorums.NewServer(
+		gorums.WithAddr(address),
+		gorums.WithPeers(myID, peerList, insecureDial),
+		srvOpt,
 	)
-	if err != nil {
-		return fmt.Errorf("failed to create system on %q: %w", address, err)
-	}
 
 	// catch signals in order to shut down gracefully
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
-	registerAndServe(sys, myID)
+	registerAndServe(srv, myID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := sys.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
+	if err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
 		return cfg.Size() == len(peers)
 	}); err != nil {
 		return fmt.Errorf("peers did not connect in time: %w", err)
 	}
 
-	log.Printf("Started storage server on %s\n", sys.Addr())
+	log.Printf("Started storage server on %s\n", srv.Addr())
 
 	<-signals
-	return sys.Stop()
+	srv.Stop()
+	return nil
 }
 
 // runLocalCluster starts four in-process servers for local testing.
 // It returns the server addresses and a stop function. The caller must
 // call stop when the cluster is no longer needed.
 func runLocalCluster(srvOpts gorums.ServerOption) ([]string, func(), error) {
-	dialOpts := gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
-	systems, stop, err := gorums.NewLocalSystems(4,
+	dialOpts := gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
+	servers, stop, err := gorums.NewLocalServers(4,
 		gorums.WithLocalServerOptions(srvOpts),
 		gorums.WithLocalDialOptions(dialOpts),
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create local systems: %w", err)
+		return nil, nil, fmt.Errorf("failed to create local servers: %w", err)
 	}
 
-	addrs := make([]string, len(systems))
-	for i, sys := range systems {
-		addrs[i] = sys.Addr()
-		registerAndServe(sys, uint32(i+1))
+	addrs := make([]string, len(servers))
+	for i, srv := range servers {
+		addrs[i] = srv.Addr()
+		registerAndServe(srv, uint32(i+1))
 	}
 
-	// Wait for all systems to see each other before opening the client REPL.
+	// Wait for all servers to see each other before opening the client REPL.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	for _, sys := range systems {
-		if err := sys.WaitForPeers(ctx, func(cfg gorums.Configuration) bool {
-			return cfg.Size() == len(systems)
+	for _, srv := range servers {
+		if err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
+			return cfg.Size() == len(servers)
 		}); err != nil {
 			stop()
 			return nil, nil, fmt.Errorf("cluster failed to connect: %w", err)
@@ -101,7 +100,7 @@ func runLocalCluster(srvOpts gorums.ServerOption) ([]string, func(), error) {
 // assignment regardless of the order of addresses in the input list.
 // The server's own address must be included in the peer list.
 // It returns an error if the server's address is not found in the peer list.
-func peerConfig(address string, peers []string) (uint32, gorums.NodeListOption, error) {
+func peerConfig(address string, peers []string) (uint32, gorums.NodeSource, error) {
 	sorted := slices.Clone(peers)
 	slices.Sort(sorted)
 	idx := slices.Index(sorted, address)
@@ -111,15 +110,13 @@ func peerConfig(address string, peers []string) (uint32, gorums.NodeListOption, 
 	return uint32(idx + 1), gorums.WithNodeList(sorted), nil
 }
 
-// registerAndServe registers the storage service on sys and starts serving in
+// registerAndServe registers the storage service on srv and starts serving in
 // a background goroutine. The server log output is labelled with the node ID.
-func registerAndServe(sys *gorums.System, id uint32) {
+func registerAndServe(srv *gorums.Server, id uint32) {
 	storage := newStorageServer(os.Stderr, fmt.Sprintf("node %d", id))
-	sys.RegisterService(nil, func(srv *gorums.Server) {
-		pb.RegisterStorageServer(srv, storage)
-	})
+	pb.RegisterStorageServer(srv, storage)
 	go func() {
-		if err := sys.Serve(); err != nil {
+		if err := srv.ListenAndServe(); err != nil {
 			log.Printf("Server error: %v", err)
 		}
 	}()
@@ -170,24 +167,24 @@ func (rw rawWriter) Write(p []byte) (n int, err error) {
 }
 
 // ReadRPC is an RPC handler
-func (s *storageServer) ReadRPC(_ gorums.ServerCtx, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
+func (s *storageServer) ReadRPC(_ gorums.ServerContext, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
 	return s.Read(req)
 }
 
 // WriteRPC is an RPC handler
-func (s *storageServer) WriteRPC(_ gorums.ServerCtx, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
+func (s *storageServer) WriteRPC(_ gorums.ServerContext, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
 	return s.Write(req)
 }
 
 // WriteUnicast is an RPC handler for one-way unicast writes.
-func (s *storageServer) WriteUnicast(_ gorums.ServerCtx, req *pb.WriteRequest) {
+func (s *storageServer) WriteUnicast(_ gorums.ServerContext, req *pb.WriteRequest) {
 	if _, err := s.Write(req); err != nil {
 		s.logger.Printf("WriteUnicast error: %v", err)
 	}
 }
 
 // WriteMulticast is an RPC handler for one-way multicast writes.
-func (s *storageServer) WriteMulticast(_ gorums.ServerCtx, req *pb.WriteRequest) {
+func (s *storageServer) WriteMulticast(_ gorums.ServerContext, req *pb.WriteRequest) {
 	_, err := s.Write(req)
 	if err != nil {
 		s.logger.Printf("Write error: %v", err)
@@ -195,17 +192,17 @@ func (s *storageServer) WriteMulticast(_ gorums.ServerCtx, req *pb.WriteRequest)
 }
 
 // ReadQC is an RPC handler for a quorum call.
-func (s *storageServer) ReadQC(_ gorums.ServerCtx, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
+func (s *storageServer) ReadQC(_ gorums.ServerContext, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
 	return s.Read(req)
 }
 
 // WriteQC is an RPC handler for a quorum call.
-func (s *storageServer) WriteQC(_ gorums.ServerCtx, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
+func (s *storageServer) WriteQC(_ gorums.ServerContext, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
 	return s.Write(req)
 }
 
 // ReadCorrectable is an RPC handler for a correctable quorum call. It sends multiple responses.
-func (s *storageServer) ReadCorrectable(_ gorums.ServerCtx, req *pb.ReadRequest, send func(response *pb.ReadResponse)) {
+func (s *storageServer) ReadCorrectable(_ gorums.ServerContext, req *pb.ReadRequest, send func(response *pb.ReadResponse)) {
 	resp, err := s.Read(req)
 	if err != nil {
 		s.logger.Printf("ReadCorrectable error: %v", err)
@@ -218,7 +215,7 @@ func (s *storageServer) ReadCorrectable(_ gorums.ServerCtx, req *pb.ReadRequest,
 
 // ReadNestedQC is a quorum-call handler that performs a nested quorum call
 // using the server's peer configuration from WithPeers.
-func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
+func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
 	cfg := ctx.PeerConfig()
 	if len(cfg) == 0 {
 		return nil, fmt.Errorf("read_nested_qc: requires server peer configuration")
@@ -230,7 +227,7 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerCtx, req *pb.ReadRequest) 
 
 // WriteNestedMulticast is a quorum-call handler that performs a nested multicast
 // using the server's peer configuration from WithPeers.
-func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerCtx, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
+func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerContext, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
 	cfg := ctx.PeerConfig()
 	if len(cfg) == 0 {
 		return nil, fmt.Errorf("write_nested_multicast: requires server peer configuration")

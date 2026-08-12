@@ -126,8 +126,8 @@ func TestQuorumCallErrorAccessors(t *testing.T) {
 			if got := tt.qcErr.Cause(); got != tt.wantCause {
 				t.Errorf("QuorumCallError.Cause() = %v, want %v", got, tt.wantCause)
 			}
-			if got := tt.qcErr.NodeErrors(); got != tt.wantNodeErrors {
-				t.Errorf("QuorumCallError.NodeErrors() = %d, want %d", got, tt.wantNodeErrors)
+			if got := tt.qcErr.NumErrors(); got != tt.wantNodeErrors {
+				t.Errorf("QuorumCallError.NumErrors() = %d, want %d", got, tt.wantNodeErrors)
 			}
 		})
 	}

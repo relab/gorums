@@ -56,8 +56,8 @@ func (e QuorumCallError) Cause() error {
 	return e.cause
 }
 
-// NodeErrors returns the number of nodes that failed during the quorum call.
-func (e QuorumCallError) NodeErrors() int {
+// NumErrors returns the number of nodes that failed during the quorum call.
+func (e QuorumCallError) NumErrors() int {
 	return len(e.errors)
 }
 

@@ -1,6 +1,6 @@
 package gengorums
 
-var rpcComment = `
+var remoteCallComment = `
 {{$comments := .Method.Comments.Leading}}
 {{if ne $comments ""}}
 {{$comments -}}
@@ -9,22 +9,22 @@ var rpcComment = `
 {{end -}}
 `
 
-var rpcVar = `
+var remoteCallVar = `
 {{$genFile := .GenFile}}
 {{$nodeContext := "NodeContext"}}
-{{$rpc := use "gorums.RPCCall" .GenFile}}
+{{$rpc := use "gorums.RemoteCall" .GenFile}}
 {{$_ := use "gorums.EnforceVersion" .GenFile}}
 `
 
-var rpcSignature = `func {{$method}}(ctx *{{$nodeContext}}, in *{{$in}}) (*{{$out}}, error) {
+var remoteCallSignature = `func {{$method}}(ctx *{{$nodeContext}}, in *{{$in}}) (*{{$out}}, error) {
 `
 
-var rpcBody = ` return {{$rpc}}[*{{$in}}, *{{$out}}](ctx, in, "{{$fullName}}")
+var remoteCallBody = ` return {{$rpc}}[*{{$in}}, *{{$out}}](ctx, in, "{{$fullName}}")
 }
 `
 
-var rpcCall = commonVariables +
-	rpcVar +
-	rpcComment +
-	rpcSignature +
-	rpcBody
+var remoteCall = commonVariables +
+	remoteCallVar +
+	remoteCallComment +
+	remoteCallSignature +
+	remoteCallBody

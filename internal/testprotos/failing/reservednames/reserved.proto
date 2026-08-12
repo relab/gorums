@@ -11,13 +11,13 @@ option features.field_presence = IMPLICIT;
 import "gorums.proto";
 
 service Reserved {
-    rpc ConfTest(Configuration) returns (Manager) {}
-    rpc QuorumCall(Configuration) returns (Manager) {
+    rpc ConfTest(Config) returns (Manager) {}
+    rpc QuorumCall(Config) returns (Manager) {
         option (gorums.quorumcall) = true;
     }
 }
 
-message Configuration {
+message Config {
     string Conf = 1;
 }
 message Manager {

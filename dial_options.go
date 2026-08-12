@@ -22,7 +22,6 @@ type dialOptions struct {
 	handler      stream.RequestHandler
 	localNodeID  uint32          // if non-zero, skip setting handler on this node ID
 	inboundMgr   *inboundManager // set by WithBackChannel; enables eager reconnect for symmetric nodes
-	srvOpts      []ServerOption  // applied only by NewSystem
 }
 
 // DefaultSendBufferSize is the per-node send queue capacity used when no
@@ -41,9 +40,9 @@ func newDialOptions() dialOptions {
 	}
 }
 
-// WithDialOptions returns a DialOption which sets any gRPC dial options
+// WithGRPCDialOptions returns a DialOption which sets any gRPC dial options
 // the client should use when initially connecting to each node in its pool.
-func WithDialOptions(opts ...grpc.DialOption) DialOption {
+func WithGRPCDialOptions(opts ...grpc.DialOption) DialOption {
 	return func(o *dialOptions) {
 		o.grpcDialOpts = append(o.grpcDialOpts, opts...)
 	}
@@ -94,13 +93,13 @@ func WithMetadata(md metadata.MD) DialOption {
 // servers it dials. It panics if srv is nil.
 //
 // A server that calls its own peers does not need this option: [WithPeers]
-// installs the back channel on the peer [Configuration] it builds.
+// installs the back channel on the peer [Config] it builds.
 //
 // NodeID semantics:
 //   - If srv.NodeID() == 0, the remote treats this connection as an anonymous
-//     client and tracks reverse-direction calls via [ServerCtx.ClientConfig].
+//     client and tracks reverse-direction calls via [ServerContext.ClientConfig].
 //   - If srv.NodeID() > 0, the remote treats this connection as a known peer
-//     and routes requests via [ServerCtx.Config].
+//     and routes requests via [ServerContext.Config].
 func WithBackChannel(srv *Server) DialOption {
 	if srv == nil {
 		panic("gorums: WithBackChannel called with nil server")
@@ -116,18 +115,5 @@ func withServer(srv *Server) DialOption {
 		o.localNodeID = srv.NodeID()
 		o.inboundMgr = srv.inboundManager
 		o.metadata = metadata.Join(o.metadata, metadataWithNodeID(srv.NodeID()))
-	}
-}
-
-// WithServerOptions bundles [ServerOption]s into a [DialOption] for use with
-// [NewSystem]. It has no effect when passed to [NewConfig].
-// Nil options are silently ignored.
-func WithServerOptions(opts ...ServerOption) DialOption {
-	return func(o *dialOptions) {
-		for _, opt := range opts {
-			if opt != nil {
-				o.srvOpts = append(o.srvOpts, opt)
-			}
-		}
 	}
 }

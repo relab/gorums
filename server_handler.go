@@ -13,7 +13,7 @@ import (
 // It is used by both server and client handler chains to carry the application-level
 // message alongside the stream-level envelope.
 type Message struct {
-	Msg proto.Message
+	Proto proto.Message
 	*stream.Message
 }
 
@@ -25,17 +25,17 @@ type MetadataEntry_builder = stream.MetadataEntry_builder
 
 type (
 	// Handler processes a request and returns a response.
-	Handler func(ServerCtx, *Message) (*Message, error)
-	// Interceptor intercepts and may modify incoming requests and outgoing responses.
-	// It receives a ServerCtx, the incoming Message, and a Handler representing
+	Handler func(ServerContext, *Message) (*Message, error)
+	// ServerInterceptor intercepts and may modify incoming requests and outgoing responses.
+	// It receives a ServerContext, the incoming Message, and a Handler representing
 	// the next element in the chain. It returns a Message and an error.
-	Interceptor func(ServerCtx, *Message, Handler) (*Message, error)
+	ServerInterceptor func(ServerContext, *Message, Handler) (*Message, error)
 )
 
-// ServerCtx is a context that is passed from the Gorums server to the handler.
+// ServerContext is a context that is passed from the Gorums server to the handler.
 // It allows the handler to release its lock on the server, allowing the next
 // request to be processed. This happens automatically when the handler returns.
-type ServerCtx struct {
+type ServerContext struct {
 	context.Context
 	release func()
 	send    func(*stream.Message)
@@ -45,7 +45,7 @@ type ServerCtx struct {
 // Release releases this handler's lock on the server, which allows the next request
 // to be processed concurrently. Use Release only when the handler no longer needs
 // exclusive access to the server's state. It is safe to call Release multiple times.
-func (ctx *ServerCtx) Release() {
+func (ctx *ServerContext) Release() {
 	if ctx.release != nil {
 		ctx.release()
 	}
@@ -56,10 +56,10 @@ func (ctx *ServerCtx) Release() {
 // and sent to the client; the stream is not closed.
 //
 // This function should only be used by generated code.
-func (ctx *ServerCtx) SendMessage(out *Message) {
-	// If Msg is set, marshal it to payload before sending.
-	if out.Msg != nil && len(out.GetPayload()) == 0 {
-		payload, err := proto.Marshal(out.Msg)
+func (ctx *ServerContext) SendMessage(out *Message) {
+	// If Proto is set, marshal it to payload before sending.
+	if out.Proto != nil && len(out.GetPayload()) == 0 {
+		payload, err := proto.Marshal(out.Proto)
 		if err == nil {
 			out.SetPayload(payload)
 		} else {
@@ -72,12 +72,12 @@ func (ctx *ServerCtx) SendMessage(out *Message) {
 	}
 }
 
-// PeerConfig returns the [Configuration] of the peers the server was configured
+// PeerConfig returns the [Config] of the peers the server was configured
 // with via [WithPeers], or nil if it was not used. It is the full peer set, not
 // the currently reachable subset, so quorum sizes derived from it inside a
 // handler do not shift as peers connect and disconnect. Use
-// [ServerCtx.ConnectedPeers] to observe reachability.
-func (ctx *ServerCtx) PeerConfig() Configuration {
+// [ServerContext.ConnectedPeers] to observe reachability.
+func (ctx *ServerContext) PeerConfig() Config {
 	if ctx.srv == nil {
 		return nil
 	}
@@ -85,20 +85,20 @@ func (ctx *ServerCtx) PeerConfig() Configuration {
 }
 
 // ConnectedPeers returns the currently reachable subset of
-// [ServerCtx.PeerConfig]; see [Server.ConnectedPeers].
-func (ctx *ServerCtx) ConnectedPeers() Configuration {
+// [ServerContext.PeerConfig]; see [Server.ConnectedPeers].
+func (ctx *ServerContext) ConnectedPeers() Config {
 	if ctx.srv == nil {
 		return nil
 	}
 	return ctx.srv.ConnectedPeers()
 }
 
-// ConnectedClients returns a [Configuration] of all connected clients capable of
+// ConnectedClients returns a [Config] of all connected clients capable of
 // receiving reverse-direction calls from the server.
-// An empty (non-nil) Configuration is returned if no client peers are connected.
+// An empty (non-nil) Config is returned if no client peers are connected.
 // The returned slice is replaced atomically on each connect/disconnect;
 // thus, retaining a reference to an old configuration is safe.
-func (ctx *ServerCtx) ConnectedClients() Configuration {
+func (ctx *ServerContext) ConnectedClients() Config {
 	if ctx.srv == nil {
 		return nil
 	}
@@ -110,7 +110,7 @@ func (ctx *ServerCtx) ConnectedClients() Configuration {
 // to facilitate routing the response back to the caller on the client side.
 // The payload, error status, and metadata entries are left empty; the error status
 // of the response can be set using [MessageWithError], and the payload will
-// be marshaled by [ServerCtx.SendMessage]. This function is safe for concurrent use.
+// be marshaled by [ServerContext.SendMessage]. This function is safe for concurrent use.
 //
 // This function should only be used in generated code.
 func NewResponseMessage(in *Message, resp proto.Message) *Message {
@@ -126,7 +126,7 @@ func NewResponseMessage(in *Message, resp proto.Message) *Message {
 		// Status is left empty; it can be set by MessageWithError if needed
 	}
 	return &Message{
-		Msg:     resp,
+		Proto:   resp,
 		Message: msgBuilder.Build(),
 	}
 }
@@ -154,10 +154,10 @@ func MessageWithError(in, out *Message, err error) *Message {
 // the zero value of T is returned.
 func AsProto[T proto.Message](msg *Message) T {
 	var zero T
-	if msg == nil || msg.Msg == nil {
+	if msg == nil || msg.Proto == nil {
 		return zero
 	}
-	if req, ok := msg.Msg.(T); ok {
+	if req, ok := msg.Proto.(T); ok {
 		return req
 	}
 	return zero
@@ -167,7 +167,7 @@ func AsProto[T proto.Message](msg *Message) T {
 // returns a Handler that executes the chain. The execution order is the same as the
 // order of the interceptors in the slice: the first element is executed first, and
 // the last element calls the final handler (the server method).
-func chainInterceptors(final Handler, interceptors ...Interceptor) Handler {
+func chainInterceptors(final Handler, interceptors ...ServerInterceptor) Handler {
 	if len(interceptors) == 0 {
 		return final
 	}
@@ -175,7 +175,7 @@ func chainInterceptors(final Handler, interceptors ...Interceptor) Handler {
 	for i := len(interceptors) - 1; i >= 0; i-- {
 		curr := interceptors[i]
 		next := handler
-		handler = func(ctx ServerCtx, in *Message) (*Message, error) {
+		handler = func(ctx ServerContext, in *Message) (*Message, error) {
 			return curr(ctx, in, next)
 		}
 	}

@@ -9,9 +9,9 @@ import (
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// makeClientCtx is a helper to create a ClientCtx with mock responses for unit tests.
-// It creates a channel with the provided responses and returns a ClientCtx.
-func makeClientCtx[Req, Resp msg](t *testing.T, numNodes int, responses []NodeResponse[msg]) *ClientCtx[Req, Resp] {
+// makeClientCtx is a helper to create a CallContext with mock responses for unit tests.
+// It creates a channel with the provided responses and returns a CallContext.
+func makeClientCtx[Req, Resp msg](t *testing.T, numNodes int, responses []NodeResponse[msg]) *CallContext[Req, Resp] {
 	t.Helper()
 
 	resultChan := make(chan NodeResponse[*stream.Message], len(responses))
@@ -32,12 +32,12 @@ func makeClientCtx[Req, Resp msg](t *testing.T, numNodes int, responses []NodeRe
 	}
 	close(resultChan)
 
-	config := make(Configuration, numNodes)
+	config := make(Config, numNodes)
 	for i := range numNodes {
 		config[i] = &Node{id: uint32(i + 1)}
 	}
 
-	c := &ClientCtx[Req, Resp]{
+	c := &CallContext[Req, Resp]{
 		Context:   t.Context(),
 		config:    config,
 		replyChan: resultChan,

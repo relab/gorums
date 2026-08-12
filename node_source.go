@@ -7,13 +7,13 @@ import (
 	"slices"
 )
 
-// NodeListOption must be implemented by node providers. It is used by both the
+// NodeSource must be implemented by node providers. It is used by both the
 // Manager (outbound) and by inboundManager (inbound) via newConfig.
-type NodeListOption interface {
-	newConfig(nodeRegistry) (Configuration, error)
+type NodeSource interface {
+	newConfig(nodeRegistry) (Config, error)
 }
 
-// nodeRegistry abstracts the node management operations required to build a Configuration.
+// nodeRegistry abstracts the node management operations required to build a Config.
 // Implemented by Manager and inboundManager.
 type nodeRegistry interface {
 	Nodes() []*Node
@@ -25,16 +25,16 @@ type NodeAddress interface {
 	Addr() string
 }
 
-// WithNodes returns a NodeListOption containing the provided mapping from
+// WithNodes returns a NodeSource containing the provided mapping from
 // application-specific IDs to types implementing NodeAddress.
 // Node IDs must be greater than 0.
-func WithNodes[T NodeAddress](nodes map[uint32]T) NodeListOption {
+func WithNodes[T NodeAddress](nodes map[uint32]T) NodeSource {
 	return nodeMap[T](nodes)
 }
 
 type nodeMap[T NodeAddress] map[uint32]T
 
-func (nm nodeMap[T]) newConfig(registry nodeRegistry) (Configuration, error) {
+func (nm nodeMap[T]) newConfig(registry nodeRegistry) (Config, error) {
 	if len(nm) == 0 {
 		return nil, fmt.Errorf("gorums: missing required node map")
 	}
@@ -49,17 +49,17 @@ func (nm nodeMap[T]) newConfig(registry nodeRegistry) (Configuration, error) {
 	return builder.configuration(), nil
 }
 
-// WithNodeList returns a NodeListOption for the provided list of node addresses.
+// WithNodeList returns a NodeSource for the provided list of node addresses.
 // Unique Node IDs are generated sequentially starting from the maximum existing
 // node ID plus one, or from 1 if no nodes exist, preventing conflicts with
 // existing nodes.
-func WithNodeList(addrsList []string) NodeListOption {
+func WithNodeList(addrsList []string) NodeSource {
 	return nodeList(addrsList)
 }
 
 type nodeList []string
 
-func (nl nodeList) newConfig(registry nodeRegistry) (Configuration, error) {
+func (nl nodeList) newConfig(registry nodeRegistry) (Config, error) {
 	if len(nl) == 0 {
 		return nil, fmt.Errorf("gorums: missing required node addresses")
 	}
@@ -74,14 +74,14 @@ func (nl nodeList) newConfig(registry nodeRegistry) (Configuration, error) {
 	return builder.configuration(), nil
 }
 
-// nodeBuilder helps construct a Configuration while tracking addresses to prevent duplicates.
+// nodeBuilder helps construct a Config while tracking addresses to prevent duplicates.
 // It encapsulates the common logic shared between WithNodes and WithNodeList.
 type nodeBuilder struct {
 	registry nodeRegistry
 	addrToID map[string]uint32 // normalized address -> node ID
 	idToNode map[uint32]*Node  // existing node ID -> node
 	maxID    uint32            // maximum existing node ID
-	nodes    Configuration
+	nodes    Config
 }
 
 // newNodeBuilder creates a new nodeBuilder initialized with existing nodes from the registry.
@@ -101,7 +101,7 @@ func newNodeBuilder(registry nodeRegistry, capacity int) *nodeBuilder {
 		addrToID: addrToID,
 		idToNode: idToNode,
 		maxID:    maxID,
-		nodes:    make(Configuration, 0, capacity),
+		nodes:    make(Config, 0, capacity),
 	}
 }
 
@@ -138,9 +138,9 @@ func (b *nodeBuilder) add(id uint32, addr string) error {
 	return nil
 }
 
-// configuration returns the built Configuration, sorted by ID.
-func (b *nodeBuilder) configuration() Configuration {
-	slices.SortFunc(b.nodes, ID)
+// configuration returns the built Config, sorted by ID.
+func (b *nodeBuilder) configuration() Config {
+	slices.SortFunc(b.nodes, ByID)
 	return b.nodes
 }
 

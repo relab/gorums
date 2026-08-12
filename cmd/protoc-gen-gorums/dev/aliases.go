@@ -16,7 +16,7 @@ import gorums "github.com/relab/gorums"
 // automatically discover them and add them to the reserved identifiers list.
 
 type (
-	Configuration = gorums.Configuration
+	Config        = gorums.Config
 	Node          = gorums.Node
 	NodeContext   = gorums.NodeContext
 	ConfigContext = gorums.ConfigContext

@@ -8,23 +8,23 @@ import (
 	"time"
 )
 
-// Configuration represents a static set of nodes on which multicast or
+// Config represents a static set of nodes on which multicast or
 // quorum calls may be invoked. A configuration is created using [NewConfig].
 // A configuration should be treated as immutable. Therefore, methods that
-// operate on a configuration always return a new Configuration instance.
-type Configuration []*Node
+// operate on a configuration always return a new Config instance.
+type Config []*Node
 
 // ConfigContext is a context that carries a configuration for multicast or
 // quorum calls. It embeds context.Context and provides access to the configuration.
 //
-// Use [Configuration.Context] to create a ConfigContext from an existing context.
+// Use [Config.Context] to create a ConfigContext from an existing context.
 type ConfigContext struct {
 	context.Context
-	cfg Configuration
+	cfg Config
 }
 
-// Configuration returns the configuration associated with this context.
-func (c ConfigContext) Configuration() Configuration {
+// Config returns the configuration associated with this context.
+func (c ConfigContext) Config() Config {
 	return c.cfg
 }
 
@@ -36,22 +36,22 @@ func (c ConfigContext) Configuration() Configuration {
 //	config, _ := gorums.NewConfig(gorums.WithNodeList(addrs), dialOpts...)
 //	cfgCtx := config.Context(context.Background())
 //	resp, err := paxos.Prepare(cfgCtx, req)
-func (c Configuration) Context(parent context.Context) *ConfigContext {
+func (c Config) Context(parent context.Context) *ConfigContext {
 	if len(c) == 0 {
 		panic("gorums: Context called on an empty configuration")
 	}
 	return &ConfigContext{Context: parent, cfg: c}
 }
 
-// NewConfig returns a new [Configuration] based on the provided nodes and dial options.
+// NewConfig returns a new [Config] based on the provided nodes and dial options.
 //
 // Example:
 //
 //	cfg, err := NewConfig(
 //	    gorums.WithNodeList([]string{"localhost:8080", "localhost:8081", "localhost:8082"}),
-//	    gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+//	    gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 //	)
-func NewConfig(nodes NodeListOption, opts ...DialOption) (Configuration, error) {
+func NewConfig(nodes NodeSource, opts ...DialOption) (Config, error) {
 	if nodes == nil {
 		return nil, fmt.Errorf("gorums: missing required node list")
 	}
@@ -64,8 +64,8 @@ func NewConfig(nodes NodeListOption, opts ...DialOption) (Configuration, error) 
 	return cfg, nil
 }
 
-// Extend returns a new Configuration combining c with new nodes from the provided NodeListOption.
-func (c Configuration) Extend(opt NodeListOption) (Configuration, error) {
+// Extend returns a new Config combining c with new nodes from the provided NodeSource.
+func (c Config) Extend(opt NodeSource) (Config, error) {
 	if len(c) == 0 {
 		return nil, fmt.Errorf("gorums: cannot extend empty configuration")
 	}
@@ -81,7 +81,7 @@ func (c Configuration) Extend(opt NodeListOption) (Configuration, error) {
 }
 
 // NodeIDs returns a slice of this configuration's Node IDs.
-func (c Configuration) NodeIDs() []uint32 {
+func (c Config) NodeIDs() []uint32 {
 	ids := make([]uint32, len(c))
 	for i, node := range c {
 		ids[i] = node.ID()
@@ -90,17 +90,17 @@ func (c Configuration) NodeIDs() []uint32 {
 }
 
 // Nodes returns the nodes in this configuration.
-func (c Configuration) Nodes() []*Node {
+func (c Config) Nodes() []*Node {
 	return c
 }
 
 // Size returns the number of nodes in this configuration.
-func (c Configuration) Size() int {
+func (c Config) Size() int {
 	return len(c)
 }
 
 // Equal returns true if configurations b and c have the same set of nodes.
-func (c Configuration) Equal(b Configuration) bool {
+func (c Config) Equal(b Config) bool {
 	if len(c) != len(b) {
 		return false
 	}
@@ -113,7 +113,7 @@ func (c Configuration) Equal(b Configuration) bool {
 }
 
 // mgr returns the outboundManager for this configuration's nodes.
-func (c Configuration) mgr() *outboundManager {
+func (c Config) mgr() *outboundManager {
 	if len(c) == 0 {
 		return nil
 	}
@@ -121,7 +121,7 @@ func (c Configuration) mgr() *outboundManager {
 }
 
 // Close closes all node connections managed by this configuration.
-func (c Configuration) Close() error {
+func (c Config) Close() error {
 	if mgr := c.mgr(); mgr != nil {
 		return mgr.Close()
 	}
@@ -129,18 +129,18 @@ func (c Configuration) Close() error {
 }
 
 // nextMsgID returns the next message ID from this client's manager.
-func (c Configuration) nextMsgID() uint64 {
+func (c Config) nextMsgID() uint64 {
 	return c[0].msgIDGen()
 }
 
 // Contains reports whether c contains a node with the given ID.
-func (c Configuration) Contains(id uint32) bool {
+func (c Config) Contains(id uint32) bool {
 	return slices.ContainsFunc(c, func(n *Node) bool { return n.id == id })
 }
 
-// Add returns a new Configuration containing nodes from c and nodes with the specified IDs.
+// Add returns a new Config containing nodes from c and nodes with the specified IDs.
 // Duplicate IDs and IDs not found in the manager are ignored.
-func (c Configuration) Add(ids ...uint32) Configuration {
+func (c Config) Add(ids ...uint32) Config {
 	if len(c) == 0 {
 		return nil
 	}
@@ -156,13 +156,13 @@ func (c Configuration) Add(ids ...uint32) Configuration {
 			}
 		}
 	}
-	slices.SortFunc(nodes, ID)
+	slices.SortFunc(nodes, ByID)
 	return nodes
 }
 
-// Union returns a new Configuration containing all nodes from both c and other.
+// Union returns a new Config containing all nodes from both c and other.
 // Duplicate nodes are included only once.
-func (c Configuration) Union(other Configuration) Configuration {
+func (c Config) Union(other Config) Config {
 	if len(c) == 0 {
 		return slices.Clone(other)
 	}
@@ -172,13 +172,13 @@ func (c Configuration) Union(other Configuration) Configuration {
 	return c.Add(other.NodeIDs()...)
 }
 
-// Remove returns a new Configuration excluding nodes with the specified IDs.
-func (c Configuration) Remove(ids ...uint32) Configuration {
+// Remove returns a new Config excluding nodes with the specified IDs.
+func (c Config) Remove(ids ...uint32) Config {
 	if len(c) == 0 {
 		return nil
 	}
 	removeSet := newSet(ids...)
-	nodes := make(Configuration, 0, len(c))
+	nodes := make(Config, 0, len(c))
 	for _, n := range c {
 		if !removeSet.contains(n.id) {
 			nodes = append(nodes, n)
@@ -187,8 +187,8 @@ func (c Configuration) Remove(ids ...uint32) Configuration {
 	return nodes
 }
 
-// Difference returns a new Configuration with nodes from c that are not in other.
-func (c Configuration) Difference(other Configuration) Configuration {
+// Difference returns a new Config with nodes from c that are not in other.
+func (c Config) Difference(other Config) Config {
 	if len(c) == 0 {
 		return nil
 	}
@@ -198,33 +198,33 @@ func (c Configuration) Difference(other Configuration) Configuration {
 	return c.Remove(other.NodeIDs()...)
 }
 
-// SortBy returns a new Configuration with nodes ordered by the given comparator.
+// Sort returns a new Config with nodes ordered by the given comparator.
 // The original configuration is not modified.
 //
-// Use this with the built-in node comparator functions [ID], [LastNodeError],
-// and [Latency]:
+// Use this with the built-in node comparator functions [ByID], [ByLastError],
+// and [ByLatency]:
 //
-//	fastest := cfg.SortBy(gorums.Latency)           // ascending by latency
-//	healthy := cfg.SortBy(gorums.LastNodeError)     // no-error nodes first
+//	fastest := cfg.Sort(gorums.ByLatency)           // ascending by latency
+//	healthy := cfg.Sort(gorums.ByLastError)     // no-error nodes first
 //
 // Comparators can be combined for multi-key ordering:
 //
-//	cfg.SortBy(func(a, b *Node) int {
-//	    if r := gorums.LastNodeError(a, b); r != 0 {
+//	cfg.Sort(func(a, b *Node) int {
+//	    if r := gorums.ByLastError(a, b); r != 0 {
 //	        return r
 //	    }
-//	    return gorums.Latency(a, b)
+//	    return gorums.ByLatency(a, b)
 //	})
 //
-// SortBy uses a stable sort, so nodes with equal comparator values retain
+// Sort uses a stable sort, so nodes with equal comparator values retain
 // their original relative order.
 //
 // Note: quorum calls contact every node in the configuration regardless of
 // order. Sorting only affects which nodes are selected when the result is
-// sliced to a smaller subset, e.g., cfg.SortBy(gorums.Latency)[:quorumSize].
+// sliced to a smaller subset, e.g., cfg.Sort(gorums.ByLatency)[:quorumSize].
 // See the "Latency-Based Node Selection" section of the user guide for
 // guidance on sub-configuration sizing and re-sort frequency.
-func (c Configuration) SortBy(cmp func(*Node, *Node) int) Configuration {
+func (c Config) Sort(cmp func(*Node, *Node) int) Config {
 	if len(c) == 0 {
 		return nil
 	}
@@ -243,13 +243,13 @@ func (c Configuration) SortBy(cmp func(*Node, *Node) int) Configuration {
 // sub-configuration. Typical examples:
 //
 //	// Latency-based top-k subset:
-//	cfg.Watch(ctx, 5*time.Second, func(c gorums.Configuration) gorums.Configuration {
-//	    return c.SortBy(gorums.Latency)[:quorumSize]
+//	cfg.Watch(ctx, 5*time.Second, func(c gorums.Config) gorums.Config {
+//	    return c.Sort(gorums.ByLatency)[:quorumSize]
 //	})
 //
 //	// Skip failed nodes first, then pick fastest:
-//	cfg.Watch(ctx, 5*time.Second, func(c gorums.Configuration) gorums.Configuration {
-//	    return c.WithoutErrors(lastErr).SortBy(gorums.Latency)[:quorumSize]
+//	cfg.Watch(ctx, 5*time.Second, func(c gorums.Config) gorums.Config {
+//	    return c.WithoutErrors(lastErr).Sort(gorums.ByLatency)[:quorumSize]
 //	})
 //
 // The returned channel has a buffer of 1. If the consumer is slow and has not
@@ -257,14 +257,14 @@ func (c Configuration) SortBy(cmp func(*Node, *Node) int) Configuration {
 // the next tick to re-evaluate.
 //
 // The goroutine exits and the channel is closed when ctx is cancelled.
-func (c Configuration) Watch(ctx context.Context, interval time.Duration, derive func(Configuration) Configuration) <-chan Configuration {
+func (c Config) Watch(ctx context.Context, interval time.Duration, derive func(Config) Config) <-chan Config {
 	if interval <= 0 {
 		panic("gorums: Watch interval must be positive")
 	}
 	if derive == nil {
 		panic("gorums: Watch derive function must be non-nil")
 	}
-	ch := make(chan Configuration, 1)
+	ch := make(chan Config, 1)
 	go func() {
 		defer close(ch)
 		current := derive(c)
@@ -291,11 +291,11 @@ func (c Configuration) Watch(ctx context.Context, interval time.Duration, derive
 	return ch
 }
 
-// WithoutErrors returns a new Configuration excluding nodes that failed in the
+// WithoutErrors returns a new Config excluding nodes that failed in the
 // given QuorumCallError. If specific error types are provided, only nodes whose
 // errors match one of those types (using errors.Is) will be excluded.
 // If no error types are provided, all failed nodes are excluded.
-func (c Configuration) WithoutErrors(err QuorumCallError, errorTypes ...error) Configuration {
+func (c Config) WithoutErrors(err QuorumCallError, errorTypes ...error) Config {
 	if len(c) == 0 {
 		return nil
 	}
@@ -319,7 +319,7 @@ func (c Configuration) WithoutErrors(err QuorumCallError, errorTypes ...error) C
 		}
 	}
 	// Build configuration with remaining nodes.
-	nodes := make(Configuration, 0, len(c))
+	nodes := make(Config, 0, len(c))
 	for _, node := range c {
 		if !excludeSet.contains(node.id) {
 			nodes = append(nodes, node)

@@ -9,7 +9,7 @@ import "google/protobuf/descriptor.proto";
 
 extend google.protobuf.MethodOptions {
     // call types
-    bool rpc        = 50001;
+    bool remotecall = 50001; // only for internal use; no need to set manually
     bool unicast    = 50002;
     bool multicast  = 50003;
     bool quorumcall = 50004;

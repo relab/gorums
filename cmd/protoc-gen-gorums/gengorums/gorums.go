@@ -255,10 +255,10 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	"types":  {template: dataTypes},
 	"server": {template: server},
 
-	callTypeName(gorums.E_Rpc): {
-		extInfo:  gorums.E_Rpc,
-		docName:  "rpc",
-		template: rpcCall,
+	callTypeName(gorums.E_Remotecall): {
+		extInfo:  gorums.E_Remotecall,
+		docName:  "remotecall",
+		template: remoteCall,
 		chkFn: func(m *protogen.Method) bool {
 			return !hasMethodOption(m, gorumsCallTypes...)
 		},

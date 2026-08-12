@@ -11,7 +11,7 @@ import (
 
 type cfgSrv struct{}
 
-func (cfgSrv) Config(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
+func (cfgSrv) Read(_ gorums.ServerContext, req *Request) (resp *Response, err error) {
 	return Response_builder{
 		Num: req.GetNum(),
 	}.Build(), nil
@@ -23,14 +23,14 @@ func serverFn(_ int) gorums.ServerIface {
 	return srv
 }
 
-// TestConfig creates and combines multiple configurations and invokes the Config RPC
+// TestConfig creates and combines multiple configurations and invokes the Read RPC
 // method on the different configurations created below.
 func TestConfig(t *testing.T) {
-	callRPC := func(config Configuration) {
+	callRPC := func(config Config) {
 		cfgCtx := config.Context(context.Background())
 		for i := range 5 {
 			// Use the new terminal method API - wait for a majority
-			resp, err := Config(cfgCtx,
+			resp, err := Read(cfgCtx,
 				Request_builder{Num: uint64(i)}.Build()).Majority()
 			if err != nil {
 				t.Fatal(err)

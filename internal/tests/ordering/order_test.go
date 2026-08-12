@@ -60,13 +60,13 @@ func (s *testSrv) isInOrder(num uint64) bool {
 	return false
 }
 
-func (s *testSrv) QuorumCall(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
+func (s *testSrv) QuorumCall(_ gorums.ServerContext, req *Request) (resp *Response, err error) {
 	return Response_builder{
 		InOrder: s.isInOrder(req.GetNum()),
 	}.Build(), nil
 }
 
-func (s *testSrv) UnaryRPC(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
+func (s *testSrv) UnaryRPC(_ gorums.ServerContext, req *Request) (resp *Response, err error) {
 	return Response_builder{
 		InOrder: s.isInOrder(req.GetNum()),
 	}.Build(), nil

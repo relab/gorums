@@ -89,7 +89,7 @@ func Collect[T any](t testing.TB, timeout time.Duration, want int, ch <-chan T) 
 // InsecureDialOptions returns a [gorums.DialOption] with insecure transport
 // credentials for testing.
 func InsecureDialOptions(_ testing.TB) gorums.DialOption {
-	return gorums.WithDialOptions(
+	return gorums.WithGRPCDialOptions(
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 }
@@ -99,7 +99,7 @@ func InsecureDialOptions(_ testing.TB) gorums.DialOption {
 // bufconn dialer in the default build, or insecure real-network credentials
 // under the integration build tag.
 func DialOptions(t testing.TB) gorums.DialOption {
-	return gorums.WithDialOptions(servers.DialOptions(t)...)
+	return gorums.WithGRPCDialOptions(servers.DialOptions(t)...)
 }
 
 // startServers starts numServers servers via srvFn, adapting srvFn's
@@ -119,11 +119,11 @@ func startServers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerI
 // Optional [Option] values can be provided to customize the manager, server, or configuration.
 //
 // By default, nodes are assigned sequential IDs (1, 2, 3, ...) matching the server
-// creation order. This can be overridden by providing a [gorums.NodeListOption].
+// creation order. This can be overridden by providing a [gorums.NodeSource].
 //
 // This is the recommended way to set up tests that need both servers and a configuration.
 // It ensures proper cleanup and detects goroutine leaks.
-func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, opts ...Option) gorums.Configuration {
+func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, opts ...Option) gorums.Config {
 	t.Helper()
 
 	testOpts := extractTestOptions(opts)
@@ -160,12 +160,12 @@ func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, 
 	return cfg
 }
 
-// NoDialedConfig returns a [gorums.Configuration] over addrs whose nodes are
+// NoDialedConfig returns a [gorums.Config] over addrs whose nodes are
 // never actually dialed: gRPC connections are established lazily on the first
 // RPC, so tests that only need a valid configuration to construct calls,
 // without ever completing one, don't need a running server behind it. If addrs
 // is empty, a single unreachable sentinel address is used.
-func NoDialedConfig(t testing.TB, addrs ...string) gorums.Configuration {
+func NoDialedConfig(t testing.TB, addrs ...string) gorums.Config {
 	t.Helper()
 	if len(addrs) == 0 {
 		addrs = []string{"127.0.0.1:65535"}
@@ -227,13 +227,13 @@ func Servers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface)
 	return addrs
 }
 
-// Systems returns n started Gorums systems on random localhost ports (see
-// [gorums.NewLocalSystems]). Each system auto-creates a peer
-// [gorums.Configuration] over the group, accessible via
-// [gorums.System.OutboundConfig]. The systems are automatically stopped when
-// the test finishes via t.Cleanup. Any [gorums.ServerOption]s are applied to
-// every server.
-func Systems(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.System {
+// LocalServers returns n started Gorums servers forming a symmetric peer
+// group on random localhost ports (see [gorums.NewLocalServers]). Each
+// server auto-creates a peer [gorums.Config] over the group, accessible
+// via [gorums.Server.PeerConfig]. The servers are automatically stopped
+// when the test finishes via t.Cleanup. Any [gorums.ServerOption]s are
+// applied to every server.
+func LocalServers(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.Server {
 	t.Helper()
 
 	// Skip goleak check for benchmarks
@@ -242,7 +242,7 @@ func Systems(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.System 
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
 
-	systems, stop, err := gorums.NewLocalSystems(n,
+	srvs, stop, err := gorums.NewLocalServers(n,
 		gorums.WithLocalServerOptions(opts...),
 		gorums.WithLocalDialOptions(InsecureDialOptions(t)),
 	)
@@ -253,11 +253,11 @@ func Systems(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.System 
 	// Register server cleanup SECOND so it runs BEFORE goleak check
 	t.Cleanup(stop)
 
-	for _, sys := range systems {
-		go sys.Serve()
+	for _, srv := range srvs {
+		go srv.ListenAndServe()
 	}
 
-	return systems
+	return srvs
 }
 
 // Closer returns a cleanup function that closes the given io.Closer.

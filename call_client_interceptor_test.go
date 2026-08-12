@@ -14,7 +14,7 @@ import (
 
 // LoggingInterceptor is a custom interceptor that logs each response.
 func LoggingInterceptor[Req, Resp proto.Message](
-	ctx *gorums.ClientCtx[Req, Resp],
+	ctx *gorums.CallContext[Req, Resp],
 	next gorums.ResponseSeq[Resp],
 ) gorums.ResponseSeq[Resp] {
 	_ = ctx.Method() // Access method name (could be used for logging)
@@ -31,8 +31,8 @@ func LoggingInterceptor[Req, Resp proto.Message](
 // FilterInterceptor returns an interceptor that filters responses based on a predicate.
 func FilterInterceptor[Req, Resp proto.Message](
 	keep func(resp gorums.NodeResponse[Resp]) bool,
-) gorums.QuorumInterceptor[Req, Resp] {
-	return func(ctx *gorums.ClientCtx[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
+) gorums.ClientInterceptor[Req, Resp] {
+	return func(ctx *gorums.CallContext[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
 		_ = ctx.Method() // Access method name (could be used for filtering)
 		return func(yield func(gorums.NodeResponse[Resp]) bool) {
 			for resp := range next {
@@ -49,8 +49,8 @@ func FilterInterceptor[Req, Resp proto.Message](
 // CountingInterceptor counts the number of responses passing through.
 func CountingInterceptor[Req, Resp proto.Message](
 	counter *int,
-) gorums.QuorumInterceptor[Req, Resp] {
-	return func(_ *gorums.ClientCtx[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
+) gorums.ClientInterceptor[Req, Resp] {
+	return func(_ *gorums.CallContext[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
 		return func(yield func(gorums.NodeResponse[Resp]) bool) {
 			for resp := range next {
 				*counter++
@@ -161,7 +161,7 @@ func TestCustomInterceptorWithMapRequest(t *testing.T) {
 			CountingInterceptor[*pb.StringValue, *pb.StringValue](&count),
 			// Built-in: transform request (identity transform for this test)
 			gorums.MapRequest[*pb.StringValue, *pb.StringValue](
-				func(req *pb.StringValue, node *gorums.Node) *pb.StringValue {
+				func(req *pb.StringValue, _ *gorums.Node) *pb.StringValue {
 					return req
 				},
 			),

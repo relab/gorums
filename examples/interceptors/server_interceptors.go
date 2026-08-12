@@ -10,8 +10,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func LoggingInterceptor(addr string) gorums.Interceptor {
-	return func(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func LoggingInterceptor(addr string) gorums.ServerInterceptor {
+	return func(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 		req := gorums.AsProto[proto.Message](in)
 		log.Printf("[%s]: LoggingInterceptor(incoming): Method=%s, Message=%s", addr, in.GetMethod(), req)
 		start := time.Now()
@@ -24,7 +24,7 @@ func LoggingInterceptor(addr string) gorums.Interceptor {
 	}
 }
 
-func LoggingSimpleInterceptor(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func LoggingSimpleInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 	req := gorums.AsProto[proto.Message](in)
 	log.Printf("LoggingSimpleInterceptor(incoming): Method=%s, Message=%v)", in.GetMethod(), req)
 	out, err := next(ctx, in)
@@ -33,7 +33,7 @@ func LoggingSimpleInterceptor(ctx gorums.ServerCtx, in *gorums.Message, next gor
 	return out, err
 }
 
-func DelayedInterceptor(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 	// delay based on sending node address
 	delay := 0 * time.Millisecond
 	peer, ok := peer.FromContext(ctx)
@@ -55,7 +55,7 @@ func DelayedInterceptor(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Ha
 }
 
 /** NoFooAllowedInterceptor rejects requests for messages with key "foo". */
-func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 	if req, ok := gorums.AsProto[proto.Message](in).(T); ok {
 		log.Printf("NoFooAllowedInterceptor: Received request for key '%s'", req.GetKey())
 		if req.GetKey() == "foo" {
@@ -66,7 +66,7 @@ func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCt
 	return next(ctx, in)
 }
 
-func MetadataInterceptor(ctx gorums.ServerCtx, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 	log.Printf("MetadataInterceptor: Adding custom metadata to message(customKey=customValue)")
 	// Add a custom metadata field
 	entry := gorums.MetadataEntry_builder{
