@@ -12,7 +12,8 @@ type PeerAcceptor interface {
 }
 
 // PeerNode represents a peer from the perspective of stream dispatch.
-// It is implemented by peerNode and nilPeerNode in the gorums package.
+// It is implemented in the gorums package, by Node for an identified peer and
+// by nilPeerNode for a connection whose peer ID is not known.
 type PeerNode interface {
 	// RouteInbound handles a message received from the peer.
 	// Messages with a server-initiated ID (high bit set) are responses to
