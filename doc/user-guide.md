@@ -1886,7 +1886,7 @@ systems, stop, err := gorums.NewLocalSystems(4)
 ### Setting Up the Client
 
 For the server to call back to a client, the client must expose its own method handlers over the same bidirectional stream it opens to the server.
-Create a `*gorums.Server`, register any handler methods the server may invoke, and then pass it to `WithServer` when establishing the outbound connection:
+Create a `*gorums.Server`, register any handler methods the server may invoke, and then pass it to `WithBackChannel` when establishing the outbound connection:
 
 ```go
 // Create a server to host the client-side handlers.
@@ -1895,7 +1895,7 @@ clientSrv := gorums.NewServer()
 // Register the methods the remote server is allowed to call back on this client.
 clientSrv.RegisterHandler(pb.MyMethod, myHandler)
 
-// Connect to the server; WithServer wires up the back-channel dispatcher automatically.
+// Connect to the server; WithBackChannel wires up the back-channel dispatcher automatically.
 config, err := gorums.NewConfig(
     gorums.WithNodeList(serverAddrs),
     gorums.WithBackChannel(clientSrv),
@@ -1903,7 +1903,7 @@ config, err := gorums.NewConfig(
 )
 ```
 
-Passing `clientSrv` to `gorums.WithServer` is what installs the server as the back-channel request handler.
+Passing `clientSrv` to `gorums.WithBackChannel` is what installs the server as the back-channel request handler.
 When the remote server dispatches a reverse-direction call via `ctx.ConnectedClients()`, the call arrives on the same gRPC stream the client opened and is routed to `clientSrv` for dispatch.
 
 The client does **not** need to open a separate listening socket — the handler is served entirely over the existing outbound connection.
