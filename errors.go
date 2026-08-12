@@ -18,12 +18,29 @@ var ErrSendFailure = errors.New("send failure")
 // ErrTypeMismatch is returned when a response cannot be cast to the expected type.
 var ErrTypeMismatch = stream.ErrTypeMismatch
 
+// ErrStreamDown is returned for a call that cannot be delivered or retried
+// because the target node's stream is unavailable. It is a gRPC status error
+// with the Unavailable code; match its identity with [errors.Is], including
+// against a node error inside a [QuorumCallError].
+var ErrStreamDown = stream.ErrStreamDown
+
+// ErrNodeClosed is returned for a call enqueued after its node was closed. It
+// is a gRPC status error with the Unavailable code; match it with [errors.Is].
+var ErrNodeClosed = stream.ErrNodeClosed
+
+// ErrSendQueueFull is returned for a two-way call enqueued while the node's
+// send queue is at capacity: a full queue means the peer is not draining sends,
+// so the call fails fast (letting quorum logic count the peer as failed) rather
+// than block behind it. It is a gRPC status error with the Unavailable code;
+// match it with [errors.Is]. See [WithSendBufferSize] for the capacity.
+var ErrSendQueueFull = stream.ErrSendQueueFull
+
 // ErrSkipNode is returned when a node is skipped by request transformations.
 // This allows the response iterator to account for all nodes without blocking.
 var ErrSkipNode = errors.New("skip node")
 
-// ErrStopped is returned by [System.WaitForConfig] and [System.WaitForClientConfig]
-// when the system is stopped before the condition is met.
+// ErrStopped is returned by [Server.WaitForPeers] and [Server.WaitForClients]
+// when the server is stopped before the condition is met.
 var ErrStopped = errors.New("system stopped")
 
 // QuorumCallError reports on a failed quorum call.

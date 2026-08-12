@@ -27,7 +27,6 @@ gorums/
 ├── cmd/protoc-gen-gorums/     # Compiler plugin for code generation
 │   ├── dev/                   # Static code + generated code examples
 │   └── gengorums/             # Compiler logic + templates
-├── benchmark/                 # Benchmarking code
 ├── examples/                  # Example implementations
 ├── internal/                  # Internal packages
 ├── doc/                       # Documentation
@@ -152,9 +151,6 @@ make -B
 # Install protoc-gen-gorums plugin
 make installgorums
 
-# Build benchmark tool
-make benchmark
-
 # Install required tools
 make tools
 ```
@@ -227,8 +223,6 @@ Before making significant changes, consult:
 ## Performance Considerations
 
 - Gorums is used in performance-critical distributed systems
-- Benchmarking tools are available in `benchmark/` and `cmd/benchmark/`
-- See `doc/benchmarking.md` for benchmarking procedures
 - Profile before optimizing - use Go's pprof tools
 
 ## Communication with Project Maintainer

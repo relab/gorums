@@ -63,31 +63,34 @@ func metadataWithNodeID(id uint32) metadata.MD {
 // Clients that specify node ID 0 in their metadata are assumed to be capable
 // of receiving reverse-direction calls from the server. These clients are
 // accepted with auto-generated IDs and included in the ClientConfig.
-// Client nodes are removed from the nodes map when they disconnect, while
-// known peer nodes persist in the map to allow for reconnection.
+// Client nodes are removed from clientNodes when they disconnect, while
+// known peer nodes persist in knownNodes to allow for reconnection.
 //
 // inboundManager is safe for concurrent use.
 type inboundManager struct {
 	mu             sync.RWMutex
 	myID           uint32                // this server's own NodeID; always present in inboundCfg
-	nodes          map[uint32]*Node      // pre-created for known peers; client peers added on connect
-	config         Configuration         // auto-updated slice of known peer servers, sorted by ID
+	knownNodes     map[uint32]*Node      // pre-created configured peers, including self when configured
+	clientNodes    map[uint32]*Node      // dynamically assigned peer-capable clients
+	peerConfig     Configuration         // the server's peer Configuration; set once by setPeerConfig
+	config         Configuration         // auto-updated connectivity-filtered subset of peerConfig, sorted by ID
+	inboundCfg     Configuration         // auto-updated slice of known peers with an inbound stream, sorted by ID
 	clientConfig   Configuration         // auto-updated slice of client peers, sorted by ID
 	nextMsgID      atomic.Uint64         // counter for server-initiated message IDs
 	sendBufferSize uint                  // send buffer size for inbound channels
 	handler        stream.RequestHandler // handler for dispatching incoming requests on all inbound nodes
 	onConfigChange func(Configuration)   // optional; called after each known-peer config change
-	nextClientID   uint32                // next ID to assign to a client peer
+	nextClientID   uint64                // next candidate ID for a client peer; uint64 represents exhaustion
 	configCh       chan struct{}         // closed and replaced on each config/clientConfig change; protected by mu
 	stopCh         chan struct{}         // closed on shutdown to unblock waiters; never replaced
 	stopOnce       sync.Once             // ensures stopCh is closed exactly once
 }
 
 // clientIDStart is the starting ID for dynamically assigned client peers.
-// Chosen to be high enough to avoid collisions with typical known-peer IDs.
+// Chosen to keep dynamically assigned IDs away from typical known-peer IDs.
 // The available ID space is [clientIDStart, math.MaxUint32], giving approximately
-// 4.3 billion unique IDs before exhaustion. acceptClient rejects new peers if the
-// counter reaches math.MaxUint32 to prevent silent wraparound.
+// 4.3 billion candidate IDs before exhaustion. Configured peers may use IDs in
+// this range; the allocator skips every occupied known-peer or client ID.
 const clientIDStart = 1 << 20
 
 // newInboundManager creates an inboundManager for this server whose NodeID is myID.
@@ -101,7 +104,8 @@ const clientIDStart = 1 << 20
 func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfigChange func(Configuration), handler stream.RequestHandler) *inboundManager {
 	im := &inboundManager{
 		myID:           myID,
-		nodes:          make(map[uint32]*Node),
+		knownNodes:     make(map[uint32]*Node),
+		clientNodes:    make(map[uint32]*Node),
 		sendBufferSize: sendBuffer,
 		handler:        handler,
 		onConfigChange: onConfigChange,
@@ -125,16 +129,15 @@ func newInboundManager(myID uint32, opt NodeListOption, sendBuffer uint, onConfi
 func (im *inboundManager) Nodes() []*Node {
 	im.mu.RLock()
 	defer im.mu.RUnlock()
-	return slices.SortedFunc(maps.Values(im.nodes), func(a, b *Node) int {
+	return slices.SortedFunc(maps.Values(im.knownNodes), func(a, b *Node) int {
 		return cmp.Compare(a.ID(), b.ID())
 	})
 }
 
-// Config returns a [Configuration] of all connected known peer servers, including this node.
-// An empty (non-nil) Configuration is returned if no known peers are connected.
-// The returned slice is replaced atomically on each connect/disconnect;
-// thus, retaining a reference to an old configuration is safe.
-func (im *inboundManager) Config() Configuration {
+// ConnectedPeers returns the current connected-peer [Configuration]; see
+// [Server.ConnectedPeers]. Before setPeerConfig installs a peer configuration,
+// it falls back to the inbound view.
+func (im *inboundManager) ConnectedPeers() Configuration {
 	if im == nil {
 		return nil
 	}
@@ -143,12 +146,42 @@ func (im *inboundManager) Config() Configuration {
 	return im.config
 }
 
-// ClientConfig returns a [Configuration] of all connected clients capable of
+// setPeerConfig installs the server's peer [Configuration], from which the
+// connected-peer view is derived. It is called once by [NewServer] after the
+// peer configuration is built; stream-state changes observed before that are
+// picked up by the rebuild here.
+func (im *inboundManager) setPeerConfig(cfg Configuration) {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	im.peerConfig = cfg
+	im.rebuildConfig()
+}
+
+// peerStreamChanged records that a dialed peer's outbound stream came up or
+// went down and rebuilds the connected-peer view. It is registered as the
+// stream-state callback for the server's outbound peer nodes; the new state
+// is read directly from the nodes during the rebuild.
+func (im *inboundManager) peerStreamChanged(uint32, bool) {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	im.rebuildConfig()
+}
+
+// inboundPeers returns the known peers with an inbound stream open to this
+// server, plus the local node. Test-only: production code observes
+// connectivity through ConnectedPeers.
+func (im *inboundManager) inboundPeers() Configuration {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+	return im.inboundCfg
+}
+
+// ConnectedClients returns a [Configuration] of all connected clients capable of
 // receiving reverse-direction calls from the server.
 // An empty (non-nil) Configuration is returned if no client peers are connected.
 // The returned slice is replaced atomically on each connect/disconnect;
 // thus, retaining a reference to an old configuration is safe.
-func (im *inboundManager) ClientConfig() Configuration {
+func (im *inboundManager) ConnectedClients() Configuration {
 	if im == nil {
 		return nil
 	}
@@ -185,7 +218,7 @@ func (im *inboundManager) newNode(id uint32, addr string) (*Node, error) {
 	} else {
 		node = newInboundNode(id, addr, im.getMsgID, im.handler)
 	}
-	im.nodes[id] = node
+	im.knownNodes[id] = node
 	return node, nil
 }
 
@@ -197,7 +230,7 @@ func (im *inboundManager) isKnown(id uint32) bool {
 	}
 	im.mu.RLock()
 	defer im.mu.RUnlock()
-	_, ok := im.nodes[id]
+	_, ok := im.knownNodes[id]
 	return ok
 }
 
@@ -243,14 +276,14 @@ func (im *inboundManager) AcceptPeer(streamCtx context.Context, inboundStream st
 func (im *inboundManager) registerPeer(streamCtx context.Context, inboundStream stream.BidiStream, id uint32) (stream.PeerNode, func(), error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
-	node := im.nodes[id]
+	node := im.knownNodes[id]
 	detach := node.attachStream(streamCtx, inboundStream, im.sendBufferSize)
 	im.rebuildConfig()
 
 	return node, func() {
 		im.mu.Lock()
 		defer im.mu.Unlock()
-		_, ok := im.nodes[id]
+		_, ok := im.knownNodes[id]
 		if !ok {
 			return
 		}
@@ -261,59 +294,91 @@ func (im *inboundManager) registerPeer(streamCtx context.Context, inboundStream 
 }
 
 // acceptClient creates a new node with an auto-assigned ID for an unknown
-// connecting client. The node is added to the nodes map and the configuration
+// connecting client. The node is added to clientNodes and the configuration
 // is rebuilt. The returned cleanup function removes the client node entirely
 // when the stream ends (unlike known peers which persist for reconnection).
 func (im *inboundManager) acceptClient(streamCtx context.Context, inboundStream stream.BidiStream) (stream.PeerNode, func(), error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
-	if im.nextClientID == ^uint32(0) {
-		return nil, func() {}, fmt.Errorf("gorums: dynamic client ID space exhausted")
+	id, err := im.nextAvailableClientID()
+	if err != nil {
+		return nil, func() {}, err
 	}
-	id := im.nextClientID
-	im.nextClientID++
 	node := newInboundNode(id, "client", im.getMsgID, im.handler)
 	detach := node.attachStream(streamCtx, inboundStream, im.sendBufferSize)
-	im.nodes[id] = node
+	im.clientNodes[id] = node
 	im.rebuildConfig()
 
 	return node, func() {
 		im.mu.Lock()
 		defer im.mu.Unlock()
-		_, ok := im.nodes[id]
+		_, ok := im.clientNodes[id]
 		if !ok {
 			return
 		}
 		if detach() {
-			delete(im.nodes, id)
+			delete(im.clientNodes, id)
 			im.rebuildConfig()
 		}
 	}, nil
 }
 
-// rebuildConfig rebuilds inbound and client configurations from the current nodes map.
-// A node is included in the known Config if it has an active channel (peer connected)
-// or if it is myID. A node is included in ClientConfig if it is a connected client peer.
+// nextAvailableClientID returns the next unoccupied dynamic client ID.
+// The caller must hold im.mu.
+func (im *inboundManager) nextAvailableClientID() (uint32, error) {
+	const maxNodeID = uint64(1<<32 - 1)
+	for im.nextClientID <= maxNodeID {
+		id := uint32(im.nextClientID)
+		im.nextClientID++
+		if _, exists := im.knownNodes[id]; exists {
+			continue
+		}
+		if _, exists := im.clientNodes[id]; exists {
+			continue
+		}
+		return id, nil
+	}
+	return 0, fmt.Errorf("gorums: dynamic client ID space exhausted")
+}
+
+// rebuildConfig rebuilds the inbound, client, and connected-peer
+// configurations from their sources. A known peer is in the inbound
+// configuration if it has an active channel (the peer opened a stream to this
+// server) or if it is myID; a client is in the client configuration while its
+// stream lives. The connected-peer configuration is the subset of the installed
+// peer configuration whose nodes can currently carry calls; before a peer
+// configuration is installed it falls back to the inbound view.
 // Callers must hold the lock.
 func (im *inboundManager) rebuildConfig() {
-	cfg := make(Configuration, 0, len(im.nodes))
-	clientCfg := make(Configuration, 0)
-	for id, node := range im.nodes {
-		if id >= clientIDStart {
-			if node.channel.Load() != nil {
-				clientCfg = append(clientCfg, node)
-			}
-		} else {
-			if id == im.myID || node.channel.Load() != nil {
+	inboundCfg := make(Configuration, 0, len(im.knownNodes))
+	for id, node := range im.knownNodes {
+		if id == im.myID || node.channel.Load() != nil {
+			inboundCfg = append(inboundCfg, node)
+		}
+	}
+	clientCfg := make(Configuration, 0, len(im.clientNodes))
+	for _, node := range im.clientNodes {
+		if node.channel.Load() != nil {
+			clientCfg = append(clientCfg, node)
+		}
+	}
+	slices.SortFunc(inboundCfg, ID)
+	slices.SortFunc(clientCfg, ID)
+	im.inboundCfg = inboundCfg
+	im.clientConfig = clientCfg
+
+	cfg := inboundCfg
+	if im.peerConfig != nil {
+		cfg = make(Configuration, 0, len(im.peerConfig))
+		for _, node := range im.peerConfig {
+			if node.ID() == im.myID || node.isUp() {
 				cfg = append(cfg, node)
 			}
 		}
+		slices.SortFunc(cfg, ID)
 	}
-	slices.SortFunc(cfg, ID)
-	slices.SortFunc(clientCfg, ID)
 	cfgChanged := !slices.Equal(im.config, cfg)
 	im.config = cfg
-	im.clientConfig = clientCfg
 	if cfgChanged && im.onConfigChange != nil {
 		im.onConfigChange(cfg)
 	}
@@ -352,21 +417,29 @@ func (im *inboundManager) waitForConfig(ctx context.Context, cond func() bool) e
 	}
 }
 
-// waitForKnownConfig blocks until cond returns true for the current known-peer
+// WaitForPeers blocks until cond returns true for the current connected-peer
 // [Configuration], or until ctx is cancelled or the server is stopped.
-// The cond function receives the current known-peer configuration and must not
-// acquire any additional locks.
-func (im *inboundManager) waitForKnownConfig(ctx context.Context, cond func(Configuration) bool) error {
+// The cond function receives the current connected-peer configuration and must
+// not acquire any additional locks.
+func (im *inboundManager) WaitForPeers(ctx context.Context, cond func(Configuration) bool) error {
 	return im.waitForConfig(ctx, func() bool {
 		return cond(im.config)
 	})
 }
 
-// waitForClientConfig blocks until cond returns true for the current client-peer
+// waitForInbound blocks until cond returns true for the current inbound view.
+// Test-only counterpart of WaitForPeers.
+func (im *inboundManager) waitForInbound(ctx context.Context, cond func(Configuration) bool) error {
+	return im.waitForConfig(ctx, func() bool {
+		return cond(im.inboundCfg)
+	})
+}
+
+// WaitForClients blocks until cond returns true for the current client-peer
 // [Configuration], or until ctx is cancelled or the server is stopped.
 // The cond function receives the current client-peer configuration and must not
 // acquire any additional locks.
-func (im *inboundManager) waitForClientConfig(ctx context.Context, cond func(Configuration) bool) error {
+func (im *inboundManager) WaitForClients(ctx context.Context, cond func(Configuration) bool) error {
 	return im.waitForConfig(ctx, func() bool {
 		return cond(im.clientConfig)
 	})
@@ -396,11 +469,17 @@ func (p *nilPeerNode) RouteInbound(ctx context.Context, msg *stream.Message, rel
 	}
 }
 
-// Enqueue sends the message directly on the inbound stream. On the first send
-// error the failure is latched and subsequent calls become no-ops, preventing
-// wasted sends while gRPC propagates the stream-context cancellation that
-// causes NodeStream to exit.
-func (p *nilPeerNode) Enqueue(req stream.Request) {
+// TrySend writes the message directly to the inbound stream.
+//
+// Unlike [Node.TrySend], this can still block: a plain client has no
+// gorums-owned send queue, only the raw gRPC stream, whose Send blocks under
+// HTTP/2 flow control with no non-blocking alternative. That is acceptable
+// here because a stuck Send only stalls this one client's own NodeStream
+// goroutine, not a lock shared with other connections.
+//
+// On the first send error the failure is latched and later calls become
+// no-ops, avoiding wasted sends while the stream shuts down.
+func (p *nilPeerNode) TrySend(req stream.Request) {
 	if p.failed.Load() {
 		return
 	}

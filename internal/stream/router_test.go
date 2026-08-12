@@ -3,11 +3,13 @@ package stream
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/relab/gorums/internal/testutils/mock"
+	"google.golang.org/grpc/metadata"
 )
 
 func TestRouterRegisterAndDeliver(t *testing.T) {
@@ -168,6 +170,29 @@ func TestRouterRequeuePending(t *testing.T) {
 	}
 }
 
+func TestRouterRequeuePendingByOwner(t *testing.T) {
+	r := NewMessageRouter()
+	firstOwner := new(pendingOwner)
+	secondOwner := new(pendingOwner)
+	r.register(firstOwner, 1, Request{Ctx: t.Context(), Msg: &Message{}, ResponseChan: make(chan response, 1)})
+	r.register(firstOwner, 2, Request{Ctx: t.Context(), Msg: &Message{}, Streaming: true, ResponseChan: make(chan response, 1)})
+	r.register(secondOwner, 3, Request{Ctx: t.Context(), Msg: &Message{}, ResponseChan: make(chan response, 1)})
+
+	requeue, cancel := r.requeuePending(firstOwner)
+	if len(requeue) != 1 {
+		t.Fatalf("requeue count = %d, want 1", len(requeue))
+	}
+	if len(cancel) != 1 {
+		t.Fatalf("cancel count = %d, want 1", len(cancel))
+	}
+	if got := r.PendingCount(); got != 1 {
+		t.Fatalf("pending count = %d, want 1", got)
+	}
+	if !r.deliverPending(3, response{NodeID: 1}) {
+		t.Fatal("second owner's request was removed")
+	}
+}
+
 // TestRouterRouteInboundMessage verifies RouteInboundMessage demultiplexes
 // inbound server-side messages: server-initiated IDs (high bit set) are routed
 // to the pending map; client-initiated IDs (low bit) are dispatched to the handler.
@@ -252,6 +277,12 @@ type mockRequestHandler struct {
 	done   chan struct{}
 }
 
+type requestHandlerFunc func(context.Context, *Message, func(), func(*Message))
+
+func (f requestHandlerFunc) HandleRequest(ctx context.Context, msg *Message, release func(), send func(*Message)) {
+	f(ctx, msg, release, send)
+}
+
 func newMockRequestHandler() *mockRequestHandler {
 	return &mockRequestHandler{done: make(chan struct{})}
 }
@@ -331,14 +362,14 @@ func TestReplyErrorDoesNotBlockOnCanceledRequest(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		req.replyError(7, ErrStreamDown)
+		req.ReplyError(7, ErrStreamDown)
 		close(done)
 	}()
 
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatal("replyError blocked on a canceled request with a full reply channel")
+		t.Fatal("ReplyError blocked on a canceled request with a full reply channel")
 	}
 }
 
@@ -351,7 +382,7 @@ func TestReplyErrorPrefersDeliveryWhenCanceledAndReplyChanReady(t *testing.T) {
 	}
 	cancel()
 
-	req.replyError(7, ErrStreamDown)
+	req.ReplyError(7, ErrStreamDown)
 
 	select {
 	case got := <-replyChan:
@@ -359,7 +390,7 @@ func TestReplyErrorPrefersDeliveryWhenCanceledAndReplyChanReady(t *testing.T) {
 			t.Fatalf("reply error = %v, want ErrStreamDown", got.Err)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("replyError dropped a ready delivery on canceled context")
+		t.Fatal("ReplyError dropped a ready delivery on canceled context")
 	}
 }
 
@@ -410,6 +441,88 @@ func TestRouterRouteMessage(t *testing.T) {
 		// enqueue should not be triggered by the dispatch itself (only by send closure).
 		if enqueueCalled {
 			t.Error("enqueue should not be called during request dispatch")
+		}
+	})
+
+	t.Run("ServerInitiatedIncludesMessageMetadata", func(t *testing.T) {
+		const (
+			key  = "request-id"
+			want = "server-initiated-metadata"
+		)
+		handlerMD := make(chan metadata.MD, 1)
+		handler := requestHandlerFunc(func(ctx context.Context, _ *Message, release func(), _ func(*Message)) {
+			defer release()
+			md, _ := metadata.FromIncomingContext(ctx)
+			handlerMD <- md
+		})
+		r := NewMessageRouter(handler)
+		msgCtx := metadata.NewOutgoingContext(connCtx, metadata.Pairs(key, want))
+		msg, err := NewMessage(msgCtx, ServerSequenceNumber(1), mock.TestMethod, nil)
+		if err != nil {
+			t.Fatalf("NewMessage: %v", err)
+		}
+
+		r.RouteMessage(connCtx, nodeID, msg, func(Request) {})
+
+		select {
+		case md := <-handlerMD:
+			if got := md.Get(key); len(got) != 1 || got[0] != want {
+				t.Fatalf("incoming metadata %q = %v, want [%q]", key, got, want)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("handler was not called within timeout")
+		}
+	})
+
+	t.Run("ServerInitiatedPreservesHandlerOrder", func(t *testing.T) {
+		firstStarted := make(chan struct{})
+		secondStarted := make(chan struct{})
+		releaseFirst := make(chan struct{})
+		var releaseOnce sync.Once
+		releaseHandler := func() { releaseOnce.Do(func() { close(releaseFirst) }) }
+		t.Cleanup(releaseHandler)
+		handler := requestHandlerFunc(func(_ context.Context, msg *Message, release func(), _ func(*Message)) {
+			switch msg.GetMessageSeqNo() {
+			case ServerSequenceNumber(1):
+				close(firstStarted)
+				<-releaseFirst
+			case ServerSequenceNumber(2):
+				close(secondStarted)
+			}
+			release()
+		})
+		r := NewMessageRouter(handler)
+		first := Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build()
+		second := Message_builder{MessageSeqNo: ServerSequenceNumber(2), Method: mock.TestMethod}.Build()
+
+		r.RouteMessage(connCtx, nodeID, first, func(Request) {})
+		select {
+		case <-firstStarted:
+		case <-time.After(time.Second):
+			t.Fatal("first handler was not called within timeout")
+		}
+
+		secondReturned := make(chan struct{})
+		go func() {
+			defer close(secondReturned)
+			r.RouteMessage(connCtx, nodeID, second, func(Request) {})
+		}()
+		select {
+		case <-secondStarted:
+			t.Fatal("second handler started before first handler released")
+		case <-time.After(50 * time.Millisecond):
+		}
+
+		releaseHandler()
+		select {
+		case <-secondStarted:
+		case <-time.After(time.Second):
+			t.Fatal("second handler did not start after first handler released")
+		}
+		select {
+		case <-secondReturned:
+		case <-time.After(time.Second):
+			t.Fatal("second RouteMessage did not return after dispatch")
 		}
 	})
 
