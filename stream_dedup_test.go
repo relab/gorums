@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -55,6 +56,11 @@ func waitForDedupConcurrent(t *testing.T, servers []*gorums.Server) {
 					for _, node := range srv.PeerConfig().Nodes() {
 						_ = node.IsShared()
 					}
+					// Yield between passes. One reader per server means the
+					// largest case runs 50 of these, and without a yield they
+					// would spin flat out on every core for as long as
+					// WaitForAll takes, starving the work under test.
+					runtime.Gosched()
 				}
 			}
 		})
