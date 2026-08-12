@@ -127,15 +127,17 @@ func (f *flags) quorumSize(numNodes int) int {
 
 func (f *flags) report(results []*benchkit.Result, opts benchkit.Options) {
 	benchkit.PrintResults(os.Stdout, results, opts, f.serverStats, f.Self)
+	// In distributed mode -self names this node, so it labels the run when
+	// -label is unset. The written report and the comparison use the same one.
+	label := f.label
+	if label == "" && f.Self != "" {
+		label = f.Self
+	}
 	if f.Output != "" {
-		label := f.label
-		if label == "" && f.Self != "" {
-			label = f.Self
-		}
 		checkf("Failed to write results: %v", benchkit.WriteLabeledReport(results, label, f.Output))
 	}
 	if f.compare != "" {
-		checkf("Failed to compare results: %v", benchkit.CompareWithBaseline(f.compare, f.label, results, os.Stdout))
+		checkf("Failed to compare results: %v", benchkit.CompareWithBaseline(f.compare, label, results, os.Stdout))
 	}
 }
 
