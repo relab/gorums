@@ -2046,6 +2046,8 @@ Calls already in flight while a stream is being replaced may still fail because 
 Each `*Node` reports its stream topology: `Node.IsOutbound` is true for a node reached over a stream this process opened, `Node.IsInbound` is true for a node reached over a stream the peer opened, and `Node.IsShared` is true for a deduplicated node whose single bidirectional stream carries calls in both directions.
 These let a symmetric deployment inspect the shared-stream topology.
 
+## Send Queue Capacity and Backpressure
+
 The per-node send queue defaults to 4096 entries.
 Passing zero to `WithSendBufferSize` or the send-size argument of `WithBufferSizes` selects that default.
 Two-way requests fail fast with an unavailable error when a real buffered queue is full.
