@@ -100,7 +100,7 @@ stressgen: tools
 	rm ./internal/testprotos/testprotos.test
 
 lint: deadcode
-	@golangci-lint-v2 run --fast-only ./... ./examples/...
+	@golangci-lint-v2 run ./... ./examples/...
 
 # deadcode reports functions unreachable from any main or test across all
 # workspace modules (root and examples), so cross-module usage is
