@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	gorums "github.com/relab/gorums"
+	"github.com/relab/gorums/gorumstest"
 )
 
 type cfgSrv struct{}
@@ -40,7 +41,7 @@ func TestConfig(t *testing.T) {
 		}
 	}
 
-	c1 := gorums.TestConfiguration(t, 6, serverFn)
+	c1 := gorumstest.Config(t, 6, serverFn)
 	fmt.Println("--- c1 ", c1.Nodes())
 	callRPC(c1)
 

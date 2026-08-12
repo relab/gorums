@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -43,8 +44,8 @@ func TestAsync(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := gorums.TestConfiguration(t, tt.numNodes, gorums.EchoServerFn)
-			ctx := gorums.TestContext(t, 2*time.Second)
+			config := gorumstest.Config(t, tt.numNodes, gorumstest.EchoServerFn)
+			ctx := gorumstest.Context(t, 2*time.Second)
 			responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
 				config.Context(ctx),
 				pb.String("test"),
@@ -67,7 +68,7 @@ func TestAsync(t *testing.T) {
 
 func TestAsync_Error(t *testing.T) {
 	// Use a configuration with no servers to force an error (or timeout)
-	config := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
+	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
@@ -86,7 +87,7 @@ func TestAsync_Error(t *testing.T) {
 
 func BenchmarkAsyncQuorumCall(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9} {
-		config := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
+		config := gorumstest.Config(b, numNodes, gorumstest.EchoServerFn)
 		cfgCtx := config.Context(b.Context())
 
 		b.Run(fmt.Sprintf("AsyncMajority/%d", numNodes), func(b *testing.B) {

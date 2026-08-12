@@ -13,8 +13,8 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: "go.mod"
           cache: true
@@ -28,8 +28,8 @@ jobs:
         run: make
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
-          args: --timeout=5m --disable=errcheck
+          args: --timeout=5m
           only-new-issues: true

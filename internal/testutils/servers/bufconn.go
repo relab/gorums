@@ -1,6 +1,6 @@
 //go:build !integration
 
-package gorums
+package servers
 
 import (
 	"context"
@@ -50,7 +50,7 @@ func (r *bufconnRegistry) registerDialer(t testing.TB, dialer bufconnDialer) (is
 
 	existingDialer, exists := r.dialers[t]
 	if exists {
-		// Chain the new dialer to fall back to the existing one
+		// Chain the new dialer to fall back to the existing one.
 		r.dialers[t] = func(ctx context.Context, addr string) (net.Conn, error) {
 			conn, err := dialer(ctx, addr)
 			if err == nil {
@@ -82,9 +82,9 @@ func (r *bufconnRegistry) cleanup(t testing.TB) {
 	delete(r.dialers, t)
 }
 
-// testSetupServers is the bufconn implementation of server setup.
-// It starts servers using bufconn and returns addresses and a variadic stop function.
-func testSetupServers(t testing.TB, numServers int, srvFn func(int) ServerIface) ([]string, func(...int)) {
+// Start starts numServers servers using in-memory bufconn listeners and
+// returns their addresses and a variadic stop function.
+func Start(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func(...int)) {
 	t.Helper()
 
 	addrToListener := make(map[string]*bufconn.Listener, numServers)
@@ -99,7 +99,7 @@ func testSetupServers(t testing.TB, numServers int, srvFn func(int) ServerIface)
 		}
 	}
 
-	// Create a dialer for the new listeners
+	// Create a dialer for the new listeners.
 	newDialer := func(ctx context.Context, addr string) (net.Conn, error) {
 		if listener, ok := addrToListener[addr]; ok {
 			return listener.DialContext(ctx)
@@ -107,7 +107,7 @@ func testSetupServers(t testing.TB, numServers int, srvFn func(int) ServerIface)
 		return nil, fmt.Errorf("no bufconn listener for address: %s", addr)
 	}
 
-	// Register or chain the dialer for this test
+	// Register or chain the dialer for this test.
 	isFirst := globalBufconnRegistry.registerDialer(t, newDialer)
 	if isFirst {
 		t.Cleanup(func() { globalBufconnRegistry.cleanup(t) })
@@ -116,10 +116,11 @@ func testSetupServers(t testing.TB, numServers int, srvFn func(int) ServerIface)
 	return setupServers(t, numServers, srvFn, listenFn)
 }
 
-// TestDialOptions returns a [DialOption] that configures a bufconn-based in-memory
-// dialer for tests. The dialer looks up the registered listener at dial time, so
-// tests may register listeners after calling TestDialOptions.
-func TestDialOptions(t testing.TB) DialOption {
+// DialOptions returns the gRPC dial options needed to connect to servers
+// started by [Start]: a context dialer that looks up the registered bufconn
+// listener at dial time (so tests may register listeners after calling
+// DialOptions), plus insecure transport credentials.
+func DialOptions(t testing.TB) []grpc.DialOption {
 	dialer := func(ctx context.Context, addr string) (net.Conn, error) {
 		d, err := globalBufconnRegistry.getDialer(t)
 		if err != nil {
@@ -127,13 +128,13 @@ func TestDialOptions(t testing.TB) DialOption {
 		}
 		return d(ctx, addr)
 	}
-	return WithDialOptions(
+	return []grpc.DialOption{
 		grpc.WithContextDialer(dialer),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
+	}
 }
 
-// bufconnListener wraps bufconn.Listener to implement net.Listener
+// bufconnListener wraps bufconn.Listener to implement net.Listener.
 type bufconnListener struct {
 	*bufconn.Listener
 	addr net.Addr
@@ -143,7 +144,7 @@ func (bl *bufconnListener) Addr() net.Addr {
 	return bl.addr
 }
 
-// bufconnAddr implements net.Addr for bufconn
+// bufconnAddr implements net.Addr for bufconn.
 type bufconnAddr struct {
 	network string
 	addr    string

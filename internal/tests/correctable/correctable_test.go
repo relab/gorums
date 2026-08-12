@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/gorumstest"
 )
 
 // run a test on a correctable call.
@@ -12,13 +13,13 @@ import (
 // the target level is n (quorum size).
 func run(t testing.TB, n int, corr func(*ConfigContext, int) CorrectableResponse) {
 	t.Helper()
-	config := gorums.TestConfiguration(t, n, func(_ int) gorums.ServerIface {
+	config := gorumstest.Config(t, n, func(_ int) gorums.ServerIface {
 		gorumsSrv := gorums.NewServer()
 		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
 		return gorumsSrv
 	})
 
-	ctx := gorums.TestContext(t, 100*time.Millisecond)
+	ctx := gorumstest.Context(t, 100*time.Millisecond)
 	configCtx := config.Context(ctx)
 	res := corr(configCtx, n)
 
@@ -52,13 +53,13 @@ func TestCorrectableStream(t *testing.T) {
 // TestCorrectableWithWatch tests progressive level watching using the type alias
 func TestCorrectableWithWatch(t *testing.T) {
 	n := 4
-	config := gorums.TestConfiguration(t, n, func(_ int) gorums.ServerIface {
+	config := gorumstest.Config(t, n, func(_ int) gorums.ServerIface {
 		gorumsSrv := gorums.NewServer()
 		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
 		return gorumsSrv
 	})
 
-	ctx := gorums.TestContext(t, 100*time.Millisecond)
+	ctx := gorumstest.Context(t, 100*time.Millisecond)
 	configCtx := config.Context(ctx)
 
 	// Use the type alias for the correctable result
