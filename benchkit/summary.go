@@ -85,7 +85,9 @@ func Summarize(r *Result, trim time.Duration) Summary {
 		throughput = float64(keptOps) / (float64(keptDurNs) / 1e9)
 	}
 	// The index-map cut is exact only when each op produced one in-order sample.
-	if clientMeasured && exact && cutOps > 0 && int(cutOps) <= len(latencies) {
+	// Compare in uint64: converting cutOps to int first can wrap negative on a
+	// 32-bit int, which would pass the bound and then panic on the slice.
+	if clientMeasured && exact && cutOps > 0 && cutOps <= uint64(len(latencies)) {
 		latencies = latencies[cutOps:]
 	}
 	return Summary{
