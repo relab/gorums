@@ -102,7 +102,8 @@ func (r *MessageRouter) PendingCount() int {
 // DispatchLocalRequest handles the request in-process for the local node,
 // bypassing the network. It delivers the request to the registered handler,
 // serializing execution the same way remote nodes do: the next dispatch is
-// blocked until the handler returns or calls [ServerContext.Release].
+// blocked until the handler returns or invokes the release callback it was
+// dispatched with.
 //
 // For one-way calls, send-completion is confirmed before the handler runs.
 // For two-way calls, the response is delivered directly to the caller's

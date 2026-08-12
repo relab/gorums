@@ -155,7 +155,7 @@ type Channel struct {
 // proactively with capped exponential backoff instead of waiting for the next
 // local send. Use this whenever a remote peer depends on this dialed stream
 // staying registered on its inbound side. Any symmetric peer (a server calling
-// its peers via WithOutbound) drops out of the remote's connected
+// its peers via WithPeers) drops out of the remote's connected
 // configuration when the stream it dialed goes idle and dies. A stream lost
 // while this side has nothing to send would otherwise leave the peer stalled
 // until the next local send.
