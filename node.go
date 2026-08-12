@@ -314,7 +314,7 @@ func (n *Node) Latency() time.Duration {
 	return n.router.Latency()
 }
 
-// ID compares nodes by their identifier in increasing order.
+// ByID compares nodes by their identifier in increasing order.
 // It is compatible with [slices.SortFunc] and [Config.Sort].
 var ByID = func(a, b *Node) int {
 	return cmp.Compare(a.id, b.id)
@@ -336,7 +336,7 @@ var ByLastError = func(a, b *Node) int {
 	}
 }
 
-// Latency compares nodes by their current latency estimate in ascending order.
+// ByLatency compares nodes by their current latency estimate in ascending order.
 // Nodes with no measurement yet (negative latency value) sort after nodes with a
 // measurement. It is compatible with [slices.SortFunc] and [Config.Sort].
 var ByLatency = func(a, b *Node) int {
