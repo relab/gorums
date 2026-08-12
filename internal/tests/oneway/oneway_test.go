@@ -52,10 +52,19 @@ type cluster struct {
 // reset discards messages left over from an earlier subtest so the next one
 // starts from a known state. A subtest that received everything it sent leaves
 // nothing behind.
+//
+// It drains until each channel is empty rather than taking len() once: a
+// straggler still in flight when reset runs would otherwise be left queued and
+// counted against the next subtest.
 func (c *cluster) reset() {
 	for _, srv := range c.srvs {
-		for range len(srv.received) {
-			<-srv.received
+	drain:
+		for {
+			select {
+			case <-srv.received:
+			default:
+				break drain
+			}
 		}
 	}
 }
