@@ -85,7 +85,7 @@ func WithInterceptors(i ...Interceptor) ServerOption {
 //
 // The server builds the peer [Configuration] itself, available from
 // [Server.PeerConfig], applying opts to the connections it establishes. To
-// observe which peers are currently reachable, use [Server.Config].
+// observe which peers are currently reachable, use [Server.ConnectedPeers].
 //
 // The returned option only records the peer set; the [NewServer] call that
 // receives it panics if the node source is invalid, for example if it contains
@@ -101,7 +101,7 @@ func WithPeers(myID uint32, nodes NodeListOption, opts ...DialOption) ServerOpti
 
 // WithPeerChange registers a callback invoked after each change to the peer
 // [Configuration] (peer connect or disconnect). The callback runs while
-// internal locks are held, so it must not call [Server.Config] or other
+// internal locks are held, so it must not call [Server.ConnectedPeers] or other
 // blocking methods; use it only to signal or copy, not for long work.
 func WithPeerChange(callback func(Configuration)) ServerOption {
 	return func(o *serverOptions) {
