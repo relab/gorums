@@ -95,8 +95,8 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 	if m.opts.StreamDedup && m.opts.InboundMgr != nil && id < m.opts.LocalNodeID {
 		// A lower-ID peer dials this node, so rather than dial back, this node
 		// reuses that peer's inbound connection. It works once the peer connects
-		// and fails with ErrStreamDown until then; [Server.WaitForAll] waits for
-		// the peer.
+		// and fails with ErrStreamDown until then; the server's WaitForAll waits
+		// for the peer.
 		//
 		// A dedup node routes its calls onto the borrowed peer's shared channel,
 		// so the borrowed peer must be the same process this node addresses: an
