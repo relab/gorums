@@ -136,6 +136,29 @@ func TestNodeSort(t *testing.T) {
 	})
 }
 
+// TestNodeSharedEnqueueDisconnected verifies that enqueueing to a shared node
+// whose peer is currently disconnected (nil channel) fails fast with
+// ErrStreamDown instead of silently dropping the request. A shared node cannot
+// re-dial its peer, so the caller must not be left waiting for a response.
+func TestNodeSharedEnqueueDisconnected(t *testing.T) {
+	peer := stream.NewTransport(1, func() uint64 { return 0 }, stream.NewMessageRouter())
+	transport := stream.NewSharedTransport(peer)
+	n := newNode(1, "", nil, transport)
+	replyChan := make(chan stream.NodeResponse[*stream.Message], 1)
+	n.loadTransport().Enqueue(stream.Request{Ctx: t.Context(), ResponseChan: replyChan})
+	select {
+	case r := <-replyChan:
+		if !errors.Is(r.Err, stream.ErrStreamDown) {
+			t.Errorf("Enqueue error = %v, want %v", r.Err, stream.ErrStreamDown)
+		}
+		if r.NodeID != 1 {
+			t.Errorf("Enqueue response NodeID = %d, want 1", r.NodeID)
+		}
+	default:
+		t.Fatal("expected error response for disconnected shared node")
+	}
+}
+
 func TestNodeCloseCancelsAllPendingRequests(t *testing.T) {
 	router := stream.NewMessageRouter()
 	node := newTestNode(1, router, stream.NewLocalChannel(1, router))
@@ -171,6 +194,9 @@ func TestNodeMissingTransportIsSafe(t *testing.T) {
 			}
 			if node.IsOutbound() {
 				t.Error("IsOutbound = true, want false")
+			}
+			if node.IsShared() {
+				t.Error("IsShared = true, want false")
 			}
 			if got := node.PendingCount(); got != 0 {
 				t.Errorf("PendingCount = %d, want 0", got)

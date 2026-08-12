@@ -24,7 +24,8 @@ type DialOptions struct {
 	Metadata     metadata.MD
 	Handler      stream.RequestHandler
 	LocalNodeID  uint32          // if non-zero, skip setting handler on this node ID
-	InboundMgr   *InboundManager // set by WithBackChannel; enables eager reconnect for symmetric nodes
+	StreamDedup  bool            // reuse a lower-ID peer's dialed stream instead of dialing back
+	InboundMgr   *InboundManager // set by WithBackChannel; enables eager reconnect for symmetric nodes and, with StreamDedup, born-shared borrowing
 	Err          error           // records misuse of a dial option; surfaced by NewConfig
 }
 
@@ -42,5 +43,13 @@ func NewDialOptions() DialOptions {
 	return DialOptions{
 		Backoff:    backoff.DefaultConfig,
 		SendBuffer: DefaultSendBufferSize,
+	}
+}
+
+// WithStreamDedup enables stream deduplication on the outbound manager. It is
+// applied by the server when its stream-dedup server option is set.
+func WithStreamDedup() DialOption {
+	return func(o *DialOptions) {
+		o.StreamDedup = true
 	}
 }

@@ -17,9 +17,12 @@ var ErrSendFailure = impl.ErrSendFailure
 var ErrTypeMismatch = stream.ErrTypeMismatch
 
 // ErrStreamDown is returned for a call that cannot be delivered or retried
-// because the target node's stream is unavailable. It is a gRPC status error
-// with the Unavailable code; match its identity with [errors.Is], including
-// against a node error inside a [QuorumCallError].
+// because the target node's stream is unavailable. Under [WithStreamDedup] a
+// higher-ID peer borrows the lower-ID peer's dialed stream and cannot re-dial
+// it, so calls to a lower-ID peer report ErrStreamDown until that peer connects
+// (see [Server.WaitForAll]) and again if the shared stream later drops. It is a
+// gRPC status error with the Unavailable code; match its identity with
+// [errors.Is], including against a node error inside a [QuorumCallError].
 var ErrStreamDown = stream.ErrStreamDown
 
 // ErrNodeClosed is returned for a call enqueued after its node was closed. It
@@ -37,8 +40,8 @@ var ErrSendQueueFull = stream.ErrSendQueueFull
 // This allows the response iterator to account for all nodes without blocking.
 var ErrSkipNode = impl.ErrSkipNode
 
-// ErrStopped is returned by [Server.WaitForPeers] and [Server.WaitForClients]
-// when the server is stopped before the condition is met.
+// ErrStopped is returned by [Server.WaitForPeers], [Server.WaitForClients],
+// and [Server.WaitForAll] when the server is stopped before the condition is met.
 var ErrStopped = conn.ErrStopped
 
 // QuorumCallError reports on a failed quorum call.

@@ -30,6 +30,17 @@ func (c NodeContext) Node() *Node {
 	return c.node
 }
 
+// sharedNodeTransport derives a borrower transport from an inbound peer node,
+// reusing the peer's channel, router, and server-space message-ID generator.
+// It returns nil if the peer has no transport.
+func sharedNodeTransport(peer *Node) *stream.Transport {
+	transport := peer.loadTransport()
+	if transport == nil {
+		return nil
+	}
+	return stream.NewSharedTransport(transport)
+}
+
 // Node encapsulates the state of a node on which a remote procedure call
 // can be performed.
 type Node struct {
@@ -39,7 +50,7 @@ type Node struct {
 	mgr  *outboundManager // owning manager for this node
 
 	// transport is fixed at construction, like id and addr; a node's channel
-	// changes only behind the transport's channel reference.
+	// changes only behind the transport's shared channel reference.
 	transport *stream.Transport
 
 	// inboundMu guards liveChannels and the active-channel handoff in
@@ -155,6 +166,16 @@ func newLocalNode(id uint32, addr string, msgIDGen func() uint64, handler stream
 	return n
 }
 
+// newSharedNode creates a node that reuses the inbound peer node's channel and
+// router. The shared node draws message IDs from the peer node's generator,
+// i.e. the server-initiated ID space, so its request IDs cannot collide with
+// the remote peer's client-initiated IDs on the same stream. Channel
+// replacement on peer reconnect is observed through the shared atomic pointer;
+// the router is owned by the peer node and stable across reconnects.
+func newSharedNode(peer *Node, addr string, mgr *outboundManager) *Node {
+	return newNode(peer.id, addr, mgr, sharedNodeTransport(peer))
+}
+
 // IsInbound returns true if the node has an active inbound channel.
 func (n *Node) IsInbound() bool {
 	ch := n.activeChannel()
@@ -165,6 +186,13 @@ func (n *Node) IsInbound() bool {
 func (n *Node) IsOutbound() bool {
 	ch := n.activeChannel()
 	return ch != nil && ch.IsOutbound()
+}
+
+// IsShared returns true if the node's channel is shared with an inbound peer
+// node rather than owned by this node's own outbound connection. Callers can
+// use this to derive their own stream-topology statistics under [WithStreamDedup].
+func (n *Node) IsShared() bool {
+	return n.loadTransport().IsShared()
 }
 
 // PendingCount returns the number of pending calls currently registered in the router.
@@ -281,9 +309,11 @@ func (n *Node) routeInbound(ctx context.Context, msg *stream.Message, release fu
 }
 
 // trySend enqueues a request to this node's channel without ever blocking the
-// caller; see [stream.Channel.TrySend]. A request for a node without a channel
-// is silently dropped. It is exposed to the stream package through the
-// [peerNode] adapter.
+// caller; see [stream.Channel.TrySend]. A shared node whose peer is currently
+// disconnected has no channel; the request is answered with ErrStreamDown
+// because the node cannot re-dial (only the peer can re-establish the stream).
+// For other nodes without a channel the request is silently dropped. It is
+// exposed to the stream package through the [peerNode] adapter.
 func (n *Node) trySend(req stream.Request) {
 	n.loadTransport().TrySend(req)
 }

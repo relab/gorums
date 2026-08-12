@@ -50,6 +50,39 @@ type testSrv struct {
 	lastNum uint64
 }
 
+type blockingOrderSrv struct {
+	firstStarted  chan struct{}
+	secondStarted chan struct{}
+	releaseFirst  chan struct{}
+}
+
+func newBlockingOrderSrv() *blockingOrderSrv {
+	return &blockingOrderSrv{
+		firstStarted:  make(chan struct{}),
+		secondStarted: make(chan struct{}),
+		releaseFirst:  make(chan struct{}),
+	}
+}
+
+func (s *blockingOrderSrv) handle(req *Request) (*Response, error) {
+	switch req.GetNum() {
+	case 1:
+		close(s.firstStarted)
+		<-s.releaseFirst
+	case 2:
+		close(s.secondStarted)
+	}
+	return Response_builder{InOrder: true}.Build(), nil
+}
+
+func (s *blockingOrderSrv) QuorumCall(_ gorums.ServerContext, req *Request) (*Response, error) {
+	return s.handle(req)
+}
+
+func (s *blockingOrderSrv) UnaryRPC(_ gorums.ServerContext, req *Request) (*Response, error) {
+	return s.handle(req)
+}
+
 func (s *testSrv) isInOrder(num uint64) bool {
 	s.Lock()
 	defer s.Unlock()
@@ -179,5 +212,75 @@ func TestMixedOrdering(t *testing.T) {
 			})
 		}
 		wg.Wait()
+	}
+}
+
+func TestDedupBackChannelOrdering(t *testing.T) {
+	servers := gorumstest.LocalServers(t, 2, gorums.WithStreamDedup())
+	handler := newBlockingOrderSrv()
+	var releaseOnce sync.Once
+	releaseFirst := func() { releaseOnce.Do(func() { close(handler.releaseFirst) }) }
+	t.Cleanup(releaseFirst)
+	RegisterGorumsTestServer(servers[0], handler)
+
+	ctx := gorumstest.Context(t, 10*time.Second)
+	for _, srv := range servers {
+		if _, err := srv.WaitForAll(ctx); err != nil {
+			t.Fatalf("WaitForAll: %v", err)
+		}
+	}
+
+	var target *gorums.Node
+	for _, node := range servers[1].PeerConfig() {
+		if node.ID() == 1 {
+			target = node
+			break
+		}
+	}
+	if target == nil {
+		t.Fatal("node 1 not found in server 2 outbound configuration")
+	}
+	if !target.IsShared() {
+		t.Fatal("node 1 is not using the deduplicated stream")
+	}
+
+	call := func(num uint64, done chan<- error) {
+		resp, err := UnaryRPC(target.Context(ctx), Request_builder{Num: num}.Build())
+		if err == nil && !resp.GetInOrder() {
+			err = errors.New("handler reported an out-of-order request")
+		}
+		done <- err
+	}
+	firstDone := make(chan error, 1)
+	secondDone := make(chan error, 1)
+	go call(1, firstDone)
+	select {
+	case <-handler.firstStarted:
+	case <-time.After(time.Second):
+		t.Fatal("first handler did not start")
+	}
+
+	go call(2, secondDone)
+	select {
+	case <-handler.secondStarted:
+		t.Fatal("second handler started before first handler released")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	releaseFirst()
+	select {
+	case <-handler.secondStarted:
+	case <-time.After(time.Second):
+		t.Fatal("second handler did not start after first handler released")
+	}
+	for i, done := range []<-chan error{firstDone, secondDone} {
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Errorf("call %d failed: %v", i+1, err)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("call %d did not complete", i+1)
+		}
 	}
 }

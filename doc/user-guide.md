@@ -1812,6 +1812,7 @@ Use `WaitForPeers` to wait for enough peers to connect before issuing calls.
 
 A symmetric server (one that both tracks peers and calls them via `WithPeers`) re-establishes an outbound stream proactively when it drops while idle, rather than waiting for the next local send.
 Without this, a peer would remain absent from the remote's `ConnectedPeers()` until that side happened to send something.
+This applies to every symmetric outbound stream, dual mode included, not only to shared streams under `WithStreamDedup`.
 
 The storage example uses `gorums.NewLocalServers`, which calls `WithPeers` automatically for each server.
 
@@ -2015,6 +2016,35 @@ sequenceDiagram
 ```
 
 The back-channel calls reuse the existing inbound gRPC streams established by the clients, so no additional network connections or firewall rules are needed.
+
+## Stream Deduplication for Symmetric Peers
+
+Stream deduplication lets symmetric Gorums peers reuse one bidirectional stream for both call directions.
+Enable it with the `WithStreamDedup` server option on a server configured with `WithPeers`.
+The server must have a nonzero node ID present in its `WithPeers` node list.
+`NewLocalServers` sets up peers and outbound configuration automatically.
+
+Call `Server.WaitForAll` before issuing application calls:
+
+```go
+config, err := srv.WaitForAll(ctx)
+if err != nil {
+    return err
+}
+```
+
+`WaitForAll` returns configuration errors immediately instead of waiting for peers that cannot satisfy the setup.
+It waits until every peer is connected — that is, until `ConnectedPeers()` equals `PeerConfig()`.
+Each pair of peers shares one bidirectional stream, dialed by the pair's lower-ID peer: the outbound node for a lower-ID peer never dials and instead shares the inbound stream that peer establishes.
+Calls to a lower-ID peer return `gorums.ErrStreamDown` until that peer has connected; match it with `errors.Is`, including against a node error inside a `QuorumCallError`.
+If a shared stream later drops, the lower-ID peer that dialed it re-establishes it automatically, and calls on the sharing side return `gorums.ErrStreamDown` until it returns.
+Calling `WaitForAll` again is safe.
+
+Configurations and sub-configurations retained before `WaitForAll` remain valid; the shared topology is fixed when a configuration is created.
+Calls already in flight while a stream is being replaced may still fail because they are not migrated between streams.
+
+Each `*Node` reports its stream topology: `Node.IsOutbound` is true for a node reached over a stream this process opened, `Node.IsInbound` is true for a node reached over a stream the peer opened, and `Node.IsShared` is true for a deduplicated node whose single bidirectional stream carries calls in both directions.
+These let a symmetric deployment inspect the shared-stream topology.
 
 ## Send Queue Capacity and Backpressure
 
