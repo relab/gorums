@@ -157,7 +157,13 @@ func SignalDone(ctx context.Context, t *SymmetricTarget) {
 			continue
 		}
 		req := benchkit.DoneRequest_builder{SenderId: t.controls[i].SelfID()}.Build()
-		_ = benchkit.Done(out.Context(ctx), req).Send()
+		// Report rather than return: Done is advisory, and a peer that already
+		// finished and exited makes a failed send the expected outcome, not a
+		// fault. Logging it still distinguishes that from a run where every
+		// send failed and no peer was ever told.
+		if err := benchkit.Done(out.Context(ctx), req).Send(); err != nil {
+			benchkit.Logf("Done signal from node %d: %v\n", t.controls[i].SelfID(), err)
+		}
 	}
 }
 
