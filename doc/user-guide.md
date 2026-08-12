@@ -413,7 +413,8 @@ The generated code provides a function for each quorum call method:
 func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse]
 ```
 
-This function returns a `*gorums.Responses[*ReadResponse]` object that provides several ways to aggregate and process responses.
+This function returns a `*gorums.Call[*ReadRequest, *ReadResponse]` handle.
+The handle embeds `*gorums.Responses[*ReadResponse]`, so it offers the same ways to aggregate and process responses, and adds `Intercept` for registering interceptors before the call is dispatched.
 
 ### Terminal Methods for Response Aggregation
 
