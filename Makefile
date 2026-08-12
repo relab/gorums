@@ -17,10 +17,11 @@ workspace_packages		:= ./... ./examples/... ./benchkit/...
 plugin_deps				:= gorums.pb.go $(static_file)
 runtime_deps			:= internal/stream/stream.pb.go internal/stream/stream_grpc.pb.go
 benchkit_deps			:= benchkit/benchkit.pb.go benchkit/control.pb.go benchkit/control_gorums.pb.go
+benchmark_deps			:= $(benchkit_deps) benchkit/benchmark/benchmark.pb.go benchkit/benchmark/benchmark_gorums.pb.go
 
-.PHONY: all dev tools bootstrapgorums installgorums benchkit test compiletests genproto benchtest bench lint deadcode modernize goplscheck
+.PHONY: all dev tools bootstrapgorums installgorums benchmark benchkit test compiletests genproto benchtest bench lint deadcode modernize goplscheck
 
-all: dev compiletests
+all: dev benchmark compiletests
 
 dev: installgorums $(runtime_deps)
 	@rm -f $(dev_path)/zorums*.pb.go
@@ -29,6 +30,9 @@ dev: installgorums $(runtime_deps)
 		--gorums_out=dev=true:. \
 		--go_opt=default_api_level=API_OPAQUE \
 		$(zorums_proto)
+
+benchmark: installgorums $(benchmark_deps)
+	@go build -C benchkit -o cmd/benchmark/benchmark ./cmd/benchmark
 
 benchkit: installgorums $(benchkit_deps)
 
@@ -45,6 +49,15 @@ benchkit/control.pb.go: $(bk_path)/benchkit/control.proto
 		--go_opt=default_api_level=API_OPAQUE $<
 
 benchkit/control_gorums.pb.go: $(bk_path)/benchkit/control.proto
+	@protoc -I=$(bk_proto_path) \
+		--gorums_out=benchkit --gorums_opt=module=$(bk_module) $<
+
+benchkit/benchmark/benchmark.pb.go: $(bk_path)/benchmark/benchmark.proto
+	@protoc -I=$(bk_proto_path) \
+		--go_out=benchkit --go_opt=module=$(bk_module) \
+		--go_opt=default_api_level=API_OPAQUE $<
+
+benchkit/benchmark/benchmark_gorums.pb.go: $(bk_path)/benchmark/benchmark.proto
 	@protoc -I=$(bk_proto_path) \
 		--gorums_out=benchkit --gorums_opt=module=$(bk_module) $<
 
@@ -158,12 +171,12 @@ goplscheck:
 			exit 1; \
 		fi
 
-# Regenerate all Gorums and protobuf generated files across the repo (dev, benchkit, internal/tests, examples).
+# Regenerate all Gorums and protobuf generated files across the repo (dev, benchkit, benchmark, internal/tests, examples).
 # This will force regeneration even though the proto files have not changed.
 genproto: installgorums dev
-	@echo "Regenerating all proto files (dev, benchkit, internal/tests, examples)"
+	@echo "Regenerating all proto files (dev, benchkit, benchmark, internal/tests, examples)"
 	@$(MAKE) -B -s dev
-	@$(MAKE) -B -s $(benchkit_deps)
+	@$(MAKE) -B -s $(benchmark_deps)
 	@$(MAKE) -B -s --no-print-directory -C ./internal/tests all
 	@$(MAKE) -B -s --no-print-directory -C ./examples all
 
