@@ -226,7 +226,7 @@ type StorageServer interface {
 	WriteUnicast(ctx gorums.ServerContext, request *WriteRequest)
 	WriteMulticast(ctx gorums.ServerContext, request *WriteRequest)
 	ReadQC(ctx gorums.ServerContext, request *ReadRequest) (response *ReadResponse, err error)
-	ReadCorrectable(ctx gorums.ServerContext, request *ReadRequest, send func(response *ReadResponse) error) error
+	ReadCorrectable(ctx gorums.ServerContext, request *ReadRequest, send func(response *ReadResponse))
 }
 ```
 
@@ -275,10 +275,10 @@ func (srv *storageSrv) ReadQC(_ gorums.ServerContext, req *ReadRequest) (resp *R
   return srv.state, nil
 }
 
-func (srv *storageSrv) ReadCorrectable(_ gorums.ServerContext, req *ReadRequest, send func(response *ReadResponse) error) error {
+func (srv *storageSrv) ReadCorrectable(_ gorums.ServerContext, req *ReadRequest, send func(response *ReadResponse)) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
-  return send(srv.state)
+  send(srv.state)
 }
 ```
 
@@ -864,7 +864,7 @@ func RequireAllSuccess(resp *gorums.Responses[*Response]) (*Response, error) {
 Gorums provides interceptors to transform requests and responses on a per-node basis.
 Interceptors are passed as call options and can be chained together.
 
-### MapRequest ServerInterceptor
+### MapRequest ClientInterceptor
 
 Transform requests before sending to each node:
 
@@ -880,7 +880,7 @@ resp, err := WriteQC(cfgCtx, req,
 ).Majority()
 ```
 
-### MapResponse ServerInterceptor
+### MapResponse ClientInterceptor
 
 Transform responses received from each node:
 
@@ -950,7 +950,7 @@ resp, err := ReadQC(cfgCtx, req,
 ).Majority()
 ```
 
-#### Example: Logging ServerInterceptor
+#### Example: Logging ClientInterceptor
 
 Create a logging interceptor that wraps the response iterator:
 
@@ -987,7 +987,7 @@ resp, err := ReadQC(cfgCtx, req,
 ).Majority()
 ```
 
-#### Example: Response Filtering ServerInterceptor
+#### Example: Response Filtering ClientInterceptor
 
 Filter out responses that don't meet certain criteria:
 
@@ -1021,7 +1021,7 @@ resp, err := ReadQC(cfgCtx, req,
 ).Majority()
 ```
 
-#### Example: Counting ServerInterceptor
+#### Example: Counting ClientInterceptor
 
 Count responses passing through the interceptor:
 
