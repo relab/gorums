@@ -280,13 +280,14 @@ func WriteTimeSeriesCSVs(outDir string, groups []TimeSeriesGroup, trim time.Dura
 		if len(tp.rows) == 0 && len(lp.rows) == 0 {
 			continue
 		}
+		base := csvBaseName(group.Benchmark)
 		for _, task := range []struct {
 			plotter  Plotter
 			filename string
 		}{
-			{tp, group.Benchmark + "_throughput.csv"},
-			{lp, group.Benchmark + "_latency.csv"},
-			{sc, group.Benchmark + "_saturation.csv"},
+			{tp, base + "_throughput.csv"},
+			{lp, base + "_latency.csv"},
+			{sc, base + "_saturation.csv"},
 		} {
 			if err := renderTimeSeries(task.plotter, filepath.Join(outDir, task.filename)); err != nil {
 				return nil, err
@@ -295,6 +296,22 @@ func WriteTimeSeriesCSVs(outDir string, groups []TimeSeriesGroup, trim time.Dura
 		available = append(available, group.Benchmark)
 	}
 	return available, nil
+}
+
+// csvBaseName reduces a benchmark name to a filename base that stays inside the
+// output directory. A benchmark name reaches here from run configuration, so a
+// name carrying a path separator would otherwise place the CSV outside outDir or
+// in a directory that was never created. Only the final path element is kept,
+// and the elements that name a directory rather than a file fall back to a
+// fixed stem. The unmodified benchmark name is still what the caller receives
+// back, since the report keys its figures by it.
+func csvBaseName(benchmark string) string {
+	base := filepath.Base(filepath.FromSlash(benchmark))
+	switch base {
+	case ".", "..", string(filepath.Separator):
+		return "benchmark"
+	}
+	return base
 }
 
 // renderTimeSeries renders one plotter's output to the file at path.

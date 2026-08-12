@@ -259,3 +259,32 @@ func csvLines(s string) []string {
 	}
 	return out
 }
+
+// TestCSVBaseNameStaysInOutputDir verifies that a benchmark name carrying path
+// separators cannot steer a CSV out of the output directory.
+func TestCSVBaseNameStaysInOutputDir(t *testing.T) {
+	tests := []struct {
+		name      string
+		benchmark string
+		want      string
+	}{
+		{"plain", "ReadQC", "ReadQC"},
+		{"relative path", "sub/ReadQC", "ReadQC"},
+		{"parent escape", "../../etc/passwd", "passwd"},
+		{"absolute", "/tmp/ReadQC", "ReadQC"},
+		{"dot", ".", "benchmark"},
+		{"dotdot", "..", "benchmark"},
+		{"separator", "/", "benchmark"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := csvBaseName(tt.benchmark)
+			if got != tt.want {
+				t.Errorf("csvBaseName(%q) = %q, want %q", tt.benchmark, got, tt.want)
+			}
+			if strings.ContainsRune(got, filepath.Separator) {
+				t.Errorf("csvBaseName(%q) = %q, still contains a path separator", tt.benchmark, got)
+			}
+		})
+	}
+}
