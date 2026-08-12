@@ -1,0 +1,22 @@
+version: "2"
+
+linters:
+  # errcheck reports every unchecked error return, which this repository does
+  # not treat as a defect on its own. Disabling it here rather than on the
+  # command line keeps make and CI in agreement.
+  disable:
+    - errcheck
+  settings:
+    staticcheck:
+      # The golangci-lint default set, minus QF1008. Gorums spells out the
+      # embedded field when the selector names the layer being addressed, as in
+      # s.inboundManager.close() or c.Responses.seq, which QF1008 would strip.
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        - -QF1008
