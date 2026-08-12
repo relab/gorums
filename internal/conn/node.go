@@ -96,7 +96,7 @@ type nodeOptions struct {
 	Metadata       metadata.MD
 	DialOpts       []grpc.DialOption
 	RequestHandler stream.RequestHandler
-	EagerReconnect bool                     // re-establish a lost stream proactively; set for symmetric (WithOutbound) nodes
+	EagerReconnect bool                     // re-establish a lost stream proactively; set for symmetric (WithPeers) nodes
 	StreamState    func(id uint32, up bool) // optional; invoked on outbound stream transitions
 	Manager        *outboundManager         // owning manager
 }

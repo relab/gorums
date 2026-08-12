@@ -24,7 +24,7 @@ type DialOptions struct {
 	Metadata     metadata.MD
 	Handler      stream.RequestHandler
 	LocalNodeID  uint32          // if non-zero, skip setting handler on this node ID
-	InboundMgr   *InboundManager // set by WithServer; enables eager reconnect for symmetric nodes
+	InboundMgr   *InboundManager // set by WithBackChannel; enables eager reconnect for symmetric nodes
 	Err          error           // records misuse of a dial option; surfaced by NewConfig
 }
 
