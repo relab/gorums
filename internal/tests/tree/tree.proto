@@ -1,0 +1,39 @@
+edition = "2023";
+
+package tree;
+
+import "gorums.proto";
+
+option features.field_presence = IMPLICIT;
+option go_package = "github.com/relab/gorums/tests/tree";
+
+// TreeAggregator demonstrates hierarchical fan-out and aggregation across a
+// cluster of nodes organized as a tree. A client or root server fans out calls
+// to a subtree; each internal node relays the call to its own children before
+// (or after) processing locally; leaves apply only local logic.
+service TreeAggregator {
+  // Broadcast fans a notification down the tree. Each internal-node handler
+  // should relay to ctx.TreeChildren() before or after local processing.
+  rpc Broadcast(BroadcastRequest) returns (Empty) {
+    option (gorums.multicast) = true;
+  }
+
+  // Aggregate collects a value from every node in the tree. Each
+  // internal-node handler should relay to ctx.TreeChildren(), sum the
+  // children's responses, and add its own local contribution.
+  rpc Aggregate(AggregateRequest) returns (AggregateResponse) {
+    option (gorums.quorumcall) = true;
+  }
+}
+
+message BroadcastRequest {
+  string text = 1;
+}
+
+message AggregateRequest {}
+
+message AggregateResponse {
+  int32 total = 1;
+}
+
+message Empty {}
