@@ -9,7 +9,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/status"
 )
 
@@ -302,20 +301,16 @@ func (c *Channel) ensureStream() (BidiStream, error) {
 	return stream, nil
 }
 
-// ensureConnectedNodeStream returns the active NodeStream over a ready
-// connection, creating a new stream if there is none.
+// ensureConnectedNodeStream returns the channel's NodeStream, creating one
+// when the channel has none. A stream already in place is returned as it is.
+// Connection state on its own does not replace it: the receive path clears a
+// stream that has ended, and that clear requeues the calls still pending on it.
 // This method is safe for concurrent use.
 func (c *Channel) ensureConnectedNodeStream() (BidiStream, error) {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
-	// if we already have a ready connection and an active stream, do nothing
-	if c.conn.GetState() == connectivity.Ready && c.stream != nil {
+	if c.stream != nil {
 		return c.stream, nil
-	}
-	// Cancel any stream left behind by a previous attempt before replacing
-	// it, so it does not stay alive server-side as an orphan.
-	if c.streamCancel != nil {
-		c.streamCancel()
 	}
 	c.streamCtx, c.streamCancel = context.WithCancel(c.connCtx)
 	var err error

@@ -609,23 +609,10 @@ func TestChannelEnsureStreamAfterBroken(t *testing.T) {
 	}
 }
 
-// TestChannelEnsureConnectedNodeStreamCancelsAbandonedStream verifies that
-// ensureConnectedNodeStream cancels a stream left behind by a previous
-// attempt before replacing it with a new one, instead of orphaning it.
-//
-// Before the fix, when the guard (conn Ready && stream != nil) was false but
-// a streamCancel from an earlier attempt was still referenced,
-// ensureConnectedNodeStream silently overwrote c.stream and c.streamCancel
-// without invoking the previous streamCancel. The abandoned stream then
-// stayed alive server-side, and any requests still in flight on it were
-// orphaned.
-//
-// The channel is built directly (bypassing NewOutboundChannel) so no sender
-// goroutine runs concurrently and races the manually injected "previous
-// attempt" state; ensureConnectedNodeStream is exercised as a plain method
-// call, matching how newChannelWithoutStream isolates state in
-// TestChannelEnsureStream above.
-func TestChannelEnsureConnectedNodeStreamCancelsAbandonedStream(t *testing.T) {
+// TestChannelEnsureConnectedNodeStreamKeepsLiveStream verifies that a stream
+// already in place is returned unchanged when the connection is not Ready.
+// The receive path is what clears a stream that has ended.
+func TestChannelEnsureConnectedNodeStreamKeepsLiveStream(t *testing.T) {
 	conn := newUnavailableClientConn(t)
 	if state := conn.GetState(); state == connectivity.Ready {
 		t.Fatalf("conn state = %v, want anything but Ready", state)
@@ -635,21 +622,22 @@ func TestChannelEnsureConnectedNodeStreamCancelsAbandonedStream(t *testing.T) {
 	t.Cleanup(connCancel)
 	c := &Channel{conn: conn, connCtx: connCtx, connCancel: connCancel}
 
-	// Simulate a stream left behind by a previous ensureConnectedNodeStream
-	// attempt: a live streamCtx/streamCancel pair and a non-nil stream.
 	oldCtx, oldCancel := context.WithCancel(connCtx)
+	t.Cleanup(oldCancel)
 	c.streamCtx, c.streamCancel = oldCtx, oldCancel
-	c.stream = newMockBidiStream()
-	if oldCtx.Err() != nil {
-		t.Fatal("old stream context should not be cancelled yet")
+	live := newMockBidiStream()
+	t.Cleanup(live.close)
+	c.stream = live
+
+	got, err := c.ensureConnectedNodeStream()
+	if err != nil {
+		t.Fatalf("ensureConnectedNodeStream: %v", err)
 	}
-
-	// conn is not Ready, so the guard is false and ensureConnectedNodeStream
-	// takes the replace-stream path.
-	_, _ = c.ensureConnectedNodeStream()
-
-	if oldCtx.Err() == nil {
-		t.Error("ensureConnectedNodeStream did not cancel the abandoned stream's context before replacing it")
+	if got != live {
+		t.Fatalf("ensureConnectedNodeStream returned a different stream")
+	}
+	if oldCtx.Err() != nil {
+		t.Fatal("ensureConnectedNodeStream cancelled the live stream")
 	}
 }
 
@@ -1499,7 +1487,7 @@ func TestChannelCancelInflightSend(t *testing.T) {
 			// The channel is built directly (bypassing the constructors) so no
 			// sender or receiver goroutine races the manually injected state;
 			// cancelInflightSend is exercised as a plain method call, matching
-			// TestChannelEnsureConnectedNodeStreamCancelsAbandonedStream.
+			// TestChannelEnsureConnectedNodeStreamKeepsLiveStream.
 			connCtx, connCancel := context.WithCancel(context.Background())
 			t.Cleanup(connCancel)
 			c := &Channel{
