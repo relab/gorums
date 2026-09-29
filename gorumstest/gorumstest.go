@@ -57,12 +57,13 @@ func WaitUntil(t testing.TB, timeout time.Duration, predicate func() bool) bool 
 }
 
 // Collect receives up to want values from ch and returns them in arrival
-// order. It gives up when timeout elapses in total, returning the values
-// collected so far, so the caller can report a shortfall instead of blocking
-// forever. Use it wherever a test waits for effects that a failure may never
-// produce, such as one-way messages: a multicast discards a request it cannot
-// deliver without reporting an error, so an unbounded wait would hang the
-// package until the test binary's timeout.
+// order. It gives up when timeout elapses in total or ch is closed, returning
+// the values collected so far, so the caller can report a shortfall instead of
+// blocking forever. A closed channel contributes no further values. Use it
+// wherever a test waits for effects that a failure may never produce, such as
+// one-way messages: a multicast discards a request it cannot deliver without
+// reporting an error, so an unbounded wait would hang the package until the
+// test binary's timeout.
 //
 // Usage:
 //
@@ -77,7 +78,10 @@ func Collect[T any](t testing.TB, timeout time.Duration, want int, ch <-chan T) 
 	defer timer.Stop()
 	for range want {
 		select {
-		case v := <-ch:
+		case v, ok := <-ch:
+			if !ok {
+				return got
+			}
 			got = append(got, v)
 		case <-timer.C:
 			return got
