@@ -40,10 +40,12 @@ type ServerOption func(*serverOptions)
 // current handler's response has been picked up.
 //
 // The sendSize controls the capacity of the server's per-node send queue for
-// outgoing peer messages in the reverse direction, with the same full-queue
-// semantics as [WithSendBufferSize]: two-way requests fail fast, one-way
-// requests and responses block. A sendSize of 0 selects [DefaultSendBufferSize].
-// Larger values may increase throughput at the cost of higher latency.
+// outgoing peer messages, with the same full-queue semantics as
+// [WithSendBufferSize]. Two-way requests fail fast when the queue is full.
+// One-way requests wait for space. A reply never waits: it fails fast, or is
+// dropped when it has no channel to report the error on. A sendSize of 0
+// selects [DefaultSendBufferSize]. Larger values may increase throughput at
+// the cost of higher latency.
 func WithBufferSizes(receiveSize, sendSize uint) ServerOption {
 	return func(o *serverOptions) {
 		o.recvBufferSize = receiveSize
