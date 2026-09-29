@@ -758,6 +758,11 @@ func (c *Channel) receiver() {
 // wait, and returns false only when the node closed, signaling the receiver to
 // exit.
 func (c *Channel) pauseReconnect(delay *time.Duration) bool {
+	// A stream already in place is ready to read. The backoff applies only
+	// while the channel has none.
+	if c.getStream() != nil {
+		return true
+	}
 	// Drain a stale readiness signal left by our own ensureStream so it cannot
 	// satisfy the wait instantly; only a signal delivered during the wait — the
 	// sender re-establishing the stream — should shorten the backoff.
