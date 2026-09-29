@@ -164,15 +164,17 @@ func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, 
 	return cfg
 }
 
-// NoDialedConfig returns a [gorums.Configuration] over addrs whose nodes are
-// never actually dialed: gRPC connections are established lazily on the first
-// RPC, so tests that only need a valid configuration to construct calls,
-// without ever completing one, don't need a running server behind it. If addrs
-// is empty, a single unreachable sentinel address is used.
-func NoDialedConfig(t testing.TB, addrs ...string) gorums.Configuration {
+// unreachableSentinelAddr is a loopback address with no server.
+const unreachableSentinelAddr = "127.0.0.1:1"
+
+// UnreachableConfig returns a [gorums.Configuration] over addrs with no server
+// behind any address. Tests use it to obtain a valid configuration whose calls
+// can never complete. If addrs is empty, the configuration uses
+// [unreachableSentinelAddr].
+func UnreachableConfig(t testing.TB, addrs ...string) gorums.Configuration {
 	t.Helper()
 	if len(addrs) == 0 {
-		addrs = []string{"127.0.0.1:65535"}
+		addrs = []string{unreachableSentinelAddr}
 	}
 	cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs), InsecureDialOptions(t))
 	if err != nil {

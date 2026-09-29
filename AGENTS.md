@@ -70,7 +70,7 @@ These files are generated from templates. Instead:
 
 - Use the `github.com/relab/gorums/gorumstest` package for common test setup.
 - Use `gorumstest.Config` for a multi-server configuration, `gorumstest.Node` for a single server node, `gorumstest.Servers` for server addresses, and `gorumstest.Systems` for symmetric in-process server groups.
-- Use `gorumstest.NoDialedConfig` when a test needs configuration construction without dialing servers.
+- Use `gorumstest.UnreachableConfig` when a test needs a valid configuration with no server behind any address, so its calls can never complete.
 - Use `gorumstest.Context` for test-scoped timeouts and `gorumstest.WaitUntil` for bounded polling.
 - Use `gorumstest.DialOptions` or `gorumstest.InsecureDialOptions` for test connections, and use `gorumstest.WithStopFunc` or `gorumstest.WithPreConnect` when a failure-path test needs server lifecycle control.
 - These helpers own listener allocation, cleanup ordering, and goroutine-leak checks.
