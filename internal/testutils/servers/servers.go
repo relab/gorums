@@ -5,6 +5,7 @@
 package servers
 
 import (
+	"errors"
 	"net"
 	"sync"
 	"testing"
@@ -34,7 +35,9 @@ func (s *serverState) start(_ testing.TB) {
 
 func (s *serverState) stop(t testing.TB) {
 	t.Helper()
-	if err := s.lis.Close(); err != nil {
+	// Serve closes the listener before it returns. Closing it again reports
+	// net.ErrClosed, and the listener is already closed.
+	if err := s.lis.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
 		t.Errorf("Failed to close listener: %v", err)
 	}
 	s.srv.Stop()
