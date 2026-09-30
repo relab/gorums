@@ -21,10 +21,13 @@ func NewMessage(ctx context.Context, msgID uint64, method string, msg proto.Mess
 	if err != nil {
 		return nil, err
 	}
-	return newMessageFromPayload(ctx, msgID, method, payload), nil
+	return NewMessageFromPayload(ctx, msgID, method, payload), nil
 }
 
-func newMessageFromPayload(ctx context.Context, msgID uint64, method string, payload []byte) *Message {
+// NewMessageFromPayload creates a [Message] from already-marshaled protobuf
+// payload bytes. It is useful when the same request body is sent to many nodes
+// but each node requires a different message sequence number.
+func NewMessageFromPayload(ctx context.Context, msgID uint64, method string, payload []byte) *Message {
 	msgBuilder := Message_builder{
 		MessageSeqNo: msgID,
 		Method:       method,
@@ -38,13 +41,6 @@ func newMessageFromPayload(ctx context.Context, msgID uint64, method string, pay
 		}
 	}
 	return msgBuilder.Build()
-}
-
-// NewMessageFromPayload creates a [Message] from already-marshaled protobuf
-// payload bytes. It is useful when the same request body is sent to many nodes
-// but each node requires a different message sequence number.
-func NewMessageFromPayload(ctx context.Context, msgID uint64, method string, payload []byte) *Message {
-	return newMessageFromPayload(ctx, msgID, method, payload)
 }
 
 // AppendToIncomingContext appends client-specific metadata from the [Message] proto message
