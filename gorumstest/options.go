@@ -21,7 +21,7 @@ type Option any
 
 // testOptions holds extracted options from a slice of Option.
 type testOptions struct {
-	managerOpts    []gorums.DialOption
+	dialOpts       []gorums.DialOption
 	serverOpts     []gorums.ServerOption
 	nodeSourceOpts []gorums.NodeSource
 	stopFuncPtr    *func(...int)       // pointer to capture the variadic stop function
@@ -70,7 +70,7 @@ func extractTestOptions(opts []Option) testOptions {
 	for _, opt := range opts {
 		switch o := opt.(type) {
 		case gorums.DialOption:
-			result.managerOpts = append(result.managerOpts, o)
+			result.dialOpts = append(result.dialOpts, o)
 		case gorums.ServerOption:
 			result.serverOpts = append(result.serverOpts, o)
 		case gorums.NodeSource:
