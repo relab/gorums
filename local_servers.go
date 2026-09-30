@@ -1,6 +1,9 @@
 package gorums
 
-import "net"
+import (
+	"fmt"
+	"net"
+)
 
 // localServerOptions accumulates the options [NewLocalServers] applies to
 // every server it creates.
@@ -58,20 +61,27 @@ func NewLocalServers(n int, opts ...LocalServerOption) ([]*Server, func(), error
 			[]ServerOption{WithPeers(myID, nodeSource, localOpts.dialOpts...)},
 			localOpts.serverOpts...,
 		)
-		srv := NewServer(serverOpts...)
+		srv, err := newServer(serverOpts...)
+		if err != nil {
+			closeServers(servers[:i], listeners)
+			return nil, nil, fmt.Errorf("gorums: invalid peer configuration: %w", err)
+		}
 		srv.setListener(listeners[i])
 		servers[i] = srv
 	}
-	stop := func() {
-		for i, srv := range servers {
-			if srv != nil {
-				srv.Stop()
-			} else if listeners[i] != nil {
-				_ = listeners[i].Close()
-			}
-		}
-	}
+	stop := func() { closeServers(servers, listeners) }
 	return servers, stop, nil
+}
+
+// closeServers stops servers and closes every preallocated listener, including
+// those of servers that were not created or that serve on another listener.
+func closeServers(servers []*Server, listeners []net.Listener) {
+	for _, srv := range servers {
+		srv.Stop()
+	}
+	for _, lis := range listeners {
+		_ = lis.Close()
+	}
 }
 
 // allocateListeners pre-allocates n TCP listeners on random localhost ports and

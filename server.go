@@ -209,6 +209,16 @@ func (s *Server) WaitForClients(ctx context.Context, cond func(Config) bool) err
 // listener. It panics on configuration errors, such as invalid addresses or
 // duplicate nodes, since these are detectable at startup.
 func NewServer(opts ...ServerOption) *Server {
+	s, err := newServer(opts...)
+	if err != nil {
+		panic(fmt.Sprintf("gorums: invalid peer configuration: %v", err))
+	}
+	return s
+}
+
+// newServer builds the [Server] that [NewServer] returns, reporting an invalid
+// peer configuration as an error instead of panicking.
+func newServer(opts ...ServerOption) (*Server, error) {
 	var serverOpts serverOptions
 	for _, opt := range opts {
 		if opt != nil {
@@ -239,12 +249,13 @@ func NewServer(opts ...ServerOption) *Server {
 	if serverOpts.outboundNodes != nil {
 		cfg, err := s.newPeerConfig(serverOpts.outboundNodes, serverOpts.outboundDialOpts)
 		if err != nil {
-			panic(fmt.Sprintf("gorums: invalid peer configuration: %v", err))
+			s.grpcServer.Stop()
+			return nil, err
 		}
 		s.outbound = cfg
 		s.im.SetPeerConfig(cfg)
 	}
-	return s
+	return s, nil
 }
 
 // newPeerConfig builds the outbound [Config] this server uses to call other
