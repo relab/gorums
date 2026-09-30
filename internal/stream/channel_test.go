@@ -1376,8 +1376,7 @@ func (s *lateCancelStream) close() {
 // per-request cancel watcher cannot strand newer pending requests on a stream
 // it clears after the original Send already returned.
 func TestChannelLateCancelWatcherRequeuesPending(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	stream := newLateCancelStream()
 	// An outbound channel with a pre-set stream: only outbound channels arm
