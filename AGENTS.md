@@ -135,6 +135,7 @@ Follow Test Driven Development (TDD) when adding features or fixing bugs:
 - **No forwarding functions/methods** - never add an exported function or method whose only body is a call to an unexported one of the same shape (e.g. `func Foo() T { return foo() }`) purely to expose it.
   Export the unexported one directly (rename it, update its doc comment) and change call sites to use the exported name.
   The only exception is when the wrapper adds real behavior (validation, combining multiple calls, adapting a signature) beyond exposing the name.
+  A single-call function that re-exports a declaration from an internal package is allowed where a type alias cannot be used: generic functions cannot be aliased, so the `runtime/gorumsimpl` call constructors and the root `MapRequest` and `MapResponse` forward to `internal/impl`, and the root `NewConfig` and `WithNodeList` forward to `internal/conn` to keep them functions rather than reassignable variables.
 
 ### Add documentation
 
