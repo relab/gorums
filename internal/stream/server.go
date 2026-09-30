@@ -2,7 +2,6 @@ package stream
 
 import (
 	"context"
-	"sync"
 )
 
 // PeerAcceptor identifies and registers incoming peers on a stream.
@@ -52,16 +51,18 @@ func NewServer(buffer uint, onConnect func(context.Context), acceptor PeerAccept
 // NodeStream handles a connection to a single client. The stream is aborted if there
 // is any error with sending or receiving.
 //
+// Requests go to a per-stream dispatcher, which starts the next request only
+// after the previous handler calls release or returns. This loop delivers
+// replies itself, so a handler that has not released does not stop the stream
+// from being read. The loop waits only when the request queue is full.
+//
 // The goroutine below delivers each handler's reply via TrySend, not the
-// blocking Enqueue. A handler holds mut until it returns, and it returns only
-// once this goroutine takes its reply off finished. If TrySend could block,
-// this goroutine would stop draining finished, the handler would never
-// return, mut would never unlock, and the Recv loop below could never read
-// the next inbound frame: the connection would deadlock.
+// blocking Enqueue. TrySend must not block: this goroutine is what drains
+// finished, and a handler blocked in send would never release the dispatcher.
 func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
-	var mut sync.Mutex // used to achieve mutex between request handlers
 	finished := make(chan *Message, s.buffer)
-	ctx := srv.Context()
+	ctx, cancel := context.WithCancel(srv.Context())
+	defer cancel()
 
 	peerNode, cleanup, err := s.acceptor.AcceptPeer(ctx, srv)
 	if err != nil {
@@ -84,9 +85,8 @@ func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 		}
 	}()
 
-	// Start with a locked mutex
-	mut.Lock()
-	defer mut.Unlock()
+	requests := newRequestDispatch(defaultRequestDispatchSize)
+	go requests.run(ctx)
 
 	for {
 		streamIn, err := srv.Recv()
@@ -94,21 +94,21 @@ func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 			return err
 		}
 
-		// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
-		// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
-		// finished, or when it is safe to start processing the next request.
-		var once sync.Once
-		release := func() { once.Do(mut.Unlock) }
 		send := func(msg *Message) {
 			select {
 			case finished <- msg:
 			case <-ctx.Done():
 			}
 		}
-
-		peerNode.RouteInbound(ctx, streamIn, release, send)
-
-		// Wait until the handler releases the mutex.
-		mut.Lock()
+		// A server-initiated ID is a reply to a call this server made.
+		// Deliver it before reading further, without the request queue.
+		if isServerSequenceNumber(streamIn.GetMessageSeqNo()) {
+			peerNode.RouteInbound(ctx, streamIn, func() {}, send)
+			continue
+		}
+		msg := streamIn
+		requests.enqueue(ctx, func(release func()) {
+			peerNode.RouteInbound(ctx, msg, release, send)
+		})
 	}
 }
