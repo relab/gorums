@@ -227,6 +227,9 @@ func Servers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface)
 		// Register goleak check FIRST so it runs LAST (after all other cleanup)
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
+	if srvFn == nil {
+		srvFn = DefaultServer
+	}
 	addrs, stopFn := startServers(t, numServers, srvFn)
 	// Register server cleanup SECOND so it runs BEFORE goleak check
 	t.Cleanup(func() { stopFn() }) // wrap to call without arguments to stop all servers
