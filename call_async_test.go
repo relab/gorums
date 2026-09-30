@@ -159,3 +159,34 @@ func BenchmarkAsyncQuorumCall(b *testing.B) {
 		})
 	}
 }
+
+// TestOnewayAsyncWaitAfterContextEnds verifies that Wait reports confirmed
+// sends as successful even when the call's context has ended by the time Wait
+// runs, which is the pattern Async exists for.
+func TestOnewayAsyncWaitAfterContextEnds(t *testing.T) {
+	config := gorumstest.Config(t, 3, gorumstest.DefaultServer)
+	tests := []struct {
+		name  string
+		async func(ctx context.Context) *gorums.OnewayAsync
+	}{
+		{"Multicast", func(ctx context.Context) *gorums.OnewayAsync {
+			return gorumsimpl.Multicast(config.Context(ctx), pb.String("x"), mock.TestMethod).Async()
+		}},
+		{"Unicast", func(ctx context.Context) *gorums.OnewayAsync {
+			return gorumsimpl.Unicast(config.Nodes()[0].Context(ctx), pb.String("x"), mock.TestMethod).Async()
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for i := range 50 {
+				ctx, cancel := context.WithCancel(t.Context())
+				h := tt.async(ctx)
+				time.Sleep(10 * time.Millisecond) // let the sends complete
+				cancel()
+				if err := h.Wait(); err != nil {
+					t.Fatalf("iteration %d: Wait after cancel = %v, want nil for confirmed sends", i, err)
+				}
+			}
+		})
+	}
+}
