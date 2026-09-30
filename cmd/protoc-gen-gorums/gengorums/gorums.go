@@ -4,6 +4,7 @@ package gengorums
 import (
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 
 	"github.com/relab/gorums"
@@ -19,7 +20,7 @@ var GenerateVersionMarkers = true
 
 // GenerateFile generates a _gorums.pb.go file containing Gorums service definitions.
 func GenerateFile(gen *protogen.Plugin, file *protogen.File) {
-	if !gorumsGuard(file) {
+	if !gorumsGuard(gen, file) {
 		return
 	}
 	filename := file.GeneratedFilenamePrefix + "_gorums.pb.go"
@@ -76,7 +77,7 @@ func genVersionCheck(g *protogen.GeneratedFile) {
 // gorumsGuard returns true if there is something for Gorums to generate
 // for the given file. If it returns false, there is nothing for Gorums
 // generate for this file. If may also fail with an error message.
-func gorumsGuard(file *protogen.File) bool {
+func gorumsGuard(gen *protogen.Plugin, file *protogen.File) bool {
 	if len(file.Services) == 0 || !hasGorumsMethods(file.Services) {
 		// there is nothing for this plugin to do
 		return false
@@ -87,16 +88,36 @@ func gorumsGuard(file *protogen.File) bool {
 		// These cannot share the same Go package.
 		log.Fatalln("Gorums does not support multiple services in the same proto file.")
 	}
-	// fail generator if a Gorums reserved identifier is used as a message name.
-	for _, msg := range file.Messages {
-		msgName := fmt.Sprintf("%v", msg.Desc.Name())
-		for _, reserved := range reservedIdents {
-			if msgName == reserved {
-				log.Fatalf("%v.proto: contains message %s, which is a reserved Gorums type.\n", file.GeneratedFilenamePrefix, msgName)
-			}
+	checkReservedIdents(gen, file)
+	return true
+}
+
+// checkReservedIdents fails the generator if a Gorums reserved identifier names
+// a Go declaration in the file's Go package: a message or enum of any file in
+// the package, or an RPC method of the file's service. Each would collide with
+// the generated type aliases or client functions.
+func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) {
+	fail := func(kind, name string) {
+		if slices.Contains(reservedIdents, name) {
+			log.Fatalf("%v.proto: contains %s %s, which is a reserved Gorums identifier.\n", file.GeneratedFilenamePrefix, kind, name)
 		}
 	}
-	return true
+	for _, f := range gen.Files {
+		if f.GoImportPath != file.GoImportPath {
+			continue
+		}
+		for _, msg := range f.Messages {
+			fail("message", msg.GoIdent.GoName)
+		}
+		for _, enum := range f.Enums {
+			fail("enum", enum.GoIdent.GoName)
+		}
+	}
+	for _, service := range file.Services {
+		for _, method := range service.Methods {
+			fail("RPC method", method.GoName)
+		}
+	}
 }
 
 // GenerateFileContent generates the Gorums service definitions, excluding the package statement.
