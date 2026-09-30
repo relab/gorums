@@ -222,8 +222,13 @@ func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn 
 		// important to cancel first to stop goroutines
 		connCancel()
 		c.setStreamUp(false)
-		// unblocks any pending senders/receivers
-		c.cancelPendingMsgs(ErrNodeClosed)
+		// unblocks any pending senders/receivers; an inbound channel closes
+		// only with its stream, so its pending calls see the stream drop
+		if c.IsInbound() {
+			c.cancelPendingMsgs(ErrStreamDown)
+		} else {
+			c.cancelPendingMsgs(ErrNodeClosed)
+		}
 		if conn != nil {
 			return conn.Close()
 		}

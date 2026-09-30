@@ -672,8 +672,8 @@ func TestChannelCloseCancelsOnlyOwnedPendingRequests(t *testing.T) {
 	}
 	select {
 	case got := <-oldReply:
-		if !errors.Is(got.Err, ErrNodeClosed) {
-			t.Fatalf("old request error = %v, want ErrNodeClosed", got.Err)
+		if !errors.Is(got.Err, ErrStreamDown) {
+			t.Fatalf("old request error = %v, want ErrStreamDown", got.Err)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("old request was not cancelled")
