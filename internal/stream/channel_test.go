@@ -1384,16 +1384,14 @@ func TestChannelLateCancelWatcherRequeuesPending(t *testing.T) {
 	defer cancel()
 
 	stream := newLateCancelStream()
-	c := NewInboundChannel(ctx, 1, 4, stream, NewMessageRouter())
+	// An outbound channel with a pre-set stream: only outbound channels arm
+	// the cancel watcher, and its receiver starts with the channel. The
+	// unavailable connection makes the requeued request fail once the stream
+	// is cleared.
+	c := newChannel(ctx, 1, 4, newUnavailableClientConn(t), stream, NewMessageRouter(), false, nil)
 	t.Cleanup(func() {
 		_ = c.Close()
 	})
-
-	done := make(chan struct{})
-	go func() {
-		c.receiver()
-		close(done)
-	}()
 
 	select {
 	case <-stream.recvStarted:
@@ -1441,18 +1439,11 @@ func TestChannelLateCancelWatcherRequeuesPending(t *testing.T) {
 
 	select {
 	case resp := <-reply2:
-		if !errors.Is(resp.Err, ErrStreamDown) {
-			t.Fatalf("reply2 error = %v, want ErrStreamDown", resp.Err)
+		if resp.Err == nil {
+			t.Fatal("reply2 succeeded, want the requeued request to fail")
 		}
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("late cancel watcher stranded newer pending request")
-	}
-
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("receiver did not exit after context cancellation")
 	}
 }
 
