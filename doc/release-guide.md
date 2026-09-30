@@ -45,6 +45,6 @@ go list -m github.com/relab/gorums@v0.9.0
 After `make prepare-release` prints the suggested version, update the version constants in the following files before creating the PR:
 
 - `internal/version/version.go`
-- `version.go` (keep `MinVersion` unchanged unless you intentionally want to relax the minimum)
+- `runtime/gorumsimpl/version.go` (keep `MinVersion` unchanged unless you intentionally want to relax the minimum)
 
 After editing those files, regenerate generated files and tidy modules as shown above, then create the PR with `make release-pr`.
