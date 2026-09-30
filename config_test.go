@@ -299,7 +299,7 @@ func TestEmptyConfiguration(t *testing.T) {
 	})
 }
 
-func TestConfigurationSort(t *testing.T) {
+func TestConfigSort(t *testing.T) {
 	cfg := gorumstest.UnreachableConfig(t, nodeList...)
 
 	t.Run("SortByID", func(t *testing.T) {
@@ -381,7 +381,7 @@ func assertPanicMessage(t *testing.T, want string, fn func()) {
 	fn()
 }
 
-func TestConfigurationExtend(t *testing.T) {
+func TestConfigExtend(t *testing.T) {
 	initialNodes := gorums.WithNodeList(nodeList[:2]) // {1,2}
 
 	tests := []struct {
@@ -473,7 +473,7 @@ func TestConfigurationExtend(t *testing.T) {
 	}
 }
 
-func TestConfigurationExtendConcurrent(t *testing.T) {
+func TestConfigExtendConcurrent(t *testing.T) {
 	addrs := gorumstest.Servers(t, 6, func(_ int) gorums.ServerIface { return gorums.NewServer() })
 
 	// Create base configuration so that concurrent Extend operations share the same node registry.
@@ -516,7 +516,7 @@ func TestConfigurationExtendConcurrent(t *testing.T) {
 	}
 }
 
-func TestConfigurationAdd(t *testing.T) {
+func TestConfigAdd(t *testing.T) {
 	c1 := gorumstest.UnreachableConfig(t, nodeList...) // c1 = {1, 2, 3}
 	if c1.Size() != len(nodeList) {
 		t.Errorf("c1.Size() = %d, want %d", c1.Size(), len(nodeList))
@@ -539,7 +539,7 @@ func TestConfigurationAdd(t *testing.T) {
 	}
 }
 
-func TestConfigurationUnion(t *testing.T) {
+func TestConfigUnion(t *testing.T) {
 	c1 := gorumstest.UnreachableConfig(t, nodeList...) // c1 = {1, 2, 3}
 
 	// Add newNodes to c1 using Extend (gets IDs 4, 5)
@@ -577,7 +577,7 @@ func TestConfigurationUnion(t *testing.T) {
 	}
 }
 
-func TestConfigurationRemove(t *testing.T) {
+func TestConfigRemove(t *testing.T) {
 	c1 := gorumstest.UnreachableConfig(t, nodeList...) // c1 = {1, 2, 3}
 
 	// Remove one node using Remove
@@ -587,7 +587,7 @@ func TestConfigurationRemove(t *testing.T) {
 	}
 }
 
-func TestConfigurationDifference(t *testing.T) {
+func TestConfigDifference(t *testing.T) {
 	c1 := gorumstest.UnreachableConfig(t, nodeList...) // c1 = {1, 2, 3}
 
 	newNodes := []string{"127.0.0.1:9084", "127.0.0.1:9085"}
@@ -603,7 +603,7 @@ func TestConfigurationDifference(t *testing.T) {
 	}
 }
 
-func TestConfigurationAddDuplicateIDs(t *testing.T) {
+func TestConfigAddDuplicateIDs(t *testing.T) {
 	c2 := gorumstest.UnreachableConfig(t, nodeList...) // c2 = {1, 2, 3}
 	// Create c1 by removing node 3
 	c1 := c2.Remove(3) // c1 = {1, 2}
@@ -621,7 +621,7 @@ func TestConfigurationAddDuplicateIDs(t *testing.T) {
 	}
 }
 
-func TestConfigurationUnionDuplicateNodes(t *testing.T) {
+func TestConfigUnionDuplicateNodes(t *testing.T) {
 	c1 := gorumstest.UnreachableConfig(t, nodeList...) // c1 = {1, 2, 3}
 
 	// Create subset configurations
@@ -645,7 +645,7 @@ func TestConfigurationUnionDuplicateNodes(t *testing.T) {
 	}
 }
 
-func TestConfigurationImmutability(t *testing.T) {
+func TestConfigImmutability(t *testing.T) {
 	c1 := gorumstest.UnreachableConfig(t, nodeList...) // c1 = {1, 2, 3}
 
 	// Test Union with empty returns a clone, not the original
@@ -678,7 +678,7 @@ func TestConfigurationImmutability(t *testing.T) {
 	}
 }
 
-func TestConfigurationWithoutErrors(t *testing.T) {
+func TestConfigWithoutErrors(t *testing.T) {
 	cfg, err := gorums.NewConfig(gorums.WithNodes(nodeMap), gorumstest.InsecureDialOptions(t))
 	if err != nil {
 		t.Fatal(err)
