@@ -679,16 +679,20 @@ func (c *Channel) sender() {
 
 		// Watch for per-request cancellation while Send is in flight: a Send
 		// blocked by flow control returns only when its stream dies, so the
-		// watcher unblocks it by clearing the stream. sendDone, set under
+		// watcher unblocks it by clearing the stream. An inbound channel has no
+		// watcher, since it cannot open a replacement stream. sendDone, set under
 		// sendGuard once Send returns, neutralizes a watcher that fires late:
 		// the caller may cancel its context the moment the response arrives —
 		// before this goroutine resumes to call stop — and the watcher
 		// goroutine spawned by that cancellation may then run arbitrarily
 		// late; see [Channel.cancelInflightSend].
 		var sendDone bool
-		stop := context.AfterFunc(req.Ctx, func() {
-			c.cancelInflightSend(&sendDone, stream)
-		})
+		stop := func() bool { return false }
+		if !c.IsInbound() {
+			stop = context.AfterFunc(req.Ctx, func() {
+				c.cancelInflightSend(&sendDone, stream)
+			})
+		}
 		err = stream.Send(req.Msg)
 		c.sendGuard.Lock()
 		sendDone = true
