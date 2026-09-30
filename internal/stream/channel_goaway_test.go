@@ -94,3 +94,42 @@ func TestChannelGoAwayDoesNotStrandPendingCall(t *testing.T) {
 		t.Errorf("pending call never completed; router pending=%d", tc.router.PendingCount())
 	}
 }
+
+// TestChannelGoAwayEndsIdleStream verifies that a stream with no pending call
+// ends when its connection receives GOAWAY, so the server's drain can finish
+// without a grace period, and that later calls use a new stream.
+func TestChannelGoAwayEndsIdleStream(t *testing.T) {
+	streamEnded := make(chan struct{}, 4)
+	echo := holdFirstServer(0)
+	tc := setupChannel(t, func(stream Gorums_NodeStreamServer) error {
+		defer func() { streamEnded <- struct{}{} }()
+		return echo(stream)
+	}, grpc.KeepaliveParams(keepalive.ServerParameters{
+		MaxConnectionAge:      200 * time.Millisecond,
+		MaxConnectionAgeGrace: time.Hour,
+	}))
+	if !waitForConnection(tc.Channel, streamConnectTimeout) {
+		t.Fatal("channel never connected")
+	}
+
+	select {
+	case <-streamEnded:
+	case <-time.After(3 * time.Second):
+		t.Fatal("server stream did not end after GOAWAY")
+	}
+
+	r := make(chan response, 1)
+	tc.Enqueue(Request{
+		Ctx:          t.Context(),
+		Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
+		ResponseChan: r,
+	})
+	select {
+	case resp := <-r:
+		if resp.Err != nil {
+			t.Fatalf("call after GOAWAY: %v", resp.Err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("call after GOAWAY never completed")
+	}
+}

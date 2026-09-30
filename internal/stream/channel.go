@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/status"
 )
 
@@ -108,6 +109,12 @@ type Channel struct {
 	streamCtx    context.Context
 	streamCancel context.CancelFunc
 	streamReady  chan struct{} // signals receiver when stream becomes available
+
+	// draining is the stream whose connection has received a server GOAWAY;
+	// it is retired when no call is pending on it. isDraining mirrors
+	// draining != nil so the receiver can test it without taking streamMut.
+	draining   BidiStream
+	isDraining atomic.Bool
 
 	// eagerReconnect makes the receiver re-establish a lost stream proactively
 	// instead of waiting for the next local send; see [NewOutboundChannel].
@@ -322,7 +329,47 @@ func (c *Channel) ensureConnectedNodeStream() (BidiStream, error) {
 	var err error
 	c.stream, err = NewGorumsClient(c.conn).NodeStream(c.streamCtx)
 	c.setStreamUp(c.stream != nil)
+	if c.stream != nil {
+		go c.retireOnGoAway(c.stream, c.streamCtx)
+	}
 	return c.stream, err
+}
+
+// retireOnGoAway marks stream as draining once its connection leaves Ready,
+// which is how the client observes a server GOAWAY, and retires it as soon as
+// no call is pending on it. A stream left open on a draining connection would
+// keep the server's graceful stop or connection-age drain from finishing, while
+// retiring it with calls pending would rerun them. It returns when ctx, the
+// stream's context, ends.
+func (c *Channel) retireOnGoAway(stream BidiStream, ctx context.Context) {
+	for c.conn.GetState() == connectivity.Ready {
+		if !c.conn.WaitForStateChange(ctx, connectivity.Ready) {
+			return
+		}
+	}
+	c.streamMut.Lock()
+	if c.stream == stream {
+		c.draining = stream
+		c.isDraining.Store(true)
+	}
+	c.streamMut.Unlock()
+	c.retireDrained()
+}
+
+// retireDrained clears the draining stream, if any, once no call is pending
+// on the channel. The next send opens a stream on a new connection. Calls
+// registered concurrently with the clear are requeued like those of any
+// cleared stream.
+func (c *Channel) retireDrained() {
+	c.streamMut.Lock()
+	stream := c.draining
+	c.streamMut.Unlock()
+	if stream == nil || c.router.pendingCount(c.pendingOwner) > 0 {
+		return
+	}
+	if c.clearStream(stream) {
+		c.requeuePendingMsgs()
+	}
 }
 
 // getStream returns the current stream, or nil if no stream is available.
@@ -350,6 +397,8 @@ func (c *Channel) clearStream(stale BidiStream) bool {
 		c.streamCancel()
 	}
 	c.stream = nil
+	c.draining = nil
+	c.isDraining.Store(false)
 	c.setStreamUp(false)
 	return true
 }
@@ -754,6 +803,9 @@ func (c *Channel) receiver() {
 			// A received frame proves the stream is viable: reset the backoff.
 			reconnectDelay = eagerReconnectBaseDelay
 			c.dispatchInbound(msg)
+			if c.isDraining.Load() {
+				c.retireDrained()
+			}
 		}
 	}
 }
