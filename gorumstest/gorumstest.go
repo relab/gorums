@@ -150,7 +150,7 @@ func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, 
 	}
 
 	// Create configuration and register its cleanup LAST so it runs FIRST (LIFO)
-	dialOptions := append([]gorums.DialOption{DialOptions(t)}, testOpts.managerOpts...)
+	dialOptions := append([]gorums.DialOption{DialOptions(t)}, testOpts.dialOpts...)
 	cfg, err := gorums.NewConfig(testOpts.nodeSource(addrs), dialOptions...)
 	if err != nil {
 		t.Fatal(err)
