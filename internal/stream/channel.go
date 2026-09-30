@@ -326,13 +326,15 @@ func (c *Channel) ensureConnectedNodeStream() (BidiStream, error) {
 		return c.stream, nil
 	}
 	c.streamCtx, c.streamCancel = context.WithCancel(c.connCtx)
-	var err error
-	c.stream, err = NewGorumsClient(c.conn).NodeStream(c.streamCtx)
-	c.setStreamUp(c.stream != nil)
-	if c.stream != nil {
-		go c.retireOnGoAway(c.stream, c.streamCtx)
+	stream, err := NewGorumsClient(c.conn).NodeStream(c.streamCtx)
+	if err != nil {
+		c.streamCancel()
+		return nil, err
 	}
-	return c.stream, err
+	c.stream = stream
+	c.setStreamUp(true)
+	go c.retireOnGoAway(stream, c.streamCtx)
+	return stream, nil
 }
 
 // retireOnGoAway marks stream as draining once its connection leaves Ready,
