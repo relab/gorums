@@ -222,7 +222,7 @@ func TestNodeMissingTransportIsSafe(t *testing.T) {
 	}
 }
 
-func TestConfigurationWatch(t *testing.T) {
+func TestConfigWatch(t *testing.T) {
 	makeNodeWithLatency := func(id uint32, lat time.Duration) *Node {
 		return newTestNode(id, stream.NewMessageRouterWithLatency(lat), nil)
 	}

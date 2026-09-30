@@ -183,13 +183,13 @@ func connectAsPeer(t *testing.T, peerID uint32, addrs []string) Config {
 	return cfg
 }
 
-// TestConfigurationExtendUsesKnownDedupPeer verifies that extending a dedup
+// TestConfigExtendUsesKnownDedupPeer verifies that extending a dedup
 // configuration with a lower-ID peer from the server's peer configuration
 // yields a born-shared node whether or not that peer is currently connected:
 // the node borrows the peer's inbound channel slot and never dials. A
 // connected peer backs the shared node with its live inbound stream; a
 // disconnected peer leaves it without a channel until the peer connects.
-func TestConfigurationExtendUsesKnownDedupPeer(t *testing.T) {
+func TestConfigExtendUsesKnownDedupPeer(t *testing.T) {
 	peers := map[uint32]testNode{
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
