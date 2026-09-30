@@ -25,7 +25,6 @@ To build and deploy Gorums, you need the following software installed:
 
 * Protobuf compiler (protoc)
 * Make
-* Ansible (used by benchmark script)
 
 ## Contributors Guide
 
