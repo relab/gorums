@@ -455,3 +455,30 @@ func assertPanics(t *testing.T, name string, fn func()) {
 	}()
 	fn()
 }
+
+// TestServerPeerChangeDeliversUsableConfig verifies that the last WithPeerChange
+// snapshot delivered while NewServer runs holds the nodes of PeerConfig, which
+// can place calls, not placeholder nodes of the inbound view.
+func TestServerPeerChangeDeliversUsableConfig(t *testing.T) {
+	var snapshots []gorums.Config
+	srv := gorums.NewServer(
+		gorums.WithPeers(1, gorums.WithNodeList([]string{"127.0.0.1:1", "127.0.0.1:2"}), gorumstest.InsecureDialOptions(t)),
+		gorums.WithPeerChange(func(c gorums.Config) { snapshots = append(snapshots, c) }),
+	)
+	defer srv.Stop()
+	if len(snapshots) == 0 {
+		t.Fatal("WithPeerChange was not called during NewServer")
+	}
+	last := snapshots[len(snapshots)-1]
+	for _, node := range last.Nodes() {
+		var want *gorums.Node
+		for _, n := range srv.PeerConfig().Nodes() {
+			if n.ID() == node.ID() {
+				want = n
+			}
+		}
+		if node != want {
+			t.Errorf("snapshot node %d is not PeerConfig's node", node.ID())
+		}
+	}
+}
