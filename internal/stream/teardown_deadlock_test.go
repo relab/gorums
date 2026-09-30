@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -15,14 +16,9 @@ import (
 // TestReceiverDispatchNotWedgedByReentrantReply verifies that a back-channel
 // handler can reply on a full send queue and still let the next request run.
 // The reply uses [Channel.trySend] (see [Channel.dispatchInbound]), so it
-// returns immediately. The router's dispatch lock stays free: the receiver
-// enqueues the request and does not hold that lock across the handler.
+// returns immediately and is dropped; the handler then returns and the
+// channel's request dispatcher starts the next request.
 // The test fails if the reply blocks.
-//
-// The test asserts on the dispatch lock directly, since a goroutine waiting on
-// sync.Mutex.Lock is not "durably blocked" for synctest's deadlock detection
-// (see testing/synctest). synctest.Wait only settles the goroutines before the
-// assertion.
 func TestReceiverDispatchNotWedgedByReentrantReply(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		const nodeID = uint32(1)
@@ -30,10 +26,12 @@ func TestReceiverDispatchNotWedgedByReentrantReply(t *testing.T) {
 		// The handler answers every request on the same channel it was
 		// dispatched on: the reentrant back-channel reply.
 		dispatched := make(chan uint64, 8)
+		replied := make(chan uint64, 8)
 		handler := requestHandlerFunc(func(_ context.Context, msg *Message, release func(), send func(*Message)) {
 			defer release()
 			dispatched <- msg.GetMessageSeqNo()
 			send(Message_builder{MessageSeqNo: msg.GetMessageSeqNo(), Method: mock.TestMethod}.Build())
+			replied <- msg.GetMessageSeqNo()
 		})
 		r := NewMessageRouter(handler)
 
@@ -62,145 +60,117 @@ func TestReceiverDispatchNotWedgedByReentrantReply(t *testing.T) {
 
 		// Dispatch a back-channel request exactly as the receiver loop does.
 		// The handler replies on the same, now-full channel.
-		first := Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build()
-		c.dispatchInbound(first)
-		synctest.Wait() // let the handler reply and (with the fix) return
-
-		// Invariant: after the handler's reentrant reply, the dispatch lock is
-		// free and the next request can run.
-		if !r.dispatchMu.TryLock() {
-			t.Fatal("dispatch lock still held: a back-channel reply blocked on a full send queue while holding it, deadlocking the receiver's dispatch loop")
-		}
-		r.dispatchMu.Unlock()
-
-		// The lock is free: a second back-channel request must still dispatch,
-		// i.e. the next dispatch is acquired in bounded time.
-		second := Message_builder{MessageSeqNo: ServerSequenceNumber(2), Method: mock.TestMethod}.Build()
-		c.dispatchInbound(second)
+		first := ServerSequenceNumber(1)
+		c.dispatchInbound(Message_builder{MessageSeqNo: first, Method: mock.TestMethod}.Build())
 		synctest.Wait()
 
-		got := make(map[uint64]bool)
-		for {
-			select {
-			case id := <-dispatched:
-				got[id] = true
-				continue
-			default:
-			}
-			break
+		// The reply returned on the full queue and was dropped.
+		if got := drain(replied); !slices.Equal(got, []uint64{first}) {
+			t.Fatalf("replied = %v, want [%d]: the reply blocked on a full send queue", got, first)
 		}
-		if !got[ServerSequenceNumber(1)] || !got[ServerSequenceNumber(2)] {
-			t.Fatalf("dispatched handlers = %v; want both back-channel requests dispatched", got)
+		if got := c.DroppedReplies(); got != 1 {
+			t.Fatalf("DroppedReplies() = %d, want 1: the reply did not reach the full send queue", got)
+		}
+
+		// The first handler has returned, so the dispatcher runs the next
+		// back-channel request, whose reply is dropped the same way.
+		second := ServerSequenceNumber(2)
+		c.dispatchInbound(Message_builder{MessageSeqNo: second, Method: mock.TestMethod}.Build())
+		synctest.Wait()
+
+		if got, want := drain(dispatched), []uint64{first, second}; !slices.Equal(got, want) {
+			t.Fatalf("dispatched = %v, want %v", got, want)
+		}
+		if got := drain(replied); !slices.Equal(got, []uint64{second}) {
+			t.Fatalf("replied = %v, want [%d]", got, second)
+		}
+		if got := c.DroppedReplies(); got != 2 {
+			t.Errorf("DroppedReplies() = %d, want 2", got)
 		}
 	})
 }
 
-// TestTrySendDoesNotBlockOnFullQueue is a focused check that the non-blocking
+// drain returns the values buffered in ch without blocking.
+func drain(ch <-chan uint64) []uint64 {
+	var got []uint64
+	for {
+		select {
+		case v := <-ch:
+			got = append(got, v)
+		default:
+			return got
+		}
+	}
+}
+
+// TestChannelTrySendDoesNotBlockOnFullQueue verifies that the non-blocking
 // enqueue used for back-channel replies returns immediately on a full send
 // queue, even with a background (deadline-free) context. A back-channel reply
-// carries only the connection context, so trySend makes progress without
-// context cancellation, which keeps a reply from wedging the receiver. The
-// one-way [Channel.Enqueue] path waits until the request context is done (see
+// carries only the connection context, so it must make progress without
+// context cancellation to keep a reply from wedging the receiver. The one-way
+// [Channel.Enqueue] path waits until the request context is done (see
 // TestChannelEnqueueRespectsRequestContext).
-func TestTrySendDoesNotBlockOnFullQueue(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		const nodeID = uint32(1)
-		stream := newBlockingSendStream()
-		c := NewInboundChannel(context.Background(), nodeID, 0, stream, NewMessageRouter())
-		defer func() {
-			stream.close()
-			_ = c.Close()
-			synctest.Wait()
-		}()
-
-		// Occupy the sender so the queue is full and cannot drain.
-		c.Enqueue(Request{
-			Ctx:    context.Background(),
-			Oneway: true,
-			Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
-		})
-		synctest.Wait()
-
-		reply := make(chan response, 1)
-		returned := make(chan struct{})
-		go func() {
-			c.trySend(Request{
-				Ctx:          context.Background(),
-				ResponseChan: reply,
-				Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
-			})
-			close(returned)
-		}()
-		synctest.Wait()
-
-		select {
-		case <-returned:
-		default:
-			t.Fatal("trySend blocked on a full send queue with a background context")
-		}
-		select {
-		case resp := <-reply:
-			if !errors.Is(resp.Err, ErrSendQueueFull) {
-				t.Errorf("trySend reply error = %v, want ErrSendQueueFull", resp.Err)
-			}
-		default:
-			t.Fatal("trySend did not fail the request when the queue was full")
-		}
-	})
-}
-
-// TestChannelTrySendDoesNotBlockOnFullQueue is the same check as
-// TestTrySendDoesNotBlockOnFullQueue against the exported [Channel.TrySend].
-// TrySend is the entry point outside this package for replies sent from a
-// receive or dispatch loop, in particular from the drain goroutine in
-// [Server.NodeStream], which keeps draining while a send queue is stuck or
-// backpressured (see TestReceiverDispatchNotWedgedByReentrantReply for the
-// client-side analog).
+//
+// [Channel.TrySend] is the entry point outside this package, used by the
+// drain goroutine in [Server.NodeStream]; [Channel.trySend] is used by the
+// client-side back-channel reply (see
+// TestReceiverDispatchNotWedgedByReentrantReply).
 func TestChannelTrySendDoesNotBlockOnFullQueue(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		const nodeID = uint32(1)
-		stream := newBlockingSendStream()
-		c := NewInboundChannel(context.Background(), nodeID, 0, stream, NewMessageRouter())
-		defer func() {
-			stream.close()
-			_ = c.Close()
-			synctest.Wait()
-		}()
+	tests := []struct {
+		name    string
+		trySend func(*Channel, Request)
+	}{
+		{name: "trySend", trySend: (*Channel).trySend},
+		{name: "TrySend", trySend: (*Channel).TrySend},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				const nodeID = uint32(1)
+				stream := newBlockingSendStream()
+				c := NewInboundChannel(context.Background(), nodeID, 0, stream, NewMessageRouter())
+				defer func() {
+					stream.close()
+					_ = c.Close()
+					synctest.Wait()
+				}()
 
-		// Occupy the sender so the queue is full and cannot drain.
-		c.Enqueue(Request{
-			Ctx:    context.Background(),
-			Oneway: true,
-			Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
-		})
-		synctest.Wait()
+				// Occupy the sender so the queue is full and cannot drain.
+				c.Enqueue(Request{
+					Ctx:    context.Background(),
+					Oneway: true,
+					Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
+				})
+				synctest.Wait()
 
-		reply := make(chan response, 1)
-		returned := make(chan struct{})
-		go func() {
-			c.TrySend(Request{
-				Ctx:          context.Background(),
-				ResponseChan: reply,
-				Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
+				reply := make(chan response, 1)
+				returned := make(chan struct{})
+				go func() {
+					tt.trySend(c, Request{
+						Ctx:          context.Background(),
+						ResponseChan: reply,
+						Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
+					})
+					close(returned)
+				}()
+				synctest.Wait()
+
+				select {
+				case <-returned:
+				default:
+					t.Fatalf("%s blocked on a full send queue with a background context", tt.name)
+				}
+				select {
+				case resp := <-reply:
+					if !errors.Is(resp.Err, ErrSendQueueFull) {
+						t.Errorf("%s reply error = %v, want ErrSendQueueFull", tt.name, resp.Err)
+					}
+				default:
+					t.Fatalf("%s did not fail the request when the queue was full", tt.name)
+				}
 			})
-			close(returned)
-		}()
-		synctest.Wait()
-
-		select {
-		case <-returned:
-		default:
-			t.Fatal("TrySend blocked on a full send queue with a background context")
-		}
-		select {
-		case resp := <-reply:
-			if !errors.Is(resp.Err, ErrSendQueueFull) {
-				t.Errorf("TrySend reply error = %v, want ErrSendQueueFull", resp.Err)
-			}
-		default:
-			t.Fatal("TrySend did not fail the request when the queue was full")
-		}
-	})
+		})
+	}
 }
 
 // TestChannelDroppedRepliesCountsOnlyUnreportableDrops verifies that
