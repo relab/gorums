@@ -134,7 +134,10 @@ type Channel struct {
 
 	// Router handles response routing for pending calls. It is owned by the
 	// Node and injected into the Channel, so it survives channel replacement.
-	router        *MessageRouter
+	router *MessageRouter
+	// requests orders back-channel handlers for this channel. Its lifetime is
+	// connCtx, which outlives individual stream reconnects.
+	requests      *requestDispatch
 	pendingOwner  *pendingOwner
 	closeOnceFunc func() error
 
@@ -143,7 +146,7 @@ type Channel struct {
 }
 
 // NewOutboundChannel creates a new channel for the given node and starts
-// the sender and receiver goroutines.
+// the sender, receiver, and request-dispatcher goroutines.
 //
 // Note that we start both goroutines even though the connection and stream
 // have not yet been established. This is to prevent deadlock when invoking
@@ -169,7 +172,8 @@ func NewOutboundChannel(parentCtx context.Context, id uint32, sendBufferSize uin
 }
 
 // NewInboundChannel creates a channel from an existing server-side stream.
-// Only the sender goroutine is started; no receiver goroutine is launched.
+// The sender and request-dispatcher goroutines are started. No receiver
+// goroutine is launched.
 //
 // Receiving from the stream is intentionally left to the caller's goroutine
 // (e.g. NodeStream's Recv loop), which is the sole authoritative reader.
@@ -201,6 +205,7 @@ func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn 
 		connCtx:        connCtx,
 		connCancel:     connCancel,
 		router:         router,
+		requests:       newRequestDispatch(defaultRequestDispatchSize),
 		pendingOwner:   new(pendingOwner),
 		streamReady:    make(chan struct{}, 1),
 		eagerReconnect: eagerReconnect,
@@ -221,6 +226,7 @@ func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn 
 		// Signal that stream is immediately ready (inbound channel).
 		c.streamReady <- struct{}{}
 	}
+	go c.requests.run(c.connCtx)
 	go c.sender()
 	if conn != nil {
 		// Outbound channels need a receiver goroutine to route call responses
@@ -783,18 +789,38 @@ func (c *Channel) pauseReconnect(delay *time.Duration) bool {
 	return true
 }
 
-// dispatchInbound routes one message received by the receiver loop: it delivers
-// responses to pending calls and dispatches server-initiated back-channel
-// requests to the handler. Stale (cancelled) calls are silently dropped.
+// dispatchInbound routes one message received by the receiver loop.
+// Responses to pending calls are delivered here. Server-initiated requests
+// are appended to the channel's request queue, and the dispatcher starts the
+// next one only after the previous handler calls release or returns. This
+// method waits only when that queue is full. Stale (cancelled) calls are
+// silently dropped.
 //
 // A back-channel handler's reply is sent via [Channel.trySend], never the
-// blocking [Channel.Enqueue]. The handler runs while holding the router's
-// dispatch lock, and this same receiver goroutine must keep reading inbound
-// frames; if the reply blocked on a full send queue, the handler would never
-// return, the lock would never release, and the receiver would stop making
-// progress.
+// blocking [Channel.Enqueue]. The handler can then release while the send
+// queue is full, and the dispatcher can start the next request.
 func (c *Channel) dispatchInbound(msg *Message) {
+	if isServerSequenceNumber(msg.GetMessageSeqNo()) {
+		c.requests.enqueue(c.connCtx, func(release func()) {
+			c.dispatchBackChannel(msg, release)
+		})
+		return
+	}
 	c.router.RouteMessage(c.connCtx, c.id, msg, c.trySend)
+}
+
+// dispatchBackChannel runs one server-initiated request. release is the
+// dispatcher's callback; the handler calls it to let the next request start.
+func (c *Channel) dispatchBackChannel(msg *Message, release func()) {
+	handler := c.router.handler
+	if handler == nil {
+		release()
+		return
+	}
+	send := func(reply *Message) {
+		c.trySend(Request{Ctx: c.connCtx, Msg: reply})
+	}
+	handler.HandleRequest(msg.AppendToIncomingContext(c.connCtx), msg, release, send)
 }
 
 // recordHealth records the outcome of a stream operation as this channel's

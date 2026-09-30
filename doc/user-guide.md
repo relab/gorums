@@ -291,10 +291,12 @@ There are some important things to note about implementing the server interfaces
 * Messages from different senders may be received in a different order at the different servers.
   To guarantee messages from different senders are executed in-order at the different servers, you must use a total ordering protocol.
 * Errors should be returned using the [`status` package](https://pkg.go.dev/google.golang.org/grpc/status?tab=doc).
-* Handlers run synchronously, and hence a long-running handler will prevent other messages from being handled.
-  To help solve this problem, our `ServerContext` objects have a `Release()` function that releases the handler's lock on the server,
-  which allows the next request to be processed. After `ctx.Release()` has been called, the handler may run concurrently
-  with the handlers for the next requests. The handler automatically calls `ctx.Release()` after returning.
+* Handlers for requests from the same stream start one at a time.
+  `ServerContext.Release` lets the next request start, and the handler calls it automatically when it returns.
+  The server keeps reading the stream either way, so a reply arrives while the handler has not called `Release`.
+  A handler may call the peer that sent the request before `Release`, and that call completes.
+  Omitting `Release` delays the next request until the handler returns.
+  After `ctx.Release()` has been called, the handler may run concurrently with the handlers for the next requests.
 
   ```go
   func (srv *storageSrv) ReadRPC(ctx gorums.ServerContext, req *ReadRequest) (resp *ReadResponse, err error) {
@@ -1821,9 +1823,10 @@ See [Server Configuration Callbacks](#server-configuration-callbacks) for detail
 
 ### Writing the Handler
 
-Call `ctx.Release()` before making nested outbound calls to release the handler's exclusive lock on the server,
-allowing the server to continue processing inbound messages while the nested calls are in flight.
-Without `Release()`, the server would block all other inbound messages until the nested calls complete.
+Call `ctx.Release()` before nested outbound calls when the next request should start while those calls are in flight.
+The server keeps reading replies either way.
+A handler may call the peer that sent the request before `Release`, and that call completes.
+Omitting `Release` delays the next request until the handler returns.
 
 Check that a configuration is non-empty before calling `Context` on it: `Config.Context` panics on an empty configuration.
 The `len(config) == 0` checks below exist for this reason, not just as a general safety habit.
@@ -1836,8 +1839,7 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadReque
     if len(config) == 0 {
         return nil, fmt.Errorf("read_nested_qc: requires a server peer configuration")
     }
-    // Release the handler lock before making nested outbound calls to avoid
-    // blocking inbound message processing on this server.
+    // Let the next request start while the nested calls are in flight.
     ctx.Release()
     return newestValue(pb.ReadQC(config.Context(ctx), req))
 }
@@ -1966,7 +1968,10 @@ In contrast, a client with a pre-configured node ID (created with `WithPeers`) a
 
 ### Writing the Handler
 
-The handler reads `ctx.ConnectedClients()` to reach all currently connected client peers:
+The handler reads `ctx.ConnectedClients()` to reach all currently connected client peers.
+`Release` lets the next request start.
+The server keeps reading the stream either way, so a handler may call a connected client before `Release` and the reply arrives on that same stream.
+Omitting `Release` delays the next request until the handler returns.
 
 ```go
 // ReadNestedQC fans out a ReadQC to all clients that have connected.

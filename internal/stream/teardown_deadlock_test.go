@@ -12,18 +12,12 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// TestReceiverDispatchNotWedgedByReentrantReply reproduces the stream-dedup
-// teardown deadlock: a server-initiated (back-channel) request is dispatched to
-// a handler while the router's dispatch lock is held; the handler replies on the
-// same channel, whose send queue is full because the transport is not draining.
-// If that reply enqueue blocks, the handler never releases the dispatch lock and
-// the receiver can no longer dispatch inbound frames — the channel deadlocks.
-//
-// The fix routes back-channel replies through the non-blocking [Channel.trySend]
-// (see [Channel.dispatchInbound]). With the fix the handler's reply fails fast,
-// the handler returns, the dispatch lock is freed, and the next request
-// dispatches. Reverting dispatchInbound to use the blocking [Channel.Enqueue]
-// makes this test fail: the dispatch lock is never released.
+// TestReceiverDispatchNotWedgedByReentrantReply verifies that a back-channel
+// handler can reply on a full send queue and still let the next request run.
+// The reply uses [Channel.trySend] (see [Channel.dispatchInbound]), so it
+// returns immediately. The router's dispatch lock stays free: the receiver
+// enqueues the request and does not hold that lock across the handler.
+// Reverting the reply to the blocking [Channel.Enqueue] makes this test fail.
 //
 // This is asserted directly on the dispatch lock rather than via synctest's
 // all-goroutines-durably-blocked deadlock detection, because a goroutine waiting
@@ -69,15 +63,13 @@ func TestReceiverDispatchNotWedgedByReentrantReply(t *testing.T) {
 		synctest.Wait() // the sender is now durably blocked in Send
 
 		// Dispatch a back-channel request exactly as the receiver loop does.
-		// dispatchSerialized runs the handler while holding the dispatch lock;
-		// the handler replies on the same, now-full channel.
+		// The handler replies on the same, now-full channel.
 		first := Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build()
 		c.dispatchInbound(first)
 		synctest.Wait() // let the handler reply and (with the fix) return
 
-		// Invariant: after the handler's reentrant reply, the dispatch lock must
-		// be free so the receiver can dispatch the next inbound frame. A held
-		// lock means the reply blocked on the full queue and the loop is wedged.
+		// Invariant: after the handler's reentrant reply, the dispatch lock is
+		// free and the next request can run.
 		if !r.dispatchMu.TryLock() {
 			t.Fatal("dispatch lock still held: a back-channel reply blocked on a full send queue while holding it, deadlocking the receiver's dispatch loop")
 		}

@@ -65,8 +65,8 @@ type MessageRouter struct {
 	pending map[uint64]pendingRequest
 	latency time.Duration
 	handler RequestHandler // shared by reference; may be nil
-	// dispatchMu serializes handler dispatch when no stream-owned ordering lock
-	// exists, covering local and client-side back-channel requests.
+	// dispatchMu serializes in-process handler dispatch for local channels.
+	// Stream readers do not take it. Each stream has its own request queue.
 	dispatchMu sync.Mutex
 }
 
@@ -138,7 +138,8 @@ func (r *MessageRouter) DispatchLocalRequest(nodeID uint32, req Request) {
 
 // dispatchSerialized starts a handler while holding the router's dispatch lock.
 // The next dispatch blocks until the handler invokes the idempotent release
-// callback, matching the ordering contract enforced by NodeStream.
+// callback. Local in-process calls use this. A stream reader does not: it
+// enqueues requests and keeps reading while a handler has not released.
 func (r *MessageRouter) dispatchSerialized(ctx context.Context, msg *Message, send func(*Message)) {
 	r.dispatchMu.Lock()
 	var once sync.Once
@@ -148,7 +149,9 @@ func (r *MessageRouter) dispatchSerialized(ctx context.Context, msg *Message, se
 
 // RouteMessage demultiplexes a message received on the client-side (outbound) stream.
 // Server-initiated requests (back-channel calls, high-bit IDs) are dispatched to the
-// handler in a new goroutine. Responses to client-initiated calls (low-bit IDs) are
+// handler in a new goroutine, under the router's dispatch lock. The channel receiver
+// does not use that path: it enqueues those requests on its own dispatcher and calls
+// this method for responses. Responses to client-initiated calls (low-bit IDs) are
 // delivered to the matching pending call; responses to cancelled or unknown calls are
 // silently dropped.
 func (r *MessageRouter) RouteMessage(ctx context.Context, nodeID uint32, msg *Message, enqueue func(Request)) {
