@@ -214,7 +214,7 @@ prepare-release: release-tools
 	echo ""; \
 	echo "If the suggested version looks good, please edit the version constants in:"; \
 	echo "  - internal/version/version.go"; \
-	echo "  - version.go"; \
+	echo "  - runtime/gorumsimpl/version.go"; \
 	echo ""; \
 	echo "After editing those files, re-run to update generated files before creating the PR:"; \
 	echo "  make genproto"; \
