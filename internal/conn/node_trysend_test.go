@@ -48,21 +48,15 @@ func (s *blockingBidiStream) Recv() (*stream.Message, error) {
 
 func (s *blockingBidiStream) close() { close(s.closed) }
 
-// TestPeerNodeTrySendDoesNotBlockOnStuckTransport reproduces the server-side
-// half of the stream-dedup teardown deadlock (see
-// stream.Server.NodeStream): a handler processing a client-initiated request
-// hands its reply to a goroutine that drains a bounded "finished" channel by
-// calling peerNode.TrySend. If that call could block on a stuck or
-// backpressured send queue, the drain goroutine would stall, "finished" would
-// back up, and the next handler's own reply would block while holding the
-// connection's ordering lock — wedging the receive loop exactly as an
-// unbounded back-channel reply blocked the client-side receiver before the
-// stream-dedup fix (see internal/stream/teardown_deadlock_test.go).
+// TestPeerNodeTrySendDoesNotBlockOnStuckTransport verifies that
+// peerNode.TrySend returns while the peer's transport is stuck. In
+// [stream.Server.NodeStream], a handler hands its reply to a goroutine that
+// drains a bounded "finished" channel by calling peerNode.TrySend, and the
+// next handler's reply waits on that channel until the call returns.
 //
 // This exercises the real chain the drain goroutine depends on: peerNode ->
-// Node.trySend -> stream.Transport.TrySend -> stream.Channel.TrySend.
-// Reverting peerNode.TrySend to call the blocking Node.enqueue makes this
-// test hang.
+// Node.trySend -> stream.Transport.TrySend -> stream.Channel.TrySend. The test
+// hangs if any link in that chain blocks.
 func TestPeerNodeTrySendDoesNotBlockOnStuckTransport(t *testing.T) {
 	transportStream := newBlockingBidiStream()
 	t.Cleanup(transportStream.close)
@@ -106,10 +100,9 @@ func TestPeerNodeTrySendDoesNotBlockOnStuckTransport(t *testing.T) {
 }
 
 // TestPeerNodeTrySendReportsSendQueueFull verifies that a two-way request
-// enqueued via TrySend on a stuck transport is failed fast with
-// ErrSendQueueFull rather than left pending forever, mirroring
-// [stream.Channel]'s existing two-way trySend contract through the real
-// peerNode adapter.
+// enqueued via TrySend on a stuck transport fails fast with ErrSendQueueFull
+// through the real peerNode adapter, matching the two-way trySend contract of
+// [stream.Channel].
 func TestPeerNodeTrySendReportsSendQueueFull(t *testing.T) {
 	transportStream := newBlockingBidiStream()
 	t.Cleanup(transportStream.close)

@@ -86,7 +86,7 @@ func closeServers(servers []*Server, listeners []net.Listener) {
 
 // allocateListeners pre-allocates n TCP listeners on random localhost ports and
 // returns them along with a [NodeSource] containing their addresses. If any
-// listener fails to open, all previously opened listeners are closed before
+// listener fails to open, the listeners opened so far are closed before
 // returning the error.
 func allocateListeners(n int) ([]net.Listener, NodeSource, error) {
 	listeners := make([]net.Listener, n)

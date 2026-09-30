@@ -16,8 +16,8 @@ func DefaultServer(i int) gorums.ServerIface {
 }
 
 // defaultTestServer creates a test server with optional server options.
-// This is the internal implementation used by both DefaultServer and
-// the test framework when server options are provided.
+// It backs both [DefaultServer] and the test helpers when server options
+// are provided.
 func defaultTestServer(i int, opts ...gorums.ServerOption) gorums.ServerIface {
 	srv := gorums.NewServer(opts...)
 	ts := testSrv{val: int32((i + 1) * 10)}

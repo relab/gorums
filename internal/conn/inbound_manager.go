@@ -21,10 +21,9 @@ import (
 const gorumsNodeIDKey = "gorums-node-id"
 
 // errSelfNodeIDStream is returned by [InboundManager.AcceptPeer] when an
-// inbound stream presents this server's own node ID. It terminates the RPC so
-// the misconfigured peer observes the rejection rather than being accepted as
-// an untracked client. The InvalidArgument code marks it as a client
-// configuration error, not a transient condition to retry.
+// inbound stream presents this server's own node ID. It terminates the RPC, so
+// the misconfigured peer observes the rejection. The InvalidArgument code
+// marks it as a client configuration error that a retry does not fix.
 var errSelfNodeIDStream = status.Error(codes.InvalidArgument, "gorums: inbound stream claims the server's own node ID")
 
 // nodeID extracts the NodeID from the gorums-node-id metadata key in ctx.
@@ -48,7 +47,7 @@ func nodeID(ctx context.Context) uint32 {
 // hasPeerMetadata reports whether ctx contains the gorums-node-id metadata key,
 // regardless of its value. A client that sends this key (even with value "0")
 // has declared itself capable of receiving back-channel calls. Regular clients
-// (those dialing without the [WithBackChannel] dial option) never send this key.
+// (those dialing without a back-channel server) never send this key.
 func hasPeerMetadata(ctx context.Context) bool {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -86,7 +85,7 @@ type InboundManager struct {
 	nextMsgID      atomic.Uint64         // counter for server-initiated message IDs
 	sendBufferSize uint                  // send buffer size for inbound channels
 	handler        stream.RequestHandler // handler for dispatching incoming requests on all inbound nodes
-	onConfigChange func(Config)          // optional; called after each known-peer config change
+	onConfigChange func(Config)          // optional; called after each connected-peer config change
 	nextClientID   uint64                // next candidate ID for a client peer; uint64 represents exhaustion
 	configCh       chan struct{}         // closed and replaced on each config/clientConfig change; protected by mu
 	stopCh         chan struct{}         // closed on shutdown to unblock waiters; never replaced
@@ -142,8 +141,8 @@ func (im *InboundManager) Nodes() []*Node {
 }
 
 // ConnectedPeers returns the current connected-peer [Config]; see
-// [Server.ConnectedPeers]. Before setPeerConfig installs a peer
-// configuration, it falls back to the inbound view.
+// [github.com/relab/gorums.Server.ConnectedPeers]. Before [InboundManager.SetPeerConfig]
+// installs a peer configuration, it returns the inbound view.
 func (im *InboundManager) ConnectedPeers() Config {
 	if im == nil {
 		return nil
@@ -154,7 +153,7 @@ func (im *InboundManager) ConnectedPeers() Config {
 }
 
 // SetPeerConfig installs the server's peer [Config], from which the
-// connected-peer view is derived. It is called once by [NewServer] after the
+// connected-peer view is derived. It is called once by [github.com/relab/gorums.NewServer] after the
 // peer configuration is built; stream-state changes observed before that are
 // picked up by the rebuild here.
 func (im *InboundManager) SetPeerConfig(cfg Config) {
@@ -175,7 +174,7 @@ func (im *InboundManager) peerStreamChanged(uint32, bool) {
 }
 
 // ConnectedClients returns the current connected-client [Config]; see
-// [Server.ConnectedClients].
+// [github.com/relab/gorums.Server.ConnectedClients].
 func (im *InboundManager) ConnectedClients() Config {
 	if im == nil {
 		return nil
@@ -247,9 +246,9 @@ func (im *InboundManager) isKnown(id uint32) bool {
 }
 
 // AcceptPeer accepts an inbound stream and returns the associated peer node
-// and a cleanup function. It currently never returns an error, but the signature
-// supports error handling to allow for authenticated peer connections in the future.
-// The returned [stream.PeerNode] is always non-nil, when err is nil.
+// and a cleanup function. It returns [errSelfNodeIDStream] for a stream that
+// presents this server's own node ID. The returned [stream.PeerNode] is
+// non-nil when err is nil.
 //
 // If the stream identifies a known peer, AcceptPeer registers it and returns
 // that peer's node.
@@ -265,15 +264,12 @@ func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream st
 	nilNode := &nilPeerNode{stream: inboundStream, handler: im.handler}
 	id := nodeID(streamCtx)
 	if im.myID != 0 && id == im.myID {
-		// A stream presenting this server's own node ID must never register on
-		// the self-node: doing so would displace the self-node's in-process
-		// channel with a network-backed one (see the self-node local channel in
-		// newLocalNode). Returning an error terminates the RPC in
-		// [stream.Server.NodeStream] before any connection callback or
-		// application handler runs, so a peer that misconfigured its node ID to
-		// collide with this server's is reported at the connection boundary
-		// instead of being silently accepted as an untracked client. The
-		// self-node is always present in the configuration regardless.
+		// A stream presenting this server's own node ID is rejected, so the
+		// self-node keeps its in-process channel (see newLocalNode). The error
+		// terminates the RPC in [stream.Server.NodeStream] before any
+		// connection callback or application handler runs, which reports the
+		// misconfigured peer at the connection boundary. The self-node stays
+		// in the configuration.
 		return nil, noop, errSelfNodeIDStream
 	}
 	if im.isKnown(id) {
@@ -443,7 +439,7 @@ func (im *InboundManager) waitForConfig(ctx context.Context, cond func() bool) e
 }
 
 // WaitForPeers blocks until cond returns true for the current connected-peer
-// [Config]; see [Server.WaitForPeers]. cond runs under im.mu, so it must not
+// [Config]; see [github.com/relab/gorums.Server.WaitForPeers]. cond runs under im.mu, so it must not
 // call back into im or otherwise acquire additional locks.
 func (im *InboundManager) WaitForPeers(ctx context.Context, cond func(Config) bool) error {
 	return im.waitForConfig(ctx, func() bool {
@@ -452,7 +448,7 @@ func (im *InboundManager) WaitForPeers(ctx context.Context, cond func(Config) bo
 }
 
 // WaitForClients blocks until cond returns true for the current
-// connected-client [Config]; see [Server.WaitForClients]. cond runs under
+// connected-client [Config]; see [github.com/relab/gorums.Server.WaitForClients]. cond runs under
 // im.mu, so it must not call back into im or otherwise acquire additional
 // locks.
 func (im *InboundManager) WaitForClients(ctx context.Context, cond func(Config) bool) error {
@@ -482,7 +478,7 @@ func (im *InboundManager) WaitForInbound(ctx context.Context, cond func(Config) 
 }
 
 // Close signals all waiters to stop and prevents new waits from blocking.
-// Called from [Server.Stop] and [Server.GracefulStop].
+// Called from [github.com/relab/gorums.Server.Stop] and [github.com/relab/gorums.Server.GracefulStop].
 func (im *InboundManager) Close() {
 	im.stopOnce.Do(func() { close(im.stopCh) })
 }
@@ -505,16 +501,10 @@ func (p *nilPeerNode) RouteInbound(ctx context.Context, msg *stream.Message, rel
 	}
 }
 
-// TrySend writes the message directly to the inbound stream.
-//
-// Unlike [peerNode.TrySend], this can still block: a plain client has no
-// gorums-owned send queue, only the raw gRPC stream, whose Send blocks under
-// HTTP/2 flow control with no non-blocking alternative. That is acceptable
-// here because a stuck Send only stalls this one client's own NodeStream
-// goroutine, not a lock shared with other connections.
-//
-// On the first send error the failure is latched and later calls become
-// no-ops, avoiding wasted sends while the stream shuts down.
+// TrySend writes the message directly to the inbound stream. A plain client
+// has no send queue, so Send can block under HTTP/2 flow control; a blocked
+// Send stalls only this client's NodeStream goroutine. After the first send
+// error, later calls are no-ops while the stream shuts down.
 func (p *nilPeerNode) TrySend(req stream.Request) {
 	if p.failed.Load() {
 		return

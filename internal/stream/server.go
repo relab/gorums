@@ -5,14 +5,14 @@ import (
 )
 
 // PeerAcceptor identifies and registers incoming peers on a stream.
-// It is implemented by inboundManager in the gorums package.
+// It is implemented by [github.com/relab/gorums/internal/conn.InboundManager].
 type PeerAcceptor interface {
 	AcceptPeer(ctx context.Context, stream BidiStream) (PeerNode, func(), error)
 }
 
 // PeerNode represents a peer from the perspective of stream dispatch.
-// It is implemented in the gorums package, by Node for an identified peer and
-// by nilPeerNode for a connection whose peer ID is not known.
+// Package [github.com/relab/gorums/internal/conn] implements it for an
+// identified peer and for a connection whose peer ID is not known.
 type PeerNode interface {
 	// RouteInbound handles a message received from the peer.
 	// Messages with a server-initiated ID (high bit set) are responses to
@@ -22,12 +22,10 @@ type PeerNode interface {
 	// release is always called — immediately for server-initiated messages,
 	// or by the handler for client-initiated requests.
 	RouteInbound(ctx context.Context, msg *Message, release func(), send func(*Message))
-	// TrySend delivers a reply to the peer without blocking on a full send
-	// queue: see [Server.NodeStream] for why a handler's reply must never be
-	// able to block here. An implementation with no queue to fail fast against
-	// may still block on the underlying transport; that is safe as long as it
-	// only stalls this one peer's connection, not a lock other connections
-	// depend on.
+	// TrySend delivers a reply to the peer without waiting for send queue
+	// space; see [Server.NodeStream]. An implementation without a send queue
+	// may block on the underlying transport, which stalls only this peer's
+	// connection.
 	TrySend(req Request)
 }
 
@@ -52,13 +50,14 @@ func NewServer(buffer uint, onConnect func(context.Context), acceptor PeerAccept
 // is any error with sending or receiving.
 //
 // Requests go to a per-stream dispatcher, which starts the next request only
-// after the previous handler calls release or returns. This loop delivers
-// replies itself, so a handler that has not released does not stop the stream
-// from being read. The loop waits only when the request queue is full.
+// after the previous handler calls release or returns. The receive loop
+// delivers replies to this server's calls itself, so the stream is read while
+// a handler holds the dispatcher. The loop waits only when the request queue
+// is full.
 //
-// The goroutine below delivers each handler's reply via TrySend, not the
-// blocking Enqueue. TrySend must not block: this goroutine is what drains
-// finished, and a handler blocked in send would never release the dispatcher.
+// A separate goroutine drains handler replies and delivers each one with
+// [PeerNode.TrySend], which never waits for send queue space, so a handler's
+// send completes and the handler can release the dispatcher.
 func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 	finished := make(chan *Message, s.buffer)
 	ctx, cancel := context.WithCancel(srv.Context())

@@ -10,10 +10,10 @@ import "google.golang.org/protobuf/proto"
 //   - Resp: The response message type from individual nodes
 //
 // Register interceptors with [Call.Intercept] before invoking a terminal
-// method. Messages are not sent to nodes until a terminal method (like Majority
-// or First) or iterator method (like Results) is called, applying any registered
-// request transformations. This lazy sending is what lets interceptors register
-// transformations prior to dispatch.
+// method. Messages are sent to nodes when a terminal method (like
+// [Responses.Majority] or [Responses.First]) or an iterator method (like
+// [Responses.Results]) is first called, applying any registered request
+// transformations.
 //
 // This function should only be used by generated code.
 func QuorumCall[Req, Resp proto.Message](ctx *ConfigContext, req Req, method string) *Call[Req, Resp] {

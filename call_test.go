@@ -215,7 +215,7 @@ func TestOnewayCallAsyncReportsSendError(t *testing.T) {
 }
 
 // TestCallInterceptAfterDispatchPanics verifies that calling Intercept after a
-// terminal method has started dispatch panics, since interceptors can no longer
+// terminal method has started dispatch panics, since interceptors cannot
 // influence the in-flight call.
 func TestCallInterceptAfterDispatchPanics(t *testing.T) {
 	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)

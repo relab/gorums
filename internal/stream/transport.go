@@ -63,8 +63,7 @@ func NewSharedTransport(peer *Transport) *Transport {
 }
 
 // IsShared reports whether this transport borrows an inbound peer node's
-// channel rather than owning its own outbound connection. It is safe on a nil
-// transport.
+// channel. It is safe on a nil transport.
 func (t *Transport) IsShared() bool {
 	return t != nil && t.shared
 }
@@ -78,7 +77,7 @@ func (t *Transport) Router() *MessageRouter {
 }
 
 // NextMsgID returns the next message ID from the transport's ID space: the
-// manager's client-initiated space for an owned transport, or the peer's
+// node's client-initiated space for an owned transport, or the peer's
 // server-initiated space for a shared transport.
 func (t *Transport) NextMsgID() uint64 {
 	return t.msgIDGen()

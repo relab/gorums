@@ -15,7 +15,7 @@ type NodeSource interface {
 }
 
 // nodeRegistry abstracts the node management operations required to build a Config.
-// Implemented by outboundManager and inboundManager.
+// Implemented by [outboundManager] and [InboundManager].
 type nodeRegistry interface {
 	Nodes() []*Node
 	newNode(id uint32, addr string) (*Node, error)

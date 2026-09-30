@@ -23,7 +23,7 @@ type serverOptions struct {
 	// Peer management options
 	myID             uint32
 	peerNodes        NodeSource   // Peers to track as they connect; set by WithPeers.
-	onConfigChange   func(Config) // Callback registered via WithPeerChange; invoked after each known-peer config change.
+	onConfigChange   func(Config) // Callback registered via [WithPeerChange]; invoked after each connected-peer config change.
 	listenAddr       string       // Listener address recorded by WithAddr; bound by ListenAndServe.
 	outboundNodes    NodeSource   // Nodes this server calls; set by WithPeers.
 	outboundDialOpts []DialOption
@@ -33,11 +33,9 @@ type serverOptions struct {
 type ServerOption func(*serverOptions)
 
 // WithBufferSizes configures the send and receive buffer sizes for the server.
-// The receiveSize is the capacity of the queue carrying finished handler
-// responses to the goroutine that writes them back on the stream; it bounds how
-// many requests one connection can have in flight. Its default is 0
-// (unbuffered), which lets a connection read its next request only once the
-// current handler's response has been picked up.
+// The receiveSize is the capacity of the queue carrying handler replies to the
+// goroutine that writes them to the stream; a handler's send waits while the
+// queue is full. Its default is 0 (unbuffered).
 //
 // The sendSize controls the capacity of the server's per-node send queue for
 // outgoing peer messages, with the same full-queue semantics as
@@ -228,7 +226,7 @@ func newServer(opts ...ServerOption) (*Server, error) {
 	if serverOpts.sendBufferSize == 0 {
 		serverOpts.sendBufferSize = conn.DefaultSendBufferSize
 	}
-	// Allocate s first so it can serve as the selfHandler for the inboundManager.
+	// Allocate s first so it can serve as the self-node handler for the [conn.InboundManager].
 	// HandleRequest only accesses s.handlers and s.interceptors, both of which are
 	// set below before NewInboundManager is called, so the reference is safe to pass.
 	s := &Server{
@@ -283,8 +281,8 @@ func (s *Server) RegisterHandler(method string, handler Handler) {
 // is not invoked; two-way handlers return a response which is delivered via send.
 //
 // This is the "default interceptor"; it is the first and last handler in the chain.
-// It is responsible for releasing the mutex when the handler chain is done,
-// unless already released by the handler itself, or an interceptor in the chain.
+// It releases the request when the handler chain is done, unless the handler
+// or an interceptor in the chain already released it.
 func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, release func(), send func(*stream.Message)) {
 	srvCtx := ServerContext{
 		Context: ctx,
@@ -387,7 +385,7 @@ func (s *Server) PeerConfig() Config {
 //
 // It waits only under [WithStreamDedup]. Without stream dedup, or without
 // [WithPeers], it returns the current peer [Config] immediately (nil if
-// none), since this server's own connections are established on demand.
+// none), since this server dials each of its peers itself.
 //
 // It returns an error without waiting if the server has no node ID, or if that
 // node ID is not one of its configured peers.
@@ -425,9 +423,9 @@ func (s *Server) GracefulStop() {
 // [Server.WaitForPeers], [Server.WaitForClients], and [Server.WaitForAll]
 // callers, stops the gRPC server, closes the listener owned by
 // [Server.Serve], [Server.ListenAndServe], or [NewLocalServers], and closes the
-// peer [Config]. It does not use gRPC graceful stop, because one-way methods
-// do not respond and would block indefinitely. Stop is safe to call before
-// serving starts, and safe to call more than once.
+// peer [Config]. It stops without waiting for in-flight RPCs, since one-way
+// methods do not respond. Stop is safe to call before serving starts, and safe
+// to call more than once.
 func (s *Server) Stop() {
 	// Unblock any WaitForPeers / WaitForClients / WaitForAll callers.
 	s.im.Close()

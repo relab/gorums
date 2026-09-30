@@ -450,10 +450,9 @@ func TestChannelStreamFailureRecordsLastErr(t *testing.T) {
 }
 
 // TestChannelLastErrClearsOnRecovery verifies that LastErr reports current
-// health rather than history: a channel whose stream failed once reports the
-// failure, and reports nil again once traffic flows over a new stream. Without
-// clearing, a node with one transient failure would look permanently unhealthy
-// and sort behind a node that is down right now.
+// health: a channel whose stream failed once reports the failure, and reports
+// nil again once traffic flows over a new stream, so a node with one transient
+// failure sorts ahead of a node that is down right now.
 func TestChannelLastErrClearsOnRecovery(t *testing.T) {
 	tc := setupChannel(t, rejectFirstStreamServer())
 
@@ -470,8 +469,8 @@ func TestChannelLastErrClearsOnRecovery(t *testing.T) {
 
 // TestChannelReceiverRecordsStreamFailure verifies that an eager-reconnect
 // receiver records its own failed stream creations. The sender records one
-// only when it has a request to send, so an idle node would otherwise report
-// no error however long it stayed unreachable.
+// only when it has a request to send, so the receiver is what records an idle
+// node's unreachability.
 func TestChannelReceiverRecordsStreamFailure(t *testing.T) {
 	conn := newUnavailableClientConn(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -872,10 +871,8 @@ func waitID(t *testing.T, ch <-chan uint64, want uint64, what string) {
 
 // TestChannelEnqueueRespectsRequestContext verifies that a caller blocked in
 // Enqueue on a full send queue is released when its own request context is
-// cancelled. Before the fix, Enqueue only watched the channel's connCtx, so a
-// worker stuck behind a peer that stopped reading could not be unblocked even
-// by a per-call deadline, observed in cluster benchmarks as nodes stalling at
-// near-zero throughput for the rest of a run.
+// cancelled, so a per-call deadline unblocks a worker stuck behind a peer that
+// stopped reading.
 func TestChannelEnqueueRespectsRequestContext(t *testing.T) {
 	stream := newBlockingSendStream()
 	// Capacity 0: the queue has no slack, so a second request blocks in
@@ -987,11 +984,10 @@ func TestChannelEnqueueTwoWayFailsFastWhenFull(t *testing.T) {
 	waitID(t, stream.sends, 2, "queued send completion")
 }
 
-// TestChannelEnqueueOnewayBlocksWhenFull verifies that one-way requests keep
-// today's blocking behavior on a full queue: with no reply to await,
-// backpressure is the only mechanism pacing a one-way producer, so a full
-// queue must make the producer wait (cancellable via the request context)
-// rather than drop the message.
+// TestChannelEnqueueOnewayBlocksWhenFull verifies that one-way requests wait
+// on a full queue: with no reply to await, backpressure paces a one-way
+// producer, so the producer waits (cancellable via the request context) and
+// the message is kept.
 func TestChannelEnqueueOnewayBlocksWhenFull(t *testing.T) {
 	stream := newBlockingSendStream()
 	c := NewInboundChannel(t.Context(), 1, 1, stream, NewMessageRouter())
@@ -1448,18 +1444,13 @@ func TestChannelLateCancelWatcherRequeuesPending(t *testing.T) {
 }
 
 // TestChannelCancelInflightSend verifies the per-request cancel watcher's
-// decision logic. The watcher exists solely to unblock a Send stalled by flow
-// control (such a Send returns only when its stream dies), so it must clear
-// the stream — and requeue the pending requests stranded on it — only while
-// the watched Send is still in flight. Once the send has completed, a
-// late-running watcher must leave the stream and its pending requests
-// untouched: clearing then would sever a healthy stream that later requests
-// (and, under stream deduplication, a remote peer sharing the stream) depend
-// on. A late watcher is routine, not exotic — a caller may cancel its context
-// the moment the response arrives (as the benchmark readiness probe does),
+// decision logic. The watcher unblocks a Send stalled by flow control, so it
+// clears the stream and requeues the pending requests on it only while the
+// watched Send is still in flight. Once the send has completed, a late-running
+// watcher leaves the stream and its pending requests untouched. A late watcher
+// is routine: a caller may cancel its context the moment the response arrives,
 // which lands the cancellation between Send returning and the sender's stop
-// call, and the watcher goroutine spawned by that cancellation can then run
-// arbitrarily late.
+// call.
 func TestChannelCancelInflightSend(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -1586,10 +1577,8 @@ func killFirstStreamServer() (serverFn func(Gorums_NodeStreamServer) error, conn
 // TestChannelEagerReconnectRedialsWithoutSends verifies that a channel with
 // eager reconnection re-establishes a stream the server killed without any
 // local send prompting it, and that the replacement stream then carries a
-// request round trip. Under stream deduplication the remote peer reuses this
-// stream for its own calls and cannot re-dial it, so waiting for the next
-// local send — the default — would leave that peer failing indefinitely on a
-// node with nothing to send.
+// request round trip; see [NewOutboundChannel] for why a peer depends on
+// that.
 func TestChannelEagerReconnectRedialsWithoutSends(t *testing.T) {
 	serverFn, conns := killFirstStreamServer()
 	tc := setupChannelEager(t, true, serverFn)
@@ -2144,10 +2133,11 @@ func TestInboundChannelClose(t *testing.T) {
 }
 
 // TestInboundChannelStreamDown verifies that an inbound channel does not
-// reconnect when the stream goes down. In production, when NodeStream.Recv()
-// returns an error, the deferred UnregisterPeer calls detachStream() → channel.Close().
-// This test mirrors that path: close the channel to simulate stream-down, then
-// verify sends return ErrNodeClosed rather than silently retrying on a new stream.
+// reconnect when the stream goes down. In production, when the Recv loop of
+// [Server.NodeStream] returns an error, the registration cleanup detaches the
+// stream and closes its channel. This test mirrors that path: it closes the
+// channel to simulate stream-down, then verifies that sends return
+// ErrNodeClosed without opening a new stream.
 func TestInboundChannelStreamDown(t *testing.T) {
 	stream := newMockBidiStream()
 	c := NewInboundChannel(t.Context(), 1, 10, stream, NewMessageRouter())

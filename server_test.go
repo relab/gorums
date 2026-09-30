@@ -243,9 +243,9 @@ func TestNewLocalServersStopBeforeServeClosesListeners(t *testing.T) {
 	}
 	stop() // called before any Serve()
 	// Every pre-allocated listener must be closed. Assert this by dialing each
-	// address and expecting a refused connection, rather than re-binding a new
-	// listener to it: re-binding races with anything else on the machine that
-	// might grab the now-free ephemeral port, which caused flakiness before.
+	// address and expecting a refused connection; re-binding the port would
+	// race with anything else on the machine that grabs the free ephemeral
+	// port.
 	for _, addr := range addrs {
 		if conn, err := net.DialTimeout("tcp", addr, 2*time.Second); err == nil {
 			_ = conn.Close()
@@ -427,9 +427,8 @@ func TestServeRecordsListenerForAddrAndStop(t *testing.T) {
 	}
 	srv.Stop()
 	// Stop must close the recorded listener. Assert this by dialing the address
-	// and expecting a refused connection, rather than re-binding a new listener
-	// to it: re-binding races with anything else on the machine that might grab
-	// the now-free ephemeral port, which caused flakiness before.
+	// and expecting a refused connection; re-binding the port would race with
+	// anything else on the machine that grabs the free ephemeral port.
 	if conn, err := net.DialTimeout("tcp", addr, 2*time.Second); err == nil {
 		_ = conn.Close()
 		t.Fatalf("connected to %s after Stop; expected the listener to be closed", addr)

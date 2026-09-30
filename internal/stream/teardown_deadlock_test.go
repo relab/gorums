@@ -17,13 +17,11 @@ import (
 // The reply uses [Channel.trySend] (see [Channel.dispatchInbound]), so it
 // returns immediately. The router's dispatch lock stays free: the receiver
 // enqueues the request and does not hold that lock across the handler.
-// Reverting the reply to the blocking [Channel.Enqueue] makes this test fail.
+// The test fails if the reply blocks.
 //
-// This is asserted directly on the dispatch lock rather than via synctest's
-// all-goroutines-durably-blocked deadlock detection, because a goroutine waiting
-// on sync.Mutex.Lock is not "durably blocked" (see testing/synctest); the mutex
-// hand-off at the heart of this deadlock is therefore invisible to that
-// detection. synctest.Wait is used only to reach a settled state before the
+// The test asserts on the dispatch lock directly, since a goroutine waiting on
+// sync.Mutex.Lock is not "durably blocked" for synctest's deadlock detection
+// (see testing/synctest). synctest.Wait only settles the goroutines before the
 // assertion.
 func TestReceiverDispatchNotWedgedByReentrantReply(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
@@ -99,12 +97,11 @@ func TestReceiverDispatchNotWedgedByReentrantReply(t *testing.T) {
 
 // TestTrySendDoesNotBlockOnFullQueue is a focused check that the non-blocking
 // enqueue used for back-channel replies returns immediately on a full send
-// queue even with a background (deadline-free) context, rather than blocking
-// unbounded. This is the property that keeps a reply from wedging the receiver:
-// unlike the one-way [Channel.Enqueue] path — which blocks until the request
-// context is done (see TestChannelEnqueueRespectsRequestContext) — trySend must
-// not depend on context cancellation to make progress, because a back-channel
-// reply carries only the never-cancelled connection context.
+// queue, even with a background (deadline-free) context. A back-channel reply
+// carries only the connection context, so trySend makes progress without
+// context cancellation, which keeps a reply from wedging the receiver. The
+// one-way [Channel.Enqueue] path waits until the request context is done (see
+// TestChannelEnqueueRespectsRequestContext).
 func TestTrySendDoesNotBlockOnFullQueue(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		const nodeID = uint32(1)
@@ -153,13 +150,12 @@ func TestTrySendDoesNotBlockOnFullQueue(t *testing.T) {
 }
 
 // TestChannelTrySendDoesNotBlockOnFullQueue is the same check as
-// TestTrySendDoesNotBlockOnFullQueue, but against the exported [Channel.TrySend]
-// rather than the unexported trySend it wraps. TrySend is the entry point used
-// outside this package for replies that must never stall a receive/dispatch
-// loop — in particular the drain goroutine in [Server.NodeStream], which hands
-// a handler's reply to the peer this way so a stuck or backpressured send
-// queue cannot wedge that goroutine (see the invariant in
-// TestReceiverDispatchNotWedgedByReentrantReply for the client-side analog).
+// TestTrySendDoesNotBlockOnFullQueue against the exported [Channel.TrySend].
+// TrySend is the entry point outside this package for replies sent from a
+// receive or dispatch loop, in particular from the drain goroutine in
+// [Server.NodeStream], which keeps draining while a send queue is stuck or
+// backpressured (see TestReceiverDispatchNotWedgedByReentrantReply for the
+// client-side analog).
 func TestChannelTrySendDoesNotBlockOnFullQueue(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		const nodeID = uint32(1)
@@ -363,22 +359,16 @@ func (p echoPeerNode) TrySend(req Request) {
 	p.ch.TrySend(req)
 }
 
-// TestNodeStreamReplyDoesNotWedgeReceiveLoop reproduces the server-side half
-// of the teardown deadlock directly against [Server.NodeStream], rather than
-// against the individual layers TrySend passes through (as the other tests in
-// this file do). A handler's reply is handed off via the drain goroutine's
-// call to PeerNode.TrySend; this must never block that goroutine, or
-// NodeStream's Recv loop below could never read the next inbound frame — see
-// the invariant in TestReceiverDispatchNotWedgedByReentrantReply for the
-// client-side analog. Reverting echoPeerNode.TrySend to call ch.Enqueue
-// instead of ch.TrySend makes this test hang.
+// TestNodeStreamReplyDoesNotWedgeReceiveLoop checks the server-side half of
+// the teardown deadlock against [Server.NodeStream] itself; the other tests in
+// this file check the layers TrySend passes through. A handler's reply is
+// handed to the drain goroutine, which sends it with PeerNode.TrySend while
+// the send queue is full, and every inbound request is still dispatched (see
+// TestReceiverDispatchNotWedgedByReentrantReply for the client-side analog).
+// The test hangs if echoPeerNode.TrySend blocks.
 //
-// This uses real goroutines and wall-clock timeouts rather than synctest: the
-// deadlock's key hand-off is NodeStream's own mut, a plain sync.Mutex, and (as
-// documented on TestReceiverDispatchNotWedgedByReentrantReply) a goroutine
-// blocked on Mutex.Lock is not "durably blocked" to synctest, so a wedged run
-// would hang synctest.Wait itself for the real test timeout instead of failing
-// with a clear message.
+// It uses real goroutines and wall-clock timeouts, so a wedged run fails with
+// a clear message.
 func TestNodeStreamReplyDoesNotWedgeReceiveLoop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -413,18 +403,15 @@ func TestNodeStreamReplyDoesNotWedgeReceiveLoop(t *testing.T) {
 
 	// Feed three inbound requests. Each handler goroutine reports to
 	// dispatched before calling send, so requests 1 and 2 are reported
-	// regardless of whether the drain goroutine wedges: NodeStream's mut
-	// only serializes Recv iterations on release, and release for request 1
-	// fires as soon as its reply is handed off to the (unbuffered) finished
-	// channel — before the drain goroutine's TrySend call on that reply even
-	// starts. Request 2's own reply hand-off is what actually depends on the
-	// drain goroutine: it blocks on finished until the drain goroutine loops
-	// back to receive again, which happens only once its TrySend call for
-	// request 1's reply returns. If that TrySend call wedges (the bug this
-	// guards against), request 2's release never fires, mut is never freed
-	// again, and request 3 — sitting in fs.inbound — is never read by
-	// NodeStream's Recv loop or dispatched. So request 3 is the one that
-	// actually exercises the invariant; 1 and 2 only get it there.
+	// whether or not the drain goroutine wedges. The request dispatcher
+	// starts the next request on release, and release for request 1 fires
+	// as soon as its reply is handed off to the (unbuffered) finished
+	// channel, before the drain goroutine's TrySend call on that reply
+	// starts. Request 2's reply hand-off waits on finished until the drain
+	// goroutine's TrySend call for request 1's reply returns. If that call
+	// wedges, request 2's release never fires and the dispatcher never
+	// starts request 3. So request 3 exercises the invariant; requests 1
+	// and 2 set it up.
 	fs.feed(Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build())
 	fs.feed(Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build())
 	fs.feed(Message_builder{MessageSeqNo: 3, Method: mock.TestMethod}.Build())

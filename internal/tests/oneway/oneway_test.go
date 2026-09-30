@@ -53,9 +53,8 @@ type cluster struct {
 // starts from a known state. A subtest that received everything it sent leaves
 // nothing behind.
 //
-// It drains until each channel is empty rather than taking len() once: a
-// straggler still in flight when reset runs would otherwise be left queued and
-// counted against the next subtest.
+// It drains until each channel is empty, so a straggler that arrives while
+// reset runs is discarded too.
 func (c *cluster) reset() {
 	for _, srv := range c.srvs {
 	drain:
@@ -92,9 +91,9 @@ func (c *cluster) received(t *testing.T, i, want int) []uint64 {
 // clusters returns a lookup that lazily creates one shared cluster per
 // configuration size and resets it before each use. Sharing clusters across
 // the subtests of a table keeps the number of connections proportional to the
-// distinct sizes rather than to the number of subtests: with real TCP
-// listeners, every subtest would otherwise leave one socket per node in
-// TIME_WAIT, and a high -count run can exhaust the ephemeral port range.
+// number of distinct sizes. With real TCP listeners, each closed connection
+// leaves a socket in TIME_WAIT, and a high -count run can exhaust the
+// ephemeral port range.
 //
 // The lookup must be called from the goroutine running t, not from a subtest,
 // since it registers servers and cleanup on t. Only the first cluster

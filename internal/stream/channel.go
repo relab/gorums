@@ -20,10 +20,8 @@ var (
 	// retried because the node's stream is not available.
 	ErrStreamDown = status.Error(codes.Unavailable, "stream is down")
 	// ErrSendQueueFull is returned for two-way requests enqueued while the
-	// node's send queue is at capacity. A full queue means the peer is not
-	// draining sends (stopped reading, exhausted flow control); failing fast
-	// lets quorum logic count the peer as failed instead of stalling the
-	// caller behind it. One-way requests block instead (see Enqueue).
+	// node's send queue is full; one-way requests wait for space instead (see
+	// [Channel.Enqueue]).
 	ErrSendQueueFull = status.Error(codes.Unavailable, "send queue full")
 )
 
@@ -160,16 +158,14 @@ type Channel struct {
 // a call type. The sender blocks on the sendQ and the receiver waits for
 // the stream to become available.
 //
-// When eagerReconnect is set, the receiver re-establishes a lost stream
-// proactively with capped exponential backoff instead of waiting for the next
-// local send. Use this whenever a remote peer depends on this dialed stream
-// staying registered on its inbound side. Any symmetric peer (a server calling
-// its peers via WithPeers) drops out of the remote's connected
-// configuration when the stream it dialed goes idle and dies; under stream
-// deduplication the peer additionally reuses this stream for its own calls and
-// cannot re-dial it at all. In both cases a stream lost while this side has
-// nothing to send would otherwise leave the peer stalled until the next local
-// send.
+// When eagerReconnect is set, the receiver re-establishes a lost stream with
+// capped exponential backoff, independently of local sends. Set it whenever a
+// remote peer depends on this dialed stream staying registered on its inbound
+// side: a symmetric peer (a server calling its peers via WithPeers) keeps this
+// node in its connected configuration only while that stream is up, and under
+// stream deduplication the peer also sends its own calls on this stream and
+// cannot dial it itself. Eager reconnect keeps the peer reachable while this
+// side has nothing to send.
 //
 // onStreamChange, if non-nil, is invoked with true when the stream is
 // established and false when it is lost, on transitions only. It runs while
@@ -182,11 +178,9 @@ func NewOutboundChannel(parentCtx context.Context, id uint32, sendBufferSize uin
 // The sender and request-dispatcher goroutines are started. No receiver
 // goroutine is launched.
 //
-// Receiving from the stream is intentionally left to the caller's goroutine
-// (e.g. NodeStream's Recv loop), which is the sole authoritative reader.
-// Starting a second receiver goroutine would race with that loop and would
-// intercept response messages that NodeStream must route after demultiplexing
-// them from new incoming requests.
+// Receiving from the stream is left to the caller's goroutine (e.g., the Recv
+// loop of [Server.NodeStream]), which is the sole reader: it separates
+// responses to pending calls from new incoming requests and routes both.
 //
 // Unlike outbound channels, inbound channels:
 //   - Have no receiver goroutine (NodeStream's Recv loop is the sole reader)
@@ -264,16 +258,14 @@ func NewLocalChannel(id uint32, router *MessageRouter) *Channel {
 	return c
 }
 
-// isLocal returns true if this channel dispatches in-process rather than over a
-// network connection.
+// isLocal reports whether this channel dispatches in-process.
 func (c *Channel) isLocal() bool {
 	// The nil sendQ is the discriminator: all outbound and inbound channels always
 	// allocate a sendQ via make(chan Request, ...) in newChannel.
 	return c.sendQ == nil
 }
 
-// IsInbound returns true if this channel was created from a server-side stream
-// rather than an outbound client connection.
+// IsInbound reports whether this channel was created from a server-side stream.
 func (c *Channel) IsInbound() bool {
 	return c.conn == nil && c.sendQ != nil
 }
@@ -289,13 +281,11 @@ func (c *Channel) Close() error {
 }
 
 // ensureStream ensures there is an active NodeStream, signals the receiver
-// that the stream is ready, and returns the ensured stream. The caller must
-// use the returned stream rather than re-reading it with getStream: a
-// concurrent clearStream — the receiver observing a broken stream, or a
-// cancel watcher — can clear the stream between the two steps, and a request
-// that never obtains a stream is failed without ever being registered for
-// retry. Sending on the returned stream after such a clear fails instead with
-// a stream error, after registration, so the request is requeued.
+// that the stream is ready, and returns the ensured stream. The caller sends on
+// the returned stream. A concurrent [Channel.clearStream] can clear the
+// channel's stream at any time; a send on the returned stream after such a
+// clear fails with a stream error after the request is registered, so the
+// request is requeued.
 // gRPC automatically handles TCP connection state when creating the stream.
 // This method is safe for concurrent use.
 func (c *Channel) ensureStream() (BidiStream, error) {
@@ -319,11 +309,10 @@ func (c *Channel) ensureStream() (BidiStream, error) {
 	return stream, nil
 }
 
-// ensureConnectedNodeStream returns the channel's NodeStream, creating one
-// when the channel has none. A stream already in place is returned as it is.
-// Connection state on its own does not replace it: the receive path clears a
-// stream that has ended, and that clear requeues the calls still pending on it.
-// This method is safe for concurrent use.
+// ensureConnectedNodeStream returns the channel's NodeStream, creating one if
+// the channel has none. The receive path clears a stream that has ended and
+// requeues its pending calls, and [Channel.retireOnGoAway] clears a stream on
+// a draining connection. This method is safe for concurrent use.
 func (c *Channel) ensureConnectedNodeStream() (BidiStream, error) {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
@@ -343,11 +332,10 @@ func (c *Channel) ensureConnectedNodeStream() (BidiStream, error) {
 }
 
 // retireOnGoAway marks stream as draining once its connection leaves Ready,
-// which is how the client observes a server GOAWAY, and retires it as soon as
-// no call is pending on it. A stream left open on a draining connection would
-// keep the server's graceful stop or connection-age drain from finishing, while
-// retiring it with calls pending would rerun them. It returns when ctx, the
-// stream's context, ends.
+// which is how the client observes a server GOAWAY, and retires it once no
+// call is pending on it. Pending calls thus complete on the stream that
+// carries them, and the server's graceful stop or connection-age drain can
+// finish. It returns when ctx, the stream's context, ends.
 func (c *Channel) retireOnGoAway(stream BidiStream, ctx context.Context) {
 	for c.conn.GetState() == connectivity.Ready {
 		if !c.conn.WaitForStateChange(ctx, connectivity.Ready) {
@@ -363,10 +351,9 @@ func (c *Channel) retireOnGoAway(stream BidiStream, ctx context.Context) {
 	c.retireDrained()
 }
 
-// retireDrained clears the draining stream, if any, once no call is pending
-// on the channel. The next send opens a stream on a new connection. Calls
-// registered concurrently with the clear are requeued like those of any
-// cleared stream.
+// retireDrained clears the draining stream, if any, when no call is pending
+// on the channel, and requeues calls registered concurrently with the clear.
+// The next send opens a stream on a new connection.
 func (c *Channel) retireDrained() {
 	c.streamMut.Lock()
 	stream := c.draining
@@ -386,13 +373,10 @@ func (c *Channel) getStream() BidiStream {
 	return c.stream
 }
 
-// clearStream cancels the stream context for stale and clears the stream reference,
-// but only if stale is still the current stream. This guards against a race where
-// the receiver calls clearStream on a stale stream after ensureStream has already
-// replaced it with a new one, which would otherwise cancel the new stream's context
-// and spuriously cancel requests that belong to the new stream.
-// It returns true if stale was still current and was cleared, false otherwise.
-// This triggers reconnection on the next send attempt.
+// clearStream cancels the stream context of stale and clears the stream
+// reference if stale is still the current stream, and reports whether it did.
+// A stream that has replaced stale is left intact, together with the requests
+// that belong to it. The next send opens a new stream.
 func (c *Channel) clearStream(stale BidiStream) bool {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
@@ -431,31 +415,12 @@ func (c *Channel) StreamUp() bool {
 	return c.streamUp.Load()
 }
 
-// Enqueue adds the request to the send queue, blocking the caller if the
-// queue is full.
-//
-// If it is a local channel, the request is dispatched in-process via
-// the registered RequestHandler without touching the network.
-// If the node is closed, it responds with an error instead.
-//
-// Two-way requests never wait here: a full queue means the peer is not
-// draining sends, and failing fast with ErrSendQueueFull beats stalling every
-// caller behind one slow peer (see [Channel.trySend]). One-way client calls
-// (Unicast, Multicast) do wait: with no reply to await, backpressure on the
-// caller is the only thing pacing the producer. Both wait points (here and at
-// the sender's dequeue) honor the request's context, so a bounded or
-// cancellable context still releases the caller; a context with no deadline
-// can block indefinitely behind a peer that stopped draining.
-//
-// Enqueue must never be used for a reply sent from a receive/dispatch loop —
-// use [Channel.trySend] instead. See [Channel.dispatchInbound].
-//
-// Requests cannot combine Oneway and Streaming; they are mutually exclusive:
-//   - one-way calls (Unicast, Multicast) do not expect server responses.
-//   - streaming (correctable) calls expect multiple server responses and
-//     require the router entry to stay alive for the duration of the stream.
-//
-// Combining them would cause double delivery on the response channel.
+// Enqueue adds the request to the send queue. A local channel dispatches it
+// in-process, and a closed channel replies [ErrNodeClosed]. When the queue is
+// full, a two-way request fails fast with [ErrSendQueueFull], while a one-way
+// request waits for space until its context ends, which paces the producer.
+// Replies sent from a receive or dispatch loop use [Channel.trySend].
+// Enqueue panics if req is both Oneway and Streaming.
 func (c *Channel) Enqueue(req Request) {
 	if req.Oneway && req.Streaming {
 		panic("gorums: Oneway and Streaming are mutually exclusive")
@@ -490,20 +455,18 @@ func (c *Channel) Enqueue(req Request) {
 		// the node's close() method was called: respond with error instead of enqueueing
 		req.ReplyError(c.id, ErrNodeClosed)
 	case <-req.Ctx.Done():
-		// The request's own context was cancelled while waiting for queue space.
-		// Without this case a caller could block here indefinitely behind a peer
-		// that stopped reading; the sender applies the same check when it dequeues,
-		// so both wait points honor the request context.
+		// The request's own context ended while waiting for queue space. The
+		// sender checks the context again when it dequeues, so both wait points
+		// honor the request context.
 		req.ReplyError(c.id, req.Ctx.Err())
 	case c.sendQ <- req:
 		// enqueued successfully
 	}
 }
 
-// TrySend is [Channel.trySend] exported for callers outside this package —
-// currently the server-side inbound reply path; see [PeerNode.TrySend]. Like
-// trySend, it never blocks on network I/O; unlike trySend, a local channel's
-// in-process dispatch can briefly block acquiring the dispatch lock.
+// TrySend enqueues req without waiting for queue space, as [Channel.trySend]
+// does. A local channel dispatches req in-process, which can briefly wait for
+// the router's dispatch lock.
 func (c *Channel) TrySend(req Request) {
 	if c.isLocal() {
 		c.router.DispatchLocalRequest(c.id, req)
@@ -519,12 +482,11 @@ func (c *Channel) TrySend(req Request) {
 // full, since there is no channel to deliver the error on; each such drop is
 // counted (see [Channel.DroppedReplies]).
 //
-// Two callers rely on this never blocking: two-way requests (see [Channel.Enqueue]
-// for why a full queue should fail fast rather than stall the caller), and
-// replies sent from a receive/dispatch loop, which must keep reading inbound
-// frames and would deadlock if a reply blocked instead — see
-// [Channel.dispatchInbound] for the client-side case and [Server.NodeStream]
-// for the server-side case.
+// Two callers depend on it never blocking: two-way requests from
+// [Channel.Enqueue], and replies sent from a receive or dispatch loop, which
+// keeps reading inbound frames while the reply is queued; see
+// [Channel.dispatchInbound] for the client side and [Server.NodeStream] for
+// the server side.
 func (c *Channel) trySend(req Request) {
 	// Deterministic already-closed check: see the equivalent select in Enqueue.
 	select {
@@ -565,27 +527,16 @@ func (c *Channel) cancelPendingMsgs(err error) {
 	}
 }
 
-// cancelInflightSend is the sender's per-request cancel watcher: it clears
-// the stream to unblock a Send that the request's canceled context would
-// otherwise leave blocked forever (a Send stalled by flow control returns
-// only when its stream dies), requeueing the pending requests stranded on the
-// cleared stream.
+// cancelInflightSend is the sender's per-request cancel watcher on an
+// outbound channel. It clears stream, which ends a Send blocked by flow
+// control, and requeues the requests pending on it.
 //
-// sendDone — set by the sender under sendGuard once Send returns — makes a
-// watcher that runs late a no-op. The caller may cancel its context the
-// moment it has the response, landing the cancellation between Send returning
-// and the sender's stop call, and the watcher goroutine spawned by that
-// cancellation may then run arbitrarily late; with nothing left to unblock,
-// clearing would sever a healthy stream that later requests (and, under
-// stream deduplication, the remote peer sharing this stream) depend on.
-//
-// One narrow window remains: between Send returning and the sender acquiring
-// sendGuard to set sendDone, a watcher can win the guard, observe sendDone
-// still false, and clear a stream whose Send already completed. This is
-// accepted rather than closed because it is self-healing and strands nothing:
-// the requeued requests retry, and the stream is re-established on the next
-// send (immediately when eager reconnect is set). The cost is a spurious
-// reconnect, not lost or misrouted traffic.
+// The sender sets sendDone under sendGuard once Send returns, which makes a
+// watcher that runs after that point a no-op: a caller that cancels its
+// context on receiving the response leaves the stream intact. A watcher that
+// takes sendGuard after Send returns but before sendDone is set clears the
+// stream; its requeued requests retry on a new stream, opened by the next
+// send or by eager reconnect.
 func (c *Channel) cancelInflightSend(sendDone *bool, stream BidiStream) {
 	c.sendGuard.Lock()
 	defer c.sendGuard.Unlock()
@@ -604,8 +555,7 @@ func (c *Channel) cancelInflightSend(sendDone *bool, stream BidiStream) {
 // Only two-way requests are registered in the router, so every requeued entry
 // takes Enqueue's non-blocking fail-fast path. Calling Enqueue directly from
 // the sender goroutine (the sole sendQ reader) therefore cannot deadlock;
-// entries that no longer fit are failed with ErrSendQueueFull rather than
-// retried. If the node closed meanwhile, Enqueue replies ErrNodeClosed and
+// entries that do not fit are failed with [ErrSendQueueFull]. If the node closed meanwhile, Enqueue replies ErrNodeClosed and
 // drainSendQ (deferred in sender) drains any entries that slipped through.
 func (c *Channel) requeuePendingMsgs() {
 	requeue, cancel := c.router.requeuePending(c.pendingOwner)
@@ -621,8 +571,8 @@ func (c *Channel) requeuePendingMsgs() {
 // sendQ when the sender goroutine exits, replying to each with ErrNodeClosed.
 // This handles both requests already in the queue and any that slip through
 // the narrow race window in Enqueue after connCtx is cancelled.
-// sendQ must never be closed: closing it could panic a concurrent Enqueue
-// that passes the outer connCtx check and then sends on a closed channel.
+// sendQ stays open for the channel's lifetime, since a concurrent Enqueue can
+// pass the outer connCtx check and then send on it.
 func (c *Channel) drainSendQ() {
 	for {
 		select {
@@ -682,15 +632,9 @@ func (c *Channel) sender() {
 			c.router.register(c.pendingOwner, req.Msg.GetMessageSeqNo(), req)
 		}
 
-		// Watch for per-request cancellation while Send is in flight: a Send
-		// blocked by flow control returns only when its stream dies, so the
-		// watcher unblocks it by clearing the stream. An inbound channel has no
-		// watcher, since it cannot open a replacement stream. sendDone, set under
-		// sendGuard once Send returns, neutralizes a watcher that fires late:
-		// the caller may cancel its context the moment the response arrives —
-		// before this goroutine resumes to call stop — and the watcher
-		// goroutine spawned by that cancellation may then run arbitrarily
-		// late; see [Channel.cancelInflightSend].
+		// Watch for per-request cancellation while Send is in flight; see
+		// [Channel.cancelInflightSend]. An inbound channel has no watcher,
+		// since it cannot open a replacement stream.
 		var sendDone bool
 		stop := func() bool { return false }
 		if !c.IsInbound() {
@@ -739,11 +683,7 @@ const (
 // stream reference and requeues pending requests for retry on a new stream.
 //
 // With eagerReconnect set, the receiver also re-establishes a lost stream
-// itself, with capped exponential backoff, instead of leaving reconnection to
-// the sender's next request: a symmetric peer depends on this dialed stream to
-// stay registered on its inbound side (and under stream deduplication reuses it
-// for its own calls and cannot re-dial it), so on a node with nothing to send
-// the peer would otherwise stall until this node's next request.
+// itself, with capped exponential backoff; see [NewOutboundChannel].
 func (c *Channel) receiver() {
 	reconnectDelay := eagerReconnectBaseDelay
 	for {
@@ -887,9 +827,10 @@ func (c *Channel) dispatchBackChannel(msg *Message, release func()) {
 }
 
 // recordHealth records the outcome of a stream operation as this channel's
-// [Channel.LastErr]: a non-nil err replaces it, a nil err clears it. Call it
-// only for operations that move data, a completed send or a received frame;
-// establishing a stream does not prove the channel usable.
+// [Channel.LastErr]: a non-nil err replaces it, a nil err clears it. A nil
+// err comes only from an operation that moves data, a completed send or a
+// received frame, since establishing a stream does not prove the channel
+// usable; a failed stream creation is recorded as an error.
 func (c *Channel) recordHealth(err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
