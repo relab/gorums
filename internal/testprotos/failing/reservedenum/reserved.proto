@@ -1,0 +1,28 @@
+// Test that Gorums will stop code generation if a reserved Gorums
+// identifier is used as an enum name.
+
+edition = "2023";
+
+package gorums.testprotos.failing.reservedenum;
+option go_package = "github.com/relab/gorums/internal/testprotos/failing/reservedenum";
+
+option features.field_presence = IMPLICIT;
+
+import "gorums.proto";
+
+service ReservedEnum {
+    rpc Lookup(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
+}
+
+enum Node {
+    NODE_UNSPECIFIED = 0;
+}
+
+message Request {
+    string Value = 1;
+}
+message Response {
+    string Value = 1;
+}

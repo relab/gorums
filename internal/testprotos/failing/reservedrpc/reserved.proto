@@ -1,0 +1,24 @@
+// Test that Gorums will stop code generation if a reserved Gorums
+// identifier is used as an RPC method name.
+
+edition = "2023";
+
+package gorums.testprotos.failing.reservedrpc;
+option go_package = "github.com/relab/gorums/internal/testprotos/failing/reservedrpc";
+
+option features.field_presence = IMPLICIT;
+
+import "gorums.proto";
+
+service ReservedRPC {
+    rpc Config(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
+}
+
+message Request {
+    string Value = 1;
+}
+message Response {
+    string Value = 1;
+}
