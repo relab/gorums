@@ -397,9 +397,15 @@ func (s *Server) WaitForAll(ctx context.Context) (Config, error) {
 	return cfg, nil
 }
 
-// GracefulStop waits for all RPCs to finish before stopping.
+// GracefulStop waits for all RPCs to finish, then unblocks
+// [Server.WaitForPeers], [Server.WaitForClients], and [Server.WaitForAll] with
+// [ErrStopped] and closes the peer [Config] built by [WithPeers].
 func (s *Server) GracefulStop() {
 	s.grpcServer.GracefulStop()
+	s.im.Close()
+	if s.outbound != nil {
+		_ = s.outbound.Close()
+	}
 }
 
 // Stop stops the server immediately and releases its resources. It unblocks any

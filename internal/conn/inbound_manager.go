@@ -482,7 +482,7 @@ func (im *InboundManager) WaitForInbound(ctx context.Context, cond func(Config) 
 }
 
 // Close signals all waiters to stop and prevents new waits from blocking.
-// Called from [Server.Stop].
+// Called from [Server.Stop] and [Server.GracefulStop].
 func (im *InboundManager) Close() {
 	im.stopOnce.Do(func() { close(im.stopCh) })
 }
