@@ -143,28 +143,44 @@ func (c *OnewayCall[Req]) dispatch() {
 // out. A skipped unicast sent nothing at all, so its [ErrSkipNode] is returned.
 func (c *OnewayCall[Req]) collect() error {
 	if c.unicast {
-		select {
-		case r := <-c.ctx.replyChan:
-			return r.Err
-		case <-c.ctx.Done():
-			return c.ctx.Err()
+		r, err := c.receive()
+		if err != nil {
+			return err
 		}
+		return r.Err
 	}
 	var errs []conn.NodeError
 	for range c.ctx.config.Size() {
-		select {
-		case r := <-c.ctx.replyChan:
-			if r.Err != nil && !errors.Is(r.Err, ErrSkipNode) {
-				errs = append(errs, conn.NewNodeError(r.NodeID, r.Err))
-			}
-		case <-c.ctx.Done():
-			return c.ctx.Err()
+		r, err := c.receive()
+		if err != nil {
+			return err
+		}
+		if r.Err != nil && !errors.Is(r.Err, ErrSkipNode) {
+			errs = append(errs, conn.NewNodeError(r.NodeID, r.Err))
 		}
 	}
 	if len(errs) > 0 {
 		return conn.NewQuorumCallError(ErrSendFailure, errs)
 	}
 	return nil
+}
+
+// receive returns the next send confirmation. A confirmation already buffered
+// is returned even if the context has ended, so a call whose sends completed
+// reports them after its context is done. The context error is returned only
+// when no confirmation is available.
+func (c *OnewayCall[Req]) receive() (NodeResponse[*stream.Message], error) {
+	select {
+	case r := <-c.ctx.replyChan:
+		return r, nil
+	default:
+	}
+	select {
+	case r := <-c.ctx.replyChan:
+		return r, nil
+	case <-c.ctx.Done():
+		return NodeResponse[*stream.Message]{}, c.ctx.Err()
+	}
 }
 
 // OnewayAsync is the send-completion handle of a one-way call dispatched with
