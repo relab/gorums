@@ -125,10 +125,10 @@ type Channel struct {
 	streamUp atomic.Bool
 
 	// onStreamChange, if non-nil, is invoked on every outbound stream
-	// transition with the new state; see [NewOutboundChannel]. It is called
-	// while internal locks are held, so it must not call back into the
-	// Channel; use it only to signal or record the state elsewhere.
-	onStreamChange func(up bool)
+	// transition; see [NewOutboundChannel]. It is called while internal
+	// locks are held, so it must not call back into the Channel; use it only
+	// to signal the change elsewhere.
+	onStreamChange func()
 
 	// sendGuard serializes each request's post-Send bookkeeping in the sender
 	// against that request's cancel watcher, so the watcher can distinguish a
@@ -167,10 +167,10 @@ type Channel struct {
 // cannot dial it itself. Eager reconnect keeps the peer reachable while this
 // side has nothing to send.
 //
-// onStreamChange, if non-nil, is invoked with true when the stream is
-// established and false when it is lost, on transitions only. It runs while
-// internal locks are held and must not call back into the Channel.
-func NewOutboundChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn *grpc.ClientConn, router *MessageRouter, eagerReconnect bool, onStreamChange func(up bool)) *Channel {
+// onStreamChange, if non-nil, is invoked when the stream is established or
+// lost, on transitions only; [Channel.StreamUp] reports the new state. It
+// runs while internal locks are held and must not call back into the Channel.
+func NewOutboundChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn *grpc.ClientConn, router *MessageRouter, eagerReconnect bool, onStreamChange func()) *Channel {
 	return newChannel(parentCtx, id, sendBufferSize, conn, nil, router, eagerReconnect, onStreamChange)
 }
 
@@ -196,7 +196,7 @@ func NewInboundChannel(parentCtx context.Context, id uint32, sendBufferSize uint
 // Pass a non-nil stream for inbound channels (stream is immediately ready; no reconnection).
 // The receiver goroutine is started only for outbound channels; inbound callers own
 // the stream's read side themselves (see NewInboundChannel for the full rationale).
-func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn *grpc.ClientConn, stream BidiStream, router *MessageRouter, eagerReconnect bool, onStreamChange func(up bool)) *Channel {
+func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn *grpc.ClientConn, stream BidiStream, router *MessageRouter, eagerReconnect bool, onStreamChange func()) *Channel {
 	connCtx, connCancel := context.WithCancel(parentCtx)
 	c := &Channel{
 		sendQ:          make(chan Request, sendBufferSize),
@@ -400,7 +400,7 @@ func (c *Channel) clearStream(stale BidiStream) bool {
 // unconditionally after each stream mutation.
 func (c *Channel) setStreamUp(up bool) {
 	if c.streamUp.CompareAndSwap(!up, up) && c.onStreamChange != nil {
-		c.onStreamChange(up)
+		c.onStreamChange()
 	}
 }
 

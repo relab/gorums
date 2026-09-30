@@ -128,7 +128,7 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 	if im := m.opts.InboundMgr; im != nil && im.isKnown(id) {
 		// Stream-state changes on a dialed peer feed the server's
 		// connected-peer view.
-		opts.StreamState = im.peerStreamChanged
+		opts.OnStreamChange = im.onStreamChange
 	}
 	n, err := newOutboundNode(addr, opts)
 	if err != nil {
