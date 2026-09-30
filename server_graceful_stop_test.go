@@ -8,7 +8,10 @@ import (
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
+	"github.com/relab/gorums/internal/testutils/mock"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	"go.uber.org/goleak"
+	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // TestGracefulStopReleasesPeerConfig verifies that GracefulStop unblocks
@@ -43,5 +46,41 @@ func TestGracefulStopReleasesPeerConfig(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("WaitForPeers did not return after GracefulStop")
+	}
+}
+
+// TestGracefulStopWithOpenClientStream verifies that GracefulStop returns
+// while a client stream is open, including when the client keeps calling
+// during the drain.
+func TestGracefulStopWithOpenClientStream(t *testing.T) {
+	srv := gorums.NewServer()
+	srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+		return gorums.NewResponseMessage(in, pb.String("echo")), nil
+	})
+	cfg := gorumstest.Config(t, 1, func(int) gorums.ServerIface { return srv })
+	node := cfg.Nodes()[0]
+
+	call := func() error {
+		ctx := gorumstest.Context(t, 2*time.Second)
+		_, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(ctx), pb.String("x"), mock.TestMethod)
+		return err
+	}
+	if err := call(); err != nil {
+		t.Fatalf("call before GracefulStop: %v", err)
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		srv.GracefulStop()
+		close(stopped)
+	}()
+	// The client keeps the stream open; calls during the drain may fail, but
+	// must not keep GracefulStop from returning.
+	_ = call()
+
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("GracefulStop did not return with a client stream open")
 	}
 }

@@ -92,6 +92,19 @@ func (r *MessageRouter) SetLatency(latency time.Duration) {
 	r.latency = latency
 }
 
+// pendingCount returns the number of pending calls registered by owner.
+func (r *MessageRouter) pendingCount(owner *pendingOwner) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	n := 0
+	for _, pending := range r.pending {
+		if pending.owner == owner {
+			n++
+		}
+	}
+	return n
+}
+
 // PendingCount returns the number of pending calls currently registered in the router.
 func (r *MessageRouter) PendingCount() int {
 	r.mu.Lock()
