@@ -87,12 +87,16 @@ func (r *bufconnRegistry) cleanup(t testing.TB) {
 func Start(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func(...int)) {
 	t.Helper()
 
+	// mu guards addrToListener, which dials read while servers are added.
+	var mu sync.Mutex
 	addrToListener := make(map[string]*bufconn.Listener, numServers)
 
 	listenFn := func(_ int) net.Listener {
 		lis := bufconn.Listen(bufSize)
 		addr := globalBufconnRegistry.nextAddress()
+		mu.Lock()
 		addrToListener[addr] = lis
+		mu.Unlock()
 		return &bufconnListener{
 			Listener: lis,
 			addr:     bufconnAddr{network: "bufconn", addr: addr},
@@ -101,7 +105,10 @@ func Start(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]strin
 
 	// Create a dialer for the new listeners.
 	newDialer := func(ctx context.Context, addr string) (net.Conn, error) {
-		if listener, ok := addrToListener[addr]; ok {
+		mu.Lock()
+		listener, ok := addrToListener[addr]
+		mu.Unlock()
+		if ok {
 			return listener.DialContext(ctx)
 		}
 		return nil, fmt.Errorf("no bufconn listener for address: %s", addr)
