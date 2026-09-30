@@ -587,8 +587,12 @@ func newestValue(responses *gorums.Responses[*ReadResponse]) (*ReadResponse, err
 
 // Usage
 cfgCtx := config.Context(ctx)
-reply, err := newestValue(ReadQC(cfgCtx, &ReadRequest{}))
+reply, err := newestValue(ReadQC(cfgCtx, &ReadRequest{}).Responses)
 ```
+
+A quorum-call function returns a `*gorums.Call[Req, Resp]`, which embeds `*gorums.Responses[Resp]`.
+Pass its `Responses` field to a helper that takes `*gorums.Responses[Resp]`; the call is dispatched, with any registered interceptors, when the helper consumes the responses.
+A helper may instead take the `*gorums.Call[Req, Resp]` itself, as the storage example does.
 
 ### Iterator Helper Methods
 
@@ -706,7 +710,7 @@ func ExampleStorageClient() {
   cfgCtx := config.Context(ctx)
 
   // Option 1: Use custom aggregation function
-  reply, err := newestValue(ReadQC(cfgCtx, &ReadRequest{Key: "x"}))
+  reply, err := newestValue(ReadQC(cfgCtx, &ReadRequest{Key: "x"}).Responses)
   if err != nil {
     log.Fatalln("read quorum call returned error:", err)
   }
@@ -772,7 +776,7 @@ This gives you full access to all iterator methods (`IgnoreErrors()`, `Filter()`
 // Custom aggregation function that returns a different type
 // Input: *Responses[*MemoryStat], Output: *MemoryStatList
 func CollectStats(resp *gorums.Responses[*MemoryStat]) (*MemoryStatList, error) {
-  replies := resp.IgnoreErrors().CollectAll()
+  replies := resp.Results().IgnoreErrors().CollectAll()
   if len(replies) == 0 {
     return nil, gorums.ErrIncomplete
   }
@@ -781,9 +785,9 @@ func CollectStats(resp *gorums.Responses[*MemoryStat]) (*MemoryStatList, error) 
   }, nil
 }
 
-// Usage: Call the function directly, passing the Responses object
+// Usage: Call the function directly, passing the call's Responses
 cfgCtx := config.Context(ctx)
-memStats, err := CollectStats(StopBenchmark(cfgCtx, &StopRequest{}))
+memStats, err := CollectStats(StopBenchmark(cfgCtx, &StopRequest{}).Responses)
 ```
 
 ### Example: Same Type Aggregation
@@ -793,7 +797,7 @@ When the return type matches the response type, you can still use this pattern f
 ```go
 // Custom majority quorum with validation
 func ValidatedMajority(resp *gorums.Responses[*ReadResponse]) (*ReadResponse, error) {
-  replies := resp.IgnoreErrors().CollectN(resp.Size()/2 + 1)
+  replies := resp.Results().IgnoreErrors().CollectN(resp.Size()/2 + 1)
   if len(replies) < resp.Size()/2+1 {
     return nil, gorums.ErrIncomplete
   }
@@ -808,7 +812,7 @@ func ValidatedMajority(resp *gorums.Responses[*ReadResponse]) (*ReadResponse, er
 
 // Usage
 cfgCtx := config.Context(ctx)
-state, err := ValidatedMajority(ReadQC(cfgCtx, &ReadRequest{}))
+state, err := ValidatedMajority(ReadQC(cfgCtx, &ReadRequest{}).Responses)
 ```
 
 ### Example: Custom Return Type (Slice)
@@ -816,7 +820,7 @@ state, err := ValidatedMajority(ReadQC(cfgCtx, &ReadRequest{}))
 ```go
 // Collect all string values from responses
 func CollectAllValues(resp *gorums.Responses[*StringValue]) ([]string, error) {
-  replies := resp.IgnoreErrors().CollectAll()
+  replies := resp.Results().IgnoreErrors().CollectAll()
   if len(replies) == 0 {
     return nil, gorums.ErrIncomplete
   }
@@ -828,7 +832,7 @@ func CollectAllValues(resp *gorums.Responses[*StringValue]) ([]string, error) {
 }
 
 // Usage: Returns []string instead of *StringValue
-values, err := CollectAllValues(GetValues(cfgCtx, &Request{}))
+values, err := CollectAllValues(GetValues(cfgCtx, &Request{}).Responses)
 ```
 
 ### Example: Computing Aggregate Statistics
@@ -836,7 +840,7 @@ values, err := CollectAllValues(GetValues(cfgCtx, &Request{}))
 ```go
 // Aggregate results from multiple nodes into a summary
 func AggregateResults(resp *gorums.Responses[*Result]) (*Result, error) {
-  replies := resp.IgnoreErrors().CollectAll()
+  replies := resp.Results().IgnoreErrors().CollectAll()
   if len(replies) == 0 {
     return nil, gorums.ErrIncomplete
   }
@@ -864,7 +868,7 @@ func AggregateResults(resp *gorums.Responses[*Result]) (*Result, error) {
 // Count responses from specific nodes
 func CountFromPrimaryNodes(resp *gorums.Responses[*Response]) (int, error) {
   count := 0
-  for r := range resp.IgnoreErrors().Filter(func(nr gorums.NodeResponse[*Response]) bool {
+  for r := range resp.Results().IgnoreErrors().Filter(func(nr gorums.NodeResponse[*Response]) bool {
     return isPrimaryNode(nr.NodeID)
   }) {
     count++
@@ -912,13 +916,16 @@ Transform requests before sending to each node:
 cfgCtx := config.Context(ctx)
 resp, err := WriteQC(cfgCtx, req).
     Intercept(
-        gorums.MapRequest(func(req *WriteRequest, node *gorums.Node) *WriteRequest {
+        gorums.MapRequest[*WriteRequest, *WriteResponse](func(req *WriteRequest, node *gorums.Node) *WriteRequest {
             // Customize request for each node
             return &WriteRequest{Value: fmt.Sprintf("%s-node-%d", req.Value, node.ID())}
         }),
     ).
     Majority()
 ```
+
+Go cannot infer the response type from the function argument, so `MapRequest` needs explicit type arguments: `MapRequest[Req, Resp]`.
+Likewise, `MapResponse` needs the request type: `MapResponse[Req]`.
 
 ### MapResponse Interceptor
 
@@ -927,7 +934,7 @@ Transform responses received from each node:
 ```go
 resp, err := ReadQC(cfgCtx, req).
     Intercept(
-        gorums.MapResponse(func(resp *ReadResponse, node *gorums.Node) *ReadResponse {
+        gorums.MapResponse[*ReadRequest](func(resp *ReadResponse, node *gorums.Node) *ReadResponse {
             // Transform response, e.g., add node ID
             resp.NodeID = node.ID()
             return resp
@@ -943,12 +950,14 @@ resp, err := ReadQC(cfgCtx, req).
 cfgCtx := config.Context(ctx)
 WriteMulticast(cfgCtx, &WriteRequest{}).
     Intercept(
-        gorums.MapRequest(func(msg *WriteRequest, node *gorums.Node) *WriteRequest {
+        gorums.MapRequest[*WriteRequest, *emptypb.Empty](func(msg *WriteRequest, node *gorums.Node) *WriteRequest {
             return &WriteRequest{Value: fmt.Sprintf("node-%d", node.ID())}
         }),
     ).
     Send()
 ```
+
+One-way calls have no response type, so their interceptors use `*emptypb.Empty` (from `google.golang.org/protobuf/types/known/emptypb`) as `Resp`.
 
 **Note:** If `MapRequest` returns `nil` for a node, the message will not be sent to that node.
 
@@ -984,7 +993,7 @@ cfgCtx := config.Context(ctx)
 resp, err := ReadQC(cfgCtx, req).
     Intercept(
         loggingInterceptor,
-        gorums.MapRequest(transformFunc),
+        gorums.MapRequest[*ReadRequest, *ReadResponse](transformFunc),
         filterInterceptor,
     ).
     Majority()
@@ -1129,10 +1138,9 @@ func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorum
 
 func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
     // Inject a custom metadata field for the handler
-    entry := gorums.MetadataEntry_builder{
-        Key:   "customKey",
-        Value: "customValue",
-    }.Build()
+    entry := &gorums.MetadataEntry{}
+    entry.SetKey("customKey")
+    entry.SetValue("customValue")
     in.SetEntry([]*gorums.MetadataEntry{entry})
 
     return next(ctx, in)
@@ -1240,7 +1248,9 @@ const quorumSize = 2 // majority for a three-node cluster, including self
 ready := make(chan struct{}, 1)
 
 gorumsSrv := gorums.NewServer(
-    gorums.WithPeers(myNodeID, gorums.WithNodeList(peerAddrs)),
+    gorums.WithPeers(myNodeID, gorums.WithNodeList(peerAddrs),
+        gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+    ),
     gorums.WithPeerChange(func(cfg gorums.Config) {
         if len(cfg) >= quorumSize {
             select {
@@ -1803,9 +1813,14 @@ Enable peer tracking for the server at construction time:
 
 ```go
 gorumsSrv := gorums.NewServer(
-    gorums.WithPeers(myNodeID, gorums.WithNodeList(peerAddrs)),
+    gorums.WithPeers(myNodeID, gorums.WithNodeList(peerAddrs),
+        gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+    ),
 )
 ```
+
+The dial options passed to `WithPeers` apply to the server's outbound connections to its peers.
+As with `NewConfig`, they must set transport credentials; otherwise `NewServer` panics.
 
 The `myNodeID` is this server's own node ID.
 It is included in the configuration returned by `PeerConfig()` so that all quorum thresholds account for the local replica; calls to the local node are served in-process.
@@ -1842,7 +1857,7 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadReque
     }
     // Let the next request start while the nested calls are in flight.
     ctx.Release()
-    return newestValue(pb.ReadQC(config.Context(ctx), req))
+    return newestValue(pb.ReadQC(config.Context(ctx), req).Responses)
 }
 ```
 
@@ -1912,7 +1927,9 @@ If you also need to track known peers with static node IDs, combine with `WithPe
 
 ```go
 gorumsSrv := gorums.NewServer(
-    gorums.WithPeers(myNodeID, gorums.WithNodeList(knownPeers)),  // static known peers
+    gorums.WithPeers(myNodeID, gorums.WithNodeList(knownPeers), // static known peers
+        gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+    ),
     // anonymous clients are tracked automatically
 )
 ```
@@ -1920,7 +1937,9 @@ gorumsSrv := gorums.NewServer(
 For example, a local test cluster:
 
 ```go
-systems, stop, err := gorums.NewLocalServers(4, nil)
+servers, stop, err := gorums.NewLocalServers(4, gorums.WithLocalDialOptions(
+    gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+))
 ```
 
 > **Note:** The `nread` and `nwrite` commands in the storage REPL example use `ctx.PeerConfig()` (the static server-to-server direction) rather than `ctx.ConnectedClients()`.
@@ -1982,7 +2001,7 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadReque
         return nil, fmt.Errorf("read_nested_qc: no client peers connected")
     }
     ctx.Release()
-    return newestValue(pb.ReadQC(config.Context(ctx), req))
+    return newestValue(pb.ReadQC(config.Context(ctx), req).Responses)
 }
 ```
 
