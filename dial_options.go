@@ -41,14 +41,9 @@ func WithBackoff(backoff backoff.Config) DialOption {
 // [WithSendBufferSize] or [WithBufferSizes] is applied with size 0.
 const DefaultSendBufferSize = conn.DefaultSendBufferSize
 
-// WithSendBufferSize sets the capacity of the per-node send queue used by Gorums.
-// When the queue toward a peer is full, two-way requests (RPC, quorum calls)
-// fail fast with an Unavailable error (send queue full) so that quorum logic
-// can count the peer as failed, while one-way requests (Unicast, Multicast)
-// block until there is space, pacing the producer. The capacity is thus the
-// backlog threshold at which a peer that stopped draining sends is treated as
-// failed. Size 0 selects [DefaultSendBufferSize]; a larger value tolerates
-// longer peer hiccups at the cost of memory and queueing latency.
+// WithSendBufferSize sets the capacity of the per-node send queue. When the
+// queue is full, two-way calls fail with [ErrSendQueueFull] and one-way calls
+// wait for space. Size 0 selects [DefaultSendBufferSize].
 func WithSendBufferSize(size uint) DialOption {
 	return func(o *conn.DialOptions) {
 		if size == 0 {

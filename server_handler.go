@@ -33,10 +33,9 @@ type (
 	ServerInterceptor func(ServerContext, *Message, Handler) (*Message, error)
 )
 
-// ServerContext is a context that is passed from the Gorums server to the handler.
-// It allows the handler to release its lock on the server, allowing the next
-// request to be processed. Replies on the stream are delivered either way.
-// Release happens automatically when the handler returns.
+// ServerContext is the context a Gorums server passes to a handler.
+// Requests on one stream run one at a time until the handler calls
+// [ServerContext.Release] or returns.
 type ServerContext struct {
 	context.Context
 	release func()
@@ -44,11 +43,11 @@ type ServerContext struct {
 	srv     *Server
 }
 
-// Release releases this handler's lock on the server, which allows the next request
-// to be processed concurrently. Replies keep arriving on the stream either way, so
-// a handler may call the peer that sent the request before calling Release and that
-// call can complete. Use Release only when the handler no longer needs exclusive
-// access to the server's state. It is safe to call Release multiple times.
+// Release lets the next request on this handler's stream start, concurrently
+// with this handler. Replies to calls the handler makes arrive before and after
+// Release, so the handler may call the peer that sent the request. Call Release
+// once the handler is done with state that requests must access one at a time.
+// It is safe to call Release multiple times.
 func (ctx *ServerContext) Release() {
 	if ctx.release != nil {
 		ctx.release()
@@ -79,8 +78,8 @@ func (ctx *ServerContext) SendMessage(out *Message) {
 // PeerConfig returns the [Config] of the peers configured with [WithPeers],
 // or nil if [WithPeers] was not used. It is the same configuration as
 // [Server.PeerConfig], so a handler can fan out calls to the server's peers.
-// Call [ServerContext.Release] before invoking calls on it, so that inbound
-// processing is not blocked while waiting for the responses.
+// Call [ServerContext.Release] before invoking calls on it, so that the next
+// request on this stream can start while the handler waits for responses.
 func (ctx *ServerContext) PeerConfig() Config {
 	if ctx.srv == nil {
 		return nil
@@ -129,9 +128,9 @@ func unmarshalRequest(in *stream.Message) (proto.Message, error) {
 // NewResponseMessage creates a new response envelope based on the provided proto
 // message. The response includes the message ID and method from the request
 // to facilitate routing the response back to the caller on the client side.
-// The payload, error status, and metadata entries are left empty; the error status
-// of the response can be set using [messageWithError], and the payload will
-// be marshaled by [ServerContext.SendMessage]. This function is safe for concurrent use.
+// The payload, error status, and metadata entries are left empty;
+// [ServerContext.SendMessage] marshals the payload. This function is safe for
+// concurrent use.
 //
 // This function should only be used in generated code.
 func NewResponseMessage(in *Message, resp proto.Message) *Message {

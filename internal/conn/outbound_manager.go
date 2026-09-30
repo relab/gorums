@@ -93,18 +93,15 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 		return n, nil
 	}
 	if m.opts.StreamDedup && m.opts.InboundMgr != nil && id < m.opts.LocalNodeID {
-		// A lower-ID peer dials this node, so rather than dial back, this node
-		// reuses that peer's inbound connection. It works once the peer connects
-		// and fails with ErrStreamDown until then; the server's WaitForAll waits
-		// for the peer.
+		// A lower-ID peer dials this node, and this node sends its calls over
+		// that peer's inbound connection. Its calls fail with
+		// [stream.ErrStreamDown] until the peer connects; the server's
+		// WaitForAll waits for the peer.
 		//
-		// A dedup node routes its calls onto the borrowed peer's shared channel,
-		// so the borrowed peer must be the same process this node addresses: an
-		// ID that maps to no known peer, or to a peer at a different address,
-		// would silently carry calls to the wrong process. WithPeers derives the
-		// peer and outbound sets from one NodeSource, but Config.Extend can add
-		// outbound nodes from a different source, so validate the borrow here.
-		// Both addresses are already normalized by the node builder.
+		// The borrowed peer must be the process this node addresses, so the
+		// borrow requires a known peer with the same address. [Config.Extend]
+		// can add outbound nodes from a source other than the peer set. Both
+		// addresses are already normalized by the node builder.
 		peer := m.opts.InboundMgr.knownPeer(id)
 		if peer == nil {
 			return nil, fmt.Errorf("gorums: stream dedup outbound node %d (%s) is not a configured peer", id, addr)
@@ -123,11 +120,8 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 		Metadata:       m.opts.Metadata,
 		DialOpts:       m.opts.GRPCDialOpts,
 		RequestHandler: m.opts.Handler,
-		// When this node belongs to a server that calls its peers, the peer may
-		// reuse this connection for its own calls and cannot re-dial it. If it
-		// drops while this node has nothing to send, the peer would stall waiting
-		// for the next local send, so re-establish it eagerly. Plain clients
-		// reconnect on the next send.
+		// A configuration that carries a server, as a peer or as a back-channel
+		// client, reconnects eagerly; see [stream.NewOutboundChannel].
 		EagerReconnect: m.opts.InboundMgr != nil,
 		Manager:        m,
 	}

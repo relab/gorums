@@ -57,13 +57,9 @@ func WaitUntil(t testing.TB, timeout time.Duration, predicate func() bool) bool 
 }
 
 // Collect receives up to want values from ch and returns them in arrival
-// order. It gives up when timeout elapses in total or ch is closed, returning
-// the values collected so far, so the caller can report a shortfall instead of
-// blocking forever. A closed channel contributes no further values. Use it
-// wherever a test waits for effects that a failure may never produce, such as
-// one-way messages: [gorums.OnewayCall.Send] discards a request it cannot
-// deliver without reporting an error, so an unbounded wait would hang the
-// package until the test binary's timeout.
+// order. It returns the values collected so far when timeout elapses in total
+// or ch is closed, so a test that waits for effects a failure may never
+// produce, such as one-way messages, can report the shortfall.
 //
 // Usage:
 //
@@ -107,20 +103,20 @@ func DialOptions(t testing.TB) gorums.DialOption {
 }
 
 // startServers starts numServers servers via srvFn, adapting srvFn's
-// [gorums.ServerIface] result to the servers package's own, independently
-// defined ServerIface (see the doc comment on gorums.ServerIface for why).
+// [gorums.ServerIface] result to the structurally identical
+// [servers.ServerIface].
 func startServers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface) ([]string, func(...int)) {
 	return servers.Start(t, numServers, func(i int) servers.ServerIface { return srvFn(i) })
 }
 
 // Config creates servers and a configuration for testing.
-// Both server and manager cleanup are handled via t.Cleanup in the correct order:
-// manager is closed first, then servers are stopped.
+// Both server and configuration cleanup are handled via t.Cleanup in the correct
+// order: the configuration is closed first, then servers are stopped.
 //
 // The provided srvFn is used to create and register the server handlers.
 // If srvFn is nil, a default mock server implementation is used.
 //
-// Optional [Option] values can be provided to customize the manager, server, or configuration.
+// Optional [Option] values can be provided to customize the dial options, server, or configuration.
 //
 // By default, nodes are assigned sequential IDs (1, 2, 3, ...) matching the server
 // creation order. This can be overridden by providing a [gorums.NodeSource].
@@ -133,8 +129,7 @@ func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, 
 	testOpts := extractTestOptions(opts)
 
 	// Register goleak check FIRST so it runs LAST (LIFO order)
-	// Only register if not reusing an existing manager (to avoid duplicate checks)
-	// and if goleak checks are not explicitly skipped
+	// Skip it for benchmarks and when goleak checks are explicitly skipped
 	if _, ok := t.(*testing.B); !ok && !testOpts.shouldSkipGoleak() {
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
@@ -185,12 +180,12 @@ func UnreachableConfig(t testing.TB, addrs ...string) gorums.Config {
 }
 
 // Node creates a single server and returns the node for testing.
-// Both server and manager cleanup are handled via t.Cleanup in the correct order.
+// Both server and configuration cleanup are handled via t.Cleanup in the correct order.
 //
 // The provided srvFn is used to create and register the server handler.
 // If srvFn is nil, a default mock server implementation is used.
 //
-// Optional [Option] values can be provided to customize the manager, server, or configuration.
+// Optional [Option] values can be provided to customize the dial options, server, or configuration.
 //
 // This is the recommended way to set up tests that need only a single server node.
 // It ensures proper cleanup and detects goroutine leaks.
@@ -202,7 +197,7 @@ func Node(t testing.TB, srvFn func(i int) gorums.ServerIface, opts ...Option) *g
 // Servers starts numServers gRPC servers using the given registration
 // function. Servers are automatically stopped when the test finishes via t.Cleanup.
 // The cleanup is registered first, so it runs after any subsequently registered
-// cleanups (e.g., manager.Close()), ensuring proper shutdown ordering.
+// cleanups (e.g., closing a configuration), ensuring proper shutdown ordering.
 //
 // Goroutine leak detection via goleak is automatically enabled and runs after
 // all other cleanup functions complete.
@@ -266,7 +261,7 @@ func LocalServers(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.Se
 	return srvs
 }
 
-// Closer returns a cleanup function that closes the given io.Closer.
+// Closer returns a cleanup function that closes c.
 func Closer(t testing.TB, c io.Closer) func() {
 	t.Helper()
 	return func() {

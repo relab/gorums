@@ -33,17 +33,14 @@ type CallContext[Req, Resp proto.Message] struct {
 	oneway bool
 
 	// sendOnce ensures messages are sent exactly once, on the first
-	// call to Responses(). This deferred sending allows interceptors
+	// call to sendNow. This deferred sending allows interceptors
 	// to register request transformations before dispatch.
 	sendOnce sync.Once
 
 	// dispatched is set once dispatch has been initiated (by sendNow or by
-	// marking an async/correctable call). Once set, Intercept panics because
-	// interceptors can no longer affect the in-flight call. It is an
-	// atomic.Bool rather than a plain bool because sendNow can be called again,
-	// redundantly, from the goroutine an async or correctable call spawns
-	// (ranging over responseSeq calls sendNow), concurrently with a caller
-	// checking or setting the flag on another goroutine.
+	// marking an async/correctable call); after that, Intercept panics. It is
+	// atomic because the goroutine an async or correctable call spawns calls
+	// sendNow while the caller may check or set the flag.
 	dispatched atomic.Bool
 }
 
@@ -61,7 +58,7 @@ func (c *CallContext[Req, Resp]) markDispatched() {
 
 // intercept applies the given interceptors in order, before dispatch. Nil
 // interceptors are ignored. It panics if the call has already been dispatched,
-// since interceptors can no longer influence an in-flight call.
+// since interceptors cannot influence an in-flight call.
 func (c *CallContext[Req, Resp]) intercept(ics ...ClientInterceptor[Req, Resp]) {
 	if c.dispatched.Load() {
 		panic("gorums: Intercept called after the call was dispatched")
@@ -107,12 +104,12 @@ func newQuorumCallContext[Req, Resp proto.Message](
 // CallContext Methods
 // -------------------------------------------------------------------------
 
-// Request returns the original request message for this quorum call.
+// Request returns the original request message for this call.
 func (c *CallContext[Req, Resp]) Request() Req {
 	return c.request
 }
 
-// Config returns the configuration (set of nodes) for this quorum call.
+// Config returns the configuration (set of nodes) for this call.
 func (c *CallContext[Req, Resp]) Config() Config {
 	return c.config
 }

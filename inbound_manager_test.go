@@ -252,8 +252,8 @@ func TestConfigurationExtendUsesKnownDedupPeer(t *testing.T) {
 // TestStreamDedupBorrowValidatesPeerAddress verifies that building a
 // deduplicated outbound node fails when the lower-ID node it would borrow from
 // is not a configured peer, or is a configured peer at a different address.
-// Without this check a dedup node could silently carry its calls onto a peer
-// channel that reaches a different process.
+// The check keeps a dedup node's calls on a peer channel that reaches the
+// process the node addresses.
 func TestStreamDedupBorrowValidatesPeerAddress(t *testing.T) {
 	peers := map[uint32]testNode{
 		2: {"127.0.0.1:9082"},
@@ -418,7 +418,7 @@ func TestUnknownPeerIgnored(t *testing.T) {
 func TestKnownPeerServerCallsClient(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
-	// Client connects as peer 2 with handlers registered on a server via WithServer.
+	// Client connects as peer 2 with handlers registered on a server via withServer.
 	clientSrv := NewServer()
 	clientSrv.RegisterHandler(mock.TestMethod, func(_ ServerContext, in *Message) (*Message, error) {
 		req := AsProto[*pb.StringValue](in)
@@ -495,7 +495,7 @@ func testClientServer(t *testing.T) (*Server, []string) {
 }
 
 // connectAsPeerClient creates a Config that advertises back-channel
-// capability by sending the gorums-node-id key (via [WithServer]),
+// capability by sending the gorums-node-id key (via [withServer]),
 // connects to addrs, and returns the configuration. The server will include it in
 // ConnectedClients and may dispatch server-initiated calls to it.
 func connectAsPeerClient(t *testing.T, addrs []string) Config {

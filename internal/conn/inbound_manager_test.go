@@ -538,10 +538,9 @@ func TestAcceptPeerStaleCleanupDoesNotDetachReplacement(t *testing.T) {
 // connection churn, and server-side registration order (serialized by the
 // manager lock) can invert the client's stream-creation order: the stream the
 // client keeps may register first, while the stream it is canceling registers
-// second. When that second registration's stream then ends, the peer must fail
-// over to the still-live first stream rather than lose its channel — otherwise
-// the surviving stream keeps receiving requests but replies are dropped on a
-// nil channel and the peer's caller stalls to its deadline.
+// second. When that second registration's stream then ends, the peer fails
+// over to the still-live first stream, which keeps carrying the replies to the
+// requests it receives.
 func TestAcceptPeerOverlappingStreamsFailover(t *testing.T) {
 	im := newTestInboundManager(t, 1)
 
@@ -633,7 +632,7 @@ func TestAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 	}
 }
 
-// TestOnConfigChangeCallbackFiringOnConstruction verifies that the onChange
+// TestOnConfigChangeCallbackFiringOnConstruction verifies that the onConfigChange
 // callback fires once during InboundManager construction, with only the
 // self-node present in the initial configuration.
 func TestOnConfigChangeCallbackFiringOnConstruction(t *testing.T) {
@@ -654,7 +653,7 @@ func TestOnConfigChangeCallbackFiringOnConstruction(t *testing.T) {
 	}
 }
 
-// TestOnConfigChangeCallbackPeerConnectDisconnect verifies that the onChange
+// TestOnConfigChangeCallbackPeerConnectDisconnect verifies that the onConfigChange
 // callback fires with the updated configuration when a known peer connects and
 // later disconnects.
 func TestOnConfigChangeCallbackPeerConnectDisconnect(t *testing.T) {

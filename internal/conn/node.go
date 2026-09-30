@@ -55,9 +55,9 @@ type Node struct {
 
 	// inboundMu guards liveChannels and the active-channel handoff in
 	// attachStream. A peer may briefly have more than one live inbound stream
-	// during connection churn; liveChannels is the set of them, so the node can
-	// fail the active channel over to a surviving stream rather than go dark
-	// when one stream ends. Lazily initialized on the first attach.
+	// during connection churn; liveChannels is the set of them, and the node
+	// fails the active channel over to a surviving stream when one stream
+	// ends. Lazily initialized on the first attach.
 	inboundMu    sync.Mutex
 	liveChannels map[*stream.Channel]struct{}
 }
@@ -107,7 +107,7 @@ type nodeOptions struct {
 	Metadata       metadata.MD
 	DialOpts       []grpc.DialOption
 	RequestHandler stream.RequestHandler
-	EagerReconnect bool                     // re-establish a lost stream proactively; set for symmetric (WithPeers) nodes
+	EagerReconnect bool                     // re-establish a lost stream proactively; see [stream.NewOutboundChannel]
 	StreamState    func(id uint32, up bool) // optional; invoked on outbound stream transitions
 	Manager        *outboundManager         // owning manager
 }
@@ -188,9 +188,9 @@ func (n *Node) IsOutbound() bool {
 	return ch != nil && ch.IsOutbound()
 }
 
-// IsShared returns true if the node's channel is shared with an inbound peer
-// node rather than owned by this node's own outbound connection. Callers can
-// use this to derive their own stream-topology statistics under [WithStreamDedup].
+// IsShared reports whether the node borrows an inbound peer node's channel,
+// as the higher-ID peer of a pair does under stream deduplication. Callers can
+// use it to derive their own stream-topology statistics.
 func (n *Node) IsShared() bool {
 	return n.loadTransport().IsShared()
 }
@@ -248,21 +248,17 @@ func (n *Node) messageRouter() *stream.MessageRouter {
 // creation order. attachStream tracks the set of live streams' channels and
 // installs the newly attached one as the node's active channel; each channel is
 // closed only when its own stream ends. When the active stream ends, the node
-// fails over to another live stream's channel — any survivor satisfies the
-// invariant that the active channel is non-nil while a stream lives, so no
-// ordering among survivors is needed — so the active channel is nil only once
-// no live stream remains. Failing over instead of clearing the slot keeps a
-// surviving stream usable — otherwise it would keep receiving requests while
-// its replies were dropped on a nil channel.
+// fails over to any other live stream's channel, so the active channel is
+// non-nil while a stream lives and a surviving stream keeps carrying replies.
 //
 // detach is idempotent and returns true only when it removed the node's last
 // live channel (the peer left the configuration), so the caller can rebuild the
 // configuration; it returns false when another live stream remains.
 //
 // It also returns the channel created for this stream. Server replies for
-// requests received on this stream must ride this channel — not the node's
-// current active channel — so that during the multi-live overlap a reply is not
-// queued on a different peer stream (see [peerNode]).
+// requests received on this stream ride this channel, so during the multi-live
+// overlap each reply is queued on the stream that received its request (see
+// [peerNode]).
 func (n *Node) attachStream(streamCtx context.Context, inboundStream stream.BidiStream, sendBufferSize uint) (newCh *stream.Channel, detach func() bool) {
 	transport := n.loadTransport()
 	newCh = stream.NewInboundChannel(streamCtx, n.id, sendBufferSize, inboundStream, transport.Router())
@@ -310,8 +306,8 @@ func (n *Node) routeInbound(ctx context.Context, msg *stream.Message, release fu
 
 // trySend enqueues a request to this node's channel without ever blocking the
 // caller; see [stream.Channel.TrySend]. A shared node whose peer is currently
-// disconnected has no channel; the request is answered with ErrStreamDown
-// because the node cannot re-dial (only the peer can re-establish the stream).
+// disconnected has no channel; the request is answered with
+// [stream.ErrStreamDown], since only the peer can re-establish the stream.
 // For other nodes without a channel the request is silently dropped. It is
 // exposed to the stream package through the [peerNode] adapter.
 func (n *Node) trySend(req stream.Request) {
@@ -324,9 +320,9 @@ func (n *Node) trySend(req stream.Request) {
 // one-time construction in [InboundManager.AcceptPeer].
 //
 // ch is the inbound channel created for this registration's stream. Replies are
-// sent on ch rather than the node's current active channel, so a request
-// received on one stream has its reply ride that same stream even while another
-// stream for the same peer is live and active (see [Node.attachStream]). ch is
+// sent on ch, so a request received on one stream has its reply ride that same
+// stream even while another stream for the same peer is live and active (see
+// [Node.attachStream]). ch is
 // nil only for peerNodes built without a registered stream (some tests), where
 // TrySend falls back to the node's active channel.
 type peerNode struct {
@@ -337,7 +333,7 @@ type peerNode struct {
 // TrySend implements [stream.PeerNode] by delivering the reply on this
 // registration's own stream channel, so a reply dispatched from the
 // server-side inbound receive loop (see [stream.Server.NodeStream]) rides the
-// stream that received the request and can never block that loop. With no bound
+// stream that received the request without blocking that loop. With no bound
 // channel it forwards to the node's active channel.
 func (p peerNode) TrySend(req stream.Request) {
 	if p.ch != nil {

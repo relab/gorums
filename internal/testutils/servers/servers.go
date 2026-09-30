@@ -28,8 +28,8 @@ type serverState struct {
 
 func (s *serverState) start(_ testing.TB) {
 	_ = s.srv.Serve(s.lis)
-	// Close rather than send: Serve can return before stop is called, and a
-	// send would then block this goroutine forever with no receiver coming.
+	// Closing stopped signals stop whenever it runs, including after Serve
+	// has already returned, and never blocks this goroutine.
 	close(s.stopped)
 }
 

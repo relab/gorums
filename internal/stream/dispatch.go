@@ -6,13 +6,12 @@ import (
 )
 
 // defaultRequestDispatchSize is how many requests a stream reader can enqueue
-// before it waits. It matches the send queue's default capacity. The reader
-// blocks only when this queue is full.
+// before it waits. It matches the send queue's default capacity.
 const defaultRequestDispatchSize = 4096
 
-// requestDispatch is a per-stream FIFO of request handlers. The reader
-// enqueues and keeps reading replies. One goroutine starts the next request
-// only after the previous handler calls release or returns.
+// requestDispatch is a per-stream FIFO of request handlers. The stream reader
+// enqueues requests and keeps reading. One goroutine starts the next request
+// once the previous handler calls release or returns.
 type requestDispatch struct {
 	queue chan func(release func())
 }
@@ -38,7 +37,7 @@ func (d *requestDispatch) run(ctx context.Context) {
 			released := make(chan struct{})
 			var once sync.Once
 			release := func() { once.Do(func() { close(released) }) }
-			// Run the handler separately so a release that arrives before the
+			// The handler runs in its own goroutine, so a release before the
 			// handler returns admits the next request.
 			go run(release)
 			select {

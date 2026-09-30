@@ -33,7 +33,7 @@ type (
 These aliases make the most commonly used Gorums types available without requiring an explicit `gorums` import in user code.
 
 Each name declared in `aliases.go` (and any other non-ignored file in `dev/`) is also added to the **reserved identifier list**.
-The Gorums generator rejects proto files that define a message type whose name matches a reserved identifier, because such a name would collide with the generated alias and cause a compile error.
+The Gorums generator rejects proto files whose messages, enums, or RPC methods use a reserved identifier as their Go name, checking every file of the service's Go package, since such a name collides with the generated alias.
 
 The bundler (`gorums_bundle.go`) discovers reserved identifiers by inspecting `TypesInfo.Defs` for all exported, package-scope declarations in the dev package.
 This means that simply declaring a type alias (or any other exported top-level name) in `aliases.go` is sufficient to reserve that name — no extra annotation is needed.
@@ -114,7 +114,7 @@ The `Makefile` itself also serves as documentation; inspect it for details.
 Symmetric stream deduplication makes the lower-ID peer of each pair the only dialer.
 The higher-ID peer's outbound node is born shared: it borrows the matching inbound transport when the configuration is created, before the peer has connected.
 The borrower cannot dial through a shared transport, so it reports `gorums.ErrStreamDown` while the owner-side stream is unavailable; callers match it with `errors.Is`.
-The owner re-establishes a lost stream eagerly with capped backoff from its channel's receiver goroutine, so a borrower heals without waiting for the owner's next send.
+The owner re-establishes a lost stream eagerly with capped backoff from its channel's receiver goroutine, independently of its own sends.
 
 Client-initiated message IDs use the low 63 bits, while server-initiated and shared-call IDs have bit 63 set.
 Shared calls use the server-generated ID space so both directions can share one router without sequence-number collisions.

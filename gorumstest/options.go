@@ -6,19 +6,16 @@ import (
 	"github.com/relab/gorums"
 )
 
-// Option is a marker interface that can hold a [gorums.DialOption],
-// [gorums.ServerOption], or [gorums.NodeSource]. This allows test helpers to
-// accept a single variadic parameter that can be filtered and passed to the
-// appropriate constructors: [gorums.NewServer] or [gorums.NewConfig].
-//
-// Each option type (gorums.DialOption, gorums.ServerOption,
-// gorums.NodeSource) satisfies this interface already, since it is just an
-// alias for any, so they can be passed directly without wrapping:
+// Option holds a [gorums.DialOption], [gorums.ServerOption],
+// [gorums.NodeSource], or one of this package's options, so test helpers can
+// accept a single variadic parameter and pass each value to
+// [gorums.NewServer] or [gorums.NewConfig]. Since Option is defined as any,
+// values of those types are passed directly without wrapping:
 //
 //	gorumstest.Config(t, 3, nil,
 //		gorums.WithBackoff(...),        // DialOption
 //		gorums.WithBufferSizes(10, 10), // ServerOption
-//		gorums.WithNodeMap(...),        // NodeSource
+//		gorums.WithNodeList(...),       // NodeSource
 //	)
 type Option any
 
@@ -63,7 +60,7 @@ func (to *testOptions) nodeSource(addrs []string) gorums.NodeSource {
 		// Use the last provided NodeSource (allows overriding)
 		return to.nodeSourceOpts[len(to.nodeSourceOpts)-1]
 	}
-	// Default: use WithNodeList which generates unique IDs based on max(manager.NodeIDs()) + 1
+	// Default: use WithNodeList, which assigns sequential IDs starting from 1
 	return gorums.WithNodeList(addrs)
 }
 

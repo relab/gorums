@@ -17,12 +17,10 @@ var ErrSendFailure = impl.ErrSendFailure
 var ErrTypeMismatch = stream.ErrTypeMismatch
 
 // ErrStreamDown is returned for a call that cannot be delivered or retried
-// because the target node's stream is unavailable. Under [WithStreamDedup] a
-// higher-ID peer borrows the lower-ID peer's dialed stream and cannot re-dial
-// it, so calls to a lower-ID peer report ErrStreamDown until that peer connects
-// (see [Server.WaitForAll]) and again if the shared stream later drops. It is a
-// gRPC status error with the Unavailable code; match its identity with
-// [errors.Is], including against a node error inside a [QuorumCallError].
+// because the target node's stream is unavailable, such as a call over a
+// shared [WithStreamDedup] stream that is not connected (see
+// [Server.WaitForAll]). It is a gRPC status error with the Unavailable code;
+// match it with [errors.Is], also inside a [QuorumCallError].
 var ErrStreamDown = stream.ErrStreamDown
 
 // ErrNodeClosed is returned for a call enqueued after its node was closed. It
@@ -30,10 +28,9 @@ var ErrStreamDown = stream.ErrStreamDown
 var ErrNodeClosed = stream.ErrNodeClosed
 
 // ErrSendQueueFull is returned for a two-way call enqueued while the node's
-// send queue is at capacity: a full queue means the peer is not draining sends,
-// so the call fails fast (letting quorum logic count the peer as failed) rather
-// than block behind it. It is a gRPC status error with the Unavailable code;
-// match it with [errors.Is]. See [WithSendBufferSize] for the capacity.
+// send queue is full, so quorum logic counts the peer as failed; see
+// [WithSendBufferSize]. It is a gRPC status error with the Unavailable code;
+// match it with [errors.Is].
 var ErrSendQueueFull = stream.ErrSendQueueFull
 
 // ErrSkipNode is returned when a node is skipped by request transformations.

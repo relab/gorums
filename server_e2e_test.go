@@ -175,10 +175,9 @@ func outerChainedHandler(
 	return func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		t.Logf("Server %d received outer request: %s", myID, req.GetValue())
-		// Release the NodeStream mutex before making the inner quorum call.
-		// Without this, the NodeStream's Recv loop cannot read the inner-call
-		// responses off the wire while this handler is blocked waiting for them,
-		// causing a deadlock.
+		// Release before making the inner quorum call, so the next request on
+		// this stream can start while this handler waits for the inner-call
+		// responses.
 		ctx.Release()
 		configCtx, err := configContext(ctx, client)
 		if err != nil {

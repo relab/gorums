@@ -25,17 +25,12 @@ type DialOptions struct {
 	Handler      stream.RequestHandler
 	LocalNodeID  uint32          // if non-zero, skip setting handler on this node ID
 	StreamDedup  bool            // reuse a lower-ID peer's dialed stream instead of dialing back
-	InboundMgr   *InboundManager // set by WithBackChannel; enables eager reconnect for symmetric nodes and, with StreamDedup, born-shared borrowing
+	InboundMgr   *InboundManager // set when the configuration carries a server (peer or back-channel client); enables eager reconnect and, with StreamDedup, borrowing
 	Err          error           // records misuse of a dial option; surfaced by NewConfig
 }
 
 // DefaultSendBufferSize is the per-node send queue capacity used when no
-// explicit size is configured. It is both the backlog threshold at which a peer
-// that stopped draining sends is treated as failed, since a full queue fails
-// two-way requests fast with [stream.ErrSendQueueFull], and the depth to which
-// one-way calls dispatched asynchronously can pipeline. The queue is a buffered
-// channel, so each node allocates the full capacity whether or not traffic
-// flows.
+// explicit size is configured. Each node allocates the full capacity up front.
 const DefaultSendBufferSize = 4096
 
 // NewDialOptions returns a DialOptions initialized with default values.

@@ -175,8 +175,9 @@ message WriteRequest {
 
 For the `unicast` and `multicast` call types, the response message type will be unused by Gorums.
 
-> **Reserved message names:** The following names are reserved by Gorums and cannot be used as proto message type names in your `.proto` files: `Config`, `Node`, `NodeContext`, `ConfigContext`.
-> Using any of these names will cause a compile error in the generated code because Gorums injects type aliases with these names into every generated `_gorums.pb.go` file.
+> **Reserved names:** The following names are reserved by Gorums: `Config`, `Node`, `NodeContext`, `ConfigContext`.
+> Gorums injects type aliases with these names into every generated `_gorums.pb.go` file, so the names cannot be used for messages, enums, or RPC methods in any `.proto` file of the same Go package.
+> The generator reports an error for a `.proto` file that uses one of them.
 
 ### Compiling the Service Definition
 
@@ -1812,9 +1813,9 @@ It is included in the configuration returned by `PeerConfig()` so that all quoru
 Peers appear in `ConnectedPeers()` as connections to them are established.
 Use `WaitForPeers` to wait for enough peers to connect before issuing calls.
 
-A symmetric server (one that both tracks peers and calls them via `WithPeers`) re-establishes an outbound stream proactively when it drops while idle, rather than waiting for the next local send.
-Without this, a peer would remain absent from the remote's `ConnectedPeers()` until that side happened to send something.
-This applies to every symmetric outbound stream, dual mode included, not only to shared streams under `WithStreamDedup`.
+A symmetric server (one that both tracks peers and calls them via `WithPeers`) re-establishes a dropped outbound stream proactively, also while it has nothing to send.
+The peer thus reappears in the remote's `ConnectedPeers()` as soon as the stream is back.
+This applies to every symmetric outbound stream, with or without `WithStreamDedup`, and to the outbound streams of a client that uses `WithBackChannel`.
 
 The storage example uses `gorums.NewLocalServers`, which calls `WithPeers` automatically for each server.
 
@@ -1964,7 +1965,7 @@ nodeCtx := serverNode.Context(ctx)
 err = pb.Register(nodeCtx, &pb.RegisterRequest{})
 ```
 
-In contrast, a client with a pre-configured node ID (created with `WithPeers`) announces its static node ID — servers with a matching node list will put it in their `ConnectedPeers()`, not `ConnectedClients()`.
+A server configured with `WithPeers` announces its static node ID instead, and servers with a matching node list put it in their `ConnectedPeers()`, not `ConnectedClients()`.
 
 ### Writing the Handler
 
@@ -2048,7 +2049,7 @@ Calling `WaitForAll` again is safe.
 Configurations and sub-configurations retained before `WaitForAll` remain valid; the shared topology is fixed when a configuration is created.
 Calls already in flight while a stream is being replaced may still fail because they are not migrated between streams.
 
-Each `*Node` reports its stream topology: `Node.IsOutbound` is true for a node reached over a stream this process opened, `Node.IsInbound` is true for a node reached over a stream the peer opened, and `Node.IsShared` is true for a deduplicated node whose single bidirectional stream carries calls in both directions.
+Each `*Node` reports its stream topology: `Node.IsOutbound` is true for a node reached over a stream this process opened, `Node.IsInbound` is true for a node reached over a stream the peer opened, and `Node.IsShared` is true for a node that borrows the stream its lower-ID peer dialed, which holds on the higher-ID side of each deduplicated pair.
 These let a symmetric deployment inspect the shared-stream topology.
 
 ## Send Queue Capacity and Backpressure
@@ -2057,7 +2058,7 @@ The per-node send queue defaults to 4096 entries.
 Passing zero to `WithSendBufferSize` or the send-size argument of `WithBufferSizes` selects that default.
 Two-way requests fail fast with an unavailable error when a real buffered queue is full.
 One-way client calls (`Unicast`, `Multicast`) wait for space instead, since backpressure on the caller is what paces them.
-A reply sent from a receive/dispatch loop — a server-initiated back-channel reply or a server-side inbound reply — also fails fast instead of waiting, or is silently dropped if it has no error channel to report on.
-Waiting there could stall that connection from reading further messages.
-`Node.DroppedReplies` counts these silent drops for a given node, so a deployment can monitor for sustained backpressure that would otherwise be invisible.
-Applications that previously relied on an unbuffered send queue should remove that assumption and choose an explicit positive capacity when a smaller backlog is required.
+A reply sent from a receive or dispatch loop, whether a back-channel reply from a client or a server's reply to an inbound request, never waits either, so the connection keeps reading further messages.
+A reply that does not fit the queue is dropped, and the remote caller waits until its context ends.
+`Node.DroppedReplies` counts these drops for a given node, so a deployment can monitor for sustained backpressure.
+Choose an explicit positive capacity when a smaller backlog is required.
