@@ -22,10 +22,9 @@ type serverOptions struct {
 	interceptors    []ServerInterceptor
 	// Peer management options
 	myID             uint32
-	peerNodes        NodeSource   // Peers to track as they connect; set by WithPeers.
+	peerNodes        NodeSource   // Peers this server tracks and calls; set by WithPeers.
 	onConfigChange   func(Config) // Callback registered via [WithPeerChange]; invoked after each connected-peer config change.
 	listenAddr       string       // Listener address recorded by WithAddr; bound by ListenAndServe.
-	outboundNodes    NodeSource   // Nodes this server calls; set by WithPeers.
 	outboundDialOpts []DialOption
 }
 
@@ -97,7 +96,6 @@ func WithPeers(myID uint32, nodes NodeSource, opts ...DialOption) ServerOption {
 	return func(o *serverOptions) {
 		o.myID = myID
 		o.peerNodes = nodes
-		o.outboundNodes = nodes
 		o.outboundDialOpts = append(o.outboundDialOpts, opts...)
 	}
 }
@@ -244,8 +242,8 @@ func newServer(opts ...ServerOption) (*Server, error) {
 	)
 	s.srv = stream.NewServer(serverOpts.recvBufferSize, serverOpts.connectCallback, s.im)
 	stream.RegisterGorumsServer(s.grpcServer, s.srv)
-	if serverOpts.outboundNodes != nil {
-		cfg, err := s.newPeerConfig(serverOpts.outboundNodes, serverOpts.outboundDialOpts)
+	if serverOpts.peerNodes != nil {
+		cfg, err := s.newPeerConfig(serverOpts.peerNodes, serverOpts.outboundDialOpts)
 		if err != nil {
 			s.grpcServer.Stop()
 			return nil, err

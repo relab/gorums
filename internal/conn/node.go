@@ -107,9 +107,9 @@ type nodeOptions struct {
 	Metadata       metadata.MD
 	DialOpts       []grpc.DialOption
 	RequestHandler stream.RequestHandler
-	EagerReconnect bool                     // re-establish a lost stream proactively; see [stream.NewOutboundChannel]
-	StreamState    func(id uint32, up bool) // optional; invoked on outbound stream transitions
-	Manager        *outboundManager         // owning manager
+	EagerReconnect bool             // re-establish a lost stream proactively; see [stream.NewOutboundChannel]
+	OnStreamChange func()           // optional; invoked on outbound stream transitions
+	Manager        *outboundManager // owning manager
 }
 
 // newOutboundNode creates a new node using the provided options. It establishes
@@ -134,13 +134,8 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 	md := opts.Metadata.Copy()
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
-	var onStreamChange func(up bool)
-	if cb := opts.StreamState; cb != nil {
-		id := opts.ID
-		onStreamChange = func(up bool) { cb(id, up) }
-	}
 	// Create new outbound channel and establish gRPC node stream
-	transport.StoreChannel(stream.NewOutboundChannel(ctx, n.id, opts.SendBufferSize, conn, router, opts.EagerReconnect, onStreamChange))
+	transport.StoreChannel(stream.NewOutboundChannel(ctx, n.id, opts.SendBufferSize, conn, router, opts.EagerReconnect, opts.OnStreamChange))
 	return n, nil
 }
 

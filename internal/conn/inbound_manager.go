@@ -163,11 +163,11 @@ func (im *InboundManager) SetPeerConfig(cfg Config) {
 	im.rebuildConfig()
 }
 
-// peerStreamChanged records that a dialed peer's outbound stream came up or
-// went down and rebuilds the connected-peer view. It is registered as the
-// stream-state callback for the server's outbound peer nodes; the new state
+// onStreamChange rebuilds the connected-peer view after a dialed peer's
+// outbound stream came up or went down. It is registered as the
+// stream-change callback for the server's outbound peer nodes; the new state
 // is read directly from the nodes during the rebuild.
-func (im *InboundManager) peerStreamChanged(uint32, bool) {
+func (im *InboundManager) onStreamChange() {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	im.rebuildConfig()
