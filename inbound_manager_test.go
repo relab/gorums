@@ -447,21 +447,16 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 		t.Fatal("peer node 2 not found in inbound config")
 	}
 
-	// Create request message and register it for response routing.
+	// Create the request message.
 	ctx := testTimeoutContext(t, 5*time.Second)
 	reqMsg, err := stream.NewMessage(ctx, conn.NodeTransport(pNode).NextMsgID(), mock.TestMethod, pb.String("hello"))
 	if err != nil {
 		t.Fatalf("NewMessage() error: %v", err)
 	}
 	replyChan := make(chan NodeResponse[*stream.Message], 1)
-	conn.NodeTransport(pNode).Router().Register(reqMsg.GetMessageSeqNo(), stream.Request{
-		Ctx:          ctx,
-		Msg:          reqMsg,
-		ResponseChan: replyChan,
-	})
 
 	// Send the request through the inbound channel.
-	conn.NodeTransport(pNode).Enqueue(stream.Request{Ctx: ctx, Msg: reqMsg})
+	conn.NodeTransport(pNode).Enqueue(stream.Request{Ctx: ctx, Msg: reqMsg, ResponseChan: replyChan})
 
 	// Wait for the response from the client handler.
 	select {

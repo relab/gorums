@@ -2086,3 +2086,7 @@ A reply sent from a receive or dispatch loop, whether a back-channel reply from 
 A reply that does not fit the queue is dropped, and the remote caller waits until its context ends.
 `Node.DroppedReplies` counts these drops for a given node, so a deployment can monitor for sustained backpressure.
 Choose an explicit positive capacity when a smaller backlog is required.
+
+On the receiving side, requests from a stream wait in a dispatch queue while the previous request's handler runs, so that handlers start in arrival order.
+The receive-size argument of `WithBufferSizes` sets that queue's capacity per stream, with a default of 4096 when zero.
+When the queue is full, the server stops reading from the stream until a handler releases or returns.

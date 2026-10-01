@@ -3,104 +3,100 @@ package stream
 import "sync/atomic"
 
 // channelRef is an atomically replaceable reference to a node's current
-// channel. The same channelRef is referenced by an inbound peer node's
-// transport and by any borrower transport derived from it, so a channel
-// replacement on peer reconnect is immediately visible to both.
+// channel. A node's transport and every borrower transport derived from it
+// share one channelRef, so a channel replacement is visible to all of them.
 type channelRef struct {
 	ptr atomic.Pointer[Channel]
 }
 
-// load returns the current channel; it is safe on a nil channelRef.
-func (r *channelRef) load() *Channel {
-	if r == nil {
-		return nil
+// load returns the current channel, or nil.
+func (r *channelRef) load() Channel {
+	if p := r.ptr.Load(); p != nil {
+		return *p
 	}
-	return r.ptr.Load()
+	return nil
 }
 
-// store replaces the current channel.
-func (r *channelRef) store(ch *Channel) {
-	r.ptr.Store(ch)
+// store replaces the current channel; a nil ch clears it.
+func (r *channelRef) store(ch Channel) {
+	if ch == nil {
+		r.ptr.Store(nil)
+		return
+	}
+	r.ptr.Store(&ch)
 }
 
-// Transport bundles everything a call needs to reach one node: the node ID, the
-// channel reference, the response router, and the message-ID generator. A
-// node's transport is fixed at construction; only the channel behind the shared
-// channel reference changes as streams come and go. The shared flag marks a
-// transport that borrows these resources from an inbound peer node.
+// Transport bundles everything a call needs to reach one node: the node ID,
+// the channel reference, the latency estimate, and the message-ID generator.
+// A node's transport is fixed at construction; only the channel behind the
+// shared channel reference changes as streams come and go. A shared transport
+// borrows these resources from an inbound peer node's transport.
 type Transport struct {
 	id       uint32
 	channel  *channelRef
-	router   *MessageRouter
+	latency  *Latency
 	msgIDGen func() uint64
 	shared   bool
 }
 
-// NewTransport returns an owned transport with an empty channel reference; the
-// caller stores the channel with [Transport.StoreChannel] once it is created.
-func NewTransport(id uint32, msgIDGen func() uint64, router *MessageRouter) *Transport {
+// NewTransport returns an owned transport with no channel; attach one with
+// [Transport.StoreChannel].
+func NewTransport(id uint32, msgIDGen func() uint64) *Transport {
 	return &Transport{
 		id:       id,
 		channel:  new(channelRef),
-		router:   router,
+		latency:  NewLatency(),
 		msgIDGen: msgIDGen,
 	}
 }
 
-// NewSharedTransport derives a borrower transport from a peer's transport,
-// referencing the peer's channel, router, and server-space message-ID
-// generator, and keeping the peer's node ID. Channel replacement on peer
-// reconnect is observed through the shared channel reference; the router is
-// owned by the peer and stable across reconnects.
+// NewSharedTransport returns a borrower transport that shares peer's node ID,
+// channel reference, latency estimate, and message-ID generator.
 func NewSharedTransport(peer *Transport) *Transport {
 	return &Transport{
 		id:       peer.id,
 		channel:  peer.channel,
-		router:   peer.router,
+		latency:  peer.latency,
 		msgIDGen: peer.msgIDGen,
 		shared:   true,
 	}
 }
 
-// IsShared reports whether this transport borrows an inbound peer node's
-// channel. It is safe on a nil transport.
+// IsShared reports whether t borrows another transport's channel. It is safe
+// on a nil transport.
 func (t *Transport) IsShared() bool {
 	return t != nil && t.shared
 }
 
-// Router returns the transport's response router, or nil on a nil transport.
-func (t *Transport) Router() *MessageRouter {
+// Latency returns the transport's latency estimate, or nil on a nil transport.
+func (t *Transport) Latency() *Latency {
 	if t == nil {
 		return nil
 	}
-	return t.router
+	return t.latency
 }
 
-// NextMsgID returns the next message ID from the transport's ID space: the
-// node's client-initiated space for an owned transport, or the peer's
-// server-initiated space for a shared transport.
+// NextMsgID returns the next message ID from the transport's ID space.
 func (t *Transport) NextMsgID() uint64 {
 	return t.msgIDGen()
 }
 
-// LoadChannel returns the transport's current channel, or nil if the transport
-// has no attached channel. It is safe on a nil transport.
-func (t *Transport) LoadChannel() *Channel {
+// LoadChannel returns the current channel, or nil if there is none or t is nil.
+func (t *Transport) LoadChannel() Channel {
 	if t == nil {
 		return nil
 	}
 	return t.channel.load()
 }
 
-// StoreChannel replaces the transport's current channel.
-func (t *Transport) StoreChannel(ch *Channel) {
+// StoreChannel replaces the current channel; a nil ch clears it.
+func (t *Transport) StoreChannel(ch Channel) {
 	t.channel.store(ch)
 }
 
-// Enqueue sends req on the current channel. Without a channel, a shared
-// transport fails the request with [ErrStreamDown] since a borrower cannot
-// dial, while an owned transport silently drops it. It is safe on a nil
-// transport (zero-value node).
+// Enqueue sends req on the current channel; see [Channel.Enqueue]. Without a
+// channel, a shared transport fails req with [ErrStreamDown] and an owned
+// transport drops it. It does nothing on a nil transport.
 func (t *Transport) Enqueue(req Request) {
 	if t == nil {
 		return
@@ -115,35 +111,12 @@ func (t *Transport) Enqueue(req Request) {
 	ch.Enqueue(req)
 }
 
-// TrySend sends req on the current channel without ever blocking the caller;
-// see [Channel.TrySend]. Otherwise identical to [Transport.Enqueue]: without a
-// channel, a shared transport fails the request with [ErrStreamDown], while an
-// owned transport silently drops it. It is safe on a nil transport.
-func (t *Transport) TrySend(req Request) {
-	if t == nil {
-		return
-	}
-	ch := t.channel.load()
-	if ch == nil {
-		if t.shared {
-			req.ReplyError(t.id, ErrStreamDown)
-		}
-		return
-	}
-	ch.TrySend(req)
-}
-
-// Close cancels all pending calls in the router and closes the owned channel.
-// Closing a shared transport is a no-op: the channel and router belong to the
-// inbound peer node. It is safe on a nil transport.
+// Close closes the owned channel. Closing a shared transport, whose channel
+// belongs to the inbound peer node, does nothing. It is safe on a nil
+// transport.
 func (t *Transport) Close() error {
 	if t == nil || t.shared {
 		return nil
-	}
-	if t.router != nil {
-		for _, req := range t.router.CancelPending() {
-			req.ReplyError(t.id, ErrNodeClosed)
-		}
 	}
 	if ch := t.channel.load(); ch != nil {
 		return ch.Close()

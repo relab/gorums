@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"slices"
 	"sync"
 	"time"
 
@@ -31,7 +32,7 @@ func (c NodeContext) Node() *Node {
 }
 
 // sharedNodeTransport derives a borrower transport from an inbound peer node,
-// reusing the peer's channel, router, and server-space message-ID generator.
+// reusing the peer's channel, latency estimate, and server-space message-ID generator.
 // It returns nil if the peer has no transport.
 func sharedNodeTransport(peer *Node) *stream.Transport {
 	transport := peer.loadTransport()
@@ -55,11 +56,10 @@ type Node struct {
 
 	// inboundMu guards liveChannels and the active-channel handoff in
 	// attachStream. A peer may briefly have more than one live inbound stream
-	// during connection churn; liveChannels is the set of them, and the node
-	// fails the active channel over to a surviving stream when one stream
-	// ends. Lazily initialized on the first attach.
+	// during connection churn; liveChannels holds their channels in attach
+	// order, and the last one is the node's active channel.
 	inboundMu    sync.Mutex
-	liveChannels map[*stream.Channel]struct{}
+	liveChannels []*stream.InboundChannel
 }
 
 // newNode creates a Node with stable identity fields and its transport.
@@ -107,7 +107,7 @@ type nodeOptions struct {
 	Metadata       metadata.MD
 	DialOpts       []grpc.DialOption
 	RequestHandler stream.RequestHandler
-	EagerReconnect bool             // re-establish a lost stream proactively; see [stream.NewOutboundChannel]
+	EagerReconnect bool             // re-establish a lost stream proactively; see [stream.OutboundOptions]
 	OnStreamChange func()           // optional; invoked on outbound stream transitions
 	Manager        *outboundManager // owning manager
 }
@@ -120,8 +120,7 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 		return nil, err
 	}
 
-	router := stream.NewMessageRouter(opts.RequestHandler)
-	transport := stream.NewTransport(opts.ID, opts.MsgIDGen, router)
+	transport := stream.NewTransport(opts.ID, opts.MsgIDGen)
 	n := newNode(opts.ID, tcpAddr.String(), opts.Manager, transport)
 
 	// Create gRPC connection to the node without connecting (lazy dial).
@@ -135,18 +134,20 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Create new outbound channel and establish gRPC node stream
-	transport.StoreChannel(stream.NewOutboundChannel(ctx, n.id, opts.SendBufferSize, conn, router, opts.EagerReconnect, opts.OnStreamChange))
+	transport.StoreChannel(stream.NewOutboundChannel(ctx, n.id, conn, stream.OutboundOptions{
+		SendBufferSize: opts.SendBufferSize,
+		Handler:        opts.RequestHandler,
+		Latency:        transport.Latency(),
+		EagerReconnect: opts.EagerReconnect,
+		OnStreamChange: opts.OnStreamChange,
+	}))
 	return n, nil
 }
 
-// newInboundNode creates a Node for a known peer or self without an active
-// channel. Used by inboundManager at construction time for all configured
-// peers; the channel is attached when the peer's stream arrives.
-// The handler, if non-nil, is stored in the router and used to dispatch
-// client-initiated requests received on the inbound stream.
-func newInboundNode(id uint32, addr string, msgIDGen func() uint64, handler stream.RequestHandler) *Node {
-	router := stream.NewMessageRouter(handler)
-	return newNode(id, addr, nil, stream.NewTransport(id, msgIDGen, router))
+// newInboundNode creates a Node for a known peer or client without an active
+// channel; the channel is attached when the peer's stream arrives.
+func newInboundNode(id uint32, addr string, msgIDGen func() uint64) *Node {
+	return newNode(id, addr, nil, stream.NewTransport(id, msgIDGen))
 }
 
 // newLocalNode creates a Node that dispatches calls in-process, bypassing the
@@ -154,33 +155,31 @@ func newInboundNode(id uint32, addr string, msgIDGen func() uint64, handler stre
 // which include itself. The provided handler serves requests directly without
 // a gRPC round-trip.
 func newLocalNode(id uint32, addr string, msgIDGen func() uint64, handler stream.RequestHandler, mgr *outboundManager) *Node {
-	router := stream.NewMessageRouter(handler)
-	transport := stream.NewTransport(id, msgIDGen, router)
+	transport := stream.NewTransport(id, msgIDGen)
 	n := newNode(id, addr, mgr, transport)
-	transport.StoreChannel(stream.NewLocalChannel(id, router))
+	transport.StoreChannel(stream.NewLocalChannel(id, handler))
 	return n
 }
 
 // newSharedNode creates a node that reuses the inbound peer node's channel and
-// router. The shared node draws message IDs from the peer node's generator,
+// latency estimate. The shared node draws message IDs from the peer node's generator,
 // i.e. the server-initiated ID space, so its request IDs cannot collide with
 // the remote peer's client-initiated IDs on the same stream. Channel
-// replacement on peer reconnect is observed through the shared atomic pointer;
-// the router is owned by the peer node and stable across reconnects.
+// replacement on peer reconnect is observed through the shared channel reference.
 func newSharedNode(peer *Node, addr string, mgr *outboundManager) *Node {
 	return newNode(peer.id, addr, mgr, sharedNodeTransport(peer))
 }
 
 // IsInbound returns true if the node has an active inbound channel.
 func (n *Node) IsInbound() bool {
-	ch := n.activeChannel()
-	return ch != nil && ch.IsInbound()
+	_, ok := n.activeChannel().(*stream.InboundChannel)
+	return ok
 }
 
 // IsOutbound returns true if the node has an active outbound client channel.
 func (n *Node) IsOutbound() bool {
-	ch := n.activeChannel()
-	return ch != nil && ch.IsOutbound()
+	_, ok := n.activeChannel().(*stream.OutboundChannel)
+	return ok
 }
 
 // IsShared reports whether the node borrows an inbound peer node's channel,
@@ -190,13 +189,14 @@ func (n *Node) IsShared() bool {
 	return n.loadTransport().IsShared()
 }
 
-// PendingCount returns the number of pending calls currently registered in the router.
+// PendingCount returns the number of calls awaiting responses on the node's
+// active channel.
 func (n *Node) PendingCount() int {
-	router := n.messageRouter()
-	if router == nil {
+	ch := n.activeChannel()
+	if ch == nil {
 		return 0
 	}
-	return router.PendingCount()
+	return ch.PendingCount()
 }
 
 // DroppedReplies returns the number of replies silently dropped on this
@@ -224,123 +224,47 @@ func (n *Node) isUp() bool {
 
 // activeChannel returns the current transport's channel, or nil if the node
 // has no transport or no attached channel.
-func (n *Node) activeChannel() *stream.Channel {
+func (n *Node) activeChannel() stream.Channel {
 	return n.loadTransport().LoadChannel()
 }
 
-// messageRouter returns the current transport's router, or nil if the node
-// has no transport.
-func (n *Node) messageRouter() *stream.MessageRouter {
-	return n.loadTransport().Router()
-}
-
 // attachStream attaches a new inbound channel to the node when a peer connects
-// and returns a detach function to call when that stream ends.
+// and returns it, with a detach function to call when that stream ends.
 //
 // A peer may briefly have more than one live inbound stream: gRPC can open a
 // second NodeStream over one connection during connection churn, and the server
 // may register the streams in an order that does not match the client's
-// creation order. attachStream tracks the set of live streams' channels and
-// installs the newly attached one as the node's active channel; each channel is
-// closed only when its own stream ends. When the active stream ends, the node
-// fails over to any other live stream's channel, so the active channel is
-// non-nil while a stream lives and a surviving stream keeps carrying replies.
+// creation order. The most recently attached live channel is the node's active
+// channel; each channel is closed only when its own stream ends, and when the
+// active one ends, the next most recent live channel becomes active. Replies
+// to requests received on a stream ride that stream's channel.
 //
 // detach is idempotent and returns true only when it removed the node's last
-// live channel (the peer left the configuration), so the caller can rebuild the
-// configuration; it returns false when another live stream remains.
-//
-// It also returns the channel created for this stream. Server replies for
-// requests received on this stream ride this channel, so during the multi-live
-// overlap each reply is queued on the stream that received its request (see
-// [peerNode]).
-func (n *Node) attachStream(streamCtx context.Context, inboundStream stream.BidiStream, sendBufferSize uint) (newCh *stream.Channel, detach func() bool) {
+// live channel (the peer left the configuration).
+func (n *Node) attachStream(streamCtx context.Context, inboundStream stream.BidiStream, opts stream.InboundOptions) (newCh *stream.InboundChannel, detach func() bool) {
 	transport := n.loadTransport()
-	newCh = stream.NewInboundChannel(streamCtx, n.id, sendBufferSize, inboundStream, transport.Router())
+	opts.Latency = transport.Latency()
+	newCh = stream.NewInboundChannel(streamCtx, n.id, inboundStream, opts)
 	n.inboundMu.Lock()
-	if n.liveChannels == nil {
-		n.liveChannels = make(map[*stream.Channel]struct{})
-	}
-	n.liveChannels[newCh] = struct{}{}
+	n.liveChannels = append(n.liveChannels, newCh)
 	transport.StoreChannel(newCh)
 	n.inboundMu.Unlock()
 	return newCh, func() bool {
 		n.inboundMu.Lock()
 		defer n.inboundMu.Unlock()
-		if _, ok := n.liveChannels[newCh]; !ok {
+		i := slices.Index(n.liveChannels, newCh)
+		if i < 0 {
 			return false // already detached
 		}
-		delete(n.liveChannels, newCh)
-		newCh.Close()
-		if transport.LoadChannel() != newCh {
-			return false // a different stream is active; membership unchanged
+		n.liveChannels = slices.Delete(n.liveChannels, i, i+1)
+		_ = newCh.Close()
+		if len(n.liveChannels) == 0 {
+			transport.StoreChannel(nil)
+			return true
 		}
-		for survivor := range n.liveChannels {
-			// Fail the active channel over to an arbitrary surviving stream;
-			// the peer stays in the configuration.
-			transport.StoreChannel(survivor)
-			return false
-		}
-		transport.StoreChannel(nil)
-		return true // no live stream remains; peer left the configuration
+		transport.StoreChannel(n.liveChannels[len(n.liveChannels)-1])
+		return false
 	}
-}
-
-// routeInbound delivers a response to a pending call or dispatches a
-// client-initiated request to the registered handler. The release
-// function is always called. It is exposed to the stream package through the
-// [peerNode] adapter.
-func (n *Node) routeInbound(ctx context.Context, msg *stream.Message, release func(), send func(*stream.Message)) {
-	router := n.messageRouter()
-	if router == nil {
-		release()
-		return
-	}
-	router.RouteInboundMessage(ctx, n.id, msg, release, send)
-}
-
-// trySend enqueues a request to this node's channel without ever blocking the
-// caller; see [stream.Channel.TrySend]. A shared node whose peer is currently
-// disconnected has no channel; the request is answered with
-// [stream.ErrStreamDown], since only the peer can re-establish the stream.
-// For other nodes without a channel the request is silently dropped. It is
-// exposed to the stream package through the [peerNode] adapter.
-func (n *Node) trySend(req stream.Request) {
-	n.loadTransport().TrySend(req)
-}
-
-// peerNode adapts a [Node] to the unexported transport interface expected by
-// the stream package ([stream.PeerNode]), keeping Node's own public API free of
-// the transport hooks. It wraps a *Node with no per-call allocation beyond the
-// one-time construction in [InboundManager.AcceptPeer].
-//
-// ch is the inbound channel created for this registration's stream. Replies are
-// sent on ch, so a request received on one stream has its reply ride that same
-// stream even while another stream for the same peer is live and active (see
-// [Node.attachStream]). ch is
-// nil only for peerNodes built without a registered stream (some tests), where
-// TrySend falls back to the node's active channel.
-type peerNode struct {
-	n  *Node
-	ch *stream.Channel
-}
-
-// TrySend implements [stream.PeerNode] by delivering the reply on this
-// registration's own stream channel, so a reply dispatched from the
-// server-side inbound receive loop (see [stream.Server.NodeStream]) rides the
-// stream that received the request without blocking that loop. With no bound
-// channel it forwards to the node's active channel.
-func (p peerNode) TrySend(req stream.Request) {
-	if p.ch != nil {
-		p.ch.TrySend(req)
-		return
-	}
-	p.n.trySend(req)
-}
-
-// RouteInbound implements [stream.PeerNode] by forwarding to the node's routeInbound.
-func (p peerNode) RouteInbound(ctx context.Context, msg *stream.Message, release func(), send func(*stream.Message)) {
-	p.n.routeInbound(ctx, msg, release, send)
 }
 
 // close this node.
@@ -431,11 +355,7 @@ func (n *Node) LastErr() error {
 // Use the [ByLatency] comparator with [Config.Sort] to order nodes
 // by their current observed latency.
 func (n *Node) Latency() time.Duration {
-	router := n.messageRouter()
-	if router == nil {
-		return -1 * time.Second
-	}
-	return router.Latency()
+	return n.loadTransport().Latency().Load()
 }
 
 // ByID compares nodes by their identifier in increasing order.
@@ -479,6 +399,3 @@ var ByLatency = func(a, b *Node) int {
 	}
 	return cmp.Compare(la, lb)
 }
-
-// compile-time assertion for interface compliance.
-var _ stream.PeerNode = peerNode{}

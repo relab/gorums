@@ -1,31 +1,27 @@
 package stream
 
-import "time"
-
 // This file collects exported constructors that exist only to support tests in
 // other packages (package stream's own tests use unexported helpers directly).
 // They live in a non-test file because Go test files are not importable across
 // packages; keeping them here separates them from production code.
 
-// NewChannelWithState creates a new Channel with a specific state for testing.
-// This function should only be used in tests.
-func NewChannelWithState(lastErr error) *Channel {
-	return &Channel{
-		lastError: lastErr,
-	}
+// NewChannelWithState returns a Channel without a stream whose
+// [Channel.LastErr] reports lastErr. This function should only be used in tests.
+func NewChannelWithState(lastErr error) Channel {
+	return stateChannel{lastErr: lastErr}
 }
 
-// NewMessageRouterWithLatency creates a new MessageRouter with an initial latency
-// for testing. The latency may be updated by subsequent message routing operations.
-// This function should only be used in tests.
-//
-// To change the latency after creation, use [MessageRouter.SetLatency].
-func NewMessageRouterWithLatency(latency time.Duration) *MessageRouter {
-	return &MessageRouter{
-		pending: make(map[uint64]pendingRequest),
-		latency: latency,
-	}
+// stateChannel is a [Channel] that only reports a fixed health state.
+type stateChannel struct {
+	lastErr error
 }
+
+func (c stateChannel) Enqueue(req Request) { req.ReplyError(0, ErrStreamDown) }
+func (stateChannel) StreamUp() bool        { return false }
+func (c stateChannel) LastErr() error      { return c.lastErr }
+func (stateChannel) DroppedReplies() int64 { return 0 }
+func (stateChannel) PendingCount() int     { return 0 }
+func (stateChannel) Close() error          { return nil }
 
 // NewSharedTransportWithGen is like [NewSharedTransport] but overrides the
 // message-ID generator, so a test can simulate a deduplicated transport that

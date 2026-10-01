@@ -56,9 +56,8 @@ func TestCallContextSendSharedMessageIDs(t *testing.T) {
 	for i := range config {
 		recorders[i] = &seqNoRecorder{}
 		id := uint32(i + 1)
-		router := stream.NewMessageRouter(recorders[i])
-		transport := stream.NewTransport(id, clientGen, router)
-		transport.StoreChannel(stream.NewLocalChannel(id, router))
+		transport := stream.NewTransport(id, clientGen)
+		transport.StoreChannel(stream.NewLocalChannel(id, recorders[i]))
 		// The third node reuses an inbound stream and must use server-initiated
 		// IDs; wrap its transport as a shared transport over the same channel.
 		if i == 2 {
