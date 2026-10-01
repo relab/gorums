@@ -55,6 +55,7 @@ func NewInboundChannel(ctx context.Context, id uint32, stream BidiStream, opts I
 		if req := c.session.sendLoop(nil); req != nil {
 			c.queue.fail(*req, ErrStreamDown)
 		}
+		c.cancel() // ends waits for queue space before the queue closes
 		c.queue.close()
 	}()
 	return c
@@ -66,8 +67,8 @@ func (c *InboundChannel) Serve() error {
 	return c.session.receive()
 }
 
-// StreamUp reports true: an inbound channel carries requests for as long as
-// it is in use.
+// StreamUp reports true; an inbound channel is detached from its node when its
+// stream ends.
 func (*InboundChannel) StreamUp() bool {
 	return true
 }

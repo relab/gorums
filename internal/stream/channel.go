@@ -11,7 +11,7 @@ type Channel interface {
 	// Enqueue sends req, reporting its outcome on req's response channel.
 	// When the send queue is full, a two-way request fails with
 	// [ErrSendQueueFull] and a one-way request waits for space until its
-	// context ends. A closed channel fails req with [ErrNodeClosed].
+	// context ends. A closed stream channel fails req with [ErrNodeClosed].
 	// Enqueue panics if req is both Oneway and Streaming.
 	Enqueue(req Request)
 	// StreamUp reports whether the channel can currently carry requests.
@@ -38,10 +38,12 @@ type Channel interface {
 // the stream start before HandleRequest returns; otherwise the next request
 // starts when HandleRequest returns.
 //
-// The send function delivers a response message to the peer without waiting
-// for send queue space. For two-way call types, send may be called zero or
-// more times (e.g., for streaming correctable calls). For one-way call types,
-// the peer has no pending call to receive a response, so it is dropped.
+// The send function delivers a response message to the peer. On a stream, it
+// does not wait for send queue space, except on an [InboundChannel] created
+// with [InboundOptions.WaitingReplies]. For two-way call types, send may be
+// called zero or more times (e.g., for streaming correctable calls). For
+// one-way call types, the peer has no pending call to receive a response, so
+// it is dropped.
 type RequestHandler interface {
 	HandleRequest(ctx context.Context, msg *Message, release func(), send func(*Message))
 }

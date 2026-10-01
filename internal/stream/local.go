@@ -22,7 +22,7 @@ func NewLocalChannel(id uint32, handler RequestHandler) *LocalChannel {
 // Enqueue queues req for the handler. A one-way request is confirmed once
 // queued. When the queue is full, a two-way request fails with
 // [ErrSendQueueFull] and a one-way request waits for space until its context
-// ends. Without a handler, req fails with codes.Unimplemented.
+// ends. Without a handler, req fails with [codes.Unimplemented].
 func (c *LocalChannel) Enqueue(req Request) {
 	if req.Oneway && req.Streaming {
 		panic("gorums: Oneway and Streaming are mutually exclusive")

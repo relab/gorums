@@ -63,6 +63,14 @@ func (s *session) sendLoop(req *Request) *Request {
 		if s.ended() || s.draining.Load() {
 			return req
 		}
+		if err := req.Ctx.Err(); err != nil {
+			req.ReplyError(s.id, err)
+			req = nil
+			continue
+		}
+		if req.wantServerResponse() && !s.pending.add(req.Msg.GetMessageSeqNo(), *req) {
+			return req // the session ended concurrently
+		}
 		if !s.send(*req) {
 			return nil
 		}
@@ -71,27 +79,18 @@ func (s *session) sendLoop(req *Request) *Request {
 }
 
 // send sends req on the stream and reports whether the stream is still usable.
-// A two-way request is recorded as pending before it is sent, and a one-way
-// request is confirmed once it is sent.
+// A two-way request must already be pending; a one-way request is confirmed
+// once it is sent.
 func (s *session) send(req Request) bool {
-	if err := req.Ctx.Err(); err != nil {
-		req.ReplyError(s.id, err)
-		return true
-	}
-	twoWay := req.wantServerResponse()
-	if twoWay && !s.pending.add(req.Msg.GetMessageSeqNo(), req) {
-		s.retry(req) // the session ended concurrently
-		return false
-	}
 	err := s.stream.Send(req.Msg)
-	s.recordHealth(err)
 	if err != nil {
-		s.end()
-		if !twoWay {
+		s.fail(err)
+		if !req.wantServerResponse() {
 			req.ReplyError(s.id, cmp.Or(req.Ctx.Err(), err))
 		}
 		return false
 	}
+	s.recordHealth(nil)
 	if req.wantSendConfirmation() {
 		req.deliver(response{NodeID: s.id})
 	}
@@ -103,11 +102,11 @@ func (s *session) send(req Request) bool {
 func (s *session) receive() error {
 	for {
 		msg, err := s.stream.Recv()
-		s.recordHealth(err)
 		if err != nil {
-			s.end()
+			s.fail(err)
 			return err
 		}
+		s.recordHealth(nil)
 		s.received.Store(true)
 		s.handle(msg)
 		s.endIfDrained()
@@ -140,6 +139,15 @@ func (s *session) handle(msg *Message) {
 	req.deliver(resp)
 }
 
+// fail records err as the channel's health and ends the session, unless the
+// session had already ended, in which case err only reflects that ending.
+func (s *session) fail(err error) {
+	if !s.ended() {
+		s.recordHealth(err)
+	}
+	s.end()
+}
+
 // end ends the session and retries or fails its pending calls; see
 // [session.retry]. It is idempotent.
 func (s *session) end() {
@@ -162,7 +170,8 @@ func (s *session) ended() bool {
 // retry queues req for the channel's next session if the session requeues
 // calls and req is not streaming; a streaming call may already have received
 // responses, so it cannot be sent again. Otherwise it fails req with
-// [ErrNodeClosed] if the channel is closed, or [ErrStreamDown].
+// [ErrNodeClosed] if the session requeues calls and the channel is closed, or
+// with [ErrStreamDown].
 func (s *session) retry(req Request) {
 	switch {
 	case s.requeue && !req.Streaming:

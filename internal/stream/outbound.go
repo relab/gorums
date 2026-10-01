@@ -76,9 +76,10 @@ func NewOutboundChannel(ctx context.Context, id uint32, conn *grpc.ClientConn, o
 }
 
 // run opens sessions and sends queued requests on them until the channel
-// closes. The first stream is opened at once. With eager reconnect, a draining
-// stream is replaced at once and a lost one after a backoff delay; otherwise,
-// either is replaced on the next request.
+// closes. The first stream is opened at once, and a stream is replaced at once
+// when a request is waiting. Otherwise, with eager reconnect, a draining stream
+// is replaced at once and a lost one after a backoff delay; without it, either
+// is replaced on the next request.
 func (c *OutboundChannel) run() {
 	defer c.wg.Done()
 	defer c.queue.close()
@@ -104,7 +105,11 @@ func (c *OutboundChannel) run() {
 		}
 		s, err := c.open()
 		if err != nil {
-			c.recordHealth(err)
+			if c.ctx.Err() != nil {
+				err = ErrNodeClosed
+			} else {
+				c.recordHealth(err)
+			}
 			if req != nil {
 				req.ReplyError(c.id, err)
 				req = nil

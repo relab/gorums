@@ -18,8 +18,8 @@ type sendQueue struct {
 	dropped atomic.Int64
 }
 
-// newSendQueue returns a queue with the given capacity. The done channel ends
-// waits for queue space; close it before calling [sendQueue.close].
+// newSendQueue returns a queue with the given capacity. Closing done ends
+// waits for queue space; [sendQueue.close] waits for those to end.
 func newSendQueue(id uint32, capacity uint, done <-chan struct{}) *sendQueue {
 	return &sendQueue{id: id, ch: make(chan Request, capacity), done: done}
 }
@@ -46,7 +46,7 @@ func (q *sendQueue) push(req Request, wait bool) {
 	select {
 	case q.ch <- req:
 	case <-req.Ctx.Done():
-		req.ReplyError(q.id, req.Ctx.Err())
+		q.fail(req, req.Ctx.Err())
 	case <-q.done:
 		q.fail(req, ErrNodeClosed)
 	}
