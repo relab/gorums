@@ -1149,8 +1149,7 @@ func TestChannelConcurrentStreamReconnect(t *testing.T) {
 // enqueued while the current stream is concurrently torn down never fails
 // with ErrStreamDown. The sender must send on the exact stream its ensure
 // step produced: reading the stream again in a separate step races with a
-// concurrent clearStream — the receiver observing a broken stream, or a
-// cancel watcher — and can observe nil right after a successful ensure,
+// concurrent clearStream by the receiver observing a broken stream, and can observe nil right after a successful ensure,
 // failing the request terminally, since a request that was never sent is not
 // registered for retry. A request that instead loses the race on Send fails
 // with a stream error after registration and is requeued, so under stream
@@ -1289,244 +1288,16 @@ func TestChannelStaleReceiverDoesNotRequeueCurrentPending(t *testing.T) {
 	}
 }
 
-// lateAfterFuncContext is a test context implementation that gives deterministic
-// control over when the AfterFunc callback fires. The trigger() method
-// simulates context cancellation and fires the registered callback.
-type lateAfterFuncContext struct {
-	ready chan struct{}
-	mu    sync.Mutex
-	err   error
-	f     func()
-	done  chan struct{}
-}
-
-func newLateAfterFuncContext() *lateAfterFuncContext {
-	return &lateAfterFuncContext{
-		ready: make(chan struct{}),
-		done:  make(chan struct{}),
-	}
-}
-
-func (*lateAfterFuncContext) Deadline() (time.Time, bool) { return time.Time{}, false }
-
-func (c *lateAfterFuncContext) Done() <-chan struct{} { return c.done }
-
-func (c *lateAfterFuncContext) Err() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.err
-}
-
-func (*lateAfterFuncContext) Value(any) any { return nil }
-
-func (c *lateAfterFuncContext) AfterFunc(f func()) func() bool {
-	c.mu.Lock()
-	c.f = f
-	close(c.ready)
-	c.mu.Unlock()
-	return func() bool { return false }
-}
-
-func (c *lateAfterFuncContext) trigger() {
-	<-c.ready
-	c.mu.Lock()
-	c.err = context.Canceled
-	f := c.f
-	close(c.done)
-	c.mu.Unlock()
-	if f != nil {
-		go f()
-	}
-}
-
-// lateCancelStream is a test stream that records sent message IDs and
-// blocks Recv until closed. This lets tests control when the receiver
-// goroutine sees a stream error after sends have completed.
-type lateCancelStream struct {
-	recvStarted chan struct{}
-	recvOnce    sync.Once
-	closed      chan struct{}
-	sends       chan uint64
-}
-
-func newLateCancelStream() *lateCancelStream {
-	return &lateCancelStream{
-		recvStarted: make(chan struct{}),
-		closed:      make(chan struct{}),
-		sends:       make(chan uint64, 8),
-	}
-}
-
-func (s *lateCancelStream) Send(msg *Message) error {
-	s.sends <- msg.GetMessageSeqNo()
-	return nil
-}
-
-func (s *lateCancelStream) Recv() (*Message, error) {
-	s.recvOnce.Do(func() { close(s.recvStarted) })
-	<-s.closed
-	return nil, context.Canceled
-}
-
-func (s *lateCancelStream) close() {
-	close(s.closed)
-}
-
-// TestChannelLateCancelWatcherRequeuesPending verifies that a late-running
-// per-request cancel watcher cannot strand newer pending requests on a stream
-// it clears after the original Send already returned.
-func TestChannelLateCancelWatcherRequeuesPending(t *testing.T) {
-	ctx := t.Context()
-
-	stream := newLateCancelStream()
-	// An outbound channel with a pre-set stream: only outbound channels arm
-	// the cancel watcher, and its receiver starts with the channel. The
-	// unavailable connection makes the requeued request fail once the stream
-	// is cleared.
-	c := newChannel(ctx, 1, 4, newUnavailableClientConn(t), stream, NewMessageRouter(), false, nil)
-	t.Cleanup(func() {
-		_ = c.Close()
-	})
-
-	select {
-	case <-stream.recvStarted:
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("receiver did not start reading from stream")
-	}
-
-	ctx1 := newLateAfterFuncContext()
-	reply1 := make(chan response, 1)
-	c.Enqueue(Request{
-		Ctx:          ctx1,
-		Msg:          Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
-		ResponseChan: reply1,
-	})
-	select {
-	case msgID := <-stream.sends:
-		if msgID != 1 {
-			t.Fatalf("first send msgID = %d, want 1", msgID)
-		}
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("first request was not sent")
-	}
-
-	reply2 := make(chan response, 1)
-	c.Enqueue(Request{
-		Ctx:          context.Background(),
-		Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
-		ResponseChan: reply2,
-	})
-	select {
-	case msgID := <-stream.sends:
-		if msgID != 2 {
-			t.Fatalf("second send msgID = %d, want 2", msgID)
-		}
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("second request was not sent")
-	}
-
-	if !routerExists(c, 2) {
-		t.Fatal("second request should be pending before late cancel watcher runs")
-	}
-
-	ctx1.trigger()
-	stream.close()
-
-	select {
-	case resp := <-reply2:
-		if resp.Err == nil {
-			t.Fatal("reply2 succeeded, want the requeued request to fail")
-		}
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("late cancel watcher stranded newer pending request")
-	}
-}
-
-// TestChannelCancelInflightSend verifies the per-request cancel watcher's
-// decision logic. The watcher unblocks a Send stalled by flow control, so it
-// clears the stream and requeues the pending requests on it only while the
-// watched Send is still in flight. Once the send has completed, a late-running
-// watcher leaves the stream and its pending requests untouched. A late watcher
-// is routine: a caller may cancel its context the moment the response arrives,
-// which lands the cancellation between Send returning and the sender's stop
-// call.
-func TestChannelCancelInflightSend(t *testing.T) {
-	tests := []struct {
-		name        string
-		sendDone    bool
-		wantCleared bool
-	}{
-		// Send still in flight: the watcher must clear the stream to unblock
-		// it, requeueing the pending request for retry on the next stream.
-		{name: "InflightSendClearsStream", sendDone: false, wantCleared: true},
-		// Send already returned: nothing is blocked, so the watcher must
-		// leave the healthy stream and its pending requests untouched.
-		{name: "CompletedSendLeavesStream", sendDone: true, wantCleared: false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// The channel is built directly (bypassing the constructors) so no
-			// sender or receiver goroutine races the manually injected state;
-			// cancelInflightSend is exercised as a plain method call, matching
-			// TestChannelEnsureConnectedNodeStreamKeepsLiveStream.
-			connCtx, connCancel := context.WithCancel(context.Background())
-			t.Cleanup(connCancel)
-			c := &Channel{
-				sendQ:        make(chan Request, 4),
-				id:           1,
-				connCtx:      connCtx,
-				connCancel:   connCancel,
-				router:       NewMessageRouter(),
-				pendingOwner: new(pendingOwner),
-				streamReady:  make(chan struct{}, 1),
-				stream:       newLateCancelStream(),
-			}
-
-			// Register a pending two-way request, as the sender does before Send.
-			const msgID = 7
-			reply := make(chan response, 1)
-			req := Request{
-				Ctx:          context.Background(),
-				Msg:          Message_builder{MessageSeqNo: msgID, Method: mock.TestMethod}.Build(),
-				ResponseChan: reply,
-			}
-			c.router.register(c.pendingOwner, msgID, req)
-
-			sendDone := tc.sendDone
-			c.cancelInflightSend(&sendDone, c.getStream())
-
-			if gotCleared := c.getStream() == nil; gotCleared != tc.wantCleared {
-				t.Errorf("stream cleared = %t, want %t", gotCleared, tc.wantCleared)
-			}
-			// The pending request must be requeued exactly when the stream was
-			// cleared; a healthy stream keeps its pending entry for the receiver.
-			if gotRequeued := len(c.sendQ) == 1; gotRequeued != tc.wantCleared {
-				t.Errorf("pending request requeued = %t, want %t", gotRequeued, tc.wantCleared)
-			}
-			if !tc.wantCleared && !routerExists(c, msgID) {
-				t.Error("pending request was removed although the stream was left intact")
-			}
-		})
-	}
-}
-
-// TestChannelCancelImmediatelyAfterSendRecovers exercises the residual window
-// in the sender's cancel watcher: a caller that cancels its request context the
-// instant its response arrives can land the cancellation between Send returning
-// and the sender marking the send done, so a late watcher clears an otherwise
-// healthy stream. That clear is self-healing — the stream re-establishes on the
-// next send and any requeued request retries — so repeated immediate
-// cancellation must never permanently strand the channel. The churn is most
-// valuable under -race. It is the end-to-end complement to the decision-table
-// coverage in [TestChannelCancelInflightSend].
+// TestChannelCancelImmediatelyAfterSendRecovers verifies that callers which
+// cancel their request context the instant the response arrives never strand
+// the channel. The churn is most valuable under -race.
 func TestChannelCancelImmediatelyAfterSendRecovers(t *testing.T) {
 	tc := setupChannel(t, echoServer)
 	if !waitForConnection(tc.Channel, streamConnectTimeout) {
 		t.Fatal("channel never connected")
 	}
 
-	// Each iteration cancels the request context the moment the response is in
-	// hand, maximizing the chance the watcher fires in the post-Send window.
+	// Each iteration cancels the request context the moment the response is in hand.
 	const iterations = 200
 	for i := range iterations {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -1548,8 +1319,7 @@ func TestChannelCancelImmediatelyAfterSendRecovers(t *testing.T) {
 		}
 	}
 
-	// After the churn a fresh request must still complete: a late watcher that
-	// cleared a healthy stream must not have stranded the channel.
+	// After the churn a fresh request must still complete.
 	if resp := sendRequest(t, tc.Channel, Request{}, iterations+1); resp.Err != nil {
 		t.Fatalf("channel stranded after cancel churn: %v", resp.Err)
 	}

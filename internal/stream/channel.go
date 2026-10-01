@@ -130,13 +130,6 @@ type Channel struct {
 	// to signal the change elsewhere.
 	onStreamChange func()
 
-	// sendGuard serializes each request's post-Send bookkeeping in the sender
-	// against that request's cancel watcher, so the watcher can distinguish a
-	// Send still in flight (which it must unblock by clearing the stream) from
-	// one that has already returned (the stream is healthy and must be left
-	// alone); see the sender loop.
-	sendGuard sync.Mutex
-
 	// Router handles response routing for pending calls. It is owned by the
 	// Node and injected into the Channel, so it survives channel replacement.
 	router *MessageRouter
@@ -527,27 +520,6 @@ func (c *Channel) cancelPendingMsgs(err error) {
 	}
 }
 
-// cancelInflightSend is the sender's per-request cancel watcher on an
-// outbound channel. It clears stream, which ends a Send blocked by flow
-// control, and requeues the requests pending on it.
-//
-// The sender sets sendDone under sendGuard once Send returns, which makes a
-// watcher that runs after that point a no-op: a caller that cancels its
-// context on receiving the response leaves the stream intact. A watcher that
-// takes sendGuard after Send returns but before sendDone is set clears the
-// stream; its requeued requests retry on a new stream, opened by the next
-// send or by eager reconnect.
-func (c *Channel) cancelInflightSend(sendDone *bool, stream BidiStream) {
-	c.sendGuard.Lock()
-	defer c.sendGuard.Unlock()
-	if *sendDone {
-		return
-	}
-	if c.clearStream(stream) {
-		c.requeuePendingMsgs()
-	}
-}
-
 // requeuePendingMsgs moves pending non-streaming requests back to sendQ for
 // retry on the next stream. Streaming requests (correctable calls) are cancelled
 // with ErrStreamDown because they cannot be safely retried.
@@ -632,21 +604,7 @@ func (c *Channel) sender() {
 			c.router.register(c.pendingOwner, req.Msg.GetMessageSeqNo(), req)
 		}
 
-		// Watch for per-request cancellation while Send is in flight; see
-		// [Channel.cancelInflightSend]. An inbound channel has no watcher,
-		// since it cannot open a replacement stream.
-		var sendDone bool
-		stop := func() bool { return false }
-		if !c.IsInbound() {
-			stop = context.AfterFunc(req.Ctx, func() {
-				c.cancelInflightSend(&sendDone, stream)
-			})
-		}
 		err = stream.Send(req.Msg)
-		c.sendGuard.Lock()
-		sendDone = true
-		c.sendGuard.Unlock()
-		stop()
 		// A completed send proves the channel usable; a failed one condemns it.
 		c.recordHealth(err)
 		if err != nil {
