@@ -555,6 +555,11 @@ Summary:
 | Quorum call (async) | Immediately, before goroutine    |
 | Multicast / unicast | On `.Send()` or `.Async()` (lazy) |
 
+**A cancelled call leaves the node's stream intact.**
+When a call's context ends, the call returns, but the request may still be sent if it was already queued or in flight, and a late reply is discarded.
+A node that stops reading its stream while its connection stays open stalls the sends behind it; two-way calls to that node then fail fast with `ErrSendQueueFull` once its queue fills.
+To detect such a node and fail its connection, enable gRPC keepalive with `gorums.WithGRPCDialOptions(grpc.WithKeepaliveParams(...))`.
+
 ## Iterator-Based Custom Aggregation
 
 For complex aggregation logic beyond the built-in terminal methods, use the iterator API provided by `responses.Results()`.
