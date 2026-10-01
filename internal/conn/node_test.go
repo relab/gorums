@@ -140,26 +140,36 @@ func TestNodeSort(t *testing.T) {
 	})
 }
 
-// TestNodeSharedEnqueueDisconnected verifies that enqueueing to a shared node
-// whose peer is currently disconnected (nil channel) fails fast with
-// ErrStreamDown instead of silently dropping the request. A shared node cannot
-// re-dial its peer, so the caller must not be left waiting for a response.
-func TestNodeSharedEnqueueDisconnected(t *testing.T) {
+// TestNodeEnqueueWithoutChannel verifies that enqueueing to a node with no
+// channel, such as a peer that is currently disconnected, fails fast with
+// ErrStreamDown instead of silently dropping the request.
+func TestNodeEnqueueWithoutChannel(t *testing.T) {
 	peer := stream.NewTransport(1, func() uint64 { return 0 })
-	transport := stream.NewSharedTransport(peer)
-	n := newNode(1, "", nil, transport)
-	replyChan := make(chan stream.NodeResponse[*stream.Message], 1)
-	n.loadTransport().Enqueue(stream.Request{Ctx: t.Context(), ResponseChan: replyChan})
-	select {
-	case r := <-replyChan:
-		if !errors.Is(r.Err, stream.ErrStreamDown) {
-			t.Errorf("Enqueue error = %v, want %v", r.Err, stream.ErrStreamDown)
-		}
-		if r.NodeID != 1 {
-			t.Errorf("Enqueue response NodeID = %d, want 1", r.NodeID)
-		}
-	default:
-		t.Fatal("expected error response for disconnected shared node")
+	tests := []struct {
+		name       string
+		node       *Node
+		wantNodeID uint32
+	}{
+		{name: "Owned", node: newNode(1, "", nil, peer), wantNodeID: 1},
+		{name: "Shared", node: newNode(1, "", nil, stream.NewSharedTransport(peer)), wantNodeID: 1},
+		{name: "NoTransport", node: &Node{}, wantNodeID: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			replyChan := make(chan stream.NodeResponse[*stream.Message], 1)
+			tt.node.loadTransport().Enqueue(stream.Request{Ctx: t.Context(), ResponseChan: replyChan})
+			select {
+			case r := <-replyChan:
+				if !errors.Is(r.Err, stream.ErrStreamDown) {
+					t.Errorf("Enqueue error = %v, want %v", r.Err, stream.ErrStreamDown)
+				}
+				if r.NodeID != tt.wantNodeID {
+					t.Errorf("Enqueue response NodeID = %d, want %d", r.NodeID, tt.wantNodeID)
+				}
+			default:
+				t.Fatal("expected error response for a node without a channel")
+			}
+		})
 	}
 }
 
@@ -220,13 +230,6 @@ func TestNodeMissingTransportIsSafe(t *testing.T) {
 				t.Errorf("close = %v, want nil", err)
 			}
 
-			reply := make(chan stream.NodeResponse[*stream.Message], 1)
-			node.loadTransport().Enqueue(stream.Request{Ctx: t.Context(), ResponseChan: reply})
-			select {
-			case got := <-reply:
-				t.Fatalf("Enqueue returned unexpected response: %+v", got)
-			default:
-			}
 		})
 	}
 }

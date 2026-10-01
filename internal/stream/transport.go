@@ -95,17 +95,15 @@ func (t *Transport) StoreChannel(ch Channel) {
 }
 
 // Enqueue sends req on the current channel; see [Channel.Enqueue]. Without a
-// channel, a shared transport fails req with [ErrStreamDown] and an owned
-// transport drops it. It does nothing on a nil transport.
+// channel, or on a nil transport, it fails req with [ErrStreamDown].
 func (t *Transport) Enqueue(req Request) {
-	if t == nil {
-		return
-	}
-	ch := t.channel.load()
+	ch := t.LoadChannel()
 	if ch == nil {
-		if t.shared {
-			req.ReplyError(t.id, ErrStreamDown)
+		var id uint32
+		if t != nil {
+			id = t.id
 		}
+		req.ReplyError(id, ErrStreamDown)
 		return
 	}
 	ch.Enqueue(req)
