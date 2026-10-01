@@ -15,19 +15,23 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-func newTestNode(id uint32, router *stream.MessageRouter, ch *stream.Channel) *Node {
-	transport := stream.NewTransport(id, func() uint64 { return 0 }, router)
+func newTestNode(id uint32, ch stream.Channel) *Node {
+	transport := stream.NewTransport(id, func() uint64 { return 0 })
 	transport.StoreChannel(ch)
 	return newNode(id, "", nil, transport)
 }
 
+func newTestNodeWithLatency(id uint32, latency time.Duration) *Node {
+	n := newTestNode(id, nil)
+	n.loadTransport().Latency().Store(latency)
+	return n
+}
+
 func TestNodeSort(t *testing.T) {
 	makeNode := func(id uint32, err error) *Node {
-		return newTestNode(id, stream.NewMessageRouter(), stream.NewChannelWithState(err))
+		return newTestNode(id, stream.NewChannelWithState(err))
 	}
-	makeNodeWithLatency := func(id uint32, lat time.Duration) *Node {
-		return newTestNode(id, stream.NewMessageRouterWithLatency(lat), nil)
-	}
+	makeNodeWithLatency := newTestNodeWithLatency
 	someErr := errors.New("some error")
 	nodes := []*Node{
 		makeNode(100, nil),
@@ -141,7 +145,7 @@ func TestNodeSort(t *testing.T) {
 // ErrStreamDown instead of silently dropping the request. A shared node cannot
 // re-dial its peer, so the caller must not be left waiting for a response.
 func TestNodeSharedEnqueueDisconnected(t *testing.T) {
-	peer := stream.NewTransport(1, func() uint64 { return 0 }, stream.NewMessageRouter())
+	peer := stream.NewTransport(1, func() uint64 { return 0 })
 	transport := stream.NewSharedTransport(peer)
 	n := newNode(1, "", nil, transport)
 	replyChan := make(chan stream.NodeResponse[*stream.Message], 1)
@@ -160,22 +164,27 @@ func TestNodeSharedEnqueueDisconnected(t *testing.T) {
 }
 
 func TestNodeCloseCancelsAllPendingRequests(t *testing.T) {
-	router := stream.NewMessageRouter()
-	node := newTestNode(1, router, stream.NewLocalChannel(1, router))
+	ch := stream.NewInboundChannel(t.Context(), 1, newMockBidiStream(), stream.InboundOptions{SendBufferSize: 1})
+	node := newTestNode(1, ch)
 	reply := make(chan stream.NodeResponse[*stream.Message], 1)
-	router.Register(1, stream.Request{
+	node.loadTransport().Enqueue(stream.Request{
 		Ctx:          t.Context(),
-		Msg:          &stream.Message{},
+		Msg:          stream.Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
 		ResponseChan: reply,
 	})
+	for deadline := time.Now().Add(time.Second); node.PendingCount() != 1; time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("request never became pending")
+		}
+	}
 
 	if err := node.close(); err != nil {
 		t.Fatalf("close: %v", err)
 	}
 	select {
 	case got := <-reply:
-		if !errors.Is(got.Err, stream.ErrNodeClosed) {
-			t.Fatalf("pending request error = %v, want ErrNodeClosed", got.Err)
+		if !errors.Is(got.Err, stream.ErrStreamDown) {
+			t.Fatalf("pending request error = %v, want ErrStreamDown", got.Err)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("pending request was not cancelled")
@@ -223,9 +232,7 @@ func TestNodeMissingTransportIsSafe(t *testing.T) {
 }
 
 func TestConfigWatch(t *testing.T) {
-	makeNodeWithLatency := func(id uint32, lat time.Duration) *Node {
-		return newTestNode(id, stream.NewMessageRouterWithLatency(lat), nil)
-	}
+	makeNodeWithLatency := newTestNodeWithLatency
 
 	// allNodes has five nodes; top-3 by ascending latency are 2(10ms), 3(20ms), 1(30ms).
 	allNodes := Config{
@@ -287,8 +294,8 @@ func TestConfigWatch(t *testing.T) {
 		}
 
 		// Swap latencies: node 2 becomes fastest.
-		n1.messageRouter().SetLatency(40 * time.Millisecond)
-		n2.messageRouter().SetLatency(5 * time.Millisecond)
+		n1.loadTransport().Latency().Store(40 * time.Millisecond)
+		n2.loadTransport().Latency().Store(5 * time.Millisecond)
 
 		select {
 		case second := <-updates:
@@ -330,89 +337,6 @@ func printNodes(t *testing.T, nodes []*Node) {
 	}
 }
 
-// testRequestHandler is a minimal stream.RequestHandler that calls release
-// and signals dispatch via a channel.
-type testRequestHandler struct {
-	done chan struct{}
-}
-
-func (h *testRequestHandler) HandleRequest(_ context.Context, _ *stream.Message, release func(), _ func(*stream.Message)) {
-	release()
-	close(h.done)
-}
-
-// TestNodeRouteInbound verifies that Node.RouteInbound correctly routes
-// server-initiated responses and dispatches client-initiated requests.
-func TestNodeRouteInbound(t *testing.T) {
-	t.Run("ServerInitiatedPendingDelivered", func(t *testing.T) {
-		n := newInboundNode(42, "127.0.0.1:9000", func() uint64 { return 0 }, nil)
-		replyChan := make(chan stream.NodeResponse[*stream.Message], 1)
-		msgID := stream.ServerSequenceNumber(7)
-		n.messageRouter().Register(msgID, stream.Request{
-			Ctx:          context.Background(),
-			Msg:          &stream.Message{},
-			ResponseChan: replyChan,
-		})
-		respMsg := stream.Message_builder{MessageSeqNo: msgID}.Build()
-		released := make(chan struct{}, 1)
-		release := func() { released <- struct{}{} }
-		n.routeInbound(context.Background(), respMsg, release, func(*stream.Message) {})
-
-		select {
-		case got := <-replyChan:
-			if got.NodeID != 42 {
-				t.Errorf("NodeID = %d, want 42", got.NodeID)
-			}
-		default:
-			t.Fatal("expected response on channel")
-		}
-		select {
-		case <-released:
-		default:
-			t.Fatal("release should be called for server-initiated response")
-		}
-	})
-
-	t.Run("ServerInitiatedStaleAbsorbed", func(t *testing.T) {
-		n := newInboundNode(42, "127.0.0.1:9000", func() uint64 { return 0 }, nil)
-		msgID := stream.ServerSequenceNumber(7)
-		respMsg := stream.Message_builder{MessageSeqNo: msgID}.Build()
-		released := make(chan struct{}, 1)
-		release := func() { released <- struct{}{} }
-		n.routeInbound(context.Background(), respMsg, release, func(*stream.Message) {})
-		select {
-		case <-released:
-		default:
-			t.Fatal("release should be called for stale server-initiated response")
-		}
-	})
-
-	t.Run("ClientInitiatedNilHandlerCallsRelease", func(t *testing.T) {
-		n := newInboundNode(42, "127.0.0.1:9000", func() uint64 { return 0 }, nil)
-		clientMsg := stream.Message_builder{MessageSeqNo: 1}.Build()
-		released := make(chan struct{}, 1)
-		release := func() { released <- struct{}{} }
-		n.routeInbound(context.Background(), clientMsg, release, func(*stream.Message) {})
-		select {
-		case <-released:
-		default:
-			t.Fatal("release should be called immediately when no handler is registered")
-		}
-	})
-
-	t.Run("ClientInitiatedDispatchedToHandler", func(t *testing.T) {
-		h := &testRequestHandler{done: make(chan struct{})}
-		n := newInboundNode(42, "127.0.0.1:9000", func() uint64 { return 0 }, h)
-		clientMsg := stream.Message_builder{MessageSeqNo: 1}.Build()
-		n.routeInbound(context.Background(), clientMsg, func() {}, func(*stream.Message) {})
-		select {
-		case <-h.done:
-		case <-time.After(time.Second):
-			t.Fatal("handler should have been called for client-initiated request")
-		}
-	})
-}
-
 // BenchmarkNodeEnqueue measures the overhead that Node.Enqueue adds per
 // request dispatch: transport and channel atomic loads plus nil guards.
 // See BenchmarkChannelSend in internal/stream and BenchmarkNodeEnqueueSend
@@ -422,7 +346,7 @@ func BenchmarkNodeEnqueue(b *testing.B) {
 
 	b.Run("ChannelNil", func(b *testing.B) {
 		// No stream attached, so the channel lookup returns nil immediately.
-		n := newInboundNode(1, "127.0.0.1:9081", func() uint64 { return 0 }, nil)
+		n := newInboundNode(1, "127.0.0.1:9081", func() uint64 { return 0 })
 		b.ResetTimer()
 		for range b.N {
 			n.loadTransport().Enqueue(req)
@@ -432,7 +356,7 @@ func BenchmarkNodeEnqueue(b *testing.B) {
 	b.Run("AtomicLoadNonNil", func(b *testing.B) {
 		// Stub channel attached; measures the transport and channel loads
 		// without going through Channel.Enqueue, which requires a running goroutine.
-		n := newInboundNode(1, "127.0.0.1:9081", func() uint64 { return 0 }, nil)
+		n := newInboundNode(1, "127.0.0.1:9081", func() uint64 { return 0 })
 		n.loadTransport().StoreChannel(stream.NewChannelWithState(nil))
 		b.ResetTimer()
 		for range b.N {
@@ -473,8 +397,8 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 
 	// Wrap the outbound channel in a Node, adding the transport lookup that
 	// Node.Enqueue performs on every dispatch.
-	n := newInboundNode(1, lis.Addr().String(), func() uint64 { return 0 }, nil)
-	ch := stream.NewOutboundChannel(context.Background(), 1, 10, conn, n.messageRouter(), false, nil)
+	n := newInboundNode(1, lis.Addr().String(), func() uint64 { return 0 })
+	ch := stream.NewOutboundChannel(context.Background(), 1, conn, stream.OutboundOptions{SendBufferSize: 10, Latency: n.loadTransport().Latency()})
 	b.Cleanup(func() { _ = ch.Close() })
 	n.loadTransport().StoreChannel(ch)
 

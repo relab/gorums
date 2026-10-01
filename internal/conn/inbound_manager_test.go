@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -68,6 +67,13 @@ func (s *recordingBidiStream) Recv() (*stream.Message, error) {
 
 func (s *recordingBidiStream) close() { close(s.recv) }
 
+// requestHandlerFunc adapts a function to [stream.RequestHandler].
+type requestHandlerFunc func(context.Context, *stream.Message, func(), func(*stream.Message))
+
+func (f requestHandlerFunc) HandleRequest(ctx context.Context, msg *stream.Message, release func(), send func(*stream.Message)) {
+	f(ctx, msg, release, send)
+}
+
 // shouldPanic asserts that fn panics with a message containing wantSubstr.
 func shouldPanic(t *testing.T, wantSubstr string, fn func()) {
 	t.Helper()
@@ -101,7 +107,7 @@ func newTestInboundManager(t *testing.T, myID uint32) *InboundManager {
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
 		3: {"127.0.0.1:9083"},
-	}), 0, nil, nil)
+	}), 0, 0, nil, nil)
 	return im
 }
 
@@ -168,11 +174,11 @@ func TestNewInboundManager(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.wantPanic != "" {
 				shouldPanic(t, tc.wantPanic, func() {
-					NewInboundManager(1, tc.opt, 0, nil, nil)
+					NewInboundManager(1, tc.opt, 0, 0, nil, nil)
 				})
 				return
 			}
-			im := NewInboundManager(1, tc.opt, 0, nil, nil)
+			im := NewInboundManager(1, tc.opt, 0, 0, nil, nil)
 			nodes := im.Nodes()
 			if len(nodes) != len(tc.wantIDs) {
 				t.Fatalf("len(im.Nodes()) = %d; want %d", len(nodes), len(tc.wantIDs))
@@ -192,7 +198,7 @@ func TestNewInboundManager(t *testing.T) {
 func TestInboundManagerKeepsHighKnownPeerIDs(t *testing.T) {
 	im := NewInboundManager(ClientIDStart, WithNodes(map[uint32]testNode{
 		ClientIDStart: {"127.0.0.1:9081"},
-	}), 0, nil, nil)
+	}), 0, 0, nil, nil)
 
 	checkIDs(t, im.ConnectedPeers(), []uint32{ClientIDStart}, "known peers")
 	checkIDs(t, im.ConnectedClients(), []uint32{}, "dynamic clients")
@@ -202,7 +208,7 @@ func TestInboundManagerDynamicClientIDSkipsKnownPeer(t *testing.T) {
 	im := NewInboundManager(1, WithNodes(map[uint32]testNode{
 		1:             {"127.0.0.1:9081"},
 		ClientIDStart: {"127.0.0.1:9082"},
-	}), 0, nil, nil)
+	}), 0, 0, nil, nil)
 	clientStream := newMockBidiStream()
 	t.Cleanup(clientStream.close)
 
@@ -405,29 +411,38 @@ func TestAcceptPeerUpdatesConfig(t *testing.T) {
 func TestAcceptPeer(t *testing.T) {
 	im := newTestInboundManager(t, 1)
 
-	typePeerNode := reflect.TypeFor[peerNode]()
-	typeNilPeer := reflect.TypeFor[*nilPeerNode]()
+	// tracked reports whether ch is the active channel of a node in im.
+	tracked := func(ch *stream.InboundChannel) bool {
+		im.mu.RLock()
+		defer im.mu.RUnlock()
+		for _, nodes := range []map[uint32]*Node{im.knownNodes, im.clientNodes} {
+			for _, n := range nodes {
+				if n.activeChannel() == stream.Channel(ch) {
+					return true
+				}
+			}
+		}
+		return false
+	}
 
 	tests := []struct {
-		name     string
-		ctx      context.Context
-		wantType reflect.Type
-		wantErr  bool
+		name        string
+		ctx         context.Context
+		wantTracked bool
+		wantErr     bool
 	}{
 		{
-			name:     "UntrackedClientNoMetadata",
-			ctx:      t.Context(), // no gorums-node-id metadata: regular client, not tracked in ConnectedClients
-			wantType: typeNilPeer,
+			name: "UntrackedClientNoMetadata",
+			ctx:  t.Context(), // no gorums-node-id metadata: regular client, not tracked in ConnectedClients
 		},
 		{
-			name:     "PeerClientAccepted",
-			ctx:      inboundCtx(t.Context(), 0), // gorums-node-id: 0 => back-channel to peer client
-			wantType: typePeerNode,
+			name:        "PeerClientAccepted",
+			ctx:         inboundCtx(t.Context(), 0), // gorums-node-id: 0 => back-channel to peer client
+			wantTracked: true,
 		},
 		{
-			name:     "UnknownPeerID",
-			ctx:      inboundCtx(t.Context(), 99), // not in configured set
-			wantType: typeNilPeer,
+			name: "UnknownPeerID",
+			ctx:  inboundCtx(t.Context(), 99), // not in configured set
 		},
 		{
 			name:    "SelfNodeIDRejected",
@@ -435,16 +450,16 @@ func TestAcceptPeer(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:     "KnownPeer",
-			ctx:      inboundCtx(t.Context(), 2),
-			wantType: typePeerNode,
+			name:        "KnownPeer",
+			ctx:         inboundCtx(t.Context(), 2),
+			wantTracked: true,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			inStream := newMockBidiStream()
 			defer inStream.close()
-			node, cleanup, err := im.AcceptPeer(tc.ctx, inStream)
+			ch, cleanup, err := im.AcceptPeer(tc.ctx, inStream)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("AcceptPeer() error = nil; want a rejection error")
@@ -457,8 +472,8 @@ func TestAcceptPeer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("AcceptPeer() unexpected error: %v", err)
 			}
-			if got := reflect.TypeOf(node); got != tc.wantType {
-				t.Errorf("AcceptPeer() type = %v; want %v", got, tc.wantType)
+			if got := tracked(ch); got != tc.wantTracked {
+				t.Errorf("AcceptPeer() channel tracked = %t; want %t", got, tc.wantTracked)
 			}
 			cleanup()
 		})
@@ -585,17 +600,21 @@ func TestAcceptPeerOverlappingStreamsFailover(t *testing.T) {
 // overlap window a reply for a request received on one inbound stream leaves on
 // that same stream, not on whichever stream happens to be the node's active
 // channel. The survivor registers first; a second stream registers and becomes
-// active; a reply issued through the survivor's PeerNode must still ride the
+// active; the reply to a request received on the survivor must still ride the
 // survivor's stream.
 func TestAcceptPeerReplyRidesReceivingStream(t *testing.T) {
+	echo := requestHandlerFunc(func(_ context.Context, msg *stream.Message, release func(), send func(*stream.Message)) {
+		defer release()
+		send(msg)
+	})
 	im := NewInboundManager(1, WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
-	}), 4, nil, nil)
+	}), 4, 0, nil, echo)
 
 	survivor := newRecordingBidiStream()
 	t.Cleanup(survivor.close)
-	survivorPeer, cleanupSurvivor, err := im.AcceptPeer(inboundCtx(t.Context(), 2), survivor)
+	survivorCh, cleanupSurvivor, err := im.AcceptPeer(inboundCtx(t.Context(), 2), survivor)
 	if err != nil {
 		t.Fatalf("AcceptPeer(survivor) error: %v", err)
 	}
@@ -610,11 +629,10 @@ func TestAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 	}
 	t.Cleanup(cleanupActive)
 
-	// Deliver a reply through the survivor's PeerNode, as NodeStream's drain
-	// goroutine does for a request received on that stream.
+	// The survivor receives a request; the handler echoes it as the reply.
 	const replySeqNo = 42
-	reply := stream.Message_builder{MessageSeqNo: replySeqNo, Method: mock.TestMethod}.Build()
-	survivorPeer.TrySend(stream.Request{Ctx: t.Context(), Msg: reply})
+	go func() { _ = survivorCh.Serve() }()
+	survivor.recv <- stream.Message_builder{MessageSeqNo: replySeqNo, Method: mock.TestMethod}.Build()
 
 	select {
 	case got := <-survivor.sent:
@@ -641,7 +659,7 @@ func TestOnConfigChangeCallbackFiringOnConstruction(t *testing.T) {
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
 		3: {"127.0.0.1:9083"},
-	}), 0, func(cfg Config) {
+	}), 0, 0, func(cfg Config) {
 		calls = append(calls, slices.Clone(cfg.NodeIDs()))
 	}, nil)
 
@@ -662,7 +680,7 @@ func TestOnConfigChangeCallbackPeerConnectDisconnect(t *testing.T) {
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
 		3: {"127.0.0.1:9083"},
-	}), 0, func(cfg Config) {
+	}), 0, 0, func(cfg Config) {
 		snapshots = append(snapshots, slices.Clone(cfg.NodeIDs()))
 	}, nil)
 
@@ -697,7 +715,7 @@ func TestOnConfigChangeCallbackMultiplePeers(t *testing.T) {
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
 		3: {"127.0.0.1:9083"},
-	}), 0, func(cfg Config) {
+	}), 0, 0, func(cfg Config) {
 		snapshots = append(snapshots, slices.Clone(cfg.NodeIDs()))
 	}, nil)
 
@@ -738,7 +756,7 @@ func TestOnConfigChangeCallbackIdempotentCleanup(t *testing.T) {
 	im := NewInboundManager(1, WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
-	}), 0, func(_ Config) {
+	}), 0, 0, func(_ Config) {
 		callCount++
 	}, nil)
 

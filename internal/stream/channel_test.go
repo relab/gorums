@@ -3,7 +3,9 @@ package stream
 import (
 	"context"
 	"errors"
+	"maps"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -21,19 +23,41 @@ const (
 	streamConnectTimeout = 3 * time.Second
 )
 
-// isConnected returns true if the channel has an active stream.
-// For outbound channels, also requires the gRPC connection to be in Ready state.
-// This method is safe for concurrent use. It is only used by tests.
-func (c *Channel) isConnected() bool {
-	if c.IsInbound() {
-		return c.connCtx.Err() == nil && c.getStream() != nil
+// isConnected reports whether the channel's connection is Ready and a stream
+// is accepting requests.
+func (c *OutboundChannel) isConnected() bool {
+	return c.conn.GetState() == connectivity.Ready && c.StreamUp()
+}
+
+// endSessions ends the channel's current sessions, as a broken stream does.
+func (c *OutboundChannel) endSessions() {
+	c.mu.Lock()
+	sessions := slices.Collect(maps.Keys(c.sessions))
+	c.mu.Unlock()
+	for _, s := range sessions {
+		s.end()
 	}
-	return c.conn.GetState() == connectivity.Ready && c.getStream() != nil
+}
+
+// pendingExists reports whether a call with msgID is pending on any of the
+// channel's sessions.
+func (c *OutboundChannel) pendingExists(msgID uint64) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for s := range c.sessions {
+		s.pending.mu.Lock()
+		_, ok := s.pending.calls[msgID]
+		s.pending.mu.Unlock()
+		if ok {
+			return true
+		}
+	}
+	return false
 }
 
 // testChannel holds the channel and cleanup function.
 type testChannel struct {
-	*Channel
+	*OutboundChannel
 	srv *grpc.Server
 	lis net.Listener
 }
@@ -99,7 +123,7 @@ func rejectFirstStreamServer() func(Gorums_NodeStreamServer) error {
 
 // waitForLastErr polls until the channel's LastErr matches want (nil or
 // non-nil) or the timeout expires, and reports what it observed.
-func waitForLastErr(t testing.TB, c *Channel, wantErr bool, what string) {
+func waitForLastErr(t testing.TB, c Channel, wantErr bool, what string) {
 	t.Helper()
 	deadline := time.Now().Add(defaultTestTimeout)
 	for time.Now().Before(deadline) {
@@ -146,11 +170,15 @@ func setupChannelEager(t testing.TB, eagerReconnect bool, serverFn func(Gorums_N
 		t.Fatalf("failed to dial: %v", err)
 	}
 
-	c := NewOutboundChannel(t.Context(), 1, 10, conn, NewMessageRouter(), eagerReconnect, nil)
+	c := NewOutboundChannel(t.Context(), 1, conn, OutboundOptions{
+		SendBufferSize: 10,
+		Latency:        NewLatency(),
+		EagerReconnect: eagerReconnect,
+	})
 	tc := &testChannel{
-		Channel: c,
-		srv:     srv,
-		lis:     lis,
+		OutboundChannel: c,
+		srv:             srv,
+		lis:             lis,
 	}
 
 	t.Cleanup(func() {
@@ -195,21 +223,19 @@ func setupChannelWithoutServer(t testing.TB) *testChannel {
 	t.Helper()
 	conn := newUnavailableClientConn(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	c := NewOutboundChannel(ctx, 1, 10, conn, NewMessageRouter(), false, nil)
+	c := NewOutboundChannel(ctx, 1, conn, OutboundOptions{SendBufferSize: 10})
 	t.Cleanup(func() {
 		cancel()
 		if err := c.Close(); err != nil {
 			t.Errorf("failed to close channel: %v", err)
 		}
 	})
-	return &testChannel{
-		Channel: c,
-	}
+	return &testChannel{OutboundChannel: c}
 }
 
 // waitForConnection polls until the node is connected or timeout expires.
 // Returns true if connected, false if timeout expired.
-func waitForConnection(c *Channel, timeout time.Duration) bool {
+func waitForConnection(c *OutboundChannel, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		if c.isConnected() {
@@ -220,9 +246,9 @@ func waitForConnection(c *Channel, timeout time.Duration) bool {
 	return c.isConnected()
 }
 
-// waitForDisconnection polls until the channel is disconnected (stream is nil) or timeout expires.
+// waitForDisconnection polls until the channel is disconnected or timeout expires.
 // Returns true if disconnected, false if timeout expired.
-func waitForDisconnection(c *Channel, timeout time.Duration) bool {
+func waitForDisconnection(c *OutboundChannel, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		if !c.isConnected() {
@@ -233,7 +259,7 @@ func waitForDisconnection(c *Channel, timeout time.Duration) bool {
 	return !c.isConnected()
 }
 
-func sendRequest(t testing.TB, c *Channel, req Request, msgID uint64) response {
+func sendRequest(t testing.TB, c Channel, req Request, msgID uint64) response {
 	t.Helper()
 	if req.Ctx == nil {
 		req.Ctx = context.Background()
@@ -261,7 +287,7 @@ type msgResponse struct {
 	resp  response
 }
 
-func sendReq(t testing.TB, results chan<- msgResponse, c *Channel, goroutineID, msgsToSend int, req Request) {
+func sendReq(t testing.TB, results chan<- msgResponse, c Channel, goroutineID, msgsToSend int, req Request) {
 	for j := range msgsToSend {
 		msgID := uint64(goroutineID*1000 + j)
 		resp := sendRequest(t, c, req, msgID)
@@ -273,7 +299,7 @@ func TestChannelCreation(t *testing.T) {
 	tc := setupChannelWithoutServer(t)
 
 	// send message when server is down
-	resp := sendRequest(t, tc.Channel, Request{Oneway: true}, 1)
+	resp := sendRequest(t, tc.OutboundChannel, Request{Oneway: true}, 1)
 	if resp.Err == nil {
 		t.Error("response err: got <nil>, want error")
 	}
@@ -282,7 +308,7 @@ func TestChannelCreation(t *testing.T) {
 func TestChannelShutdown(t *testing.T) {
 	tc := setupChannel(t, echoServer)
 
-	if !waitForConnection(tc.Channel, streamConnectTimeout) {
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
 		t.Fatal("channel should be connected")
 	}
 
@@ -291,7 +317,7 @@ func TestChannelShutdown(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := range numMessages {
 		wg.Go(func() {
-			resp := sendRequest(t, tc.Channel, Request{}, uint64(i))
+			resp := sendRequest(t, tc.OutboundChannel, Request{}, uint64(i))
 			if resp.Err != nil {
 				t.Errorf("unexpected error for message %d, got error: %v", i, resp.Err)
 			}
@@ -305,7 +331,7 @@ func TestChannelShutdown(t *testing.T) {
 	}
 
 	// try to send a message after closure
-	resp := sendRequest(t, tc.Channel, Request{}, 999)
+	resp := sendRequest(t, tc.OutboundChannel, Request{}, 999)
 	if resp.Err == nil {
 		t.Error("expected error when sending to closed channel")
 	} else if !errors.Is(resp.Err, ErrNodeClosed) {
@@ -322,16 +348,16 @@ func TestChannelLatency(t *testing.T) {
 	tc := setupChannel(t, delayServer(minDelay))
 
 	// Initial latency should be -1
-	if latency := tc.router.Latency(); latency != -1*time.Second {
+	if latency := tc.latency.Load(); latency != -1*time.Second {
 		t.Errorf("Initial latency = %v, expected -1s", latency)
 	}
 
 	// Send a few requests to update latency
 	for i := range 10 {
-		sendRequest(t, tc.Channel, Request{Oneway: false}, uint64(i))
+		sendRequest(t, tc.OutboundChannel, Request{Oneway: false}, uint64(i))
 	}
 
-	latency := tc.router.Latency()
+	latency := tc.latency.Load()
 	if latency <= 0 {
 		t.Errorf("Latency = %v, expected > 0", latency)
 	}
@@ -353,7 +379,7 @@ func TestChannelSendCompletionWaiting(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			start := time.Now()
-			resp := sendRequest(t, tc.Channel, Request{Oneway: tt.oneway}, uint64(i))
+			resp := sendRequest(t, tc.OutboundChannel, Request{Oneway: tt.oneway}, uint64(i))
 			elapsed := time.Since(start)
 			if resp.Err != nil {
 				t.Errorf("unexpected error: %v", resp.Err)
@@ -392,7 +418,7 @@ func TestChannelErrors(t *testing.T) {
 			setup: func(t *testing.T) *testChannel {
 				tc := setupChannel(t, echoServer)
 				// Send a message to ensure connection is established
-				resp := sendRequest(t, tc.Channel, Request{Oneway: true}, 1)
+				resp := sendRequest(t, tc.OutboundChannel, Request{Oneway: true}, 1)
 				if resp.Err != nil {
 					t.Errorf("initial message send should succeed, got error: %v", resp.Err)
 				}
@@ -408,7 +434,7 @@ func TestChannelErrors(t *testing.T) {
 			tc := tt.setup(t)
 			time.Sleep(100 * time.Millisecond)
 
-			resp := sendRequest(t, tc.Channel, Request{Oneway: true}, uint64(i))
+			resp := sendRequest(t, tc.OutboundChannel, Request{Oneway: true}, uint64(i))
 			if resp.Err == nil {
 				t.Errorf("expected error containing %q but got nil", tt.wantErr)
 			} else if !strings.Contains(resp.Err.Error(), tt.wantErr) {
@@ -418,17 +444,11 @@ func TestChannelErrors(t *testing.T) {
 	}
 }
 
-// TestChannelStreamFailureRecordsLastErr verifies that a request the sender
+// TestChannelStreamFailureRecordsLastErr verifies that a request the channel
 // cannot deliver because no stream could be established leaves the reason in
-// LastErr. LastErr reports node health, so it records the failure whether or
-// not the request itself had somewhere to report the error: here a reply with
-// no response channel, the one request shape that reaches the sender without
-// one.
+// LastErr, even when the request has no response channel to report it on.
 func TestChannelStreamFailureRecordsLastErr(t *testing.T) {
 	tc := setupChannelWithoutServer(t)
-	if err := tc.LastErr(); err != nil {
-		t.Fatalf("LastErr = %v, want nil before the first request", err)
-	}
 
 	msg, err := NewMessage(context.Background(), 1, mock.TestMethod, nil)
 	if err != nil {
@@ -457,24 +477,22 @@ func TestChannelLastErrClearsOnRecovery(t *testing.T) {
 	tc := setupChannel(t, rejectFirstStreamServer())
 
 	// The channel's eager connect creates the stream the server rejects.
-	waitForLastErr(t, tc.Channel, true, "the rejected stream to be recorded")
+	waitForLastErr(t, tc.OutboundChannel, true, "the rejected stream to be recorded")
 
 	// A completed round trip over the replacement stream proves the channel
 	// usable again.
-	if resp := sendRequest(t, tc.Channel, Request{}, 1); resp.Err != nil {
+	if resp := sendRequest(t, tc.OutboundChannel, Request{}, 1); resp.Err != nil {
 		t.Fatalf("sendRequest after recovery: %v", resp.Err)
 	}
-	waitForLastErr(t, tc.Channel, false, "LastErr to clear after recovery")
+	waitForLastErr(t, tc.OutboundChannel, false, "LastErr to clear after recovery")
 }
 
-// TestChannelReceiverRecordsStreamFailure verifies that an eager-reconnect
-// receiver records its own failed stream creations. The sender records one
-// only when it has a request to send, so the receiver is what records an idle
-// node's unreachability.
-func TestChannelReceiverRecordsStreamFailure(t *testing.T) {
+// TestChannelEagerReconnectRecordsStreamFailure verifies that an idle channel
+// with eager reconnect records its failed stream creations.
+func TestChannelEagerReconnectRecordsStreamFailure(t *testing.T) {
 	conn := newUnavailableClientConn(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	c := NewOutboundChannel(ctx, 1, 10, conn, NewMessageRouter(), true, nil)
+	c := NewOutboundChannel(ctx, 1, conn, OutboundOptions{SendBufferSize: 10, EagerReconnect: true})
 	t.Cleanup(func() {
 		cancel()
 		if err := c.Close(); err != nil {
@@ -482,172 +500,19 @@ func TestChannelReceiverRecordsStreamFailure(t *testing.T) {
 		}
 	})
 
-	// No request is ever enqueued: only the receiver's redial loop runs.
-	waitForLastErr(t, c, true, "the receiver's failed redial to be recorded")
+	// No request is ever enqueued: only the redial loop runs.
+	waitForLastErr(t, c, true, "the failed redial to be recorded")
 }
 
-// TestChannelEnsureStream verifies that ensureStream correctly manages stream lifecycle.
-func TestChannelEnsureStream(t *testing.T) {
-	// Helper to prepare a fresh node with no stream
-	newChannelWithoutStream := func(t testing.TB) *testChannel {
-		tc := setupChannel(t, echoServer)
-		// ensure sender and receiver goroutines are stopped
-		tc.connCancel()
-		// Extract grpc.ClientConn from existing channel
-		conn := tc.conn
-		// Create new channel with test context without metadata (real implementation captures metadata)
-		tc.Channel = NewOutboundChannel(t.Context(), tc.id, 10, conn, NewMessageRouter(), false, nil)
-		return tc
-	}
-
-	// Helper to verify stream expectations
-	cmpStream := func(t *testing.T, first, second BidiStream, wantSame bool) {
-		t.Helper()
-		// If second is nil, skip equality check (covered by UnconnectedNodeHasNoStream action)
-		if second == nil {
-			return
-		}
-		// Both streams provided - check equality
-		if wantSame && first != second {
-			t.Error("expected same stream, but got different stream")
-		}
-		if !wantSame && first == second {
-			t.Error("expected different stream, but got same stream")
-		}
-	}
-
-	tests := []struct {
-		name     string
-		setup    func(t testing.TB) *testChannel
-		action   func(tc *testChannel) (first, second BidiStream)
-		wantSame bool
-	}{
-		{
-			// Use setupChannelWithoutServer so the gRPC connection never reaches
-			// connectivity.Ready, making ensureStream fail as expected.
-			// newChannelWithoutStream reuses an already-Ready conn (from setupChannel),
-			// so ensureStream would succeed there, which is wrong for this sub-case.
-			name:  "UnconnectedNodeHasNoStream",
-			setup: setupChannelWithoutServer,
-			action: func(tc *testChannel) (BidiStream, BidiStream) {
-				if _, err := tc.ensureStream(); err == nil {
-					t.Error("ensureStream succeeded unexpectedly")
-				}
-				if tc.getStream() != nil {
-					t.Error("stream should be nil")
-				}
-				return nil, nil
-			},
-		},
-		{
-			name:  "CreatesStreamWhenConnected",
-			setup: newChannelWithoutStream,
-			action: func(tc *testChannel) (BidiStream, BidiStream) {
-				if _, err := tc.ensureStream(); err != nil {
-					t.Errorf("ensureStream failed: %v", err)
-				}
-				return tc.getStream(), nil
-			},
-		},
-		{
-			name:  "RepeatedCallsReturnSameStream",
-			setup: newChannelWithoutStream,
-			action: func(tc *testChannel) (BidiStream, BidiStream) {
-				if _, err := tc.ensureStream(); err != nil {
-					t.Errorf("first ensureStream failed: %v", err)
-				}
-				first := tc.getStream()
-				if _, err := tc.ensureStream(); err != nil {
-					t.Errorf("second ensureStream failed: %v", err)
-				}
-				return first, tc.getStream()
-			},
-			wantSame: true,
-		},
-		{
-			name:  "StreamDisconnectionCreatesNewStream",
-			setup: newChannelWithoutStream,
-			action: func(tc *testChannel) (BidiStream, BidiStream) {
-				if _, err := tc.ensureStream(); err != nil {
-					t.Errorf("initial ensureStream failed: %v", err)
-				}
-				first := tc.getStream()
-				tc.clearStream(first)
-				if _, err := tc.ensureStream(); err != nil {
-					t.Errorf("ensureStream after disconnect failed: %v", err)
-				}
-				return first, tc.getStream()
-			},
-			wantSame: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tc := tt.setup(t)
-			first, second := tt.action(tc)
-			cmpStream(t, first, second, tt.wantSame)
-		})
-	}
-}
-
-func TestChannelEnsureStreamAfterBroken(t *testing.T) {
-	tc := setupChannel(t, echoServer)
-
-	// Ensure we have a stream
-	if _, err := tc.ensureStream(); err != nil {
-		t.Fatalf("ensureStream failed: %v", err)
-	}
-
-	// Break the stream
-	tc.clearStream(tc.getStream())
-
-	// Ensure we can get it back
-	if _, err := tc.ensureStream(); err != nil {
-		t.Fatalf("ensureStream failed after clear: %v", err)
-	}
-}
-
-// TestChannelEnsureConnectedNodeStreamKeepsLiveStream verifies that a stream
-// already in place is returned unchanged when the connection is not Ready.
-// The receive path is what clears a stream that has ended.
-func TestChannelEnsureConnectedNodeStreamKeepsLiveStream(t *testing.T) {
-	conn := newUnavailableClientConn(t)
-	if state := conn.GetState(); state == connectivity.Ready {
-		t.Fatalf("conn state = %v, want anything but Ready", state)
-	}
-
-	connCtx, connCancel := context.WithCancel(context.Background())
-	t.Cleanup(connCancel)
-	c := &Channel{conn: conn, connCtx: connCtx, connCancel: connCancel}
-
-	oldCtx, oldCancel := context.WithCancel(connCtx)
-	t.Cleanup(oldCancel)
-	c.streamCtx, c.streamCancel = oldCtx, oldCancel
-	live := newMockBidiStream()
-	t.Cleanup(live.close)
-	c.stream = live
-
-	got, err := c.ensureConnectedNodeStream()
-	if err != nil {
-		t.Fatalf("ensureConnectedNodeStream: %v", err)
-	}
-	if got != live {
-		t.Fatalf("ensureConnectedNodeStream returned a different stream")
-	}
-	if oldCtx.Err() != nil {
-		t.Fatal("ensureConnectedNodeStream cancelled the live stream")
-	}
-}
-
+// TestChannelCloseCancelsOnlyOwnedPendingRequests verifies that closing one
+// of a node's inbound channels fails only the calls pending on that channel.
 func TestChannelCloseCancelsOnlyOwnedPendingRequests(t *testing.T) {
-	router := NewMessageRouter()
 	oldStream := newMockBidiStream()
 	newStream := newMockBidiStream()
 	t.Cleanup(oldStream.close)
 	t.Cleanup(newStream.close)
-	oldChannel := NewInboundChannel(t.Context(), 1, 1, oldStream, router)
-	newChannel := NewInboundChannel(t.Context(), 1, 1, newStream, router)
+	oldChannel := NewInboundChannel(t.Context(), 1, oldStream, InboundOptions{SendBufferSize: 1})
+	newChannel := NewInboundChannel(t.Context(), 1, newStream, InboundOptions{SendBufferSize: 1})
 	t.Cleanup(func() { _ = oldChannel.Close() })
 	t.Cleanup(func() { _ = newChannel.Close() })
 
@@ -658,11 +523,12 @@ func TestChannelCloseCancelsOnlyOwnedPendingRequests(t *testing.T) {
 	oldChannel.Enqueue(Request{Ctx: t.Context(), Msg: oldMessage, ResponseChan: oldReply})
 	newChannel.Enqueue(Request{Ctx: t.Context(), Msg: newMessage, ResponseChan: newReply})
 
+	pending := func() int { return oldChannel.PendingCount() + newChannel.PendingCount() }
 	deadline := time.Now().Add(time.Second)
-	for router.PendingCount() != 2 && time.Now().Before(deadline) {
+	for pending() != 2 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
-	if got := router.PendingCount(); got != 2 {
+	if got := pending(); got != 2 {
 		t.Fatalf("pending count = %d, want 2", got)
 	}
 
@@ -683,10 +549,7 @@ func TestChannelCloseCancelsOnlyOwnedPendingRequests(t *testing.T) {
 	default:
 	}
 
-	newID := newMessage.GetMessageSeqNo()
-	if !router.deliverPending(newID, response{NodeID: 1, Value: newMessage}) {
-		t.Fatal("new request was removed from router")
-	}
+	newChannel.session.handle(newMessage)
 	select {
 	case got := <-newReply:
 		if got.Err != nil {
@@ -715,14 +578,16 @@ func TestChannelConnectionState(t *testing.T) {
 			wantConnected: true,
 		},
 		{
-			name: "RequiresBothReadyAndStream",
+			name: "RequiresStream",
 			setup: func(t *testing.T) *testChannel {
 				tc := setupChannel(t, echoServer)
-				// Wait for stream to be established
-				if !waitForConnection(tc.Channel, streamConnectTimeout) {
-					t.Fatal("node should be connected before clearing stream")
+				if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
+					t.Fatal("node should be connected before ending its stream")
 				}
-				tc.clearStream(tc.getStream())
+				tc.endSessions()
+				if !waitForDisconnection(tc.OutboundChannel, streamConnectTimeout) {
+					t.Fatal("node should be disconnected after its stream ended")
+				}
 				return tc
 			},
 			wantConnected: false,
@@ -733,7 +598,7 @@ func TestChannelConnectionState(t *testing.T) {
 			tc := tt.setup(t)
 			if tt.wantConnected {
 				// For tests expecting connection, poll until connected or timeout
-				if !waitForConnection(tc.Channel, streamConnectTimeout) {
+				if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
 					t.Errorf("isConnected() = false, want true")
 				}
 			} else {
@@ -805,7 +670,7 @@ func TestChannelContext(t *testing.T) {
 			t.Cleanup(cancel)
 
 			tc := setupChannel(t, tt.serverFn)
-			resp := sendRequest(t, tc.Channel, Request{Ctx: ctx, Oneway: tt.oneway}, uint64(i))
+			resp := sendRequest(t, tc.OutboundChannel, Request{Ctx: ctx, Oneway: tt.oneway}, uint64(i))
 			if !errors.Is(resp.Err, tt.wantErr) {
 				t.Errorf("expected %v, got: %v", tt.wantErr, resp.Err)
 			}
@@ -877,7 +742,7 @@ func TestChannelEnqueueRespectsRequestContext(t *testing.T) {
 	stream := newBlockingSendStream()
 	// Capacity 0: the queue has no slack, so a second request blocks in
 	// Enqueue as soon as the sender goroutine is occupied in Send.
-	c := NewInboundChannel(t.Context(), 1, 0, stream, NewMessageRouter())
+	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 0})
 	t.Cleanup(func() {
 		stream.close()
 		_ = c.Close()
@@ -935,7 +800,7 @@ func TestChannelEnqueueRespectsRequestContext(t *testing.T) {
 func TestChannelEnqueueTwoWayFailsFastWhenFull(t *testing.T) {
 	stream := newBlockingSendStream()
 	// Capacity 1: one request occupies the sender, one fills the queue.
-	c := NewInboundChannel(t.Context(), 1, 1, stream, NewMessageRouter())
+	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 1})
 	t.Cleanup(func() {
 		stream.close()
 		_ = c.Close()
@@ -990,7 +855,7 @@ func TestChannelEnqueueTwoWayFailsFastWhenFull(t *testing.T) {
 // the message is kept.
 func TestChannelEnqueueOnewayBlocksWhenFull(t *testing.T) {
 	stream := newBlockingSendStream()
-	c := NewInboundChannel(t.Context(), 1, 1, stream, NewMessageRouter())
+	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 1})
 	t.Cleanup(func() {
 		stream.close()
 		_ = c.Close()
@@ -1045,13 +910,13 @@ func TestChannelEnqueueOnewayBlocksWhenFull(t *testing.T) {
 	waitID(t, stream.sends, 3, "unblocked send completion")
 }
 
-// TestChannelStreamReadySignaling verifies that the receiver goroutine is properly notified
-// when a stream becomes available.
-func TestChannelStreamReadySignaling(t *testing.T) {
+// TestChannelFirstRequestLatency verifies that the first request does not wait
+// for anything beyond the stream's creation.
+func TestChannelFirstRequestLatency(t *testing.T) {
 	tc := setupChannel(t, echoServer)
 
 	start := time.Now()
-	resp := sendRequest(t, tc.Channel, Request{}, 1)
+	resp := sendRequest(t, tc.OutboundChannel, Request{}, 1)
 	firstLatency := time.Since(start)
 
 	if resp.Err != nil {
@@ -1059,7 +924,7 @@ func TestChannelStreamReadySignaling(t *testing.T) {
 	}
 
 	start = time.Now()
-	resp = sendRequest(t, tc.Channel, Request{}, 2)
+	resp = sendRequest(t, tc.OutboundChannel, Request{}, 2)
 	secondLatency := time.Since(start)
 
 	if resp.Err != nil {
@@ -1075,28 +940,25 @@ func TestChannelStreamReadySignaling(t *testing.T) {
 	}
 }
 
-// TestChannelStreamReadyAfterReconnect verifies that the receiver is properly notified
-// when a stream is re-established after being cleared (simulating reconnection).
-// The server drops the stream after the first message, forcing the channel to reconnect.
-// The second request must succeed, proving the full reconnect path works end-to-end.
-func TestChannelStreamReadyAfterReconnect(t *testing.T) {
+// TestChannelReconnectAfterServerDrop verifies that a request after the server
+// dropped the stream opens a new stream and completes.
+func TestChannelReconnectAfterServerDrop(t *testing.T) {
 	tc := setupChannel(t, breakStreamServer)
 
 	// First request succeeds; the server then drops the stream.
-	resp := sendRequest(t, tc.Channel, Request{}, 1)
+	resp := sendRequest(t, tc.OutboundChannel, Request{}, 1)
 	if resp.Err != nil {
 		t.Fatalf("unexpected error on initial request: %v", resp.Err)
 	}
 
-	// Wait for the receiver to detect the server-side disconnect so the channel
-	// is in a clean disconnected state before the next request triggers reconnection.
-	if !waitForDisconnection(tc.Channel, streamConnectTimeout) {
+	// Wait for the channel to detect the server-side disconnect so the next
+	// request triggers the reconnection.
+	if !waitForDisconnection(tc.OutboundChannel, streamConnectTimeout) {
 		t.Fatal("channel should be disconnected after server drop")
 	}
 
-	// Second request: the sender re-establishes the stream and the receiver
-	// picks up the streamReady signal to route the response.
-	resp = sendRequest(t, tc.Channel, Request{}, 2)
+	// Second request: the channel re-establishes the stream.
+	resp = sendRequest(t, tc.OutboundChannel, Request{}, 2)
 	if resp.Err != nil {
 		t.Fatalf("unexpected error after reconnect: %v", resp.Err)
 	}
@@ -1107,18 +969,16 @@ func TestChannelStreamReadyAfterReconnect(t *testing.T) {
 // the first message, then the test fires multiple concurrent requests without
 // waiting for the channel to detect the disconnect.
 //
-// This validates the channel's stream lifecycle management ensures that:
-// - Requests are only tracked in the response router when sent on the current stream
-// - The clearStream stale-check prevents cancelling a new stream's context
-// - Concurrent requests sent during reconnection succeed without spurious errors
+// Requests that race with the broken stream's teardown must be sent again on
+// the new stream rather than fail.
 func TestChannelConcurrentStreamReconnect(t *testing.T) {
 	tc := setupChannel(t, breakStreamServer)
-	if !waitForConnection(tc.Channel, streamConnectTimeout) {
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
 		t.Fatal("channel should be connected")
 	}
 
 	// Request 1 causes the server to echo and immediately break the stream.
-	resp := sendRequest(t, tc.Channel, Request{}, 1)
+	resp := sendRequest(t, tc.OutboundChannel, Request{}, 1)
 	if resp.Err != nil {
 		t.Fatalf("unexpected error on initial request: %v", resp.Err)
 	}
@@ -1132,7 +992,7 @@ func TestChannelConcurrentStreamReconnect(t *testing.T) {
 	errs := make([]error, concurrency)
 	for i := range concurrency {
 		wg.Go(func() {
-			resp := sendRequest(t, tc.Channel, Request{}, uint64(i+2))
+			resp := sendRequest(t, tc.OutboundChannel, Request{}, uint64(i+2))
 			errs[i] = resp.Err
 		})
 	}
@@ -1145,32 +1005,21 @@ func TestChannelConcurrentStreamReconnect(t *testing.T) {
 	}
 }
 
-// TestChannelRequestsSurviveStreamChurn verifies that a two-way request
-// enqueued while the current stream is concurrently torn down never fails
-// with ErrStreamDown. The sender must send on the exact stream its ensure
-// step produced: reading the stream again in a separate step races with a
-// concurrent clearStream by the receiver observing a broken stream, and can observe nil right after a successful ensure,
-// failing the request terminally, since a request that was never sent is not
-// registered for retry. A request that instead loses the race on Send fails
-// with a stream error after registration and is requeued, so under stream
-// churn every request must eventually succeed.
+// TestChannelRequestsSurviveStreamChurn verifies that two-way requests issued
+// while the current stream is repeatedly torn down never fail: a request
+// pending on an ended stream, or taken from the queue as the stream ends, is
+// sent again on the next stream.
 func TestChannelRequestsSurviveStreamChurn(t *testing.T) {
 	tc := setupChannel(t, echoServer)
-	if !waitForConnection(tc.Channel, streamConnectTimeout) {
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
 		t.Fatal("channel should be connected")
 	}
 
-	// Churn: keep tearing down whatever stream is current, exactly as the
-	// receiver does when it observes a broken stream (clear, then requeue the
-	// pending requests stranded on it), forcing every request to race its
-	// ensure/send steps against a concurrent stream teardown.
 	churnDone := make(chan struct{})
 	go func() {
 		defer close(churnDone)
 		for range 2000 {
-			if s := tc.getStream(); s != nil && tc.clearStream(s) {
-				tc.requeuePendingMsgs()
-			}
+			tc.endSessions()
 		}
 	}()
 
@@ -1181,7 +1030,7 @@ func TestChannelRequestsSurviveStreamChurn(t *testing.T) {
 		wg.Go(func() {
 			// Issue requests until the churn ends, recording the first failure.
 			for msgID := uint64(1); ; msgID++ {
-				resp := sendRequest(t, tc.Channel, Request{}, uint64(i+1)*100000+msgID)
+				resp := sendRequest(t, tc.OutboundChannel, Request{}, uint64(i+1)*100000+msgID)
 				if resp.Err != nil {
 					errs[i] = resp.Err
 					return
@@ -1203,97 +1052,12 @@ func TestChannelRequestsSurviveStreamChurn(t *testing.T) {
 	}
 }
 
-type recvStartedStream struct {
-	*mockBidiStream
-	started chan struct{}
-	once    sync.Once
-}
-
-func newRecvStartedStream() *recvStartedStream {
-	return &recvStartedStream{
-		mockBidiStream: newMockBidiStream(),
-		started:        make(chan struct{}),
-	}
-}
-
-func (s *recvStartedStream) Recv() (*Message, error) {
-	s.once.Do(func() { close(s.started) })
-	return s.mockBidiStream.Recv()
-}
-
-// TestChannelStaleReceiverDoesNotRequeueCurrentPending verifies that a receiver
-// blocked on an old stream instance cannot requeue requests that were already
-// registered on a newer stream.
-func TestChannelStaleReceiverDoesNotRequeueCurrentPending(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	stale := newRecvStartedStream()
-	current := newMockBidiStream()
-	c := NewInboundChannel(ctx, 1, 1, stale, NewMessageRouter())
-	t.Cleanup(func() {
-		_ = c.Close()
-	})
-
-	done := make(chan struct{})
-	go func() {
-		c.receiver()
-		close(done)
-	}()
-
-	select {
-	case <-stale.started:
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("receiver did not start reading from stale stream")
-	}
-
-	c.streamMut.Lock()
-	c.stream = current
-	c.streamMut.Unlock()
-
-	const msgID = 42
-	msg := Message_builder{
-		MessageSeqNo: msgID,
-		Method:       mock.TestMethod,
-	}.Build()
-	c.router.register(c.pendingOwner, msgID, Request{
-		Ctx:          ctx,
-		Msg:          msg,
-		ResponseChan: make(chan response, 1),
-	})
-
-	stale.close()
-
-	deadline := time.Now().Add(200 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		if len(c.queue.ch) > 0 || !routerExists(c, msgID) {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-
-	if got := len(c.queue.ch); got != 0 {
-		t.Fatalf("stale receiver requeued current-stream request: sendQ len = %d, want 0", got)
-	}
-	if !routerExists(c, msgID) {
-		t.Fatal("stale receiver removed pending request for the current stream")
-	}
-
-	current.close()
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("receiver did not exit after context cancellation")
-	}
-}
-
 // TestChannelCancelImmediatelyAfterSendRecovers verifies that callers which
 // cancel their request context the instant the response arrives never strand
 // the channel. The churn is most valuable under -race.
 func TestChannelCancelImmediatelyAfterSendRecovers(t *testing.T) {
 	tc := setupChannel(t, echoServer)
-	if !waitForConnection(tc.Channel, streamConnectTimeout) {
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
 		t.Fatal("channel never connected")
 	}
 
@@ -1320,7 +1084,7 @@ func TestChannelCancelImmediatelyAfterSendRecovers(t *testing.T) {
 	}
 
 	// After the churn a fresh request must still complete.
-	if resp := sendRequest(t, tc.Channel, Request{}, iterations+1); resp.Err != nil {
+	if resp := sendRequest(t, tc.OutboundChannel, Request{}, iterations+1); resp.Err != nil {
 		t.Fatalf("channel stranded after cancel churn: %v", resp.Err)
 	}
 }
@@ -1435,9 +1199,8 @@ func (h *signalingRequestHandler) HandleRequest(_ context.Context, msg *Message,
 }
 
 // TestChannelReceiverDispatchesOnlyServerInitiatedUnknownMessages verifies that
-// the client-side receiver drops late client-call responses that no longer have
-// a pending router entry, while still dispatching unmatched server-initiated
-// requests to the registered back-channel handler.
+// an outbound session drops late responses that no longer have a pending call,
+// while still dispatching server-initiated requests to the handler.
 func TestChannelReceiverDispatchesOnlyServerInitiatedUnknownMessages(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -1458,19 +1221,16 @@ func TestChannelReceiverDispatchesOnlyServerInitiatedUnknownMessages(t *testing.
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
 			stream := newMockBidiStream()
 			handler := &signalingRequestHandler{called: make(chan *Message, 1)}
-			c := NewInboundChannel(ctx, 1, 1, stream, NewMessageRouter(handler))
-			t.Cleanup(func() {
-				_ = c.Close()
-			})
+			e := newEndpoint(t.Context(), 1, 1, 0, handler, nil)
+			ctx, cancel := context.WithCancel(e.ctx)
+			s := newSession(&e, stream, ctx, cancel, true, true)
+			t.Cleanup(e.cancel)
 
 			done := make(chan struct{})
 			go func() {
-				c.receiver()
+				_ = s.receive()
 				close(done)
 			}()
 
@@ -1497,11 +1257,10 @@ func TestChannelReceiverDispatchesOnlyServerInitiatedUnknownMessages(t *testing.
 			}
 
 			stream.close()
-			cancel()
 			select {
 			case <-done:
 			case <-time.After(defaultTestTimeout):
-				t.Fatal("receiver did not exit after context cancellation")
+				t.Fatal("receive did not return after the stream closed")
 			}
 		})
 	}
@@ -1510,7 +1269,7 @@ func TestChannelReceiverDispatchesOnlyServerInitiatedUnknownMessages(t *testing.
 func TestChannelRouterLifecycle(t *testing.T) {
 	tc := setupChannel(t, echoServer)
 
-	if !waitForConnection(tc.Channel, streamConnectTimeout) {
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
 		t.Fatal("channel should be connected")
 	}
 
@@ -1538,27 +1297,18 @@ func TestChannelRouterLifecycle(t *testing.T) {
 				}
 			}()
 			msgID := uint64(i)
-			resp := sendRequest(t, tc.Channel, Request{Oneway: tt.oneway, Streaming: tt.streaming}, msgID)
+			resp := sendRequest(t, tc.OutboundChannel, Request{Oneway: tt.oneway, Streaming: tt.streaming}, msgID)
 			if resp.Err != nil {
 				t.Errorf("unexpected error: %v", resp.Err)
 			}
-			if exists := routerExists(tc.Channel, msgID); exists != tt.wantRouter {
-				t.Errorf("router exists = %v, want %v", exists, tt.wantRouter)
+			if exists := tc.pendingExists(msgID); exists != tt.wantRouter {
+				t.Errorf("pending call exists = %v, want %v", exists, tt.wantRouter)
 			}
 			if tt.wantPanic && !panicRecovered {
 				t.Errorf("expected panic but none occurred")
 			}
 		})
 	}
-}
-
-// Helper functions for testing channel response routing and router lifecycle
-
-func routerExists(c *Channel, msgID uint64) bool {
-	c.router.mu.Lock()
-	defer c.router.mu.Unlock()
-	_, exists := c.router.pending[msgID]
-	return exists
 }
 
 func TestChannelResponseRouting(t *testing.T) {
@@ -1568,7 +1318,7 @@ func TestChannelResponseRouting(t *testing.T) {
 	results := make(chan msgResponse, numMessages)
 
 	for i := range numMessages {
-		go sendReq(t, results, tc.Channel, i, 1, Request{Oneway: true})
+		go sendReq(t, results, tc.OutboundChannel, i, 1, Request{Oneway: true})
 	}
 
 	// Collect and verify results
@@ -1599,8 +1349,8 @@ func TestChannelConcurrentSends(t *testing.T) {
 	results := make(chan msgResponse, numMessages)
 	for goID := range numGoroutines {
 		go func() {
-			sendReq(t, results, tc.Channel, goID, msgsPerGoroutine, Request{Oneway: true})
-			sendReq(t, results, tc.Channel, goID, msgsPerGoroutine, Request{Oneway: false})
+			sendReq(t, results, tc.OutboundChannel, goID, msgsPerGoroutine, Request{Oneway: true})
+			sendReq(t, results, tc.OutboundChannel, goID, msgsPerGoroutine, Request{Oneway: false})
 		}()
 	}
 
@@ -1620,31 +1370,20 @@ func TestChannelConcurrentSends(t *testing.T) {
 	}
 }
 
-// TestChannelDeadlock reproduces a deadlock bug (issue #235) that occurred
-// in channel.go when the stream broke during active communication.
-//
-// Root Cause:
-// The receiver goroutine held a read lock while performing a blocking I/O operation
-// that could hang indefinitely when the stream broke. Meanwhile, the sender goroutine
-// tried to acquire a write lock to reconnect, creating a deadlock.
-//
-// This test verifies the fix by:
-// 1. Establishing a connection and activating the stream
-// 2. Breaking the stream by stopping the server
-// 3. Sending multiple messages concurrently to trigger the deadlock condition
-// 4. Verifying all goroutines can successfully enqueue without hanging
+// TestChannelDeadlock verifies that requests can still be queued while a
+// broken stream is torn down and replaced (issue #235).
 func TestChannelDeadlock(t *testing.T) {
 	tc := setupChannel(t, breakStreamServer)
 
-	if !waitForConnection(tc.Channel, streamConnectTimeout) {
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
 		t.Fatal("channel should be connected")
 	}
 
 	// Send message to activate stream
-	sendRequest(t, tc.Channel, Request{Oneway: true}, 1)
+	sendRequest(t, tc.OutboundChannel, Request{Oneway: true}, 1)
 
 	// Break the stream, forcing a reconnection on next send
-	tc.clearStream(tc.getStream())
+	tc.endSessions()
 	time.Sleep(20 * time.Millisecond)
 
 	// Send multiple messages concurrently when stream is broken with the
@@ -1686,93 +1425,42 @@ func TestChannelDeadlock(t *testing.T) {
 	}
 }
 
-// TestChannelClearStreamDeadlock verifies that clearStream followed by requeuePendingMsgs
-// does not deadlock when sendQ is full and responseRouters contains pending non-streaming requests.
-//
-// Deadlock scenario (original code, where clearStream called requeuePendingMsgs internally):
-//  1. clearStream acquires streamMut and calls requeuePendingMsgs.
-//  2. requeuePendingMsgs enqueues the first pending request; sender dequeues it and
-//     immediately blocks in ensureStream waiting for streamMut.
-//  3. requeuePendingMsgs fills sendQ to capacity with the remaining requests.
-//  4. requeuePendingMsgs blocks in Enqueue on one final request (sendQ is full).
-//  5. Neither goroutine can proceed: receiver holds streamMut while blocked in Enqueue,
-//     and sender waits for streamMut in ensureStream — deadlock.
-//
-// The fix moves requeuePendingMsgs out of clearStream so streamMut is never held
-// across the Enqueue calls.
-func TestChannelClearStreamDeadlock(t *testing.T) {
-	// Use a very small sendQ (capacity 2) so the deadlock is triggered with only
-	// sendBufSize+2 = 4 injected pending requests.
+// TestChannelSessionEndWithFullQueue verifies that ending a session whose
+// pending calls exceed the send queue's free space neither blocks nor strands
+// a call: each is either queued again or fails with ErrSendQueueFull.
+func TestChannelSessionEndWithFullQueue(t *testing.T) {
 	const sendBufSize = 2
+	stream := newBlockingSendStream()
+	t.Cleanup(stream.close)
+	e := newEndpoint(t.Context(), 1, sendBufSize, 0, nil, nil)
+	t.Cleanup(e.cancel)
+	ctx, cancel := context.WithCancel(e.ctx)
+	s := newSession(&e, stream, ctx, cancel, true, true)
 
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
-	}
-	srv := grpc.NewServer() // skipcq: GO-S0902
-	RegisterGorumsServer(srv, &mockServer{handler: holdServer})
-	go func() {
-		_ = srv.Serve(lis)
-	}()
-	t.Cleanup(srv.Stop)
-
-	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
-	}
-	c := NewOutboundChannel(t.Context(), 1, sendBufSize, conn, NewMessageRouter(), false, nil)
-	t.Cleanup(func() {
-		if closeErr := c.Close(); closeErr != nil {
-			t.Errorf("failed to close channel: %v", closeErr)
-		}
-		_ = conn.Close()
-	})
-
-	if !waitForConnection(c, streamConnectTimeout) {
-		t.Fatal("channel should be connected")
-	}
-	staleStream := c.getStream()
-
-	// Inject sendBufSize+2 non-streaming requests directly into the router's
-	// pending map, bypassing the normal sendMsg path. requeuePendingMsgs will
-	// attempt to re-enqueue all of them. With sendBufSize=2:
-	//  - request 1 is enqueued; sender dequeues it and blocks in ensureStream.
-	//  - requests 2-3 fill sendQ to capacity.
-	//  - request 4's Enqueue call blocks on a full sendQ while clearStream
-	//    still holds streamMut — deadlock.
 	const numPending = sendBufSize + 2
-	replyChannels := make([]chan response, numPending)
+	replies := make(chan response, numPending)
 	for i := range numPending {
-		replyChannels[i] = make(chan response, 1)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		t.Cleanup(cancel)
-		msg, msgErr := NewMessage(ctx, uint64(1000+i), mock.TestMethod, nil)
-		if msgErr != nil {
-			t.Fatalf("NewMessage failed: %v", msgErr)
-		}
-		c.router.register(c.pendingOwner, uint64(1000+i), Request{
-			Ctx:          ctx,
-			Msg:          msg,
-			Streaming:    false,
-			Oneway:       false,
-			ResponseChan: replyChannels[i],
-		})
+		msg := Message_builder{MessageSeqNo: uint64(1000 + i), Method: mock.TestMethod}.Build()
+		s.pending.add(msg.GetMessageSeqNo(), Request{Ctx: t.Context(), Msg: msg, ResponseChan: replies})
 	}
 
-	// clearStream + requeuePendingMsgs (as the real call sites do) should complete
-	// without deadlocking.
 	done := make(chan struct{})
 	go func() {
-		c.clearStream(staleStream)
-		c.requeuePendingMsgs()
+		s.end()
 		close(done)
 	}()
-
 	select {
 	case <-done:
-		// No deadlock.
 	case <-time.After(2 * time.Second):
-		t.Fatal("DEADLOCK: clearStream+requeuePendingMsgs did not return within 2s")
+		t.Fatal("ending the session blocked on a full send queue")
+	}
+	if got := len(e.queue.ch); got != sendBufSize {
+		t.Errorf("requeued calls = %d, want %d", got, sendBufSize)
+	}
+	for range numPending - sendBufSize {
+		if got := <-replies; !errors.Is(got.Err, ErrSendQueueFull) {
+			t.Errorf("overflow call error = %v, want ErrSendQueueFull", got.Err)
+		}
 	}
 }
 
@@ -1817,51 +1505,11 @@ func (m *mockBidiStream) Recv() (*Message, error) {
 	}
 }
 
-// TestIsInbound verifies IsInbound() for both channel types.
-func TestIsInbound(t *testing.T) {
-	tests := []struct {
-		name     string
-		chanFunc func(t *testing.T) *Channel
-		want     bool
-	}{
-		{
-			name:     "OutboundWithoutServer",
-			chanFunc: func(t *testing.T) *Channel { return setupChannelWithoutServer(t).Channel },
-			want:     false,
-		},
-		{
-			name:     "OutboundWithServer",
-			chanFunc: func(t *testing.T) *Channel { return setupChannel(t, echoServer).Channel },
-			want:     false,
-		},
-		{
-			name: "Inbound",
-			chanFunc: func(t *testing.T) *Channel {
-				stream := newMockBidiStream()
-				c := NewInboundChannel(t.Context(), 1, 10, stream, NewMessageRouter())
-				t.Cleanup(func() { _ = c.Close() })
-				return c
-			},
-			want: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c := tt.chanFunc(t)
-			if got := c.IsInbound(); got != tt.want {
-				t.Errorf("IsInbound() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-// TestInboundChannel verifies that an inbound channel can send messages.
-// No receiver goroutine is started for inbound channels; the caller's NodeStream
-// Recv loop is the sole reader. Oneway confirms successful delivery to the
-// stream without requiring a routed response.
+// TestInboundChannel verifies that an inbound channel sends a one-way request
+// and confirms it without a routed response.
 func TestInboundChannel(t *testing.T) {
 	stream := newMockBidiStream()
-	c := NewInboundChannel(t.Context(), 1, 10, stream, NewMessageRouter())
+	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 10})
 	t.Cleanup(func() {
 		_ = c.Close()
 	})
@@ -1876,13 +1524,12 @@ func TestInboundChannel(t *testing.T) {
 	}
 }
 
-// TestInboundChannelClose verifies that close does not close the underlying
-// server connection (conn is nil for inbound channels).
+// TestInboundChannelClose verifies that a closed inbound channel fails later
+// requests with ErrNodeClosed.
 func TestInboundChannelClose(t *testing.T) {
 	stream := newMockBidiStream()
-	c := NewInboundChannel(t.Context(), 1, 10, stream, NewMessageRouter())
+	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 10})
 
-	// Close the channel; should succeed without touching any grpc.ClientConn.
 	if err := c.Close(); err != nil {
 		t.Errorf("Close() error: %v", err)
 	}
@@ -1895,21 +1542,16 @@ func TestInboundChannelClose(t *testing.T) {
 		t.Errorf("expected 'node closed' error, got: %v", resp.Err)
 	}
 
-	// Channel should not be connected after close.
-	if c.isConnected() {
-		t.Error("isConnected() = true after close, want false")
+	if !c.session.ended() {
+		t.Error("session still running after close")
 	}
 }
 
-// TestInboundChannelStreamDown verifies that an inbound channel does not
-// reconnect when the stream goes down. In production, when the Recv loop of
-// [Server.NodeStream] returns an error, the registration cleanup detaches the
-// stream and closes its channel. This test mirrors that path: it closes the
-// channel to simulate stream-down, then verifies that sends return
-// ErrNodeClosed without opening a new stream.
+// TestInboundChannelStreamDown verifies that an inbound channel whose stream
+// ended fails later requests with ErrNodeClosed instead of reconnecting.
 func TestInboundChannelStreamDown(t *testing.T) {
 	stream := newMockBidiStream()
-	c := NewInboundChannel(t.Context(), 1, 10, stream, NewMessageRouter())
+	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 10})
 
 	// Verify initial send works.
 	resp := sendRequest(t, c, Request{Oneway: true}, 1)
@@ -1917,9 +1559,12 @@ func TestInboundChannelStreamDown(t *testing.T) {
 		t.Fatalf("initial send failed: %v", resp.Err)
 	}
 
-	// Simulate NodeStream detecting stream-down: NodeStream.Recv() returns an
-	// error → deferred UnregisterPeer() runs → detachStream() → channel.Close().
+	// The stream ends, as Serve observes, and the channel is closed, as the
+	// NodeStream cleanup does.
 	stream.close()
+	if err := c.Serve(); err == nil {
+		t.Fatal("Serve returned nil after the stream ended")
+	}
 	if err := c.Close(); err != nil {
 		t.Fatalf("Close() error: %v", err)
 	}
@@ -1932,14 +1577,13 @@ func TestInboundChannelStreamDown(t *testing.T) {
 		t.Errorf("expected 'node closed' error, got: %v", resp.Err)
 	}
 
-	// Verify channel remains disconnected (did not reconnect).
-	if c.isConnected() {
-		t.Error("inbound channel reconnected, but it should not")
+	if !c.session.ended() {
+		t.Error("inbound session still running after its stream ended")
 	}
 }
 
-// BenchmarkChannelStreamReadyFirstRequest measures the latency of the first request,
-// which includes stream creation and the stream-ready signaling.
+// BenchmarkChannelFirstRequest measures the latency of the first request,
+// which includes stream creation.
 //
 // This benchmark creates a new server and node per iteration to measure true
 // "cold start" latency. Due to TCP port exhaustion on macOS (ephemeral ports
@@ -1948,7 +1592,7 @@ func TestInboundChannelStreamDown(t *testing.T) {
 //
 // Note: This benchmark includes server setup overhead, so absolute numbers
 // should be interpreted with caution. The goal is to detect regressions.
-func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
+func BenchmarkChannelFirstRequest(b *testing.B) {
 	if b.N > 500 {
 		b.Skip("Skipping to avoid port exhaustion; use -benchtime=100x")
 	}
@@ -1980,11 +1624,9 @@ func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
 	}
 }
 
-// BenchmarkChannelStreamReadyReconnect measures the latency of reconnecting
-// after the stream has been cleared.
-// Note: This benchmark has inherent variability due to the race between
-// clearStream and the sender's ensureStream call.
-func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
+// BenchmarkChannelReconnect measures the latency of a request that must
+// reconnect after the stream ended.
+func BenchmarkChannelReconnect(b *testing.B) {
 	tc := setupChannel(b, echoServer)
 
 	// Establish initial stream with a fresh context
@@ -2006,14 +1648,9 @@ func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
 
 	b.ResetTimer()
 	for i := range b.N {
-		tc.clearStream(tc.getStream())
+		tc.endSessions()
 
-		// Wait a tiny bit for the receiver to notice the stream is gone
-		// and be ready for the signal. This simulates real-world behavior
-		// where the receiver detects the error before reconnection.
-		time.Sleep(100 * time.Microsecond)
-
-		// Now send a request which will trigger ensureStream -> newNodeStream -> signal
+		// Now send a request, which opens a new stream.
 		ctx := context.Background()
 		reqMsg, _ := NewMessage(ctx, uint64(i+1), mock.TestMethod, nil)
 		req := Request{Ctx: ctx, Msg: reqMsg}
@@ -2023,8 +1660,7 @@ func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
 
 		select {
 		case <-replyChan:
-			// stream down errors are sometimes expected here due to a race between
-			// clearStream and ensureStream; we ignore errors in benchmarks.
+			// errors are ignored in benchmarks.
 		case <-time.After(500 * time.Millisecond):
 			b.Fatalf("timeout on request %d", i)
 		}

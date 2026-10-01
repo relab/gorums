@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -51,7 +52,7 @@ func TestChannelGoAwayDoesNotStrandPendingCall(t *testing.T) {
 			MaxConnectionAge:      300 * time.Millisecond,
 			MaxConnectionAgeGrace: 30 * time.Second,
 		}))
-	if !waitForConnection(tc.Channel, streamConnectTimeout) {
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
 		t.Fatal("channel never connected")
 	}
 
@@ -91,7 +92,7 @@ func TestChannelGoAwayDoesNotStrandPendingCall(t *testing.T) {
 			t.Fatalf("pending call: %v", resp.Err)
 		}
 	case <-time.After(3 * time.Second):
-		t.Errorf("pending call never completed; router pending=%d", tc.router.PendingCount())
+		t.Errorf("pending call never completed; pending=%d", tc.PendingCount())
 	}
 }
 
@@ -108,7 +109,7 @@ func TestChannelGoAwayEndsIdleStream(t *testing.T) {
 		MaxConnectionAge:      200 * time.Millisecond,
 		MaxConnectionAgeGrace: time.Hour,
 	}))
-	if !waitForConnection(tc.Channel, streamConnectTimeout) {
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
 		t.Fatal("channel never connected")
 	}
 
@@ -131,5 +132,60 @@ func TestChannelGoAwayEndsIdleStream(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("call after GOAWAY never completed")
+	}
+}
+
+// TestChannelGoAwayEndsStreamUnderLoad verifies that a stream whose connection
+// receives GOAWAY ends even while calls keep arriving: new calls go to a new
+// stream, so the drained stream's pending calls run out.
+func TestChannelGoAwayEndsStreamUnderLoad(t *testing.T) {
+	streamEnded := make(chan struct{}, 16)
+	tc := setupChannel(t, func(stream Gorums_NodeStreamServer) error {
+		defer func() { streamEnded <- struct{}{} }()
+		return delayServer(time.Millisecond)(stream)
+	}, grpc.KeepaliveParams(keepalive.ServerParameters{
+		MaxConnectionAge:      300 * time.Millisecond,
+		MaxConnectionAgeGrace: time.Hour,
+	}))
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
+		t.Fatal("channel never connected")
+	}
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	var msgID atomic.Uint64
+	errs := make(chan error, 8)
+	for range 8 {
+		wg.Go(func() {
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				r := make(chan response, 1)
+				tc.Enqueue(Request{
+					Ctx:          t.Context(),
+					Msg:          Message_builder{MessageSeqNo: msgID.Add(1), Method: mock.TestMethod}.Build(),
+					ResponseChan: r,
+				})
+				if resp := <-r; resp.Err != nil {
+					errs <- resp.Err
+					return
+				}
+			}
+		})
+	}
+
+	select {
+	case <-streamEnded:
+	case <-time.After(3 * time.Second):
+		t.Error("server stream did not end after GOAWAY while calls kept arriving")
+	}
+	close(stop)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Errorf("call failed: %v", err)
 	}
 }

@@ -11,11 +11,11 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// TestDispatchInboundKeepsReadingWhileHandlerUnreleased verifies that the
-// receiver can enqueue the next request and deliver a reply while a handler
-// has not released, and that the second request still waits for that release.
-func TestDispatchInboundKeepsReadingWhileHandlerUnreleased(t *testing.T) {
-	const nodeID = uint32(1)
+// TestSessionHandleKeepsReadingWhileHandlerUnreleased verifies that the
+// receive loop can queue the next request and deliver a response while a
+// handler has not released, and that the second request still waits for that
+// release.
+func TestSessionHandleKeepsReadingWhileHandlerUnreleased(t *testing.T) {
 	releaseFirst := make(chan struct{})
 	started := make(chan uint64, 2)
 	handler := requestHandlerFunc(func(_ context.Context, msg *Message, release func(), _ func(*Message)) {
@@ -25,14 +25,10 @@ func TestDispatchInboundKeepsReadingWhileHandlerUnreleased(t *testing.T) {
 		}
 		release()
 	})
-	router := NewMessageRouter(handler)
-	st := newMockBidiStream()
-	t.Cleanup(st.close)
-	c := NewInboundChannel(context.Background(), nodeID, 0, st, router)
-	t.Cleanup(func() { _ = c.Close() })
+	s := newTestSession(t, 0, handler, true, true)
 
 	replyCh := make(chan response, 1)
-	router.Register(42, Request{
+	s.pending.add(42, Request{
 		Ctx:          context.Background(),
 		Msg:          &Message{},
 		ResponseChan: replyCh,
@@ -41,9 +37,9 @@ func TestDispatchInboundKeepsReadingWhileHandlerUnreleased(t *testing.T) {
 	readerDone := make(chan struct{})
 	go func() {
 		defer close(readerDone)
-		c.dispatchInbound(Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build())
-		c.dispatchInbound(Message_builder{MessageSeqNo: ServerSequenceNumber(2), Method: mock.TestMethod}.Build())
-		c.dispatchInbound(Message_builder{MessageSeqNo: 42, Method: mock.TestMethod}.Build())
+		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build())
+		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(2), Method: mock.TestMethod}.Build())
+		s.handle(Message_builder{MessageSeqNo: 42, Method: mock.TestMethod}.Build())
 	}()
 
 	select {
@@ -85,9 +81,9 @@ func TestDispatchInboundKeepsReadingWhileHandlerUnreleased(t *testing.T) {
 	}
 }
 
-// TestDispatchInboundBackChannel verifies how the receiver routes a
+// TestSessionHandleBackChannel verifies how an outbound session routes a
 // server-initiated request and an unknown response.
-func TestDispatchInboundBackChannel(t *testing.T) {
+func TestSessionHandleBackChannel(t *testing.T) {
 	t.Run("HandlerSeesMessageMetadata", func(t *testing.T) {
 		const key, want = "request-id", "dedup-metadata"
 		handlerMD := make(chan metadata.MD, 1)
@@ -96,17 +92,14 @@ func TestDispatchInboundBackChannel(t *testing.T) {
 			md, _ := metadata.FromIncomingContext(ctx)
 			handlerMD <- md
 		})
-		st := newMockBidiStream()
-		t.Cleanup(st.close)
-		c := NewInboundChannel(t.Context(), 1, 0, st, NewMessageRouter(handler))
-		t.Cleanup(func() { _ = c.Close() })
+		s := newTestSession(t, 0, handler, true, true)
 
 		msgCtx := metadata.NewOutgoingContext(t.Context(), metadata.Pairs(key, want))
 		msg, err := NewMessage(msgCtx, ServerSequenceNumber(1), mock.TestMethod, nil)
 		if err != nil {
 			t.Fatalf("NewMessage: %v", err)
 		}
-		c.dispatchInbound(msg)
+		s.handle(msg)
 		select {
 		case md := <-handlerMD:
 			if got := md.Get(key); len(got) != 1 || got[0] != want {
@@ -118,12 +111,9 @@ func TestDispatchInboundBackChannel(t *testing.T) {
 	})
 
 	t.Run("NoHandlerOrUnknownIDIsDropped", func(t *testing.T) {
-		st := newMockBidiStream()
-		t.Cleanup(st.close)
-		c := NewInboundChannel(t.Context(), 1, 0, st, NewMessageRouter())
-		t.Cleanup(func() { _ = c.Close() })
-		c.dispatchInbound(Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build())
-		c.dispatchInbound(Message_builder{MessageSeqNo: 999, Method: mock.TestMethod}.Build())
+		s := newTestSession(t, 0, nil, true, true)
+		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build())
+		s.handle(Message_builder{MessageSeqNo: 999, Method: mock.TestMethod}.Build())
 	})
 }
 
@@ -226,7 +216,7 @@ func TestDispatcherBounded(t *testing.T) {
 // own node before releasing waits only as long as its context allows, and that
 // the nested call runs once the handler returns.
 func TestLocalChannelReentrantCall(t *testing.T) {
-	var c *Channel
+	var c *LocalChannel
 	nestedReply := make(chan response, 1)
 	outerDone := make(chan error, 1)
 	handler := requestHandlerFunc(func(ctx context.Context, msg *Message, _ func(), send func(*Message)) {
@@ -248,7 +238,7 @@ func TestLocalChannelReentrantCall(t *testing.T) {
 			outerDone <- nil
 		}
 	})
-	c = NewLocalChannel(1, NewMessageRouter(handler))
+	c = NewLocalChannel(1, handler)
 
 	c.Enqueue(Request{
 		Ctx:          t.Context(),

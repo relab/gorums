@@ -32,9 +32,9 @@ type serverOptions struct {
 type ServerOption func(*serverOptions)
 
 // WithBufferSizes configures the send and receive buffer sizes for the server.
-// The receiveSize is the capacity of the queue carrying handler replies to the
-// goroutine that writes them to the stream; a handler's send waits while the
-// queue is full. Its default is 0 (unbuffered).
+// The receiveSize is the number of received requests per stream that can wait
+// for the running handler; receiving from the stream waits while that many are
+// queued. A receiveSize of 0 selects the default of 4096.
 //
 // The sendSize controls the capacity of the server's per-node send queue for
 // outgoing peer messages, with the same full-queue semantics as
@@ -237,10 +237,11 @@ func newServer(opts ...ServerOption) (*Server, error) {
 		serverOpts.myID,
 		serverOpts.peerNodes,
 		serverOpts.sendBufferSize,
+		serverOpts.recvBufferSize,
 		serverOpts.onConfigChange,
 		s,
 	)
-	s.srv = stream.NewServer(serverOpts.recvBufferSize, serverOpts.connectCallback, s.im)
+	s.srv = stream.NewServer(serverOpts.connectCallback, s.im)
 	stream.RegisterGorumsServer(s.grpcServer, s.srv)
 	if serverOpts.peerNodes != nil {
 		cfg, err := s.newPeerConfig(serverOpts.peerNodes, serverOpts.outboundDialOpts)

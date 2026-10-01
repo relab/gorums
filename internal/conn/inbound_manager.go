@@ -84,6 +84,7 @@ type InboundManager struct {
 	clientConfig   Config                // auto-updated slice of client peers, sorted by ID
 	nextMsgID      atomic.Uint64         // counter for server-initiated message IDs
 	sendBufferSize uint                  // send buffer size for inbound channels
+	dispatchSize   uint                  // request dispatch queue size for inbound channels
 	handler        stream.RequestHandler // handler for dispatching incoming requests on all inbound nodes
 	onConfigChange func(Config)          // optional; called after each connected-peer config change
 	nextClientID   uint64                // next candidate ID for a client peer; uint64 represents exhaustion
@@ -105,14 +106,17 @@ const ClientIDStart = 1 << 20
 // immediately included in the Config as the self-node, so that quorum thresholds
 // account for the local replica from the moment of construction. The handler is
 // installed on the self-node (if present) to enable in-process dispatch without
-// a network round-trip. Panics on configuration errors (invalid addresses,
-// duplicate nodes, etc.)
-func NewInboundManager(myID uint32, peerNodes NodeSource, sendBuffer uint, onConfigChange func(Config), handler stream.RequestHandler) *InboundManager {
+// a network round-trip. Inbound channels use sendBuffer and dispatchSize as
+// their send queue and request dispatch capacities; a dispatchSize of 0
+// selects the default.
+// Panics on configuration errors (invalid addresses, duplicate nodes, etc.)
+func NewInboundManager(myID uint32, peerNodes NodeSource, sendBuffer, dispatchSize uint, onConfigChange func(Config), handler stream.RequestHandler) *InboundManager {
 	im := &InboundManager{
 		myID:           myID,
 		knownNodes:     make(map[uint32]*Node),
 		clientNodes:    make(map[uint32]*Node),
 		sendBufferSize: sendBuffer,
+		dispatchSize:   dispatchSize,
 		handler:        handler,
 		onConfigChange: onConfigChange,
 		nextClientID:   ClientIDStart,
@@ -210,7 +214,7 @@ func (im *InboundManager) newNode(id uint32, addr string) (*Node, error) {
 	if id == im.myID && im.handler != nil {
 		node = newLocalNode(id, addr, im.getMsgID, im.handler, nil)
 	} else {
-		node = newInboundNode(id, addr, im.getMsgID, im.handler)
+		node = newInboundNode(id, addr, im.getMsgID)
 	}
 	im.knownNodes[id] = node
 	return node, nil
@@ -221,9 +225,8 @@ func (im *InboundManager) newNode(id uint32, addr string) (*Node, error) {
 // regardless of whether the peer is currently connected: known-peer nodes
 // exist from construction, so a dedup outbound configuration can borrow a
 // peer's channel slot before the peer first connects. The returned node's
-// channel pointer is shared, so channel attachments and replacements remain
-// visible to holders, and its router is owned by the node and stable across
-// reconnects.
+// channel reference is shared, so channel attachments and replacements remain
+// visible to holders.
 func (im *InboundManager) knownPeer(id uint32) *Node {
 	if im == nil {
 		return nil
@@ -245,23 +248,19 @@ func (im *InboundManager) isKnown(id uint32) bool {
 	return ok
 }
 
-// AcceptPeer accepts an inbound stream and returns the associated peer node
-// and a cleanup function. It returns [errSelfNodeIDStream] for a stream that
-// presents this server's own node ID. The returned [stream.PeerNode] is
-// non-nil when err is nil.
+// AcceptPeer accepts an inbound stream and returns its channel and a cleanup
+// function that closes the channel. It returns [errSelfNodeIDStream] for a
+// stream that presents this server's own node ID.
 //
-// If the stream identifies a known peer, AcceptPeer registers it and returns
-// that peer's node.
-// If the stream includes peer metadata with node ID 0, AcceptPeer creates a
-// client peer node with an assigned ID.
-// Otherwise, AcceptPeer returns a nilPeerNode that accepts the connection
-// without tracking it in the configuration.
-func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream stream.BidiStream) (stream.PeerNode, func(), error) {
+// If the stream identifies a known peer, AcceptPeer attaches the channel to
+// that peer's node. If the stream includes peer metadata with node ID 0,
+// AcceptPeer creates a client peer node with an assigned ID. Otherwise, the
+// channel serves the connection without being tracked in any configuration.
+func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream stream.BidiStream) (*stream.InboundChannel, func(), error) {
 	noop := func() {}
 	if im == nil {
-		return &nilPeerNode{stream: inboundStream}, noop, nil
+		return untrackedChannel(streamCtx, inboundStream, stream.InboundOptions{SendBufferSize: DefaultSendBufferSize})
 	}
-	nilNode := &nilPeerNode{stream: inboundStream, handler: im.handler}
 	id := nodeID(streamCtx)
 	if im.myID != 0 && id == im.myID {
 		// A stream presenting this server's own node ID is rejected, so the
@@ -277,13 +276,13 @@ func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream st
 		return im.registerPeer(streamCtx, inboundStream, id)
 	}
 	if id != 0 {
-		// Unknown positive ID: misconfigured or unrecognized peer — reject quietly.
-		return nilNode, noop, nil
+		// Unknown positive ID: misconfigured or unrecognized peer — serve it untracked.
+		return untrackedChannel(streamCtx, inboundStream, im.inboundOptions())
 	}
 	if !hasPeerMetadata(streamCtx) {
 		// Regular client (no gorums-node-id key): accept the connection but do not
 		// track it in ConnectedClients — the client cannot receive back-channel calls.
-		return nilNode, noop, nil
+		return untrackedChannel(streamCtx, inboundStream, im.inboundOptions())
 	}
 	// Peer-capable anonymous client (gorums-node-id: 0) — create new node with auto-assigned ID.
 	return im.acceptClient(streamCtx, inboundStream)
@@ -295,14 +294,14 @@ func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream st
 // as active while keeping the prior one live until its own stream ends, so the
 // node never goes dark mid-handover; see [Node.attachStream]. The returned
 // cleanup function detaches this registration's channel.
-func (im *InboundManager) registerPeer(streamCtx context.Context, inboundStream stream.BidiStream, id uint32) (stream.PeerNode, func(), error) {
+func (im *InboundManager) registerPeer(streamCtx context.Context, inboundStream stream.BidiStream, id uint32) (*stream.InboundChannel, func(), error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	node := im.knownNodes[id]
-	newCh, detach := node.attachStream(streamCtx, inboundStream, im.sendBufferSize)
+	newCh, detach := node.attachStream(streamCtx, inboundStream, im.inboundOptions())
 	im.rebuildConfig()
 
-	return peerNode{n: node, ch: newCh}, func() {
+	return newCh, func() {
 		im.mu.Lock()
 		defer im.mu.Unlock()
 		_, ok := im.knownNodes[id]
@@ -319,19 +318,19 @@ func (im *InboundManager) registerPeer(streamCtx context.Context, inboundStream 
 // connecting client. The node is added to clientNodes and the configuration
 // is rebuilt. The returned cleanup function removes the client node entirely
 // when the stream ends (unlike known peers which persist for reconnection).
-func (im *InboundManager) acceptClient(streamCtx context.Context, inboundStream stream.BidiStream) (stream.PeerNode, func(), error) {
+func (im *InboundManager) acceptClient(streamCtx context.Context, inboundStream stream.BidiStream) (*stream.InboundChannel, func(), error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	id, err := im.nextAvailableClientID()
 	if err != nil {
 		return nil, func() {}, err
 	}
-	node := newInboundNode(id, "client", im.getMsgID, im.handler)
-	newCh, detach := node.attachStream(streamCtx, inboundStream, im.sendBufferSize)
+	node := newInboundNode(id, "client", im.getMsgID)
+	newCh, detach := node.attachStream(streamCtx, inboundStream, im.inboundOptions())
 	im.clientNodes[id] = node
 	im.rebuildConfig()
 
-	return peerNode{n: node, ch: newCh}, func() {
+	return newCh, func() {
 		im.mu.Lock()
 		defer im.mu.Unlock()
 		_, ok := im.clientNodes[id]
@@ -483,40 +482,26 @@ func (im *InboundManager) Close() {
 	im.stopOnce.Do(func() { close(im.stopCh) })
 }
 
-// nilPeerNode implements [stream.PeerNode] for regular clients that have no
-// back-channel capability.
-type nilPeerNode struct {
-	stream  stream.BidiStream
-	handler stream.RequestHandler
-	failed  atomic.Bool
-}
-
-// RouteInbound dispatches all messages as client-initiated requests to the
-// registered handler (if any).
-func (p *nilPeerNode) RouteInbound(ctx context.Context, msg *stream.Message, release func(), send func(*stream.Message)) {
-	if p.handler != nil {
-		p.handler.HandleRequest(msg.AppendToIncomingContext(ctx), msg, release, send)
-	} else {
-		release()
+// inboundOptions returns the options for the manager's inbound channels.
+func (im *InboundManager) inboundOptions() stream.InboundOptions {
+	return stream.InboundOptions{
+		SendBufferSize: im.sendBufferSize,
+		DispatchSize:   im.dispatchSize,
+		Handler:        im.handler,
 	}
 }
 
-// TrySend writes the message directly to the inbound stream. A plain client
-// has no send queue, so Send can block under HTTP/2 flow control; a blocked
-// Send stalls only this client's NodeStream goroutine. After the first send
-// error, later calls are no-ops while the stream shuts down.
-func (p *nilPeerNode) TrySend(req stream.Request) {
-	if p.failed.Load() {
-		return
-	}
-	if err := p.stream.Send(req.Msg); err != nil {
-		p.failed.Store(true)
-	}
+// untrackedChannel returns a channel for a stream that is not tracked in any
+// configuration, and a cleanup function that closes it. Replies on it wait for
+// send queue space.
+func untrackedChannel(streamCtx context.Context, inboundStream stream.BidiStream, opts stream.InboundOptions) (*stream.InboundChannel, func(), error) {
+	opts.WaitingReplies = true
+	ch := stream.NewInboundChannel(streamCtx, 0, inboundStream, opts)
+	return ch, func() { _ = ch.Close() }, nil
 }
 
 // compile-time assertion for interface compliance.
 var (
 	_ stream.PeerAcceptor = (*InboundManager)(nil)
 	_ nodeRegistry        = (*InboundManager)(nil)
-	_ stream.PeerNode     = (*nilPeerNode)(nil)
 )
