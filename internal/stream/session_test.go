@@ -126,3 +126,20 @@ func TestSessionDrain(t *testing.T) {
 		t.Fatal("drained session did not end after its last pending call completed")
 	}
 }
+
+// TestSessionFailRecordsOnlyLiveErrors verifies that a stream error is
+// recorded in LastErr while the session is live, but not once the session has
+// ended, when the error only reflects that ending.
+func TestSessionFailRecordsOnlyLiveErrors(t *testing.T) {
+	s := newTestSession(t, 1, nil, true, true)
+	streamErr := errors.New("stream broken")
+	s.fail(streamErr)
+	if err := s.LastErr(); !errors.Is(err, streamErr) {
+		t.Fatalf("LastErr = %v, want %v", err, streamErr)
+	}
+	s.recordHealth(nil) // a newer session moved data
+	s.fail(context.Canceled)
+	if err := s.LastErr(); err != nil {
+		t.Errorf("LastErr = %v after the ended session failed again, want nil", err)
+	}
+}

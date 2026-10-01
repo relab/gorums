@@ -32,9 +32,9 @@ type serverOptions struct {
 type ServerOption func(*serverOptions)
 
 // WithBufferSizes configures the send and receive buffer sizes for the server.
-// The receiveSize is the number of received requests per stream that can wait
-// for the running handler; receiving from the stream waits while that many are
-// queued. A receiveSize of 0 selects the default of 4096.
+// The receiveSize is the number of requests received on each inbound stream
+// that can wait for the running handler; receiving from the stream waits while
+// that many are queued. A receiveSize of 0 selects the default of 4096.
 //
 // The sendSize controls the capacity of the server's per-node send queue for
 // outgoing peer messages, with the same full-queue semantics as
