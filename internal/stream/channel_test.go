@@ -1266,13 +1266,13 @@ func TestChannelStaleReceiverDoesNotRequeueCurrentPending(t *testing.T) {
 
 	deadline := time.Now().Add(200 * time.Millisecond)
 	for time.Now().Before(deadline) {
-		if len(c.sendQ) > 0 || !routerExists(c, msgID) {
+		if len(c.queue.ch) > 0 || !routerExists(c, msgID) {
 			break
 		}
 		time.Sleep(time.Millisecond)
 	}
 
-	if got := len(c.sendQ); got != 0 {
+	if got := len(c.queue.ch); got != 0 {
 		t.Fatalf("stale receiver requeued current-stream request: sendQ len = %d, want 0", got)
 	}
 	if !routerExists(c, msgID) {
@@ -1658,7 +1658,7 @@ func TestChannelDeadlock(t *testing.T) {
 			req := Request{Ctx: ctx, Msg: reqMsg}
 
 			select {
-			case tc.sendQ <- req:
+			case tc.queue.ch <- req:
 				doneChan <- true
 			case <-ctx.Done():
 				doneChan <- false

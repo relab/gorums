@@ -86,7 +86,7 @@ func (r Request) ReplyError(nodeID uint32, err error) {
 }
 
 type Channel struct {
-	sendQ chan Request
+	queue *sendQueue
 	id    uint32
 
 	// Connection lifecycle management: node close() cancels the
@@ -138,9 +138,6 @@ type Channel struct {
 	requests      *requestDispatch
 	pendingOwner  *pendingOwner
 	closeOnceFunc func() error
-
-	// droppedReplies counts replies silently dropped by trySend: see DroppedReplies.
-	droppedReplies atomic.Int64
 }
 
 // NewOutboundChannel creates a new channel for the given node and starts
@@ -148,7 +145,7 @@ type Channel struct {
 //
 // Note that we start both goroutines even though the connection and stream
 // have not yet been established. This is to prevent deadlock when invoking
-// a call type. The sender blocks on the sendQ and the receiver waits for
+// a call type. The sender blocks on the send queue and the receiver waits for
 // the stream to become available.
 //
 // When eagerReconnect is set, the receiver re-establishes a lost stream with
@@ -192,7 +189,7 @@ func NewInboundChannel(parentCtx context.Context, id uint32, sendBufferSize uint
 func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn *grpc.ClientConn, stream BidiStream, router *MessageRouter, eagerReconnect bool, onStreamChange func()) *Channel {
 	connCtx, connCancel := context.WithCancel(parentCtx)
 	c := &Channel{
-		sendQ:          make(chan Request, sendBufferSize),
+		queue:          newSendQueue(id, sendBufferSize, connCtx.Done()),
 		id:             id,
 		conn:           conn,
 		stream:         stream,
@@ -206,8 +203,9 @@ func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn 
 		onStreamChange: onStreamChange,
 	}
 	c.closeOnceFunc = sync.OnceValue(func() error {
-		// important to cancel first to stop goroutines
+		// important to cancel first to stop goroutines and end waits for queue space
 		connCancel()
+		c.queue.close()
 		c.setStreamUp(false)
 		// unblocks any pending senders/receivers; an inbound channel closes
 		// only with its stream, so its pending calls see the stream drop
@@ -253,14 +251,13 @@ func NewLocalChannel(id uint32, router *MessageRouter) *Channel {
 
 // isLocal reports whether this channel dispatches in-process.
 func (c *Channel) isLocal() bool {
-	// The nil sendQ is the discriminator: all outbound and inbound channels always
-	// allocate a sendQ via make(chan Request, ...) in newChannel.
-	return c.sendQ == nil
+	// The nil queue is the discriminator: newChannel always allocates one.
+	return c.queue == nil
 }
 
 // IsInbound reports whether this channel was created from a server-side stream.
 func (c *Channel) IsInbound() bool {
-	return c.conn == nil && c.sendQ != nil
+	return c.conn == nil && c.queue != nil
 }
 
 // IsOutbound returns true if this channel was created as an outbound client connection.
@@ -422,39 +419,8 @@ func (c *Channel) Enqueue(req Request) {
 		c.router.DispatchLocalRequest(c.id, req)
 		return
 	}
-	// Two-stage select: the outer non-blocking check catches the already-closed
-	// case deterministically. Go's select only falls through to default when no
-	// other case is ready, so if connCtx.Done() is already closed it always
-	// wins — unlike a plain single select, where Go randomly picks between a
-	// ready Done channel and a buffered sendQ.
-	// The inner selects handle the case where the node closes concurrently
-	// while we are waiting for sendQ space; there a narrow race remains, but
-	// drainSendQ (deferred in sender) will drain and ReplyError any entry that
-	// slips through after sender exits.
-	select {
-	case <-c.connCtx.Done():
-		// the node's close() method was called: respond with error instead of enqueueing
-		req.ReplyError(c.id, ErrNodeClosed)
-		return
-	default:
-	}
-	if req.wantServerResponse() {
-		// Two-way request: never wait for queue space.
-		c.trySend(req)
-		return
-	}
-	select {
-	case <-c.connCtx.Done():
-		// the node's close() method was called: respond with error instead of enqueueing
-		req.ReplyError(c.id, ErrNodeClosed)
-	case <-req.Ctx.Done():
-		// The request's own context ended while waiting for queue space. The
-		// sender checks the context again when it dequeues, so both wait points
-		// honor the request context.
-		req.ReplyError(c.id, req.Ctx.Err())
-	case c.sendQ <- req:
-		// enqueued successfully
-	}
+	// Two-way requests never wait for queue space.
+	c.queue.push(req, !req.wantServerResponse())
 }
 
 // TrySend enqueues req without waiting for queue space, as [Channel.trySend]
@@ -468,48 +434,15 @@ func (c *Channel) TrySend(req Request) {
 	c.trySend(req)
 }
 
-// trySend enqueues req without ever blocking the caller: if the node has
-// closed it replies ErrNodeClosed, and if the send queue is full it replies
-// ErrSendQueueFull instead of waiting for space. A request with no
-// ResponseChan (a back-channel reply) is simply dropped when the queue is
-// full, since there is no channel to deliver the error on; each such drop is
-// counted (see [Channel.DroppedReplies]).
-//
-// Two callers depend on it never blocking: two-way requests from
-// [Channel.Enqueue], and replies sent from a receive or dispatch loop, which
-// keeps reading inbound frames while the reply is queued; see
-// [Channel.dispatchInbound] for the client side and [Server.NodeStream] for
-// the server side.
+// trySend enqueues req without waiting for queue space; see [sendQueue.push].
 func (c *Channel) trySend(req Request) {
-	// Deterministic already-closed check: see the equivalent select in Enqueue.
-	select {
-	case <-c.connCtx.Done():
-		if req.ResponseChan == nil {
-			c.droppedReplies.Add(1)
-		}
-		req.ReplyError(c.id, ErrNodeClosed)
-		return
-	default:
-	}
-	select {
-	case c.sendQ <- req:
-		// enqueued successfully
-	default:
-		if req.ResponseChan == nil {
-			c.droppedReplies.Add(1)
-		}
-		req.ReplyError(c.id, ErrSendQueueFull)
-	}
+	c.queue.push(req, false)
 }
 
-// DroppedReplies returns the number of replies this channel has silently
-// dropped: requests with no ResponseChan (back-channel or inbound replies
-// dispatched from a receive/dispatch loop) that [Channel.trySend] could not
-// enqueue because the node had closed or the send queue was full. Two-way
-// requests are never counted here, since their caller already observes the
-// failure directly via ErrSendQueueFull or ErrNodeClosed.
+// DroppedReplies returns the number of requests without a response channel
+// that were dropped because the send queue was full or closed.
 func (c *Channel) DroppedReplies() int64 {
-	return c.droppedReplies.Load()
+	return c.queue.dropped.Load()
 }
 
 // cancelPendingMsgs cancels this channel's pending messages by sending an
@@ -520,15 +453,10 @@ func (c *Channel) cancelPendingMsgs(err error) {
 	}
 }
 
-// requeuePendingMsgs moves pending non-streaming requests back to sendQ for
-// retry on the next stream. Streaming requests (correctable calls) are cancelled
-// with ErrStreamDown because they cannot be safely retried.
-//
-// Only two-way requests are registered in the router, so every requeued entry
-// takes Enqueue's non-blocking fail-fast path. Calling Enqueue directly from
-// the sender goroutine (the sole sendQ reader) therefore cannot deadlock;
-// entries that do not fit are failed with [ErrSendQueueFull]. If the node closed meanwhile, Enqueue replies ErrNodeClosed and
-// drainSendQ (deferred in sender) drains any entries that slipped through.
+// requeuePendingMsgs moves pending non-streaming requests back to the send
+// queue for retry on the next stream, and fails streaming requests with
+// [ErrStreamDown]. Requeued requests are two-way, so they never wait for queue
+// space; those that do not fit fail with [ErrSendQueueFull].
 func (c *Channel) requeuePendingMsgs() {
 	requeue, cancel := c.router.requeuePending(c.pendingOwner)
 	for _, req := range cancel {
@@ -536,24 +464,6 @@ func (c *Channel) requeuePendingMsgs() {
 	}
 	for _, req := range requeue {
 		c.Enqueue(req)
-	}
-}
-
-// drainSendQ is deferred in sender() and drains any remaining requests from
-// sendQ when the sender goroutine exits, replying to each with ErrNodeClosed.
-// This handles both requests already in the queue and any that slip through
-// the narrow race window in Enqueue after connCtx is cancelled.
-// sendQ stays open for the channel's lifetime, since a concurrent Enqueue can
-// pass the outer connCtx check and then send on it.
-func (c *Channel) drainSendQ() {
-	for {
-		select {
-		case req := <-c.sendQ:
-			req.ReplyError(c.id, ErrNodeClosed)
-		default:
-			// sendQ is empty
-			return
-		}
 	}
 }
 
@@ -569,7 +479,9 @@ func (c *Channel) drainSendQ() {
 //   - Send success, two-way call: the router entry stays alive for receiver()
 //     to deliver the actual server response.
 func (c *Channel) sender() {
-	defer c.drainSendQ()
+	// The channel's context may end without Close; close the queue so later
+	// requests fail instead of waiting in it.
+	defer c.queue.close()
 
 	// eager connect; ignored if stream is down (will be retried on send)
 	_, _ = c.ensureStream()
@@ -580,8 +492,7 @@ func (c *Channel) sender() {
 		case <-c.connCtx.Done():
 			// the node's close() method was called: exit sender goroutine
 			return
-		case req = <-c.sendQ:
-			// take next request from sendQ
+		case req = <-c.queue.ch:
 		}
 
 		stream, err := c.ensureStream()
