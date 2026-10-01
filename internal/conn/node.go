@@ -235,12 +235,13 @@ func (n *Node) activeChannel() stream.Channel {
 // second NodeStream over one connection during connection churn, and the server
 // may register the streams in an order that does not match the client's
 // creation order. The most recently attached live channel is the node's active
-// channel; each channel is closed only when its own stream ends, and when the
-// active one ends, the next most recent live channel becomes active. Replies
-// to requests received on a stream ride that stream's channel.
+// channel; when the active one is detached, the next most recent live channel
+// becomes active. Replies to requests received on a stream ride that stream's
+// channel.
 //
-// detach is idempotent and returns true only when it removed the node's last
-// live channel (the peer left the configuration).
+// detach removes the channel from the node without closing it. It is
+// idempotent and returns true only when it removed the node's last live
+// channel (the peer left the configuration).
 func (n *Node) attachStream(streamCtx context.Context, inboundStream stream.BidiStream, opts stream.InboundOptions) (newCh *stream.InboundChannel, detach func() bool) {
 	transport := n.loadTransport()
 	opts.Latency = transport.Latency()
@@ -257,7 +258,6 @@ func (n *Node) attachStream(streamCtx context.Context, inboundStream stream.Bidi
 			return false // already detached
 		}
 		n.liveChannels = slices.Delete(n.liveChannels, i, i+1)
-		_ = newCh.Close()
 		if len(n.liveChannels) == 0 {
 			transport.StoreChannel(nil)
 			return true

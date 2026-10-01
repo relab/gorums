@@ -777,3 +777,69 @@ func TestOnConfigChangeCallbackIdempotentCleanup(t *testing.T) {
 		t.Fatalf("after double cleanup: onChange called %d time(s); want 2", callCount)
 	}
 }
+
+// stuckSendStream is a [stream.BidiStream] whose Send blocks until closed, as a
+// send to a peer that stopped reading does.
+type stuckSendStream struct {
+	entered chan struct{}
+	closed  chan struct{}
+}
+
+func (s *stuckSendStream) Send(*stream.Message) error {
+	select {
+	case s.entered <- struct{}{}:
+	default:
+	}
+	<-s.closed
+	return io.EOF
+}
+
+func (s *stuckSendStream) Recv() (*stream.Message, error) {
+	<-s.closed
+	return nil, io.EOF
+}
+
+// TestAcceptPeerCleanupDoesNotHoldManagerLock verifies that a stream's cleanup,
+// which waits for the channel's send loop, does not block the manager while
+// that send loop is stuck on the peer.
+func TestAcceptPeerCleanupDoesNotHoldManagerLock(t *testing.T) {
+	im := newTestInboundManager(t, 1)
+	st := &stuckSendStream{entered: make(chan struct{}, 1), closed: make(chan struct{})}
+	ch, cleanup, err := im.AcceptPeer(inboundCtx(t.Context(), 2), st)
+	if err != nil {
+		t.Fatalf("AcceptPeer: %v", err)
+	}
+	ch.Enqueue(stream.Request{Ctx: t.Context(), Oneway: true, Msg: stream.Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build()})
+	<-st.entered
+
+	cleanupDone := make(chan struct{})
+	go func() {
+		cleanup()
+		close(cleanupDone)
+	}()
+	waitCtx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	if err := im.WaitForPeers(waitCtx, func(cfg Config) bool { return !slices.Contains(cfg.NodeIDs(), 2) }); err != nil {
+		t.Fatalf("WaitForPeers while another stream's cleanup waited on its peer: %v", err)
+	}
+	accepted := make(chan struct{})
+	go func() {
+		other := newMockBidiStream()
+		defer other.close()
+		_, otherCleanup, _ := im.AcceptPeer(inboundCtx(t.Context(), 3), other)
+		otherCleanup()
+		close(accepted)
+	}()
+	select {
+	case <-accepted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("AcceptPeer blocked while another stream's cleanup waited on its peer")
+	}
+
+	close(st.closed)
+	select {
+	case <-cleanupDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("cleanup did not finish after the stuck send returned")
+	}
+}

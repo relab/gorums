@@ -293,7 +293,7 @@ func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream st
 // stream (e.g., during connection churn), attachStream installs the new channel
 // as active while keeping the prior one live until its own stream ends, so the
 // node never goes dark mid-handover; see [Node.attachStream]. The returned
-// cleanup function detaches this registration's channel.
+// cleanup function detaches and closes this registration's channel.
 func (im *InboundManager) registerPeer(streamCtx context.Context, inboundStream stream.BidiStream, id uint32) (*stream.InboundChannel, func(), error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
@@ -303,14 +303,13 @@ func (im *InboundManager) registerPeer(streamCtx context.Context, inboundStream 
 
 	return newCh, func() {
 		im.mu.Lock()
-		defer im.mu.Unlock()
-		_, ok := im.knownNodes[id]
-		if !ok {
-			return
-		}
-		if detach() {
+		if _, ok := im.knownNodes[id]; ok && detach() {
 			im.rebuildConfig()
 		}
+		im.mu.Unlock()
+		// Closing waits for the channel's send loop, which may wait on the
+		// peer, so it runs without holding im.mu.
+		_ = newCh.Close()
 	}, nil
 }
 
@@ -332,15 +331,14 @@ func (im *InboundManager) acceptClient(streamCtx context.Context, inboundStream 
 
 	return newCh, func() {
 		im.mu.Lock()
-		defer im.mu.Unlock()
-		_, ok := im.clientNodes[id]
-		if !ok {
-			return
-		}
-		if detach() {
+		if _, ok := im.clientNodes[id]; ok && detach() {
 			delete(im.clientNodes, id)
 			im.rebuildConfig()
 		}
+		im.mu.Unlock()
+		// Closing waits for the channel's send loop, which may wait on the
+		// peer, so it runs without holding im.mu.
+		_ = newCh.Close()
 	}, nil
 }
 
