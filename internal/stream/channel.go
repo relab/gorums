@@ -133,9 +133,9 @@ type Channel struct {
 	// Router handles response routing for pending calls. It is owned by the
 	// Node and injected into the Channel, so it survives channel replacement.
 	router *MessageRouter
-	// requests orders back-channel handlers for this channel. Its lifetime is
-	// connCtx, which outlives individual stream reconnects.
-	requests      *requestDispatch
+	// requests orders back-channel handlers for this channel, and local
+	// handlers for a local channel, across stream reconnects.
+	requests      *dispatcher
 	pendingOwner  *pendingOwner
 	closeOnceFunc func() error
 }
@@ -196,7 +196,7 @@ func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn 
 		connCtx:        connCtx,
 		connCancel:     connCancel,
 		router:         router,
-		requests:       newRequestDispatch(defaultRequestDispatchSize),
+		requests:       newDispatcher(connCtx.Done(), 0),
 		pendingOwner:   new(pendingOwner),
 		streamReady:    make(chan struct{}, 1),
 		eagerReconnect: eagerReconnect,
@@ -223,7 +223,6 @@ func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn 
 		// Signal that stream is immediately ready (inbound channel).
 		c.streamReady <- struct{}{}
 	}
-	go c.requests.run(c.connCtx)
 	go c.sender()
 	if conn != nil {
 		// Outbound channels need a receiver goroutine to route call responses
@@ -235,14 +234,13 @@ func newChannel(parentCtx context.Context, id uint32, sendBufferSize uint, conn 
 	return c
 }
 
-// NewLocalChannel creates a Channel that dispatches requests in-process,
-// bypassing the network entirely. The provided router must carry the
-// RequestHandler used to serve incoming call types on this node.
-// No goroutines are started; the channel's Close is a no-op.
+// NewLocalChannel creates a Channel that dispatches requests in-process to
+// the router's RequestHandler, bypassing the network. Its Close is a no-op.
 func NewLocalChannel(id uint32, router *MessageRouter) *Channel {
 	c := &Channel{
 		id:           id,
 		router:       router,
+		requests:     newDispatcher(nil, 0),
 		pendingOwner: new(pendingOwner),
 	}
 	c.closeOnceFunc = sync.OnceValue(func() error { return nil })
@@ -416,7 +414,7 @@ func (c *Channel) Enqueue(req Request) {
 		panic("gorums: Oneway and Streaming are mutually exclusive")
 	}
 	if c.isLocal() {
-		c.router.DispatchLocalRequest(c.id, req)
+		c.dispatchLocal(req, !req.wantServerResponse())
 		return
 	}
 	// Two-way requests never wait for queue space.
@@ -424,11 +422,10 @@ func (c *Channel) Enqueue(req Request) {
 }
 
 // TrySend enqueues req without waiting for queue space, as [Channel.trySend]
-// does. A local channel dispatches req in-process, which can briefly wait for
-// the router's dispatch lock.
+// does. A local channel dispatches req in-process.
 func (c *Channel) TrySend(req Request) {
 	if c.isLocal() {
-		c.router.DispatchLocalRequest(c.id, req)
+		c.dispatchLocal(req, false)
 		return
 	}
 	c.trySend(req)
@@ -672,13 +669,48 @@ func (c *Channel) pauseReconnect(delay *time.Duration) bool {
 // blocking [Channel.Enqueue]. The handler can then release while the send
 // queue is full, and the dispatcher can start the next request.
 func (c *Channel) dispatchInbound(msg *Message) {
-	if isServerSequenceNumber(msg.GetMessageSeqNo()) {
-		c.requests.enqueue(c.connCtx, func(release func()) {
+	msgID := msg.GetMessageSeqNo()
+	if isServerSequenceNumber(msgID) {
+		c.requests.push(c.connCtx, func(release func()) {
 			c.dispatchBackChannel(msg, release)
 		})
 		return
 	}
-	c.router.RouteMessage(c.connCtx, c.id, msg, c.trySend)
+	c.router.deliverPending(msgID, response{NodeID: c.id, Value: msg, Err: msg.ErrorStatus()})
+}
+
+// dispatchLocal queues req for the router's handler, waiting for queue space
+// if wait is true. It fails req with [ErrSendQueueFull] if the queue is full
+// and wait is false. A one-way request is confirmed once queued.
+func (c *Channel) dispatchLocal(req Request, wait bool) {
+	if req.Ctx.Err() != nil {
+		req.ReplyError(c.id, req.Ctx.Err())
+		return
+	}
+	handler := c.router.handler
+	if handler == nil {
+		req.ReplyError(c.id, status.Error(codes.Unimplemented, "no request handler registered"))
+		return
+	}
+	ctx := req.Msg.AppendToIncomingContext(req.Ctx)
+	send := func(msg *Message) {
+		if req.wantServerResponse() {
+			req.deliver(response{NodeID: c.id, Value: msg, Err: msg.ErrorStatus()})
+		}
+	}
+	run := func(release func()) { handler.HandleRequest(ctx, req.Msg, release, send) }
+	if wait {
+		if !c.requests.push(req.Ctx, run) {
+			req.ReplyError(c.id, req.Ctx.Err())
+			return
+		}
+	} else if !c.requests.tryPush(run) {
+		req.ReplyError(c.id, ErrSendQueueFull)
+		return
+	}
+	if req.wantSendConfirmation() {
+		req.deliver(response{NodeID: c.id})
+	}
 }
 
 // dispatchBackChannel runs one server-initiated request. release is the

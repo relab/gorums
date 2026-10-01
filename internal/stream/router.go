@@ -4,20 +4,17 @@ import (
 	"context"
 	"sync"
 	"time"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // RequestHandler is the interface that wraps the HandleRequest method.
 //
 // HandleRequest handles an incoming request message from the stream,
 // dispatching it to the appropriate method handler, as encoded in the
-// message's method field. It should be called in a new goroutine for
-// every request.
+// message's method field. Each call runs in its own goroutine.
 //
-// The release function must be idempotent. It must be called in the
-// handler to allow processing the next request from the stream.
+// The release function is idempotent. Calling it lets the next request from
+// the stream start before HandleRequest returns; otherwise the next request
+// starts when HandleRequest returns.
 //
 // The send function is used to deliver the provided response message
 // back to the communicating peer. For two-way call types, send may be
@@ -65,9 +62,6 @@ type MessageRouter struct {
 	pending map[uint64]pendingRequest
 	latency time.Duration
 	handler RequestHandler // shared by reference; may be nil
-	// dispatchMu serializes in-process handler dispatch for local channels.
-	// Stream readers do not take it. Each stream has its own request queue.
-	dispatchMu sync.Mutex
 }
 
 // NewMessageRouter creates a new MessageRouter with an optional RequestHandler.
@@ -112,79 +106,6 @@ func (r *MessageRouter) PendingCount() int {
 	return len(r.pending)
 }
 
-// DispatchLocalRequest handles the request in-process for the local node,
-// bypassing the network. It delivers the request to the registered handler,
-// serializing execution the same way remote nodes do: the next dispatch is
-// blocked until the handler returns or invokes the release callback it was
-// dispatched with.
-//
-// For one-way calls, send-completion is confirmed before the handler runs.
-// For two-way calls, the response is delivered directly to the caller's
-// response channel via the send closure.
-func (r *MessageRouter) DispatchLocalRequest(nodeID uint32, req Request) {
-	if req.Ctx.Err() != nil {
-		req.ReplyError(nodeID, req.Ctx.Err())
-		return
-	}
-	if r.handler == nil {
-		req.ReplyError(nodeID, status.Error(codes.Unimplemented, "no request handler registered"))
-		return
-	}
-	// One-way calls: confirm "send" completion before running the handler,
-	// since the caller blocks until confirmation arrives on ResponseChan.
-	if req.wantSendConfirmation() {
-		if !req.deliver(response{NodeID: nodeID}) {
-			return // request cancelled while waiting for send confirmation; do not run the handler.
-		}
-	}
-	send := func(msg *Message) {
-		// One-way fire-and-forget calls have no ResponseChan, so send is a no-op.
-		if !req.wantServerResponse() {
-			return
-		}
-		// Two-way calls: deliver the handler's response on ResponseChan.
-		req.deliver(response{NodeID: nodeID, Value: msg, Err: msg.ErrorStatus()})
-	}
-
-	r.dispatchSerialized(req.Msg.AppendToIncomingContext(req.Ctx), req.Msg, send)
-}
-
-// dispatchSerialized starts a handler while holding the router's dispatch lock.
-// The next dispatch blocks until the handler invokes the idempotent release
-// callback. Local in-process calls use this. A stream reader does not: it
-// enqueues requests and keeps reading while a handler has not released.
-func (r *MessageRouter) dispatchSerialized(ctx context.Context, msg *Message, send func(*Message)) {
-	r.dispatchMu.Lock()
-	var once sync.Once
-	release := func() { once.Do(r.dispatchMu.Unlock) }
-	go r.handler.HandleRequest(ctx, msg, release, send)
-}
-
-// RouteMessage demultiplexes a message received on the client-side (outbound) stream.
-// Server-initiated requests (back-channel calls, high-bit IDs) are dispatched to the
-// handler in a new goroutine, under the router's dispatch lock. The channel receiver
-// does not use that path: it enqueues those requests on its own dispatcher and calls
-// this method for responses. Responses to client-initiated calls (low-bit IDs) are
-// delivered to the matching pending call; responses to cancelled or unknown calls are
-// silently dropped.
-func (r *MessageRouter) RouteMessage(ctx context.Context, nodeID uint32, msg *Message, enqueue func(Request)) {
-	msgID := msg.GetMessageSeqNo()
-
-	// A server-initiated ID identifies a back-channel request to this client,
-	// not a response to any call the client registered.
-	if isServerSequenceNumber(msgID) {
-		if r.handler != nil {
-			send := func(reply *Message) {
-				enqueue(Request{Ctx: ctx, Msg: reply})
-			}
-			r.dispatchSerialized(msg.AppendToIncomingContext(ctx), msg, send)
-		}
-		return
-	}
-
-	r.deliverPending(msgID, response{NodeID: nodeID, Value: msg, Err: msg.ErrorStatus()})
-}
-
 // Register registers an unowned pending call awaiting a response.
 // Full-router cancellation and requeue operations include unowned calls,
 // while channel-scoped operations do not.
@@ -201,9 +122,8 @@ func (r *MessageRouter) register(owner *pendingOwner, msgID uint64, req Request)
 }
 
 // RouteInboundMessage demultiplexes a message received on the server-side (inbound) stream.
-// It is the symmetric counterpart of [RouteMessage] for the server-side receive path.
-// Client-initiated requests (low-bit IDs) are dispatched to the handler in a new goroutine,
-// or release is called immediately when no handler is registered. Responses to server-initiated
+// Client-initiated requests (low-bit IDs) are passed to the handler, which runs on the
+// caller's goroutine, or release is called immediately when no handler is registered. Responses to server-initiated
 // calls (high-bit IDs) are delivered to the matching pending call; stale responses from
 // cancelled calls are silently absorbed. The release function is always called.
 func (r *MessageRouter) RouteInboundMessage(ctx context.Context, nodeID uint32, msg *Message, release func(), send func(*Message)) {
@@ -211,7 +131,7 @@ func (r *MessageRouter) RouteInboundMessage(ctx context.Context, nodeID uint32, 
 	if !isServerSequenceNumber(msgID) {
 		// Client-initiated request: dispatch to handler or unblock the ordering lock.
 		if r.handler != nil {
-			go r.handler.HandleRequest(msg.AppendToIncomingContext(ctx), msg, release, send)
+			r.handler.HandleRequest(msg.AppendToIncomingContext(ctx), msg, release, send)
 		} else {
 			release()
 		}
