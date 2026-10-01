@@ -3,13 +3,11 @@ package stream
 import (
 	"context"
 	"errors"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/relab/gorums/internal/testutils/mock"
-	"google.golang.org/grpc/metadata"
 )
 
 func TestRouterRegisterAndDeliver(t *testing.T) {
@@ -52,8 +50,8 @@ func TestRouterDeliverUnknown(t *testing.T) {
 
 // TestRouterDeliverPendingUnknown verifies that deliverPending returns false for
 // any unmatched msgID, regardless of whether it is a client- or server-initiated ID.
-// Callers (RouteMessage, RouteInboundMessage) are responsible for handling the
-// server-initiated case before invoking deliverPending.
+// Callers are responsible for handling the server-initiated case before
+// invoking deliverPending.
 func TestRouterDeliverPendingUnknown(t *testing.T) {
 	t.Run("ServerInitiatedUnknownReturnsFalse", func(t *testing.T) {
 		r := NewMessageRouter()
@@ -392,149 +390,4 @@ func TestReplyErrorPrefersDeliveryWhenCanceledAndReplyChanReady(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("ReplyError dropped a ready delivery on canceled context")
 	}
-}
-
-// TestRouterRouteMessage verifies the three dispatch branches of RouteMessage.
-func TestRouterRouteMessage(t *testing.T) {
-	const nodeID = uint32(1)
-	connCtx := context.Background()
-
-	t.Run("RoutesToPendingCall", func(t *testing.T) {
-		r := NewMessageRouter()
-		replyChan := make(chan response, 1)
-		r.Register(42, Request{
-			Ctx:          connCtx,
-			Msg:          &Message{},
-			ResponseChan: replyChan,
-		})
-
-		msg := Message_builder{MessageSeqNo: 42, Method: mock.TestMethod}.Build()
-		r.RouteMessage(connCtx, nodeID, msg, nil)
-		select {
-		case got := <-replyChan:
-			if got.NodeID != nodeID {
-				t.Errorf("NodeID = %d, want %d", got.NodeID, nodeID)
-			}
-		default:
-			t.Fatal("expected response on channel")
-		}
-	})
-
-	t.Run("ServerInitiatedDispatchesHandler", func(t *testing.T) {
-		handler := newMockRequestHandler()
-		r := NewMessageRouter(handler)
-
-		enqueueCalled := false
-		enqueue := func(Request) { enqueueCalled = true }
-
-		msg := Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build()
-		r.RouteMessage(connCtx, nodeID, msg, enqueue)
-		// Wait for the handler goroutine to complete before reading handler.called.
-		select {
-		case <-handler.done:
-		case <-time.After(time.Second):
-			t.Fatal("handler was not called within timeout")
-		}
-		if !handler.called.Load() {
-			t.Error("handler was not called for server-initiated message")
-		}
-		// enqueue should not be triggered by the dispatch itself (only by send closure).
-		if enqueueCalled {
-			t.Error("enqueue should not be called during request dispatch")
-		}
-	})
-
-	t.Run("ServerInitiatedIncludesMessageMetadata", func(t *testing.T) {
-		const (
-			key  = "request-id"
-			want = "dedup-metadata"
-		)
-		handlerMD := make(chan metadata.MD, 1)
-		handler := requestHandlerFunc(func(ctx context.Context, _ *Message, release func(), _ func(*Message)) {
-			defer release()
-			md, _ := metadata.FromIncomingContext(ctx)
-			handlerMD <- md
-		})
-		r := NewMessageRouter(handler)
-		msgCtx := metadata.NewOutgoingContext(connCtx, metadata.Pairs(key, want))
-		msg, err := NewMessage(msgCtx, ServerSequenceNumber(1), mock.TestMethod, nil)
-		if err != nil {
-			t.Fatalf("NewMessage: %v", err)
-		}
-
-		r.RouteMessage(connCtx, nodeID, msg, func(Request) {})
-
-		select {
-		case md := <-handlerMD:
-			if got := md.Get(key); len(got) != 1 || got[0] != want {
-				t.Fatalf("incoming metadata %q = %v, want [%q]", key, got, want)
-			}
-		case <-time.After(time.Second):
-			t.Fatal("handler was not called within timeout")
-		}
-	})
-
-	t.Run("ServerInitiatedPreservesHandlerOrder", func(t *testing.T) {
-		firstStarted := make(chan struct{})
-		secondStarted := make(chan struct{})
-		releaseFirst := make(chan struct{})
-		var releaseOnce sync.Once
-		releaseHandler := func() { releaseOnce.Do(func() { close(releaseFirst) }) }
-		t.Cleanup(releaseHandler)
-		handler := requestHandlerFunc(func(_ context.Context, msg *Message, release func(), _ func(*Message)) {
-			switch msg.GetMessageSeqNo() {
-			case ServerSequenceNumber(1):
-				close(firstStarted)
-				<-releaseFirst
-			case ServerSequenceNumber(2):
-				close(secondStarted)
-			}
-			release()
-		})
-		r := NewMessageRouter(handler)
-		first := Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build()
-		second := Message_builder{MessageSeqNo: ServerSequenceNumber(2), Method: mock.TestMethod}.Build()
-
-		r.RouteMessage(connCtx, nodeID, first, func(Request) {})
-		select {
-		case <-firstStarted:
-		case <-time.After(time.Second):
-			t.Fatal("first handler was not called within timeout")
-		}
-
-		secondReturned := make(chan struct{})
-		go func() {
-			defer close(secondReturned)
-			r.RouteMessage(connCtx, nodeID, second, func(Request) {})
-		}()
-		select {
-		case <-secondStarted:
-			t.Fatal("second handler started before first handler released")
-		case <-time.After(50 * time.Millisecond):
-		}
-
-		releaseHandler()
-		select {
-		case <-secondStarted:
-		case <-time.After(time.Second):
-			t.Fatal("second handler did not start after first handler released")
-		}
-		select {
-		case <-secondReturned:
-		case <-time.After(time.Second):
-			t.Fatal("second RouteMessage did not return after dispatch")
-		}
-	})
-
-	t.Run("ServerInitiatedNoHandlerIsSilentlyDropped", func(_ *testing.T) {
-		r := NewMessageRouter()
-		msg := Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build()
-		r.RouteMessage(connCtx, nodeID, msg, nil) // must not panic
-	})
-
-	t.Run("ClientInitiatedUnknownIsSilentlyDropped", func(_ *testing.T) {
-		r := NewMessageRouter()
-		msg := Message_builder{MessageSeqNo: 999, Method: mock.TestMethod}.Build()
-		r.RouteMessage(connCtx, nodeID, msg, nil) // must not panic
-	})
 }

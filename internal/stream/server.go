@@ -18,7 +18,7 @@ type PeerNode interface {
 	// Messages with a server-initiated ID (high bit set) are responses to
 	// calls this server made; they are delivered to the matching pending call.
 	// Messages with a client-initiated ID (low bit) are new requests from
-	// the peer; they are dispatched to the registered handler in a new goroutine.
+	// the peer; they are passed to the registered handler on the caller's goroutine.
 	// release is always called — immediately for server-initiated messages,
 	// or by the handler for client-initiated requests.
 	RouteInbound(ctx context.Context, msg *Message, release func(), send func(*Message))
@@ -84,8 +84,7 @@ func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 		}
 	}()
 
-	requests := newRequestDispatch(defaultRequestDispatchSize)
-	go requests.run(ctx)
+	requests := newDispatcher(ctx.Done(), 0)
 
 	for {
 		streamIn, err := srv.Recv()
@@ -106,7 +105,7 @@ func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 			continue
 		}
 		msg := streamIn
-		requests.enqueue(ctx, func(release func()) {
+		requests.push(ctx, func(release func()) {
 			peerNode.RouteInbound(ctx, msg, release, send)
 		})
 	}

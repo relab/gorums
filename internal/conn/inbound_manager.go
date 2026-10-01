@@ -495,7 +495,7 @@ type nilPeerNode struct {
 // registered handler (if any).
 func (p *nilPeerNode) RouteInbound(ctx context.Context, msg *stream.Message, release func(), send func(*stream.Message)) {
 	if p.handler != nil {
-		go p.handler.HandleRequest(msg.AppendToIncomingContext(ctx), msg, release, send)
+		p.handler.HandleRequest(msg.AppendToIncomingContext(ctx), msg, release, send)
 	} else {
 		release()
 	}
