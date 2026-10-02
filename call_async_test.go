@@ -163,25 +163,47 @@ func BenchmarkAsyncQuorumCall(b *testing.B) {
 // TestOnewayAsyncWaitAfterContextEnds verifies that Wait reports confirmed
 // sends as successful even when the call's context has ended by the time Wait
 // runs, which is the pattern Async exists for.
+//
+// Each node's channel sends in order and confirms a one-way send before it
+// sends the next request, so a completed two-way call issued after Async
+// proves that the one-way sends were confirmed.
 func TestOnewayAsyncWaitAfterContextEnds(t *testing.T) {
 	config := gorumstest.Config(t, 3, gorumstest.DefaultServer)
+	node := config.Nodes()[0]
 	tests := []struct {
-		name  string
-		async func(ctx context.Context) *gorums.OnewayAsync
+		name    string
+		async   func(ctx context.Context) *gorums.OnewayAsync
+		barrier func() error
 	}{
-		{"Multicast", func(ctx context.Context) *gorums.OnewayAsync {
-			return gorumsimpl.Multicast(config.Context(ctx), pb.String("x"), mock.TestMethod).Async()
-		}},
-		{"Unicast", func(ctx context.Context) *gorums.OnewayAsync {
-			return gorumsimpl.Unicast(config.Nodes()[0].Context(ctx), pb.String("x"), mock.TestMethod).Async()
-		}},
+		{
+			name: "Multicast",
+			async: func(ctx context.Context) *gorums.OnewayAsync {
+				return gorumsimpl.Multicast(config.Context(ctx), pb.String("x"), mock.TestMethod).Async()
+			},
+			barrier: func() error {
+				_, err := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](config.Context(t.Context()), pb.String("x"), mock.TestMethod).All()
+				return err
+			},
+		},
+		{
+			name: "Unicast",
+			async: func(ctx context.Context) *gorums.OnewayAsync {
+				return gorumsimpl.Unicast(node.Context(ctx), pb.String("x"), mock.TestMethod).Async()
+			},
+			barrier: func() error {
+				_, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(t.Context()), pb.String("x"), mock.TestMethod)
+				return err
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for i := range 50 {
 				ctx, cancel := context.WithCancel(t.Context())
 				h := tt.async(ctx)
-				time.Sleep(10 * time.Millisecond) // let the sends complete
+				if err := tt.barrier(); err != nil {
+					t.Fatalf("iteration %d: barrier call: %v", i, err)
+				}
 				cancel()
 				if err := h.Wait(); err != nil {
 					t.Fatalf("iteration %d: Wait after cancel = %v, want nil for confirmed sends", i, err)
