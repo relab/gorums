@@ -10,6 +10,7 @@ import (
 type localServerOptions struct {
 	serverOpts []ServerOption
 	dialOpts   []DialOption
+	listen     func() (net.Listener, error)
 }
 
 // LocalServerOption configures [NewLocalServers]. Use [WithLocalServerOptions]
@@ -28,6 +29,15 @@ func WithLocalServerOptions(opts ...ServerOption) LocalServerOption {
 func WithLocalDialOptions(opts ...DialOption) LocalServerOption {
 	return func(o *localServerOptions) {
 		o.dialOpts = append(o.dialOpts, opts...)
+	}
+}
+
+// WithLocalListeners makes [NewLocalServers] create each server's listener with
+// listen instead of a TCP listener on a random localhost port. Each listener's
+// address must be a unique host:port that the servers' dial options reach.
+func WithLocalListeners(listen func() (net.Listener, error)) LocalServerOption {
+	return func(o *localServerOptions) {
+		o.listen = listen
 	}
 }
 
@@ -50,7 +60,11 @@ func NewLocalServers(n int, opts ...LocalServerOption) ([]*Server, func(), error
 			opt(&localOpts)
 		}
 	}
-	listeners, nodeSource, err := allocateListeners(n)
+	listen := localOpts.listen
+	if listen == nil {
+		listen = func() (net.Listener, error) { return net.Listen("tcp", "127.0.0.1:0") }
+	}
+	listeners, nodeSource, err := allocateListeners(n, listen)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -84,15 +98,14 @@ func closeServers(servers []*Server, listeners []net.Listener) {
 	}
 }
 
-// allocateListeners pre-allocates n TCP listeners on random localhost ports and
-// returns them along with a [NodeSource] containing their addresses. If any
-// listener fails to open, the listeners opened so far are closed before
-// returning the error.
-func allocateListeners(n int) ([]net.Listener, NodeSource, error) {
+// allocateListeners creates n listeners with listen and returns them along
+// with a [NodeSource] containing their addresses. If any listener fails to
+// open, the listeners opened so far are closed before returning the error.
+func allocateListeners(n int, listen func() (net.Listener, error)) ([]net.Listener, NodeSource, error) {
 	listeners := make([]net.Listener, n)
 	addrs := make([]string, n)
 	for i := range n {
-		lis, err := net.Listen("tcp", "127.0.0.1:0")
+		lis, err := listen()
 		if err != nil {
 			for j := range i {
 				_ = listeners[j].Close()
