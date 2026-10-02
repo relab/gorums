@@ -82,7 +82,9 @@ func (s *session) sendLoop(req *Request) *Request {
 // A two-way request must already be pending; a one-way request is confirmed
 // once it is sent.
 func (s *session) send(req Request) bool {
+	s.sendStart.Store(time.Now().UnixNano())
 	err := s.stream.Send(req.Msg)
+	s.sendStart.Store(0)
 	if err != nil {
 		s.fail(err)
 		if !req.wantServerResponse() {

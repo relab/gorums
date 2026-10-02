@@ -162,3 +162,62 @@ func TestSessionDrainEndsWhenCallerIsDone(t *testing.T) {
 		t.Fatal("draining session did not end after its streaming call's context ended")
 	}
 }
+
+// TestLastErrReportsStalledSend verifies that LastErr reports ErrSendStalled
+// while a send has been blocked for StallReportDelay or longer, and otherwise
+// the outcome of the latest stream operation.
+func TestLastErrReportsStalledSend(t *testing.T) {
+	streamErr := errors.New("stream broken")
+	tests := []struct {
+		name    string
+		blocked time.Duration // how long the send in progress has been blocked; 0 for none
+		lastErr error
+		want    error
+	}{
+		{name: "NoSend", want: nil},
+		{name: "NoSendAfterError", lastErr: streamErr, want: streamErr},
+		{name: "ShortSend", blocked: StallReportDelay / 2, lastErr: streamErr, want: streamErr},
+		{name: "StalledSend", blocked: 2 * StallReportDelay, want: ErrSendStalled},
+		{name: "StalledSendAfterError", blocked: 2 * StallReportDelay, lastErr: streamErr, want: ErrSendStalled},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := newEndpoint(t.Context(), 1, 1, 0, nil, nil)
+			t.Cleanup(e.cancel)
+			e.recordHealth(tt.lastErr)
+			if tt.blocked > 0 {
+				e.sendStart.Store(time.Now().Add(-tt.blocked).UnixNano())
+			}
+			if got := e.LastErr(); !errors.Is(got, tt.want) && got != tt.want {
+				t.Errorf("LastErr = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSessionSendMarksSendInProgress verifies that a send records its start
+// while it is blocked and clears it once it completes.
+func TestSessionSendMarksSendInProgress(t *testing.T) {
+	stream := newBlockingSendStream()
+	t.Cleanup(stream.close)
+	e := newEndpoint(t.Context(), 1, 4, 0, nil, nil)
+	t.Cleanup(e.cancel)
+	ctx, cancel := context.WithCancel(e.ctx)
+	s := newSession(&e, stream, ctx, cancel, true, true)
+
+	e.Enqueue(Request{Ctx: t.Context(), Oneway: true, Msg: Message_builder{MessageSeqNo: 1}.Build()})
+	go s.sendLoop(nil)
+	<-stream.entered
+	if e.sendStart.Load() == 0 {
+		t.Fatal("blocked send did not record its start")
+	}
+	stream.release()
+	waitID(t, stream.sends, 1, "send completion")
+	deadline := time.Now().Add(defaultTestTimeout)
+	for e.sendStart.Load() != 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if e.sendStart.Load() != 0 {
+		t.Error("completed send did not clear its start")
+	}
+}

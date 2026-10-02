@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"sync/atomic"
+	"time"
 )
 
 // Channel carries requests to one node. It is implemented by
@@ -16,8 +17,9 @@ type Channel interface {
 	Enqueue(req Request)
 	// StreamUp reports whether the channel can currently carry requests.
 	StreamUp() bool
-	// LastErr returns the error of the channel's most recent stream
-	// operation, or nil if it succeeded.
+	// LastErr returns [ErrSendStalled] while a send has been blocked for
+	// [StallReportDelay] or longer, and otherwise the error of the channel's
+	// most recent stream operation, or nil if it succeeded.
 	LastErr() error
 	// DroppedReplies returns the number of handler replies dropped because
 	// the send queue was full or closed.
@@ -59,6 +61,10 @@ type endpoint struct {
 	latency  *Latency       // may be nil
 	lastErr  atomic.Pointer[error]
 
+	// sendStart is when the send in progress began, in Unix nanoseconds, or 0
+	// if there is none. A channel sends on one goroutine at a time.
+	sendStart atomic.Int64
+
 	// waitingReplies makes handler replies wait for queue space until the
 	// channel closes, instead of being dropped when the queue is full.
 	waitingReplies bool
@@ -99,8 +105,13 @@ func (e *endpoint) DroppedReplies() int64 {
 }
 
 // LastErr implements [Channel.LastErr]. It reports the channel's current
-// health, not the outcome of any one request.
+// health, not the outcome of any one request: [ErrSendStalled] while a send
+// has been blocked for [StallReportDelay] or longer, and otherwise the outcome
+// of the latest stream operation.
 func (e *endpoint) LastErr() error {
+	if start := e.sendStart.Load(); start != 0 && time.Since(time.Unix(0, start)) >= StallReportDelay {
+		return ErrSendStalled
+	}
 	if err := e.lastErr.Load(); err != nil {
 		return *err
 	}
