@@ -189,3 +189,62 @@ func TestChannelGoAwayEndsStreamUnderLoad(t *testing.T) {
 		t.Errorf("call failed: %v", err)
 	}
 }
+
+// TestChannelGoAwayEndsStreamAfterStreamingCall verifies that a stream whose
+// connection receives GOAWAY ends after the streaming call it carried is done,
+// as signaled by the call's context ending.
+func TestChannelGoAwayEndsStreamAfterStreamingCall(t *testing.T) {
+	carrierEnded := make(chan struct{}, 1)
+	tc := setupChannel(t, func(stream Gorums_NodeStreamServer) error {
+		carrier := false
+		defer func() {
+			if carrier {
+				carrierEnded <- struct{}{}
+			}
+		}()
+		for {
+			in, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			carrier = carrier || in.GetMessageSeqNo() == 1
+			if err := stream.Send(in); err != nil {
+				return err
+			}
+		}
+	}, grpc.KeepaliveParams(keepalive.ServerParameters{
+		MaxConnectionAge:      500 * time.Millisecond,
+		MaxConnectionAgeGrace: time.Hour,
+	}))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	r := make(chan response, 1)
+	tc.Enqueue(Request{
+		Ctx:          ctx,
+		Msg:          Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
+		Streaming:    true,
+		ResponseChan: r,
+	})
+	select {
+	case resp := <-r:
+		if resp.Err != nil {
+			t.Fatalf("streaming call: %v", resp.Err)
+		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("streaming call got no response")
+	}
+
+	// The streaming call stays pending, so its stream outlives GOAWAY.
+	select {
+	case <-carrierEnded:
+		t.Fatal("stream ended while its streaming call was live")
+	case <-time.After(time.Second):
+	}
+	cancel()
+	select {
+	case <-carrierEnded:
+	case <-time.After(3 * time.Second):
+		t.Fatal("stream did not end after GOAWAY once its streaming call was done")
+	}
+}
