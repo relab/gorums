@@ -232,7 +232,8 @@ func Servers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface)
 }
 
 // LocalServers returns n started Gorums servers forming a symmetric peer
-// group on random localhost ports (see [gorums.NewLocalServers]). Each
+// group (see [gorums.NewLocalServers]), connected in memory in the default
+// build and over localhost TCP under the integration build tag. Each
 // server auto-creates a peer [gorums.Config] over the group, accessible
 // via [gorums.Server.PeerConfig]. The servers are automatically stopped
 // when the test finishes via t.Cleanup. Any [gorums.ServerOption]s (for
@@ -246,7 +247,11 @@ func LocalServers(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.Se
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
 
-	srvs, stop, err := gorums.NewLocalServers(n, gorums.WithLocalServerOptions(opts...), gorums.WithLocalDialOptions(InsecureDialOptions(t)))
+	srvs, stop, err := gorums.NewLocalServers(n,
+		gorums.WithLocalServerOptions(opts...),
+		gorums.WithLocalDialOptions(DialOptions(t)),
+		gorums.WithLocalListeners(servers.Listen(t)),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
