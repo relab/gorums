@@ -184,9 +184,10 @@ func (s *session) retry(req Request) {
 }
 
 // startDrain stops the session from taking requests from the send queue. The
-// session ends once its pending calls have completed.
+// session ends once each pending call has completed or its context has ended.
 func (s *session) startDrain() {
 	if s.draining.CompareAndSwap(false, true) {
+		s.pending.watchExpiry(s.endIfDrained)
 		close(s.drain)
 	}
 	s.endIfDrained()

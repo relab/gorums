@@ -143,3 +143,22 @@ func TestSessionFailRecordsOnlyLiveErrors(t *testing.T) {
 		t.Errorf("LastErr = %v after the ended session failed again, want nil", err)
 	}
 }
+
+// TestSessionDrainEndsWhenCallerIsDone verifies that a draining session whose
+// remaining pending call is streaming ends once that call's context ends.
+func TestSessionDrainEndsWhenCallerIsDone(t *testing.T) {
+	s := newTestSession(t, 1, nil, true, true)
+	ctx, cancel := context.WithCancel(t.Context())
+	s.pending.add(1, Request{Ctx: ctx, Msg: &Message{}, Streaming: true, ResponseChan: make(chan response, 1)})
+	s.startDrain()
+	s.stopSending()
+	if s.ended() {
+		t.Fatal("session ended while a streaming call was live")
+	}
+	cancel()
+	select {
+	case <-s.done:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("draining session did not end after its streaming call's context ended")
+	}
+}
