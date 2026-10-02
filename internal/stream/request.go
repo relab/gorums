@@ -18,7 +18,15 @@ var (
 	// node's send queue is full; one-way requests wait for space instead (see
 	// [Channel]).
 	ErrSendQueueFull = status.Error(codes.Unavailable, "send queue full")
+	// ErrSendStalled is reported by [Channel.LastErr] while a send on the
+	// node's stream has been blocked for [StallReportDelay] or longer, as when
+	// the peer has stopped reading the stream.
+	ErrSendStalled = status.Error(codes.Unavailable, "send stalled")
 )
+
+// StallReportDelay is how long a send must be blocked before [Channel.LastErr]
+// reports [ErrSendStalled].
+const StallReportDelay = time.Second
 
 // BidiStream abstracts both client-side and server-side bidirectional streams.
 // Both grpc.BidiStreamingClient[Message, Message] and

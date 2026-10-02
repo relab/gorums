@@ -33,6 +33,11 @@ var ErrNodeClosed = stream.ErrNodeClosed
 // match it with [errors.Is].
 var ErrSendQueueFull = stream.ErrSendQueueFull
 
+// ErrSendStalled is reported by [Node.LastErr] while a send to the node has
+// been blocked for a second or longer, as when the node has stopped reading
+// its stream.
+var ErrSendStalled = stream.ErrSendStalled
+
 // ErrSkipNode is returned when a node is skipped by request transformations.
 // This allows the response iterator to account for all nodes without blocking.
 var ErrSkipNode = impl.ErrSkipNode

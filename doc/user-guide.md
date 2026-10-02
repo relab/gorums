@@ -558,6 +558,7 @@ Summary:
 **A cancelled call leaves the node's stream intact.**
 When a call's context ends, the call returns, but the request may still be sent if it was already queued or in flight, and a late reply is discarded.
 A node that stops reading its stream while its connection stays open stalls the sends behind it; two-way calls to that node then fail fast with `ErrSendQueueFull` once its queue fills, so quorum calls proceed with the remaining nodes.
+While a send to a node has been blocked for a second or longer, `Node.LastErr` reports `gorums.ErrSendStalled`, so `ByLastError` orders the node last.
 gRPC keepalive, enabled with `gorums.WithGRPCDialOptions(grpc.WithKeepaliveParams(...))`, detects a node whose connection or process is gone; it does not detect a live node that has stopped reading one stream, since the transport still answers keepalive pings.
 
 ## Iterator-Based Custom Aggregation
