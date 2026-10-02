@@ -86,12 +86,25 @@ func (r *bufconnRegistry) cleanup(t testing.TB) {
 // returns their addresses and a variadic stop function.
 func Start(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func(...int)) {
 	t.Helper()
+	listenFn := newListenFunc(t)
+	return setupServers(t, numServers, srvFn, func(int) net.Listener { return listenFn() })
+}
 
-	// mu guards addrToListener, which dials read while servers are added.
+// Listen returns a function that creates an in-memory bufconn listener with a
+// unique address, which the dialer from [DialOptions] for t can reach.
+func Listen(t testing.TB) func() (net.Listener, error) {
+	listenFn := newListenFunc(t)
+	return func() (net.Listener, error) { return listenFn(), nil }
+}
+
+// newListenFunc returns a function that creates bufconn listeners and
+// registers a dialer for t that reaches them.
+func newListenFunc(t testing.TB) func() net.Listener {
+	// mu guards addrToListener, which dials read while listeners are added.
 	var mu sync.Mutex
-	addrToListener := make(map[string]*bufconn.Listener, numServers)
+	addrToListener := make(map[string]*bufconn.Listener)
 
-	listenFn := func(_ int) net.Listener {
+	listenFn := func() net.Listener {
 		lis := bufconn.Listen(bufSize)
 		addr := globalBufconnRegistry.nextAddress()
 		mu.Lock()
@@ -119,8 +132,7 @@ func Start(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]strin
 	if isFirst {
 		t.Cleanup(func() { globalBufconnRegistry.cleanup(t) })
 	}
-
-	return setupServers(t, numServers, srvFn, listenFn)
+	return listenFn
 }
 
 // DialOptions returns the gRPC dial options needed to connect to servers
