@@ -9,9 +9,13 @@ import (
 // minSweepSize is the table size at which add first removes expired calls.
 const minSweepSize = 64
 
-// pendingCalls holds the two-way calls sent on one stream that await responses.
-// A call whose context has ended is removed once the table has doubled in size
-// since the last sweep, and at once while the table watches for expiry.
+// pendingCalls holds the two-way calls sent on one stream that await
+// responses. Calls whose contexts have ended are removed when [pendingCalls.add]
+// finds that the table has doubled in size since its last sweep and holds at
+// least [minSweepSize] calls. Once [pendingCalls.watchExpiry] is called, as when
+// the stream starts draining, each call is instead removed as soon as its
+// context ends. Until then, a call whose context ended after the last sweep
+// stays in the table until the next sweep or until the stream ends.
 type pendingCalls struct {
 	mu       sync.Mutex
 	calls    map[uint64]pendingCall

@@ -25,6 +25,8 @@ type Channel interface {
 	// the send queue was full or closed.
 	DroppedReplies() int64
 	// PendingCount returns the number of two-way calls awaiting responses.
+	// The count may include calls whose callers are done but that have not
+	// yet been removed.
 	PendingCount() int
 	// Close closes the channel and fails its queued and pending requests.
 	Close() error
