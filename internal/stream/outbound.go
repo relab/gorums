@@ -35,10 +35,20 @@ type OutboundOptions struct {
 	OnStreamChange func()
 }
 
-// OutboundChannel is a [Channel] over streams this node dials to a server. It
-// opens a stream on creation and re-establishes a lost one, and requests that
-// were pending on a lost stream are sent again on the next one, except
-// streaming requests, which fail with [ErrStreamDown].
+// OutboundChannel is a [Channel] over a stream that this node opens to a
+// server. It opens the stream when it is created. If the stream fails, for
+// example because the connection breaks or the server stops, the channel
+// opens a new stream; [OutboundOptions.EagerReconnect] controls how soon.
+//
+// Calls still awaiting responses when the stream fails are sent again on the
+// new stream. Calls that do not fit in the send queue fail with
+// [ErrSendQueueFull]. Streaming calls fail with [ErrStreamDown] instead. They
+// are not sent again, since they may already have received responses.
+//
+// A server that shuts down gracefully first tells the client to stop using
+// the connection (a GOAWAY). The channel then sends new calls on a new
+// stream. Calls already sent on the old stream complete there, and the old
+// stream ends once it has no calls left.
 type OutboundChannel struct {
 	endpoint
 	conn           *grpc.ClientConn
@@ -47,7 +57,7 @@ type OutboundChannel struct {
 	streamUp       atomic.Bool
 
 	mu       sync.Mutex
-	sessions map[*session]struct{} // sessions whose receive loop is running
+	sessions map[*session]struct{} // sessions still receiving; two during a GOAWAY handover
 
 	wg        sync.WaitGroup
 	closeOnce func() error

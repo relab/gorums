@@ -7,8 +7,11 @@ import (
 	"time"
 )
 
-// session is one stream of a channel. It sends queued requests on the stream,
-// routes the frames received on it, and holds the two-way calls sent on it.
+// session is a channel's state for one gRPC stream. A session sends queued
+// requests on the stream, routes the frames received from the stream, and
+// holds the two-way calls awaiting responses on the stream. An inbound channel
+// has one session. An outbound channel starts a new session for each stream
+// that the channel opens.
 type session struct {
 	*endpoint
 	stream BidiStream
@@ -18,8 +21,8 @@ type session struct {
 	// serverRequests reports whether the peer's requests carry
 	// server-initiated IDs, as they do on a stream this side dialed.
 	serverRequests bool
-	// requeue reports whether calls left pending when the session ends are
-	// sent again on the channel's next session.
+	// requeue is set on an outbound session. Calls still pending when the
+	// session ends are then queued again for the channel's next session.
 	requeue bool
 
 	pending pendingCalls
@@ -169,11 +172,19 @@ func (s *session) ended() bool {
 	}
 }
 
-// retry queues req for the channel's next session if the session requeues
-// calls and req is not streaming; a streaming call may already have received
-// responses, so it cannot be sent again. Otherwise it fails req with
-// [ErrNodeClosed] if the session requeues calls and the channel is closed, or
-// with [ErrStreamDown].
+// retry queues a call that was pending when the session ended, so that the
+// call is sent again on the channel's next session.
+//
+// On an outbound session, retry fails the call only in these cases:
+//
+//   - A streaming call fails with [ErrStreamDown], since the call may already
+//     have received responses.
+//   - A non-streaming call fails with [ErrSendQueueFull] if the send queue is
+//     full.
+//   - Any call fails with [ErrNodeClosed] if the channel is closed.
+//
+// An inbound channel has no next session, so on an inbound session, retry
+// fails every call with [ErrStreamDown].
 func (s *session) retry(req Request) {
 	switch {
 	case s.requeue && !req.Streaming:
