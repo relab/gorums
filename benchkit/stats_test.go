@@ -270,6 +270,34 @@ func TestSymmetricMulticastCorrectedResultHDR(t *testing.T) {
 	}
 }
 
+// TestStatsCorrectedNegativeSamples verifies that a raw sample below zero
+// keeps its value until the per-sender clock correction. A sender whose clock
+// runs ahead of the receiver by more than the transit time yields negative raw
+// samples, and both modes must correct them to the true transit time.
+func TestStatsCorrectedNegativeSamples(t *testing.T) {
+	const (
+		transit = 100 * time.Microsecond
+		ahead   = 10 * time.Millisecond
+	)
+	for _, mode := range []StatsMode{StatsMode_EXACT, StatsMode_HDR} {
+		t.Run(mode.String(), func(t *testing.T) {
+			s := NewStats(mode)
+			s.Start()
+			s.AddLatencyBySender(1, transit-ahead)
+			s.End()
+
+			r := s.GetResultCorrected(map[uint32]int64{1: int64(ahead)})
+			if got := r.GetTotalOps(); got != 1 {
+				t.Errorf("TotalOps = %d, want 1", got)
+			}
+			// 3 sigfigs at a raw magnitude near 10ms resolves to about 8µs.
+			if got := r.Percentiles(0.5)[0]; got < transit-10*time.Microsecond || got > transit+10*time.Microsecond {
+				t.Errorf("corrected p50 = %v, want ≈%v", got, transit)
+			}
+		})
+	}
+}
+
 // TestStatsResetSwitchesMode verifies that Reset reconfigures the aggregate and
 // per-sender stores to the requested mode, so one Stats can back consecutive
 // runs with different StatsMode values.

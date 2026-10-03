@@ -116,6 +116,36 @@ func TestCorrectLatenciesHistogram(t *testing.T) {
 	}
 }
 
+// TestCorrectLatenciesNegativeSamples verifies that a server-measured result
+// keeps raw samples below zero until the coordinator corrects them. A server
+// whose clock runs behind the sender by more than the transit time records
+// negative raw samples, and both modes must correct them to the true transit
+// time.
+func TestCorrectLatenciesNegativeSamples(t *testing.T) {
+	const (
+		transit = 100 * time.Microsecond
+		behind  = 10 * time.Millisecond
+	)
+	for _, mode := range []StatsMode{StatsMode_EXACT, StatsMode_HDR} {
+		t.Run(mode.String(), func(t *testing.T) {
+			s := NewStats(mode)
+			s.Start()
+			s.AddLatency(transit - behind)
+			s.End()
+
+			r := s.GetResult()
+			CorrectLatencies(r, -int64(behind))
+			if got := r.GetTotalOps(); got != 1 {
+				t.Errorf("TotalOps = %d, want 1", got)
+			}
+			// 3 sigfigs at a raw magnitude near 10ms resolves to about 8µs.
+			if got := r.Percentiles(0.5)[0]; got < transit-10*time.Microsecond || got > transit+10*time.Microsecond {
+				t.Errorf("corrected p50 = %v, want ≈%v", got, transit)
+			}
+		})
+	}
+}
+
 // captureStderr redirects os.Stderr for the duration of f and returns everything
 // written to it, restoring the original stderr before returning.
 func captureStderr(t *testing.T, f func()) string {
