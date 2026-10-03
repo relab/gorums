@@ -327,7 +327,7 @@ func (s *Stats) GetResult() *Result {
 		if samples := store.Samples(); samples != nil {
 			r.SetLatencies(slices.Clone(samples))
 		} else if hs, ok := store.(*hdrStore); ok {
-			r.SetHistogram(hs.h.snapshot())
+			r.SetHistogram(hs.snapshot())
 		}
 	}
 	return r
@@ -352,7 +352,7 @@ func (s *Stats) GetResultCorrected(offsets map[uint32]int64) *Result {
 		agg := newHDRHistogram()
 		for _, id := range slices.Sorted(maps.Keys(s.bySender)) {
 			if hs, ok := s.bySender[id].(*hdrStore); ok {
-				agg.recordPairs(hs.h.buckets(), offsets[id])
+				agg.recordPairs(hs.buckets(), offsets[id])
 			}
 		}
 		return s.resultFromHistogram(agg)

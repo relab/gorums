@@ -136,9 +136,9 @@ func (h *Histogram) RecordValueN(v int64, n uint64) error {
 // h, clamping each shifted value into h's trackable range [0, highest]. It is
 // the shared core of clock-offset correction and histogram merging: delta is a
 // per-source clock offset (0 when merging already-corrected histograms).
-// Clamping matches [hdrStore.Add], so a correction that pushes a value below
-// zero or above the ceiling never drops the sample, whose count feeds
-// throughput and the distribution.
+// The pairs may carry negative values, such as the raw samples of an
+// [hdrStore]. Clamping keeps a sample whose shifted value lands below zero or
+// above the ceiling, since its count feeds throughput and the distribution.
 func (h *Histogram) recordPairs(pairs iter.Seq2[int64, uint64], delta int64) {
 	for v, c := range pairs {
 		_ = h.RecordValueN(min(max(v+delta, 0), h.highest), c)

@@ -1,5 +1,9 @@
 package benchkit
 
+import "slices"
+
+import "iter"
+
 // SampleStore accumulates latency samples for one benchmark run.
 // Implementations are not thread-safe; callers must serialize access.
 //
@@ -58,27 +62,79 @@ func newHDRHistogram() *Histogram {
 	return NewHistogram(hdrLowest, hdrHighest, hdrSigfigs)
 }
 
-// hdrStore backs StatsMode_HDR: it retains no raw samples, only a log-linear
-// [Histogram] in constant memory. The histogram is persisted on the Result as
+// hdrStore backs StatsMode_HDR: it retains no raw samples, only log-linear
+// [Histogram]s in constant memory. The histogram is persisted on the Result as
 // a LatencyHistogram (see [Stats.GetResult]), from which consumers compute
 // approximate percentiles, mean, and stddev.
+//
+// A server-measured raw sample is negative when the sender's clock runs ahead
+// of the receiver's by more than the transit time. Its sign must survive until
+// the clock-offset correction, so neg records the magnitudes of negative
+// samples and h records the rest.
 type hdrStore struct {
-	h *Histogram
+	h   *Histogram
+	neg *Histogram
 }
 
 func newHDRStore() *hdrStore {
-	return &hdrStore{h: newHDRHistogram()}
+	return &hdrStore{h: newHDRHistogram(), neg: newHDRHistogram()}
 }
 
-// Add records ns, clamped into the trackable range: a sample must never be
-// dropped, since the op count feeds throughput.
+// Add records ns, its magnitude clamped to the trackable ceiling: a sample
+// must never be dropped, since the op count feeds throughput.
 func (s *hdrStore) Add(ns int64) {
-	_ = s.h.RecordValue(min(max(ns, 0), hdrHighest))
+	if ns < 0 {
+		_ = s.neg.RecordValue(min(-ns, hdrHighest))
+		return
+	}
+	_ = s.h.RecordValue(min(ns, hdrHighest))
 }
 
-func (s *hdrStore) Count() uint64    { return s.h.TotalCount() }
+func (s *hdrStore) Count() uint64    { return s.h.TotalCount() + s.neg.TotalCount() }
 func (s *hdrStore) Samples() []int64 { return nil }
-func (s *hdrStore) Reset()           { s.h.Reset() }
+
+func (s *hdrStore) Reset() {
+	s.h.Reset()
+	s.neg.Reset()
+}
+
+// buckets yields each occupied bucket of both histograms in ascending value
+// order as the pair (median-equivalent value, count); see [Histogram.buckets].
+func (s *hdrStore) buckets() iter.Seq2[int64, uint64] {
+	return func(yield func(int64, uint64) bool) {
+		var values []int64
+		var counts []uint64
+		for v, c := range s.neg.buckets() {
+			values = append(values, -v)
+			counts = append(counts, c)
+		}
+		for i, value := range slices.Backward(values) {
+			if !yield(value, counts[i]) {
+				return
+			}
+		}
+		for v, c := range s.h.buckets() {
+			if !yield(v, c) {
+				return
+			}
+		}
+	}
+}
+
+// snapshot renders the store's occupied buckets as a LatencyHistogram message;
+// see [Histogram.snapshot]. Returns nil when empty.
+func (s *hdrStore) snapshot() *LatencyHistogram {
+	if s.Count() == 0 {
+		return nil
+	}
+	var values []int64
+	var counts []uint64
+	for v, c := range s.buckets() {
+		values = append(values, v)
+		counts = append(counts, c)
+	}
+	return LatencyHistogram_builder{Value: values, Count: counts}.Build()
+}
 
 // offsetHistogram returns src re-quantized onto the canonical HDR layout with
 // delta added to every value, for clock-offset correction of a server-measured
