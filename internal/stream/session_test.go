@@ -13,7 +13,7 @@ func newTestSession(t *testing.T, sendBufferSize uint, handler RequestHandler, s
 	e := newEndpoint(t.Context(), 1, sendBufferSize, 0, handler, NewLatency())
 	t.Cleanup(e.cancel)
 	ctx, cancel := context.WithCancel(e.ctx)
-	return newSession(&e, newMockBidiStream(), ctx, cancel, serverRequests, requeue)
+	return newSession(ctx, cancel, &e, newMockBidiStream(), serverRequests, requeue)
 }
 
 // TestSessionHandleDeliversResponse verifies that a response is delivered to
@@ -203,7 +203,7 @@ func TestSessionSendMarksSendInProgress(t *testing.T) {
 	e := newEndpoint(t.Context(), 1, 4, 0, nil, nil)
 	t.Cleanup(e.cancel)
 	ctx, cancel := context.WithCancel(e.ctx)
-	s := newSession(&e, stream, ctx, cancel, true, true)
+	s := newSession(ctx, cancel, &e, stream, true, true)
 
 	e.Enqueue(Request{Ctx: t.Context(), Oneway: true, Msg: Message_builder{MessageSeqNo: 1}.Build()})
 	go s.sendLoop(nil)

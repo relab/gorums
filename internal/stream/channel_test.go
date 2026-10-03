@@ -1225,7 +1225,7 @@ func TestChannelReceiverDispatchesOnlyServerInitiatedUnknownMessages(t *testing.
 			handler := &signalingRequestHandler{called: make(chan *Message, 1)}
 			e := newEndpoint(t.Context(), 1, 1, 0, handler, nil)
 			ctx, cancel := context.WithCancel(e.ctx)
-			s := newSession(&e, stream, ctx, cancel, true, true)
+			s := newSession(ctx, cancel, &e, stream, true, true)
 			t.Cleanup(e.cancel)
 
 			done := make(chan struct{})
@@ -1435,7 +1435,7 @@ func TestChannelSessionEndWithFullQueue(t *testing.T) {
 	e := newEndpoint(t.Context(), 1, sendBufSize, 0, nil, nil)
 	t.Cleanup(e.cancel)
 	ctx, cancel := context.WithCancel(e.ctx)
-	s := newSession(&e, stream, ctx, cancel, true, true)
+	s := newSession(ctx, cancel, &e, stream, true, true)
 
 	const numPending = sendBufSize + 2
 	replies := make(chan response, numPending)

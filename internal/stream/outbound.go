@@ -160,7 +160,7 @@ func (c *OutboundChannel) open() (*session, error) {
 		cancel()
 		return nil, err
 	}
-	s := newSession(&c.endpoint, st, ctx, cancel, true, true)
+	s := newSession(ctx, cancel, &c.endpoint, st, true, true)
 	c.mu.Lock()
 	c.sessions[s] = struct{}{}
 	c.mu.Unlock()
