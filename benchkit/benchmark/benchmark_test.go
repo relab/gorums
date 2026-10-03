@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -321,31 +322,32 @@ func TestAsyncQCBoundsInFlight(t *testing.T) {
 	}
 
 	const maxAsync = 64
-	var inFlight, peak atomic.Int64
+	// The harness dispatches a call only after taking a token, and returns the
+	// token only after an earlier call completed. So when a call is dispatched,
+	// every tracked call that is not yet done holds a token, and the number of
+	// such calls cannot exceed maxAsync, whatever the goroutine scheduling.
+	var (
+		mu          sync.Mutex
+		outstanding []AsyncEcho
+		peak        int
+	)
 	opts := benchkit.Options{Workers: 2, MaxAsync: maxAsync, Duration: 2 * time.Second, QuorumSize: 2}
 	res, err := runAsyncQCBenchmark(opts, target.servers[0].PeerConfig(),
 		func(cc *ConfigContext, in *Echo, quorumSize int) AsyncEcho {
 			fut := QuorumCall(cc, in).AsyncThreshold(quorumSize)
-			cur := inFlight.Add(1)
-			for {
-				old := peak.Load()
-				if cur <= old || peak.CompareAndSwap(old, cur) {
-					break
-				}
-			}
-			// Async.Get reads an already-closed channel, so observing the same
-			// future from a second goroutine is safe.
-			go func() { _, _ = fut.Get(); inFlight.Add(-1) }()
+			mu.Lock()
+			defer mu.Unlock()
+			outstanding = slices.DeleteFunc(outstanding, AsyncEcho.Done)
+			outstanding = append(outstanding, fut)
+			peak = max(peak, len(outstanding))
 			return fut
 		})
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
 
-	// The observer decrements after the benchmark's own completion path, so a
-	// small overshoot is measurement skew rather than a broken bound.
-	if got := peak.Load(); got > maxAsync*2 {
-		t.Errorf("peak in flight = %d, want <= %d (2x -max-async=%d)", got, maxAsync*2, maxAsync)
+	if peak > maxAsync {
+		t.Errorf("peak in flight = %d, want <= %d (-max-async)", peak, maxAsync)
 	}
 
 	lat := res.GetLatencies()
@@ -361,7 +363,7 @@ func TestAsyncQCBoundsInFlight(t *testing.T) {
 	throughput := float64(res.GetTotalOps()) / elapsed.Seconds()
 	concurrency := throughput * mean.Seconds()
 	t.Logf("throughput=%.0f/s mean=%v peak_in_flight=%d littles_law_concurrency=%.1f",
-		throughput, mean, peak.Load(), concurrency)
+		throughput, mean, peak, concurrency)
 	if concurrency > maxAsync*4 {
 		t.Errorf("throughput %.0f/s at mean latency %v implies %.0f concurrent calls, but -max-async=%d; "+
 			"the recorded latency is measuring the harness, not the calls",
