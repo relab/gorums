@@ -6,14 +6,16 @@ import (
 )
 
 // GenerateDevFiles generates a zorums_{{gorumsType}}_gorums.pb.go file for each Gorums datatype
-// and for each call type in the service definition.
-func GenerateDevFiles(gen *protogen.Plugin, file *protogen.File) {
-	if !gorumsGuard(gen, file) {
-		return
+// and for each call type in the service definition. It returns an error if the
+// file cannot be generated as written.
+func GenerateDevFiles(gen *protogen.Plugin, file *protogen.File) error {
+	if ok, err := gorumsGuard(gen, file); !ok {
+		return err
 	}
 	for gorumsType := range gorumsCallTypesInfo {
 		generateDevFile(gen, file, gorumsType)
 	}
+	return nil
 }
 
 func generateDevFile(gen *protogen.Plugin, file *protogen.File, gorumsType string) {

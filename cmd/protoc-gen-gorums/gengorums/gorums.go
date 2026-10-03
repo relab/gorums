@@ -3,7 +3,6 @@ package gengorums
 
 import (
 	"fmt"
-	"log"
 	"slices"
 	"strings"
 
@@ -18,10 +17,11 @@ import (
 // GenerateVersionMarkers specifies whether to generate version markers.
 var GenerateVersionMarkers = true
 
-// GenerateFile generates a _gorums.pb.go file containing Gorums service definitions.
-func GenerateFile(gen *protogen.Plugin, file *protogen.File) {
-	if !gorumsGuard(gen, file) {
-		return
+// GenerateFile generates a _gorums.pb.go file containing Gorums service
+// definitions. It returns an error if the file cannot be generated as written.
+func GenerateFile(gen *protogen.Plugin, file *protogen.File) error {
+	if ok, err := gorumsGuard(gen, file); !ok {
+		return err
 	}
 	filename := file.GeneratedFilenamePrefix + "_gorums.pb.go"
 	g := gen.NewGeneratedFile(filename, file.GoImportPath)
@@ -35,6 +35,7 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) {
 		addImport(path, ident, g)
 	}
 	generateFileContent(file, g)
+	return nil
 }
 
 func genGeneratedHeader(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile) {
@@ -74,50 +75,67 @@ func genVersionCheck(g *protogen.GeneratedFile) {
 	}
 }
 
-// gorumsGuard returns true if there is something for Gorums to generate
-// for the given file. If it returns false, there is nothing for Gorums
-// generate for this file. If may also fail with an error message.
-func gorumsGuard(gen *protogen.Plugin, file *protogen.File) bool {
+// gorumsGuard reports whether there is something for Gorums to generate for
+// the given file. It returns an error, and false, if the file has Gorums
+// methods but cannot be generated as written.
+func gorumsGuard(gen *protogen.Plugin, file *protogen.File) (bool, error) {
 	if len(file.Services) == 0 || !hasGorumsMethods(file.Services) {
 		// there is nothing for this plugin to do
-		return false
+		return false, nil
 	}
 	if len(file.Services) > 1 {
 		// To build multiple services, make separate proto files and
 		// run the plugin separately for each proto file.
 		// These cannot share the same Go package.
-		log.Fatalln("Gorums does not support multiple services in the same proto file.")
+		return false, fmt.Errorf("%s: Gorums does not support multiple services in the same proto file", file.Desc.Path())
 	}
-	checkReservedIdents(gen, file)
-	return true
+	if err := checkReservedIdents(gen, file); err != nil {
+		return false, err
+	}
+	for _, method := range file.Services[0].Methods {
+		if _, info := callType(method); info != nil {
+			if err := validateOptions(method); err != nil {
+				return false, err
+			}
+		}
+	}
+	return true, nil
 }
 
-// checkReservedIdents fails the generator if a Gorums reserved identifier names
-// a Go declaration in the file's Go package: a message or enum of any file in
+// checkReservedIdents returns an error if a Gorums reserved identifier names a
+// Go declaration in the file's Go package: a message or enum of any file in
 // the package, or an RPC method of the file's service. Each would collide with
 // the generated type aliases or client functions.
-func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) {
-	fail := func(kind, name string) {
+func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
+	check := func(kind, name string) error {
 		if slices.Contains(reservedIdents, name) {
-			log.Fatalf("%v.proto: contains %s %s, which is a reserved Gorums identifier.\n", file.GeneratedFilenamePrefix, kind, name)
+			return fmt.Errorf("%v.proto: contains %s %s, which is a reserved Gorums identifier", file.GeneratedFilenamePrefix, kind, name)
 		}
+		return nil
 	}
 	for _, f := range gen.Files {
 		if f.GoImportPath != file.GoImportPath {
 			continue
 		}
 		for _, msg := range f.Messages {
-			fail("message", msg.GoIdent.GoName)
+			if err := check("message", msg.GoIdent.GoName); err != nil {
+				return err
+			}
 		}
 		for _, enum := range f.Enums {
-			fail("enum", enum.GoIdent.GoName)
+			if err := check("enum", enum.GoIdent.GoName); err != nil {
+				return err
+			}
 		}
 	}
 	for _, service := range file.Services {
 		for _, method := range service.Methods {
-			fail("RPC method", method.GoName)
+			if err := check("RPC method", method.GoName); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 // GenerateFileContent generates the Gorums service definitions, excluding the package statement.
@@ -197,9 +215,6 @@ func genMethod(g *protogen.GeneratedFile, method *protogen.Method, targetType st
 	}
 	if targetType != "" && targetType != typeName {
 		return
-	}
-	if err := validateOptions(method); err != nil {
-		log.Fatal(err)
 	}
 	type methodData struct {
 		GenFile *protogen.GeneratedFile
