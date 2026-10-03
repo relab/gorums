@@ -70,8 +70,7 @@ func NewOutboundChannel(ctx context.Context, id uint32, conn *grpc.ClientConn, o
 		c.wg.Wait()
 		return c.conn.Close()
 	})
-	c.wg.Add(1)
-	go c.run()
+	c.wg.Go(c.run)
 	return c
 }
 
@@ -81,7 +80,6 @@ func NewOutboundChannel(ctx context.Context, id uint32, conn *grpc.ClientConn, o
 // is replaced at once and a lost one after a backoff delay; without it, either
 // is replaced on the next request.
 func (c *OutboundChannel) run() {
-	defer c.wg.Done()
 	defer c.queue.close()
 	delay := eagerReconnectBaseDelay
 	var retry <-chan time.Time
@@ -157,18 +155,15 @@ func (c *OutboundChannel) open() (*session, error) {
 	c.sessions[s] = struct{}{}
 	c.mu.Unlock()
 	c.setStreamUp(true)
-	c.wg.Add(2)
-	go func() {
-		defer c.wg.Done()
+	c.wg.Go(func() {
 		_ = s.receive()
 		c.mu.Lock()
 		delete(c.sessions, s)
 		c.mu.Unlock()
-	}()
-	go func() {
-		defer c.wg.Done()
+	})
+	c.wg.Go(func() {
 		c.watchGoAway(ctx, s)
-	}()
+	})
 	return s, nil
 }
 
