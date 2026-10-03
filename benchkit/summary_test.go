@@ -137,7 +137,7 @@ func TestSummarizeHDRHistogram(t *testing.T) {
 	}
 	// Weighted p50 over (100×5, 200×15): the 10th of 20 samples is 200.
 	dist := s.Dist()
-	if pcts := dist.Quantiles(0.5); pcts == nil || pcts[0] != 200 {
+	if pcts := dist.Quantiles(0.5); len(pcts) == 0 || pcts[0] != 200 {
 		t.Errorf("histogram p50 = %v, want 200ns", pcts)
 	}
 	// Weighted mean: (100·5 + 200·15) / 20 = 175.

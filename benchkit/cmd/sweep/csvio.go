@@ -68,7 +68,7 @@ func forEachCSVRow(path string, progress bool, visit func([]string, map[string]i
 	cr := csv.NewReader(input)
 	cr.ReuseRecord = true
 	header, err := cr.Read()
-	if err == io.EOF {
+	if errors.Is(err, io.EOF) {
 		return nil
 	}
 	if err != nil {

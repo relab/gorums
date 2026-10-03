@@ -67,7 +67,7 @@ func collectOffsets(logDir string) ([]offsetSample, error) {
 				continue
 			}
 			m := offsetLineRE.FindStringSubmatch(line)
-			if m == nil || m[1] == m[2] {
+			if len(m) < 3 || m[1] == m[2] {
 				continue
 			}
 			samples = append(samples, offsetSample{

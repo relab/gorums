@@ -514,7 +514,7 @@ func launchAndWait(g iago.Group, nodes []nodeAssignment, peers string, spec runS
 			wg.Go(func() {
 				// io.EOF is the benign session-close signal, not a run failure
 				// (see iago.Shell.Apply, which applies the same filter).
-				if err := cmd.RunContext(ctx, buildNodeCmd(node, peers, spec, base, cfg)); err != nil && err != io.EOF {
+				if err := cmd.RunContext(ctx, buildNodeCmd(node, peers, spec, base, cfg)); err != nil && !errors.Is(err, io.EOF) {
 					errs[i] = fmt.Errorf("node %s:%d: %w", node.host, node.port, err)
 				}
 				<-stdoutDone
