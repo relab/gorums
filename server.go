@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/relab/gorums/internal/conn"
+	"github.com/relab/gorums/internal/impl"
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -302,7 +303,7 @@ func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, rele
 		return
 	}
 
-	msg, err := unmarshalRequest(reqMsg)
+	msg, err := impl.UnmarshalRequest(reqMsg)
 	in := &Message{Proto: msg, Message: reqMsg}
 	if err != nil {
 		srvCtx.SendMessage(messageWithError(in, nil, err))

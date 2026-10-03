@@ -2,15 +2,12 @@ package gorums
 
 import (
 	"context"
-	"fmt"
 	"slices"
 
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
 // Message wraps a wire-level [stream.Message] with its deserialized proto payload.
@@ -99,33 +96,6 @@ func (ctx *ServerContext) ConnectedClients() Config {
 		return nil
 	}
 	return ctx.srv.ConnectedClients()
-}
-
-// unmarshalRequest unmarshals the request proto message from the message.
-// It uses the method name in the message to look up the Input type from the proto registry.
-func unmarshalRequest(in *stream.Message) (proto.Message, error) {
-	// get method descriptor from registry
-	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(in.GetMethod()))
-	if err != nil {
-		return nil, fmt.Errorf("gorums: could not find method descriptor for %s", in.GetMethod())
-	}
-	methodDesc := desc.(protoreflect.MethodDescriptor)
-
-	// get the request message type (Input type)
-	msgType, err := protoregistry.GlobalTypes.FindMessageByName(methodDesc.Input().FullName())
-	if err != nil {
-		return nil, fmt.Errorf("gorums: could not find message type %s", methodDesc.Input().FullName())
-	}
-	req := msgType.New().Interface()
-
-	// unmarshal message from the Message.Payload field
-	payload := in.GetPayload()
-	if len(payload) > 0 {
-		if err := proto.Unmarshal(payload, req); err != nil {
-			return nil, fmt.Errorf("gorums: could not unmarshal request: %w", err)
-		}
-	}
-	return req, nil
 }
 
 // NewResponseMessage creates a new response envelope based on the provided proto
