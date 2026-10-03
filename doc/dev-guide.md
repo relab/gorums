@@ -108,6 +108,8 @@ The `Makefile` itself also serves as documentation; inspect it for details.
 | `stresstest`      | Runs stress tests (build tag: `stress`) for thorough testing.                                          |
 | `modernize`       | Applies `go fix` and `x/tools/modernize@latest` across all workspace modules.                           |
 | `goplscheck`      | Fails on gopls diagnostics, including hint-level suggestions, in non-generated Go source.             |
+| `lint`            | Runs `golangci-lint` with `.golangci.yml` on all workspace modules, as CI does.                       |
+| `deadcode`        | Lists functions unreachable from any main or test; advisory, and run by `lint`.                         |
 
 ## Runtime Architecture
 

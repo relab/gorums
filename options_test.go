@@ -11,7 +11,7 @@ import (
 // ServerOptions rather than panicking, so callers that thread an optional
 // option (for example [NewLocalServers]) can pass nil.
 func TestNewServerToleratesNilOptions(t *testing.T) {
-	srv := NewServer(nil, WithBufferSizes(8, 8), nil)
+	srv := NewServer(nil, WithBufferSizes(8, 8), nil) //nolint:gocritic // nil in several positions is the case under test
 	if srv == nil {
 		t.Fatal("NewServer returned nil")
 	}

@@ -1,12 +1,47 @@
 version: "2"
 
+run:
+  timeout: 5m
+
 linters:
   # errcheck reports every unchecked error return, which this repository does
   # not treat as a defect on its own. Disabling it here rather than on the
   # command line keeps make and CI in agreement.
   disable:
     - errcheck
+  # These linters report likely defects rather than style, so each finding
+  # should be fixed or carry a //nolint comment that says why it is safe.
+  enable:
+    - asasalint # a []any passed as a single variadic any argument
+    - bidichk # bidirectional Unicode control characters in source
+    - durationcheck # two time.Duration values multiplied together
+    - errorlint # error comparisons and verbs that break on wrapped errors
+    - forcetypeassert # unchecked type assertions, which panic on mismatch
+    - gocritic # diagnostic checks only; see settings
+    - makezero # append to a slice created with a nonzero length
+    - nilerr # returning nil after checking that err is non-nil
+    - nilnesserr # returning a different, nil error after an err check
+    - nolintlint # malformed or unused //nolint directives
+    - reassign # reassigning package variables of another package
+    - unconvert # unnecessary type conversions
+    - wastedassign # assignments whose values are never used
   settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+      disabled-tags:
+        - style
+        - performance
+        - opinionated
+      disabled-checks:
+        # A deferred cleanup skipped by log.Fatal in main is harmless here:
+        # the process exits, which releases what the cleanup would.
+        - exitAfterDefer
+        # Flags explanatory comments that contain arithmetic or identifiers.
+        - commentedOutCode
+    nolintlint:
+      require-explanation: true
+      require-specific: true
     staticcheck:
       # The golangci-lint default set, minus QF1008. Gorums spells out the
       # embedded field when the selector names the layer being addressed, as in
@@ -20,3 +55,16 @@ linters:
         - -ST1021
         - -ST1022
         - -QF1008
+
+  exclusions:
+    rules:
+      # Tests compare errors by identity on purpose, and a failed type
+      # assertion in a test fails that test.
+      - path: _test\.go
+        linters:
+          - errorlint
+          - forcetypeassert
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
