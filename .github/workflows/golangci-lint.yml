@@ -5,8 +5,6 @@ on:
   pull_request:
 permissions:
   contents: read
-  # Optional: allow read access to pull request. Use with `only-new-issues` option.
-  pull-requests: read
 
 jobs:
   golangci:
@@ -27,9 +25,10 @@ jobs:
       - name: Run Make
         run: make
 
+      # Lints the whole tree with the same version and arguments as make lint,
+      # so a clean local run means a clean CI run.
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
-          args: --timeout=5m
-          only-new-issues: true
+          version: v2.13.2
+          args: ./... ./examples/... ./benchkit/...

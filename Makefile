@@ -139,8 +139,10 @@ stressgen: tools
 	cd ./internal/testprotos; stress -timeout=10s -p=1 ./testprotos.test
 	rm ./internal/testprotos/testprotos.test
 
+# Use the golangci-lint version that .github/workflows/golangci-lint.yml pins,
+# so make lint and CI agree.
 lint: deadcode
-	@golangci-lint-v2 run ./... ./examples/... ./benchkit/...
+	@golangci-lint run ./... ./examples/... ./benchkit/...
 
 # deadcode reports functions unreachable from any main or test across all
 # workspace modules (root, examples, benchkit), so cross-module usage is
