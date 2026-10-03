@@ -108,9 +108,9 @@ const ClientIDStart = 1 << 20
 // installed on the self-node (if present) to enable in-process dispatch without
 // a network round-trip. Inbound channels use sendBuffer and dispatchSize as
 // their send queue and request dispatch capacities; a dispatchSize of 0
-// selects the default.
-// Panics on configuration errors (invalid addresses, duplicate nodes, etc.)
-func NewInboundManager(myID uint32, peerNodes NodeSource, sendBuffer, dispatchSize uint, onConfigChange func(Config), handler stream.RequestHandler) *InboundManager {
+// selects the default. It returns an error if peerNodes is invalid, for
+// example because of an invalid address or a duplicate node.
+func NewInboundManager(myID uint32, peerNodes NodeSource, sendBuffer, dispatchSize uint, onConfigChange func(Config), handler stream.RequestHandler) (*InboundManager, error) {
 	im := &InboundManager{
 		myID:           myID,
 		knownNodes:     make(map[uint32]*Node),
@@ -125,11 +125,11 @@ func NewInboundManager(myID uint32, peerNodes NodeSource, sendBuffer, dispatchSi
 	}
 	if peerNodes != nil {
 		if _, err := peerNodes.newConfig(im); err != nil {
-			panic("gorums: invalid peer configuration: " + err.Error())
+			return nil, err
 		}
 	}
 	im.rebuildConfig()
-	return im
+	return im, nil
 }
 
 // Nodes returns a slice of known peer nodes in order of their IDs.
