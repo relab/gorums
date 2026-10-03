@@ -3,13 +3,15 @@ package testprotos_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/relab/gorums/internal/protoc"
 )
 
 // TestFailingProtoFiles verifies that the generator rejects each proto file
-// that declares a Gorums reserved identifier, whatever kind of declaration.
+// that declares a Gorums reserved identifier, whatever kind of declaration,
+// and reports the reason through protoc.
 func TestFailingProtoFiles(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -31,6 +33,9 @@ func TestFailingProtoFiles(t *testing.T) {
 			out, err := protoc.Run("sourceRelative", tt.proto)
 			if err == nil {
 				t.Fatalf("expected protoc to fail with:\n%s", out)
+			}
+			if want := "reserved Gorums identifier"; !strings.Contains(out, want) {
+				t.Errorf("protoc output = %q, want it to contain %q", out, want)
 			}
 		})
 	}
