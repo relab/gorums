@@ -41,7 +41,7 @@ func nodeID(ctx context.Context) uint32 {
 	if err != nil || id == 0 {
 		return 0
 	}
-	return uint32(id)
+	return id
 }
 
 // hasPeerMetadata reports whether ctx contains the gorums-node-id metadata key,
