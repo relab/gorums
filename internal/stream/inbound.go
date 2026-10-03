@@ -29,7 +29,6 @@ type InboundOptions struct {
 type InboundChannel struct {
 	endpoint
 	session   *session
-	sent      chan struct{} // closed when the send loop has returned
 	closeOnce func() error
 }
 
@@ -39,7 +38,6 @@ type InboundChannel struct {
 func NewInboundChannel(ctx context.Context, id uint32, stream BidiStream, opts InboundOptions) *InboundChannel {
 	c := &InboundChannel{
 		endpoint: newEndpoint(ctx, id, opts.SendBufferSize, opts.DispatchSize, opts.Handler, opts.Latency),
-		sent:     make(chan struct{}),
 	}
 	c.waitingReplies = opts.WaitingReplies
 	sessionCtx, cancel := context.WithCancel(c.ctx)
@@ -47,11 +45,10 @@ func NewInboundChannel(ctx context.Context, id uint32, stream BidiStream, opts I
 	c.closeOnce = sync.OnceValue(func() error {
 		c.cancel()
 		c.session.end()
-		<-c.sent
+		c.queue.close()
 		return nil
 	})
 	go func() {
-		defer close(c.sent)
 		if req := c.session.sendLoop(nil); req != nil {
 			c.queue.fail(*req, ErrStreamDown)
 		}
@@ -79,8 +76,9 @@ func (c *InboundChannel) PendingCount() int {
 }
 
 // Close ends the stream's session, fails pending calls with [ErrStreamDown]
-// and queued requests with [ErrNodeClosed], and waits for the send loop to
-// return. It is idempotent.
+// and queued requests with [ErrNodeClosed], and returns without waiting for
+// the send loop. A send blocked on flow control ends with an error once the
+// stream's RPC returns, and the send loop then exits. It is idempotent.
 func (c *InboundChannel) Close() error {
 	return c.closeOnce()
 }

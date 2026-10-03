@@ -218,6 +218,38 @@ func TestChannelDroppedRepliesCountsOnlyUnreportableDrops(t *testing.T) {
 	})
 }
 
+// TestInboundCloseReturnsWhileSendBlocked verifies that inbound cleanup does
+// not wait for a transport send whose completion depends on the RPC returning.
+func TestInboundCloseReturnsWhileSendBlocked(t *testing.T) {
+	stream := newBlockingSendStream()
+	t.Cleanup(stream.close)
+	c := NewInboundChannel(context.Background(), 1, stream, InboundOptions{})
+	t.Cleanup(func() { _ = c.Close() })
+
+	c.Enqueue(Request{
+		Ctx:    context.Background(),
+		Oneway: true,
+		Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
+	})
+	select {
+	case <-stream.entered:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("sender never entered Send")
+	}
+
+	closed := make(chan struct{})
+	go func() {
+		_ = c.Close()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Close waited for the blocked transport send")
+	}
+	stream.release()
+}
+
 // fakeNodeStream is a minimal Gorums_NodeStreamServer for driving
 // Server.NodeStream directly: Send blocks until release is called (simulating
 // a backpressured or unresponsive link), signaling entered once a Send call
