@@ -109,6 +109,402 @@ The `Makefile` itself also serves as documentation; inspect it for details.
 | `modernize`       | Applies `go fix` and `x/tools/modernize@latest` across all workspace modules.                           |
 | `goplscheck`      | Fails on gopls diagnostics, including hint-level suggestions, in non-generated Go source.             |
 
+## Runtime Architecture
+
+The runtime is split into layers, each in its own package.
+The diagrams below show the main types of each layer and how they connect.
+They omit helper types and most fields and methods; the package doc comments and the source are authoritative.
+
+### Package Layering
+
+Generated code reaches the call engine through `runtime/gorumsimpl`, and application code uses the types that the root `gorums` package re-exports as aliases.
+Each internal package depends only on the packages below it.
+
+```mermaid
+flowchart TD
+    app["Application code"]
+    gen["Generated code<br/>(*_gorums.pb.go)"]
+    gorums["gorums<br/>(Server, type aliases)"]
+    gorumsimpl["runtime/gorumsimpl<br/>(call constructors)"]
+    impl["internal/impl<br/>(call engine)"]
+    conn["internal/conn<br/>(nodes, configurations, connectivity)"]
+    stream["internal/stream<br/>(channels, sessions, wire messages)"]
+    grpc["gRPC NodeStream<br/>(bidirectional stream)"]
+
+    app --> gen
+    app --> gorums
+    gen --> gorumsimpl
+    gen --> gorums
+    gorumsimpl --> impl
+    gorums -. "type aliases" .-> impl
+    gorums -. "type aliases" .-> conn
+    gorums --> stream
+    impl --> conn
+    impl --> stream
+    conn --> stream
+    stream --> grpc
+```
+
+### Stream Layer (`internal/stream`)
+
+A `Transport` is everything a call needs to reach one node.
+It holds a `channelRef`, an atomically replaceable reference to the node's current `Channel`.
+There are three channel kinds:
+
+* `OutboundChannel` runs over streams this node dials; it opens a new `session` for each stream and requeues pending calls when a stream is lost.
+* `InboundChannel` runs over one stream that the server accepted; its single `session` ends with the stream.
+* `LocalChannel` serves requests in-process through the handler, with no stream.
+
+The two stream channels embed an `endpoint` with the send queue, the request dispatcher, the optional `RequestHandler`, and the `Latency` estimate.
+A `session` sends queued requests on its `BidiStream`, records two-way calls in `pendingCalls`, and routes received frames either to a pending call or to the dispatcher.
+On the server side, `Server.NodeStream` asks a `PeerAcceptor` for the `InboundChannel` of each accepted stream.
+
+```mermaid
+classDiagram
+    direction LR
+    class Channel {
+        <<interface>>
+        Enqueue(Request)
+        StreamUp() bool
+        PendingCount() int
+        Close() error
+    }
+    class RequestHandler {
+        <<interface>>
+        HandleRequest(ctx, msg, release, send)
+    }
+    class BidiStream {
+        <<interface>>
+        Send(msg) error
+        Recv() msg, error
+    }
+    class PeerAcceptor {
+        <<interface>>
+        AcceptPeer(ctx, stream) InboundChannel
+    }
+    class Transport {
+        id uint32
+        shared bool
+        Enqueue(Request)
+        StoreChannel(Channel)
+        NextMsgID() uint64
+    }
+    class session {
+        sendLoop()
+        receive()
+        handle(msg)
+    }
+    class Request {
+        Ctx context.Context
+        Msg Message
+        ResponseChan
+    }
+
+    Transport --> channelRef : channel
+    Transport --> Latency
+    channelRef --> Channel : current
+    Channel <|.. OutboundChannel
+    Channel <|.. InboundChannel
+    Channel <|.. LocalChannel
+    OutboundChannel *-- endpoint : embeds
+    InboundChannel *-- endpoint : embeds
+    OutboundChannel o-- "0..*" session : one per dialed stream
+    InboundChannel *-- "1" session
+    LocalChannel --> RequestHandler
+    LocalChannel *-- dispatcher
+    session --> endpoint
+    session --> BidiStream
+    session *-- pendingCalls
+    endpoint *-- sendQueue
+    endpoint *-- dispatcher
+    endpoint --> RequestHandler
+    endpoint --> Latency
+    sendQueue o-- Request
+    pendingCalls o-- Request
+    Request --> Message
+    Server --> PeerAcceptor
+    PeerAcceptor ..> InboundChannel : returns
+```
+
+### Connectivity Layer (`internal/conn`)
+
+A `Config` is a slice of `*Node`, and each `Node` has a fixed `stream.Transport`.
+An `outboundManager` creates and owns the nodes of the configurations built by `NewConfig` and `Config.Extend`.
+A server's `InboundManager` owns the nodes for its known peers and for the peer-capable clients that connect to it, and maintains the connected-peer and connected-client configurations.
+It implements `stream.PeerAcceptor`, attaching each accepted stream to the matching node.
+Both managers implement `nodeRegistry`, which a `NodeSource` uses to build a configuration.
+
+```mermaid
+classDiagram
+    direction LR
+    class Config {
+        <<slice>>
+        NodeIDs() []uint32
+        Size() int
+        Context(parent) ConfigContext
+    }
+    class Node {
+        id uint32
+        addr string
+        Context(parent) NodeContext
+        IsShared() bool
+    }
+    class NodeSource {
+        <<interface>>
+    }
+    class nodeRegistry {
+        <<interface>>
+        Nodes() []*Node
+    }
+    class InboundManager {
+        AcceptPeer(ctx, stream)
+        ConnectedPeers() Config
+        ConnectedClients() Config
+    }
+    class StreamTransport["stream.Transport"]
+    class StreamInboundChannel["stream.InboundChannel"]
+    class StreamPeerAcceptor["stream.PeerAcceptor"] {
+        <<interface>>
+    }
+    class StreamRequestHandler["stream.RequestHandler"] {
+        <<interface>>
+    }
+
+    ConfigContext --> Config
+    NodeContext --> Node
+    Config o-- "*" Node
+    Node --> StreamTransport : transport
+    Node --> outboundManager : mgr
+    Node o-- "0..*" StreamInboundChannel : liveChannels
+    outboundManager o-- "*" Node : nodes
+    outboundManager *-- DialOptions : opts
+    DialOptions --> InboundManager : InboundMgr
+    DialOptions --> StreamRequestHandler : Handler
+    InboundManager o-- "*" Node : knownNodes, clientNodes
+    InboundManager --> Config : peer, connected, client configs
+    InboundManager --> StreamRequestHandler : handler
+    StreamPeerAcceptor <|.. InboundManager
+    nodeRegistry <|.. outboundManager
+    nodeRegistry <|.. InboundManager
+    NodeSource ..> nodeRegistry : builds Config with
+```
+
+### Node Kinds
+
+A node's kind is set by the transport and channel it is created with.
+Calls only ever see the node's transport; the channel behind the transport's `channelRef` may change as streams come and go.
+
+* An outbound node dials its peer and owns an `OutboundChannel`.
+* A local node is the server's own node in its peer configuration; it owns a `LocalChannel` that calls the server's handler in-process.
+* An inbound node is a known peer or a client of the server; `InboundManager.AcceptPeer` stores an `InboundChannel` in its transport when the peer's stream arrives, and clears it when the last live stream ends.
+* A shared node is the higher-ID peer's outbound node under stream deduplication; its shared transport borrows the inbound peer node's `channelRef`, `Latency`, and message-ID generator.
+
+```mermaid
+flowchart LR
+    subgraph outbound["Outbound node"]
+        N1[Node] --> T1[Transport] --> R1[channelRef] --> C1[OutboundChannel]
+    end
+    subgraph local["Local node"]
+        N2[Node] --> T2[Transport] --> R2[channelRef] --> C2[LocalChannel]
+    end
+    subgraph inbound["Inbound node"]
+        N3[Node] --> T3[Transport] --> R3[channelRef] --> C3[InboundChannel]
+        N3 -. liveChannels .-> C3
+    end
+    subgraph shared["Shared node (stream dedup)"]
+        N4[Node] --> T4["Transport<br/>(shared)"]
+    end
+    T4 -- borrows --> R3
+```
+
+### Call Engine (`internal/impl`)
+
+Each call constructor builds a `CallContext` that holds the request, the target `Config`, the reply channel, and the response iterator (`ResponseSeq`).
+A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`), as well as the `Async` and `Correctable` futures.
+A one-way call (`Multicast`, `Unicast`) returns a `OnewayCall`, whose `Send` waits for the send confirmations and whose `Async` returns an `OnewayAsync`.
+A `ClientInterceptor` wraps the response iterator and may register per-node request transformations before the call is dispatched.
+`CallContext` reaches each node's send path through `conn.NodeTransport`.
+
+```mermaid
+classDiagram
+    direction LR
+    class CallContext~Req, Resp~ {
+        request Req
+        method string
+        replyChan
+        sendNow()
+    }
+    class Call~Req, Resp~ {
+        Intercept(interceptors) Call
+    }
+    class Responses~Resp~ {
+        First() Resp, error
+        Majority() Resp, error
+        All() Resp, error
+        Threshold(n) Resp, error
+        Results() ResponseSeq
+    }
+    class OnewayCall~Req~ {
+        Send() error
+        Async() OnewayAsync
+    }
+    class OnewayAsync {
+        Wait() error
+    }
+    class ResponseSeq~Resp~ {
+        <<iterator>>
+    }
+    class ClientInterceptor~Req, Resp~ {
+        <<func>>
+    }
+    class Async~Resp~ {
+        Get() Resp, error
+    }
+    class Correctable~Resp~ {
+        Get() Resp, int, error
+        Watch(level)
+    }
+    class starter {
+        <<interface>>
+        sendNow()
+        markDispatched()
+    }
+    class ConnConfig["conn.Config"]
+    class StreamTransport["stream.Transport"]
+
+    Call *-- Responses : embeds
+    Call --> CallContext : ctx
+    OnewayCall --> CallContext : ctx
+    OnewayCall ..> OnewayAsync : Async()
+    Responses --> ResponseSeq : seq
+    Responses --> starter : start
+    starter <|.. CallContext
+    Responses ..> Async : AsyncMajority() etc.
+    Responses ..> Correctable : Correctable(n)
+    CallContext --> ConnConfig : config
+    CallContext --> ResponseSeq : responseSeq
+    ClientInterceptor ..> CallContext : wraps ResponseSeq
+    CallContext ..> StreamTransport : Enqueue via conn.NodeTransport
+```
+
+### Quorum Call Path
+
+A quorum call is dispatched lazily, on the first iteration of its response iterator, so that interceptors can be registered first.
+Each node's channel sends on its own goroutine, and responses are matched to pending calls by message ID.
+
+```mermaid
+sequenceDiagram
+    participant Gen as Generated method
+    participant Call as impl.Call
+    participant CC as impl.CallContext
+    participant T as stream.Transport
+    participant Ch as stream.OutboundChannel
+    participant S as stream.session
+    participant G as gRPC stream
+
+    Gen->>Call: QuorumCall(ctx, req, method)
+    Call->>CC: newQuorumCallContext
+    Gen->>Call: Majority()
+    Call->>CC: iterate ResponseSeq (sendNow)
+    loop each node in Config
+        CC->>T: conn.NodeTransport(n).Enqueue(Request)
+        T->>Ch: Channel.Enqueue: push on sendQueue
+    end
+    Note over Ch,S: channel goroutine
+    S->>Ch: sendLoop takes Request from sendQueue
+    S->>S: pendingCalls.add(msgID, Request)
+    S->>G: Send(Message)
+    G-->>S: Recv() response Message
+    S->>S: handle: pendingCalls.take(msgID)
+    S-->>CC: Request.deliver to replyChan
+    CC-->>Call: ResponseSeq yields NodeResponse
+    Call-->>Gen: majority response or QuorumCallError
+```
+
+### Server Side (`gorums`)
+
+The root `gorums.Server` ties the layers together on the server side.
+It registers a `stream.Server` with its gRPC server, uses its `conn.InboundManager` as the server's `stream.PeerAcceptor`, and serves as the `stream.RequestHandler` for inbound streams, for its local node, and for back-channel requests on its outbound peer configuration.
+`Server.HandleRequest` creates a `ServerContext` per request and runs the registered `Handler`, wrapped by any `ServerInterceptor`s.
+A `gorums.Message` wraps a `stream.Message` together with its decoded proto payload.
+
+```mermaid
+classDiagram
+    direction LR
+    class Server {
+        handlers map[string]Handler
+        RegisterHandler(method, Handler)
+        HandleRequest(ctx, msg, release, send)
+        ConnectedPeers() Config
+        ConnectedClients() Config
+    }
+    class ServerContext {
+        Release()
+        SendMessage(Message)
+        PeerConfig() Config
+        ConnectedClients() Config
+    }
+    class Handler {
+        <<func>>
+    }
+    class ServerInterceptor {
+        <<func>>
+    }
+    class Message {
+        Proto proto.Message
+    }
+    class GRPCServer["grpc.Server"]
+    class StreamServer["stream.Server"]
+    class StreamMessage["stream.Message"]
+    class InboundManager["conn.InboundManager"]
+    class ConnConfig["conn.Config"]
+    class StreamRequestHandler["stream.RequestHandler"] {
+        <<interface>>
+    }
+
+    Server --> GRPCServer : grpcServer
+    Server --> StreamServer : srv
+    Server --> InboundManager : im
+    Server --> ConnConfig : outbound, with WithPeers
+    Server o-- "*" Handler : handlers
+    Server o-- "*" ServerInterceptor : interceptors
+    StreamRequestHandler <|.. Server
+    StreamServer --> InboundManager : acceptor
+    InboundManager --> Server : handler
+    Server ..> ServerContext : creates per request
+    ServerContext --> Server : srv
+    Message *-- StreamMessage : embeds
+```
+
+### Inbound Request Path
+
+Requests that arrive on one stream run through the handler one at a time until the handler calls `ServerContext.Release` or returns.
+A handler's reply is queued on the stream's own channel and sent by its send loop.
+
+```mermaid
+sequenceDiagram
+    participant P as Remote peer
+    participant SS as stream.Server
+    participant IM as conn.InboundManager
+    participant N as conn.Node
+    participant IC as stream.InboundChannel
+    participant D as dispatcher
+    participant H as gorums.Server
+
+    P->>SS: open NodeStream
+    SS->>IM: AcceptPeer(ctx, stream)
+    IM->>N: attachStream: NewInboundChannel
+    N->>N: Transport.StoreChannel(ch)
+    IM-->>SS: InboundChannel, cleanup
+    SS->>IC: Serve(): receive loop
+    P->>IC: request Message
+    IC->>D: push handler job
+    D->>H: HandleRequest(ctx, msg, release, send)
+    H->>H: Handler(ServerContext, Message)
+    H->>IC: send(reply): push on sendQueue
+    IC->>P: Send(reply) on send loop
+```
+
 ## Stream Deduplication Internals
 
 Symmetric stream deduplication makes the lower-ID peer of each pair the only dialer.
