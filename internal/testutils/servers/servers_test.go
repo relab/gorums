@@ -33,9 +33,9 @@ func (l *closeSeqListener) Close() error {
 	return nil
 }
 
-func (l *closeSeqListener) Accept() (net.Conn, error) { return nil, net.ErrClosed }
+func (*closeSeqListener) Accept() (net.Conn, error) { return nil, net.ErrClosed }
 
-func (l *closeSeqListener) Addr() net.Addr { return closeSeqAddr{} }
+func (*closeSeqListener) Addr() net.Addr { return closeSeqAddr{} }
 
 type closeSeqAddr struct{}
 

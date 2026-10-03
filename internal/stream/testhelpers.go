@@ -16,7 +16,7 @@ type stateChannel struct {
 	lastErr error
 }
 
-func (c stateChannel) Enqueue(req Request) { req.ReplyError(0, ErrStreamDown) }
+func (stateChannel) Enqueue(req Request)   { req.ReplyError(0, ErrStreamDown) }
 func (stateChannel) StreamUp() bool        { return false }
 func (c stateChannel) LastErr() error      { return c.lastErr }
 func (stateChannel) DroppedReplies() int64 { return 0 }

@@ -21,7 +21,7 @@ func TestStreamDedupInflightCallFailsWithStreamDown(t *testing.T) {
 	started := make(chan struct{}, 1)
 	unblock := make(chan struct{})
 	defer close(unblock)
-	owner.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	owner.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message) (*gorums.Message, error) {
 		started <- struct{}{}
 		select {
 		case <-unblock:
