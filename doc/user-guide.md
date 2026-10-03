@@ -294,8 +294,8 @@ There are some important things to note about implementing the server interfaces
 * Errors should be returned using the [`status` package](https://pkg.go.dev/google.golang.org/grpc/status?tab=doc).
 * Handlers for requests from the same stream start one at a time.
   `ServerContext.Release` lets the next request start, and the handler calls it automatically when it returns.
-  The server keeps reading the stream either way, so a reply arrives while the handler has not called `Release`.
-  A handler may call the peer that sent the request before `Release`, and that call completes.
+  The server keeps reading the stream while the stream's dispatch queue has room, so a reply arrives while the handler has not called `Release`.
+  A handler may call the peer that sent the request before `Release`, and that call completes unless the peer fills the queue first; see [Send Queue Capacity and Backpressure](#send-queue-capacity-and-backpressure).
   Omitting `Release` delays the next request until the handler returns.
   After `ctx.Release()` has been called, the handler may run concurrently with the handlers for the next requests.
 
@@ -1846,8 +1846,8 @@ See [Server Configuration Callbacks](#server-configuration-callbacks) for detail
 ### Writing the Handler
 
 Call `ctx.Release()` before nested outbound calls when the next request should start while those calls are in flight.
-The server keeps reading replies either way.
-A handler may call the peer that sent the request before `Release`, and that call completes.
+The server keeps reading replies while the stream's dispatch queue has room.
+A handler may call the peer that sent the request before `Release`, and that call completes unless the peer fills the queue first; see [Send Queue Capacity and Backpressure](#send-queue-capacity-and-backpressure).
 Omitting `Release` delays the next request until the handler returns.
 
 Check that a configuration is non-empty before calling `Context` on it: `Config.Context` panics on an empty configuration.
@@ -1996,7 +1996,8 @@ A server configured with `WithPeers` announces its static node ID instead, and s
 
 The handler reads `ctx.ConnectedClients()` to reach all currently connected client peers.
 `Release` lets the next request start.
-The server keeps reading the stream either way, so a handler may call a connected client before `Release` and the reply arrives on that same stream.
+The server keeps reading the stream while its dispatch queue has room, so a handler may call a connected client before `Release` and the reply arrives on that same stream.
+If that client fills the queue first, the call waits until its context ends; see [Send Queue Capacity and Backpressure](#send-queue-capacity-and-backpressure).
 Omitting `Release` delays the next request until the handler returns.
 
 ```go
@@ -2091,3 +2092,7 @@ Choose an explicit positive capacity when a smaller backlog is required.
 On the receiving side, requests from a stream wait in a dispatch queue while the previous request's handler runs, so that handlers start in arrival order.
 The receive-size argument of `WithBufferSizes` sets that queue's capacity per stream, with a default of 4096 when zero.
 When the queue is full, the server stops reading from the stream until a handler releases or returns.
+Replies on that stream then wait too.
+A handler that calls the sending peer before `Release` waits for that reply until its context ends if the peer fills the queue in the meantime.
+Call `Release` before such a call, or choose a receive size larger than the number of requests the peer can send while the call is in flight.
+A client's back channel queues server-initiated requests the same way, with the default capacity of 4096.
