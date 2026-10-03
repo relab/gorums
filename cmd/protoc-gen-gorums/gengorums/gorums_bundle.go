@@ -57,7 +57,7 @@ func GenerateBundleFile(dst string) {
 		fmt.Printf("\nReview changes above; to revert use:\n")
 		fmt.Printf("mv %s.bak %s\n", dst, dst)
 	}
-	err = os.WriteFile(dst, []byte(staticContent), 0o666)
+	err = os.WriteFile(dst, staticContent, 0o666)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -127,11 +127,9 @@ func findIdentifiers(pkgInfo *packages.Package) (map[string]string, []string) {
 		if pkg := obj.Pkg(); pkg != nil && pkg.Path() != pkgInfo.PkgPath {
 			switch obj := obj.(type) {
 			case *types.Func:
-				if typ := obj.Type(); typ != nil {
-					if recv := typ.(*types.Signature).Recv(); recv != nil {
-						// ignore functions on non-package types
-						continue
-					}
+				if obj.Signature().Recv() != nil {
+					// ignore functions on non-package types
+					continue
 				}
 				addUniqueIdentifier(pkgIdents, pkg.Path(), obj.Name())
 
