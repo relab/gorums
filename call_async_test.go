@@ -91,7 +91,7 @@ func TestAsyncDone(t *testing.T) {
 	t.Run("PendingReportsNotDone", func(t *testing.T) {
 		// A call over a never-dialed config never completes, so the future
 		// stays pending and Done reports false.
-		config := gorumstest.NoDialedConfig(t)
+		config := gorumstest.UnreachableConfig(t)
 		ctx := gorumstest.Context(t, 2*time.Second)
 		future := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
 			config.Context(ctx),
