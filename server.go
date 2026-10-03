@@ -237,7 +237,7 @@ func newServer(opts ...ServerOption) (*Server, error) {
 		interceptors: serverOpts.interceptors,
 		listenAddr:   serverOpts.listenAddr,
 	}
-	s.im = conn.NewInboundManager(
+	im, err := conn.NewInboundManager(
 		serverOpts.myID,
 		serverOpts.peerNodes,
 		serverOpts.sendBufferSize,
@@ -245,6 +245,11 @@ func newServer(opts ...ServerOption) (*Server, error) {
 		serverOpts.onConfigChange,
 		s,
 	)
+	if err != nil {
+		s.grpcServer.Stop()
+		return nil, err
+	}
+	s.im = im
 	s.srv = stream.NewServer(serverOpts.connectCallback, s.im)
 	stream.RegisterGorumsServer(s.grpcServer, s.srv)
 	if serverOpts.peerNodes != nil {

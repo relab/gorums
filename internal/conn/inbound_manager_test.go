@@ -74,20 +74,15 @@ func (f requestHandlerFunc) HandleRequest(ctx context.Context, msg *stream.Messa
 	f(ctx, msg, release, send)
 }
 
-// shouldPanic asserts that fn panics with a message containing wantSubstr.
-func shouldPanic(t *testing.T, wantSubstr string, fn func()) {
+// newInboundManager returns an InboundManager for a test, failing the test if
+// [NewInboundManager] rejects peerNodes.
+func newInboundManager(t *testing.T, myID uint32, peerNodes NodeSource, onConfigChange func(Config), handler stream.RequestHandler) *InboundManager {
 	t.Helper()
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatalf("expected panic containing %q; got no panic", wantSubstr)
-		}
-		msg := fmt.Sprint(r)
-		if !strings.Contains(msg, wantSubstr) {
-			t.Fatalf("panic = %q; want it to contain %q", msg, wantSubstr)
-		}
-	}()
-	fn()
+	im, err := NewInboundManager(myID, peerNodes, 0, 0, onConfigChange, handler)
+	if err != nil {
+		t.Fatalf("NewInboundManager: %v", err)
+	}
+	return im
 }
 
 // testNode is a minimal NodeSource for use in tests.
@@ -103,11 +98,11 @@ var _ NodeSource = nodeMap[testNode](nil)
 // newTestInboundManager creates an InboundManager with myID and three known peers.
 func newTestInboundManager(t *testing.T, myID uint32) *InboundManager {
 	t.Helper()
-	im := NewInboundManager(myID, WithNodes(map[uint32]testNode{
+	im := newInboundManager(t, myID, WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
 		3: {"127.0.0.1:9083"},
-	}), 0, 0, nil, nil)
+	}), nil, nil)
 	return im
 }
 
@@ -117,7 +112,7 @@ func TestNewInboundManager(t *testing.T) {
 		opt        NodeSource
 		wantIDs    []uint32
 		wantCfgIDs []uint32 // expected Config IDs after construction
-		wantPanic  string   // if non-empty, expect panic containing this substring
+		wantErr    string   // if non-empty, expect an error containing this substring
 	}{
 		{
 			name: "ValidNodes",
@@ -130,9 +125,9 @@ func TestNewInboundManager(t *testing.T) {
 			wantCfgIDs: []uint32{1}, // only self-node until peers connect
 		},
 		{
-			name:      "EmptyMapRejected",
-			opt:       WithNodes(map[uint32]testNode{}),
-			wantPanic: "missing required node map",
+			name:    "EmptyMapRejected",
+			opt:     WithNodes(map[uint32]testNode{}),
+			wantErr: "missing required node map",
 		},
 		{
 			name: "NodeZeroRejected",
@@ -140,7 +135,7 @@ func TestNewInboundManager(t *testing.T) {
 				0: {"127.0.0.1:9080"},
 				1: {"127.0.0.1:9081"},
 			}),
-			wantPanic: "node 0 is reserved",
+			wantErr: "node 0 is reserved",
 		},
 		{
 			name: "DuplicateAddressRejected",
@@ -148,14 +143,14 @@ func TestNewInboundManager(t *testing.T) {
 				1: {"127.0.0.1:9081"},
 				2: {"127.0.0.1:9081"}, // same address as ID 1
 			}),
-			wantPanic: "already in use by node",
+			wantErr: "already in use by node",
 		},
 		{
 			name: "InvalidAddressRejected",
 			opt: WithNodes(map[uint32]testNode{
 				1: {"not-an-address"},
 			}),
-			wantPanic: "invalid address",
+			wantErr: "invalid address",
 		},
 		{
 			// WithNodeList assigns IDs starting at 1.
@@ -165,20 +160,23 @@ func TestNewInboundManager(t *testing.T) {
 			wantCfgIDs: []uint32{1}, // only self-node until peers connect
 		},
 		{
-			name:      "WithNodeListEmptyRejected",
-			opt:       WithNodeList([]string{}),
-			wantPanic: "missing required node addresses",
+			name:    "WithNodeListEmptyRejected",
+			opt:     WithNodeList([]string{}),
+			wantErr: "missing required node addresses",
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.wantPanic != "" {
-				shouldPanic(t, tc.wantPanic, func() {
-					NewInboundManager(1, tc.opt, 0, 0, nil, nil)
-				})
+			im, err := NewInboundManager(1, tc.opt, 0, 0, nil, nil)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("NewInboundManager() error = %v; want it to contain %q", err, tc.wantErr)
+				}
 				return
 			}
-			im := NewInboundManager(1, tc.opt, 0, 0, nil, nil)
+			if err != nil {
+				t.Fatalf("NewInboundManager() error = %v", err)
+			}
 			nodes := im.Nodes()
 			if len(nodes) != len(tc.wantIDs) {
 				t.Fatalf("len(im.Nodes()) = %d; want %d", len(nodes), len(tc.wantIDs))
@@ -196,19 +194,19 @@ func TestNewInboundManager(t *testing.T) {
 }
 
 func TestInboundManagerKeepsHighKnownPeerIDs(t *testing.T) {
-	im := NewInboundManager(ClientIDStart, WithNodes(map[uint32]testNode{
+	im := newInboundManager(t, ClientIDStart, WithNodes(map[uint32]testNode{
 		ClientIDStart: {"127.0.0.1:9081"},
-	}), 0, 0, nil, nil)
+	}), nil, nil)
 
 	checkIDs(t, im.ConnectedPeers(), []uint32{ClientIDStart}, "known peers")
 	checkIDs(t, im.ConnectedClients(), []uint32{}, "dynamic clients")
 }
 
 func TestInboundManagerDynamicClientIDSkipsKnownPeer(t *testing.T) {
-	im := NewInboundManager(1, WithNodes(map[uint32]testNode{
+	im := newInboundManager(t, 1, WithNodes(map[uint32]testNode{
 		1:             {"127.0.0.1:9081"},
 		ClientIDStart: {"127.0.0.1:9082"},
-	}), 0, 0, nil, nil)
+	}), nil, nil)
 	clientStream := newMockBidiStream()
 	t.Cleanup(clientStream.close)
 
@@ -607,10 +605,13 @@ func TestAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 		defer release()
 		send(msg)
 	})
-	im := NewInboundManager(1, WithNodes(map[uint32]testNode{
+	im, err := NewInboundManager(1, WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
 	}), 4, 0, nil, echo)
+	if err != nil {
+		t.Fatalf("NewInboundManager: %v", err)
+	}
 
 	survivor := newRecordingBidiStream()
 	t.Cleanup(survivor.close)
@@ -655,11 +656,11 @@ func TestAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 // self-node present in the initial configuration.
 func TestOnConfigChangeCallbackFiringOnConstruction(t *testing.T) {
 	var calls [][]uint32
-	NewInboundManager(1, WithNodes(map[uint32]testNode{
+	newInboundManager(t, 1, WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
 		3: {"127.0.0.1:9083"},
-	}), 0, 0, func(cfg Config) {
+	}), func(cfg Config) {
 		calls = append(calls, slices.Clone(cfg.NodeIDs()))
 	}, nil)
 
@@ -676,11 +677,11 @@ func TestOnConfigChangeCallbackFiringOnConstruction(t *testing.T) {
 // later disconnects.
 func TestOnConfigChangeCallbackPeerConnectDisconnect(t *testing.T) {
 	var snapshots [][]uint32
-	im := NewInboundManager(1, WithNodes(map[uint32]testNode{
+	im := newInboundManager(t, 1, WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
 		3: {"127.0.0.1:9083"},
-	}), 0, 0, func(cfg Config) {
+	}), func(cfg Config) {
 		snapshots = append(snapshots, slices.Clone(cfg.NodeIDs()))
 	}, nil)
 
@@ -711,11 +712,11 @@ func TestOnConfigChangeCallbackPeerConnectDisconnect(t *testing.T) {
 // fires in sorted ID order as multiple peers connect and disconnect.
 func TestOnConfigChangeCallbackMultiplePeers(t *testing.T) {
 	var snapshots [][]uint32
-	im := NewInboundManager(1, WithNodes(map[uint32]testNode{
+	im := newInboundManager(t, 1, WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
 		3: {"127.0.0.1:9083"},
-	}), 0, 0, func(cfg Config) {
+	}), func(cfg Config) {
 		snapshots = append(snapshots, slices.Clone(cfg.NodeIDs()))
 	}, nil)
 
@@ -753,10 +754,10 @@ func TestOnConfigChangeCallbackMultiplePeers(t *testing.T) {
 // function twice does not fire the callback a second time on the same disconnect.
 func TestOnConfigChangeCallbackIdempotentCleanup(t *testing.T) {
 	var callCount int
-	im := NewInboundManager(1, WithNodes(map[uint32]testNode{
+	im := newInboundManager(t, 1, WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9081"},
 		2: {"127.0.0.1:9082"},
-	}), 0, 0, func(_ Config) {
+	}), func(_ Config) {
 		callCount++
 	}, nil)
 

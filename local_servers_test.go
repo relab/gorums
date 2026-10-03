@@ -24,6 +24,22 @@ func TestLocalServersMissingDialOptions(t *testing.T) {
 	}
 }
 
+// TestLocalServersInvalidPeers verifies that NewLocalServers reports peers
+// that the inbound manager rejects as an error instead of panicking.
+func TestLocalServersInvalidPeers(t *testing.T) {
+	servers, stop, err := gorums.NewLocalServers(2,
+		gorums.WithLocalDialOptions(gorumstest.InsecureDialOptions(t)),
+		gorums.WithLocalServerOptions(gorums.WithPeers(1, gorums.WithNodeList([]string{"not-an-address"}))),
+	)
+	if err == nil {
+		stop()
+		t.Fatal("NewLocalServers with an invalid peer address succeeded, want an error")
+	}
+	if servers != nil || stop != nil {
+		t.Errorf("NewLocalServers returned servers=%v stop=%v with an error", servers, stop != nil)
+	}
+}
+
 // TestLocalServersStopClosesPreallocatedListener verifies that the stop
 // function closes a server's preallocated listener even when the server
 // was started on a different listener with Serve.
