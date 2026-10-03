@@ -162,9 +162,9 @@ func newAsyncSends(depth int) *asyncSends {
 }
 
 // dispatch reserves outstanding capacity before invoking send. Once depth
-// sends are outstanding, it reaps the oldest to make room. An error belongs to
-// that earlier send, so the pending send is not dispatched after the run has
-// already failed.
+// sends are outstanding, it reaps the oldest to make room, or takes the slot
+// another worker's reap frees first. An error belongs to that earlier send, so
+// the pending send is not dispatched after the run has already failed.
 func (a *asyncSends) dispatch(send func() asyncSend) error {
 	for {
 		select {
@@ -174,11 +174,19 @@ func (a *asyncSends) dispatch(send func() asyncSend) error {
 		default:
 		}
 
-		oldest := <-a.handles
-		err := oldest.Wait()
-		<-a.slots
-		if err != nil {
-			return err
+		// Every send may already be held by other reaping workers. A reap
+		// that fails frees its slot without queueing a new send, so wait for
+		// that slot as well as for a send to reap.
+		select {
+		case a.slots <- struct{}{}:
+			a.handles <- send()
+			return nil
+		case oldest := <-a.handles:
+			err := oldest.Wait()
+			<-a.slots
+			if err != nil {
+				return err
+			}
 		}
 	}
 }

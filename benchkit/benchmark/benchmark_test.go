@@ -678,6 +678,62 @@ func TestAsyncSendsReservesCapacityBeforeDispatch(t *testing.T) {
 	}
 }
 
+type failingAsyncSend struct {
+	reaping chan<- struct{}
+	fail    <-chan struct{}
+}
+
+func (s failingAsyncSend) Wait() error {
+	close(s.reaping)
+	<-s.fail
+	return errors.New("send failed")
+}
+
+type completedAsyncSend struct{}
+
+func (completedAsyncSend) Wait() error { return nil }
+
+// TestAsyncSendsFailedReapFreesWaitingWorker verifies that a worker waiting
+// for capacity can dispatch after another worker's reap fails. The failing
+// worker frees its slot without queueing a new send, so the waiting worker
+// must take that slot instead of waiting for a send to reap.
+func TestAsyncSendsFailedReapFreesWaitingWorker(t *testing.T) {
+	outstanding := newAsyncSends(1)
+	reaping, fail := make(chan struct{}), make(chan struct{})
+	if err := outstanding.dispatch(func() asyncSend { return failingAsyncSend{reaping: reaping, fail: fail} }); err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+	complete := func() asyncSend { return completedAsyncSend{} }
+
+	reaperErr := make(chan error, 1)
+	go func() { reaperErr <- outstanding.dispatch(complete) }()
+	<-reaping
+	waiterErr := make(chan error, 1)
+	go func() { waiterErr <- outstanding.dispatch(complete) }()
+	// Let the second worker find the only slot taken and start waiting.
+	time.Sleep(20 * time.Millisecond)
+
+	close(fail)
+	if err := <-reaperErr; err == nil {
+		t.Fatal("reaping dispatch succeeded, want the failed send's error")
+	}
+	select {
+	case err := <-waiterErr:
+		if err != nil {
+			t.Fatalf("waiting dispatch: %v", err)
+		}
+	case <-time.After(time.Second):
+		// Unblock the stranded worker so the test does not leak it.
+		outstanding.slots <- struct{}{}
+		outstanding.handles <- completedAsyncSend{}
+		<-waiterErr
+		t.Fatal("waiting dispatch stayed blocked after the in-flight send failed")
+	}
+	if err := outstanding.drain(); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+}
+
 // TestAsyncMulticastBenchmarkRuns verifies that the AsyncMulticast benchmark
 // completes a server-measured run and records operations, exercising the
 // dispatch and quiesce-drain wiring together.
