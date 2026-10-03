@@ -151,7 +151,7 @@ A `Transport` is everything a call needs to reach one node.
 It holds a `channelRef`, an atomically replaceable reference to the node's current `Channel`.
 There are three channel kinds:
 
-* `OutboundChannel` runs over streams this node dials; it opens a new `session` for each stream and requeues pending calls when a stream is lost.
+* `OutboundChannel` runs over streams this node dials; it opens a new `session` for each stream and requeues pending calls when a stream is lost, as far as the send queue has space.
 * `InboundChannel` runs over one stream that the server accepted; its single `session` ends with the stream.
 * `LocalChannel` serves requests in-process through the handler, with no stream.
 
