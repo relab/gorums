@@ -374,7 +374,7 @@ func TestStatsHDRModeResult(t *testing.T) {
 		t.Errorf("histogram counts sum = %d, want 10", total)
 	}
 	// p50 of 1µs..10µs is 5µs; histogram precision is 3 sigfigs.
-	if pcts := r.Percentiles(0.5); pcts == nil || math.Abs(float64(pcts[0]-5*time.Microsecond)) > 50 {
+	if pcts := r.Percentiles(0.5); len(pcts) == 0 || math.Abs(float64(pcts[0]-5*time.Microsecond)) > 50 {
 		t.Errorf("Percentiles(0.5) = %v, want ≈5µs", pcts)
 	}
 	// Mean of 1µs..10µs is 5.5µs.

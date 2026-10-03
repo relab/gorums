@@ -180,7 +180,7 @@ func TestAggregateServerResultsHistogram(t *testing.T) {
 	}
 	// Merged distribution {1,1,1,1,2}µs has median 1µs, reproduced within
 	// HDR precision.
-	if p := got.Percentiles(0.5); p == nil || math.Abs(float64(p[0]-time.Microsecond)) > 50 {
+	if p := got.Percentiles(0.5); len(p) == 0 || math.Abs(float64(p[0]-time.Microsecond)) > 50 {
 		t.Errorf("Percentiles(0.5) = %v, want ≈1µs", p)
 	}
 }

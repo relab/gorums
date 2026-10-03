@@ -182,7 +182,7 @@ func findDegradedNodes(nodes map[string]nodeMeasurement, bounds degradationBound
 	var flagged []degradedNode
 	for host, m := range nodes {
 		var reason string
-		relative := 0.0
+		var relative float64
 		switch {
 		case tputMedian > 0 && bounds.below > 0 && m.throughput < bounds.below*tputMedian:
 			reason, relative = degradedSlow, m.throughput/tputMedian
