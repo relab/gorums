@@ -123,11 +123,11 @@ func RegisterServices(services []Service) error {
 
 		fileDesc, err := protodesc.NewFile(fd, protoregistry.GlobalFiles)
 		if err != nil {
-			return fmt.Errorf("failed to create file descriptor for %s: %v", pkg, err)
+			return fmt.Errorf("failed to create file descriptor for %s: %w", pkg, err)
 		}
 
 		if err := protoregistry.GlobalFiles.RegisterFile(fileDesc); err != nil {
-			return fmt.Errorf("failed to register file %s: %v", pkg, err)
+			return fmt.Errorf("failed to register file %s: %w", pkg, err)
 		}
 	}
 	return nil
