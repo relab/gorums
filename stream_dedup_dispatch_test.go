@@ -54,7 +54,7 @@ func TestStreamDedupDispatchBorrowerSlowHandlerBlocksOwnCalls(t *testing.T) {
 			servers := dispatchSetup(t, dedup)
 			started := make(chan struct{}, 1)
 			unblock := make(chan struct{})
-			servers[1].RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+			servers[1].RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 				started <- struct{}{}
 				<-unblock // slow handler, no Release
 				return gorums.NewResponseMessage(in, pb.String("slow")), nil
@@ -98,7 +98,7 @@ func TestStreamDedupDispatchOwnerSlowHandlerBlocksOwnCalls(t *testing.T) {
 			servers := dispatchSetup(t, dedup)
 			started := make(chan struct{}, 4)
 			unblock := make(chan struct{})
-			servers[0].RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+			servers[0].RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 				started <- struct{}{}
 				<-unblock // slow handler, no Release
 				return gorums.NewResponseMessage(in, pb.String("slow")), nil
