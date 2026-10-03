@@ -45,9 +45,12 @@ type ServerContext struct {
 
 // Release lets the next request on this handler's stream start, concurrently
 // with this handler. Replies to calls the handler makes arrive before and after
-// Release, so the handler may call the peer that sent the request. Call Release
-// once the handler is done with state that requests must access one at a time.
-// It is safe to call Release multiple times.
+// Release, so the handler may call the peer that sent the request. Before
+// Release, such a reply arrives only while the stream's dispatch queue has room
+// (see [WithBufferSizes]); call Release first if the peer may fill that queue
+// while the call is in flight. Call Release once the handler is done with state
+// that requests must access one at a time. It is safe to call Release multiple
+// times.
 func (ctx *ServerContext) Release() {
 	if ctx.release != nil {
 		ctx.release()
