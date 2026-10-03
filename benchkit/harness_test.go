@@ -150,7 +150,7 @@ func TestMeasureLatencyRunOverNotRecorded(t *testing.T) {
 		}
 	}
 	start := time.Now()
-	configs := slices.Values([]gorums.Config{gorumstest.NoDialedConfig(t)})
+	configs := slices.Values([]gorums.Config{gorumstest.UnreachableConfig(t)})
 	result, err := MeasureLatency(context.Background(), opts, configs, setup)
 	if err != nil {
 		t.Fatalf("MeasureLatency err = %v, want nil", err)
@@ -589,7 +589,7 @@ func TestRunStampsFullConfig(t *testing.T) {
 // operations count errors while allowing the run to complete.
 func TestClientMeasuredCountsErrorsWithoutAborting(t *testing.T) {
 	var calls atomic.Int64
-	run := ClientMeasured(gorumstest.NoDialedConfig(t),
+	run := ClientMeasured(gorumstest.UnreachableConfig(t),
 		func(_ Options, _ *gorums.ConfigContext) func() error {
 			return func() error {
 				// Fail every other op; persistent errors must not abort.
@@ -618,7 +618,7 @@ func TestClientMeasuredQuiesce(t *testing.T) {
 	var opsDone atomic.Int64
 	var opsAtQuiesce int64
 	quiesceCalls := 0
-	run := ClientMeasured(gorumstest.NoDialedConfig(t),
+	run := ClientMeasured(gorumstest.UnreachableConfig(t),
 		func(_ Options, _ *gorums.ConfigContext) func() error {
 			return func() error {
 				opsDone.Add(1)
@@ -647,7 +647,7 @@ func TestClientMeasuredQuiesce(t *testing.T) {
 	}
 
 	errDrain := errors.New("drain failed")
-	failing := ClientMeasured(gorumstest.NoDialedConfig(t),
+	failing := ClientMeasured(gorumstest.UnreachableConfig(t),
 		func(_ Options, _ *gorums.ConfigContext) func() error {
 			return func() error { return nil }
 		},
@@ -666,7 +666,7 @@ func TestClientMeasuredVerify(t *testing.T) {
 	setup := func(_ Options, _ *gorums.ConfigContext) func() error {
 		return func() error { return nil }
 	}
-	run := ClientMeasured(gorumstest.NoDialedConfig(t), setup,
+	run := ClientMeasured(gorumstest.UnreachableConfig(t), setup,
 		WithVerify(func(replies map[uint32]*Result) error {
 			verifyCalls++
 			gotReplies = replies
@@ -683,7 +683,7 @@ func TestClientMeasuredVerify(t *testing.T) {
 	}
 
 	errVerify := errors.New("ops diverged")
-	failing := ClientMeasured(gorumstest.NoDialedConfig(t), setup,
+	failing := ClientMeasured(gorumstest.UnreachableConfig(t), setup,
 		WithVerify(func(map[uint32]*Result) error { return errVerify }))
 	if _, err := failing(Options{Workers: 1, Duration: time.Millisecond}); !errors.Is(err, errVerify) {
 		t.Errorf("run with failing verify = %v, want %v", err, errVerify)
