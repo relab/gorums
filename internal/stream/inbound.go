@@ -41,7 +41,7 @@ func NewInboundChannel(ctx context.Context, id uint32, stream BidiStream, opts I
 	}
 	c.waitingReplies = opts.WaitingReplies
 	sessionCtx, cancel := context.WithCancel(c.ctx)
-	c.session = newSession(&c.endpoint, stream, sessionCtx, cancel, false, false)
+	c.session = newSession(sessionCtx, cancel, &c.endpoint, stream, false, false)
 	c.closeOnce = sync.OnceValue(func() error {
 		c.cancel()
 		c.session.end()

@@ -35,7 +35,7 @@ func TestReceiverDispatchNotWedgedByReentrantReply(t *testing.T) {
 		stream := newBlockingSendStream()
 		e := newEndpoint(context.Background(), 1, 0, 0, handler, nil)
 		ctx, cancel := context.WithCancel(e.ctx)
-		s := newSession(&e, stream, ctx, cancel, true, true)
+		s := newSession(ctx, cancel, &e, stream, true, true)
 		go s.sendLoop(nil)
 		defer func() {
 			stream.close()

@@ -33,9 +33,9 @@ type session struct {
 	received    atomic.Bool // a frame has been received
 }
 
-// newSession returns a session over stream that ends when ctx ends or cancel
+// newSession returns a session of e over stream that ends when ctx ends or cancel
 // is called.
-func newSession(e *endpoint, stream BidiStream, ctx context.Context, cancel context.CancelFunc, serverRequests, requeue bool) *session {
+func newSession(ctx context.Context, cancel context.CancelFunc, e *endpoint, stream BidiStream, serverRequests, requeue bool) *session {
 	return &session{
 		endpoint:       e,
 		stream:         stream,
