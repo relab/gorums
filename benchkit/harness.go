@@ -332,24 +332,57 @@ const paceTolerance = 0.95
 // degraded toward closed-loop saturation while the recorded rate markers
 // still claim the offered load.
 func PaceWarning(sent uint64, offered float64) string {
+	return paceWarning("", sent, offered)
+}
+
+// paceWarning formats the [PaceWarning] message; level, when not empty, names
+// the offered-load level that fell behind.
+func paceWarning(level string, sent uint64, offered float64) string {
 	if offered <= 0 || float64(sent) >= paceTolerance*offered {
 		return ""
 	}
-	return fmt.Sprintf("warning: offered rate not sustained: %d of %.0f scheduled sends (%.0f%%); "+
+	return fmt.Sprintf("warning: offered rate not sustained%s: %d of %.0f scheduled sends (%.0f%%); "+
 		"raise -workers (sustaining a rate needs about rate x latency in-flight ops) or lower the rate",
-		sent, offered, 100*float64(sent)/offered)
+		level, sent, offered, 100*float64(sent)/offered)
+}
+
+// paceLevel is one offered-load level of a paced run: its rate per send
+// target, its length, and the sends attempted during it across all targets.
+type paceLevel struct {
+	rate int
+	dur  time.Duration
+	sent uint64
+}
+
+// paceWarnings returns one warning per level that fell behind its schedule,
+// with targets send targets sharing each level. A ramp is checked level by
+// level, because its top levels are where the workers run out, and the lower
+// levels would hide that shortfall in a whole-run count. A single-level run
+// gets the [PaceWarning] message.
+func paceWarnings(levels []paceLevel, targets int) []string {
+	var msgs []string
+	for _, l := range levels {
+		offered := float64(l.rate) * l.dur.Seconds() * float64(targets)
+		level := ""
+		if len(levels) > 1 {
+			level = fmt.Sprintf(" at %d ops/s", l.rate)
+		}
+		if msg := paceWarning(level, l.sent, offered); msg != "" {
+			msgs = append(msgs, msg)
+		}
+	}
+	return msgs
 }
 
 // runMeasure executes the measurement phase, applying rate ramping if both
 // ramp options (RateStep, RateStepMax) are set. When the run is paced, it
-// counts the attempted sends and warns on stderr when the run fell behind the
-// offered-load schedule (see [PaceWarning]); the count is one atomic add per
-// send, taken only on the paced path, where each send already pays a timer
-// wait. The unlimited (closed-loop) path is untouched.
+// counts the attempted sends and warns on stderr for each offered-load level
+// that fell behind its schedule (see [PaceWarning]); the count is one atomic
+// add per send, taken only on the paced path, where each send already pays a
+// timer wait. The unlimited (closed-loop) path is untouched.
 func runMeasure(ctx context.Context, ticker *Ticker, opts Options, doOps ...func() error) error {
-	offered := opts.OfferedOps() * float64(len(doOps))
-	if offered <= 0 {
-		return runSchedule(ctx, ticker, opts, doOps...)
+	if opts.OfferedOps() <= 0 {
+		return runSchedule(ctx, ticker, opts, nil, doOps...)
 	}
 	var sent atomic.Uint64
 	counted := make([]func() error, len(doOps))
@@ -359,10 +392,17 @@ func runMeasure(ctx context.Context, ticker *Ticker, opts Options, doOps ...func
 			return doOp()
 		}
 	}
-	if err := runSchedule(ctx, ticker, opts, counted...); err != nil {
+	var levels []paceLevel
+	var levelStart uint64
+	levelDone := func(rate int, dur time.Duration) {
+		total := sent.Load()
+		levels = append(levels, paceLevel{rate: rate, dur: dur, sent: total - levelStart})
+		levelStart = total
+	}
+	if err := runSchedule(ctx, ticker, opts, levelDone, counted...); err != nil {
 		return err
 	}
-	if msg := PaceWarning(sent.Load(), offered); msg != "" {
+	for _, msg := range paceWarnings(levels, len(doOps)) {
 		fmt.Fprintln(os.Stderr, msg)
 	}
 	return nil
@@ -375,10 +415,18 @@ func runMeasure(ctx context.Context, ticker *Ticker, opts Options, doOps ...func
 // Duration evenly across the levels, so it always spans exactly Duration and
 // ends exactly at RateStepMax. Passing more than one doOp fans the phase out
 // across independent send targets, as the symmetric runners do (see [RunPhase]).
-func runSchedule(ctx context.Context, ticker *Ticker, opts Options, doOps ...func() error) error {
+// When levelDone is not nil, it is called after each level with that level's
+// rate and length; the lengths add up to Duration.
+func runSchedule(ctx context.Context, ticker *Ticker, opts Options, levelDone func(rate int, dur time.Duration), doOps ...func() error) error {
 	if !opts.rampEnabled() {
 		start := time.Now()
-		return RunPhase(ctx, opts.Workers, opts.Rate, start, start.Add(opts.Duration), doOps...)
+		if err := RunPhase(ctx, opts.Workers, opts.Rate, start, start.Add(opts.Duration), doOps...); err != nil {
+			return err
+		}
+		if levelDone != nil {
+			levelDone(opts.Rate, opts.Duration)
+		}
+		return nil
 	}
 	// Rate-ramp mode: one phase per offered-load level.
 	numSteps := opts.rampSteps()
@@ -393,6 +441,9 @@ func runSchedule(ctx context.Context, ticker *Ticker, opts Options, doOps ...fun
 		stepStart := time.Now()
 		if err := RunPhase(ctx, opts.Workers, currentRate, stepStart, stepStart.Add(dur), doOps...); err != nil {
 			return err
+		}
+		if levelDone != nil {
+			levelDone(currentRate, dur)
 		}
 		if i < numSteps-1 {
 			currentRate = min(currentRate+opts.RateStep, opts.RateStepMax)

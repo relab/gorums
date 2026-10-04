@@ -385,6 +385,111 @@ func TestPaceWarning(t *testing.T) {
 	}
 }
 
+// TestPaceWarnings verifies that a ramped run is checked level by level, so a
+// top level that falls behind is reported even when the run as a whole stays
+// within tolerance, and that a single-level run keeps the whole-run message.
+func TestPaceWarnings(t *testing.T) {
+	tests := []struct {
+		name      string
+		levels    []paceLevel
+		targets   int
+		wantRates []string // one substring per expected warning, in order
+	}{
+		{
+			name:    "SingleLevelOnSchedule",
+			levels:  []paceLevel{{rate: 100, dur: time.Second, sent: 100}},
+			targets: 1,
+		},
+		{
+			name:      "SingleLevelBehind",
+			levels:    []paceLevel{{rate: 100, dur: time.Second, sent: 50}},
+			targets:   1,
+			wantRates: []string{"50 of 100 scheduled sends"},
+		},
+		{
+			// The whole run sends 2900 of 3000 (97%), above tolerance, but the
+			// top level sends only 900 of 1000 (90%).
+			name: "RampTopLevelBehind",
+			levels: []paceLevel{
+				{rate: 1000, dur: time.Second, sent: 1000},
+				{rate: 2000, dur: 500 * time.Millisecond, sent: 1000},
+				{rate: 1000, dur: time.Second, sent: 900},
+			},
+			targets:   1,
+			wantRates: []string{"at 1000 ops/s"},
+		},
+		{
+			name: "RampScalesBySendTargets",
+			levels: []paceLevel{
+				{rate: 100, dur: time.Second, sent: 300},
+				{rate: 200, dur: time.Second, sent: 450},
+			},
+			targets:   3,
+			wantRates: []string{"at 200 ops/s"},
+		},
+		{
+			name: "RampOnSchedule",
+			levels: []paceLevel{
+				{rate: 100, dur: time.Second, sent: 100},
+				{rate: 200, dur: time.Second, sent: 199},
+			},
+			targets: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msgs := paceWarnings(tt.levels, tt.targets)
+			if len(msgs) != len(tt.wantRates) {
+				t.Fatalf("paceWarnings() = %q, want %d warning(s)", msgs, len(tt.wantRates))
+			}
+			for i, msg := range msgs {
+				if !strings.Contains(msg, tt.wantRates[i]) {
+					t.Errorf("warning %q does not contain %q", msg, tt.wantRates[i])
+				}
+				if !strings.Contains(msg, "-workers") {
+					t.Errorf("warning %q does not mention -workers", msg)
+				}
+			}
+		})
+	}
+}
+
+// TestRunScheduleReportsLevels verifies that runSchedule reports every
+// offered-load level with its rate, and that the reported level durations
+// add up to the run's Duration.
+func TestRunScheduleReportsLevels(t *testing.T) {
+	tests := []struct {
+		name      string
+		opts      Options
+		wantRates []int
+	}{
+		{"SingleLevel", Options{Workers: 1, Rate: 100, Duration: 60 * time.Millisecond}, []int{100}},
+		{"Ramp", Options{Workers: 1, Duration: 100 * time.Millisecond, RateStep: 50, RateStepMax: 200}, []int{50, 100, 150, 200}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.opts.Interval = time.Hour // phase markers only, no background ticks
+			m := StartMeasurement(tt.opts)
+			var rates []int
+			var total time.Duration
+			levelDone := func(rate int, dur time.Duration) {
+				rates = append(rates, rate)
+				total += dur
+			}
+			if err := runSchedule(context.Background(), m.ticker, tt.opts, levelDone, func() error { return nil }); err != nil {
+				t.Fatalf("runSchedule: %v", err)
+			}
+			m.ticker.Stop()
+			if !slices.Equal(rates, tt.wantRates) {
+				t.Errorf("level rates = %v, want %v", rates, tt.wantRates)
+			}
+			if total != tt.opts.Duration {
+				t.Errorf("level durations sum to %v, want %v", total, tt.opts.Duration)
+			}
+		})
+	}
+}
+
 // TestOptionsRampSteps verifies the number of offered-load levels derived from
 // the ramp options: one per RateStep increment from the start rate up to and
 // including RateStepMax, with a partial final increment still counting as a
