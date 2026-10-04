@@ -627,10 +627,7 @@ func runSymmetricMulticast(t *SymmetricTarget, opts benchkit.Options) (*benchkit
 	// are the authoritative measure of work done. Server receives are N times
 	// sends in this topology, so server TotalOps would overcount.
 	n := uint64(totalSent.Load())
-	r.SetTotalOps(n)
-	r.SetTotalTime(int64(elapsed))
-	if n > 0 {
-		r.SetThroughput(float64(n) / elapsed.Seconds())
-	}
+	r.SetClientTotals(n, elapsed)
+	r.SetPerOpMemoryFromServerStats(n)
 	return r, nil
 }
