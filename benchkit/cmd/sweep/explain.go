@@ -72,7 +72,7 @@ func runExplainCheck(cfg *config) error {
 // fall in the elided middle of a trimmed log. The match is case-insensitive
 // substring; over-inclusion (an occasional benign line) is preferable to losing
 // the one line that explains the failure. "not ready", "stall", and "127.0.1.1"
-// are the fingerprints of the Type A AwaitReady failures; "refused", "timeout",
+// are the fingerprints of the Type A awaitReady failures; "refused", "timeout",
 // and "deadline" mark the Type B connection errors.
 var salientKeywords = []string{
 	"error", "warn", "fail", "panic", "fatal",
@@ -92,8 +92,8 @@ then exit. You are given the run's artifacts and must diagnose the failure.
 
 Failure taxonomy:
 
-  Type A - setup failure (AwaitReady / inbound unreachability). A node cannot
-  receive inbound peer connections, so it stalls in AwaitReady waiting for the
+  Type A - setup failure (awaitReady / inbound unreachability). A node cannot
+  receive inbound peer connections, so it stalls in awaitReady waiting for the
   full mesh. After a 20s stall timeout every node cancels and reports "remote
   peers not ready". No result files are produced; the process exits with status
   1. failure_phase is usually "setup". A common root cause: a host binds its
@@ -101,7 +101,7 @@ Failure taxonomy:
   interface, so peers cannot reach it; the effect is episodic and host-specific.
 
   Type B - measurement failure (linger too short for completion skew). All
-  nodes pass AwaitReady, but during measurement some nodes run slower than
+  nodes pass awaitReady, but during measurement some nodes run slower than
   others. Fast nodes finish, write results, linger briefly, then close their
   listeners and exit. A slow node issuing a later quorum call hits "connection
   refused" or an incomplete-call error. Partial result files are produced (the
@@ -109,7 +109,7 @@ Failure taxonomy:
 
 Worked example (Type A): At N=25, all nodes logged "remote peers not ready:
 ... inbound peers not ready (connected 24/25, missing node 7 ...)". One host
-(bb16, node 7) reported connected 2/25 - nearly isolated. Because AwaitReady
+(bb16, node 7) reported connected 2/25 - nearly isolated. Because awaitReady
 needs every node to see all peers, that one host stalled the whole cluster
 until the 20s timer fired. Root cause: that host bound its listener to
 127.0.1.1:9000 while every other host bound its real address. Fix: bind the

@@ -35,7 +35,7 @@ const (
 // without scanning sweep.log, whether a failed run produced any usable results:
 //
 //   - setup: the run failed before any node wrote a result file (a port
-//     conflict, or a launch/AwaitReady failure that left zero result files).
+//     conflict, or a launch/awaitReady failure that left zero result files).
 //   - measurement: nodes ran but some failed mid-benchmark, so only a subset of
 //     result files were collected.
 //   - collection: all nodes finished but the result files could not be

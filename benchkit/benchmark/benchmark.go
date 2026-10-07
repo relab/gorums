@@ -22,7 +22,7 @@ import (
 // BenchTarget carries the targets for benchmark execution. Set Config for
 // traditional (coordinator→servers) benchmarks and Symmetric for peer-to-peer
 // benchmarks; either or both may be set. Benchmarks for unset targets are
-// omitted from GetBenchmarks.
+// not run.
 type BenchTarget struct {
 	Config    Config
 	Symmetric *SymmetricTarget
@@ -31,10 +31,10 @@ type BenchTarget struct {
 // asyncQCFunc issues one async quorum call and returns its future.
 type asyncQCFunc func(*ConfigContext, *Echo, int) AsyncEcho
 
-// ErrAsyncQCRampUnsupported is returned by runAsyncQCBenchmark when rate
+// errAsyncQCRampUnsupported is returned by runAsyncQCBenchmark when rate
 // ramping (-rate-step/-rate-step-max) is requested; AsyncQuorumCall does not
 // support it.
-var ErrAsyncQCRampUnsupported = errors.New("rate ramping is not supported by AsyncQuorumCall")
+var errAsyncQCRampUnsupported = errors.New("rate ramping is not supported by AsyncQuorumCall")
 
 // asyncQCComplete processes the outcome of one async quorum call and reports
 // whether the run should continue. [benchkit.ErrRunOver] ends it, recording the
@@ -62,7 +62,7 @@ func asyncQCComplete(err error, elapsed time.Duration, m *benchkit.Measurement) 
 // offered-load schedule warns on stderr.
 func runAsyncQCBenchmark(opts benchkit.Options, config Config, f asyncQCFunc) (*benchkit.Result, error) {
 	if opts.RateStep > 0 || opts.RateStepMax > 0 {
-		return nil, fmt.Errorf("benchmark %q: %w", opts.BenchName, ErrAsyncQCRampUnsupported)
+		return nil, fmt.Errorf("benchmark %q: %w", opts.BenchName, errAsyncQCRampUnsupported)
 	}
 	ctx, cancel := benchkit.BenchContext(opts)
 	defer cancel()
@@ -209,7 +209,7 @@ func (a *asyncSends) drain() error {
 }
 
 // benchTargetNeeds identifies which BenchTarget field a benchDesc's build
-// function requires, so GetBenchmarks can filter benchDescs by what the
+// function requires, so [benchmarks] can filter benchDescs by what the
 // caller's target actually provides.
 type benchTargetNeeds int
 
@@ -220,7 +220,7 @@ const (
 
 // benchDesc is the single source of truth for one benchmark: its name and
 // description (used by -list via [BenchmarkDescriptions]) and how to build
-// its runnable closure (used by [GetBenchmarks]).
+// its runnable closure (used by [benchmarks]).
 type benchDesc struct {
 	Name        string
 	Description string
@@ -229,7 +229,7 @@ type benchDesc struct {
 }
 
 // benchDescs lists every known benchmark. Traditional benchmarks (needsConfig)
-// receive cfg, which [GetBenchmarks] derives from t.Config or, when unset,
+// receive cfg, which [benchmarks] derives from t.Config or, when unset,
 // from the symmetric target's server 0 outbound config; peer-to-peer
 // benchmarks (needsSymmetric) receive sym.
 var benchDescs = []benchDesc{
@@ -354,7 +354,7 @@ func BenchmarkDescriptions() []benchkit.Bench {
 	return descs
 }
 
-// GetBenchmarks returns runnable benchmarks for the given targets. Traditional
+// benchmarks returns runnable benchmarks for the given targets. Traditional
 // (needsConfig) benchmarks are included when t.Config is set, or when
 // t.Symmetric is a single-process local target, in which case server 0's
 // outbound config serves as the Config. They are excluded for a distributed
@@ -363,7 +363,7 @@ func BenchmarkDescriptions() []benchkit.Bench {
 // Control.Start/Stop against the same peer group concurrently, resetting and
 // reading every other node's Stats window mid-run. Symmetric benchmarks are
 // included whenever t.Symmetric is set, local or distributed.
-func GetBenchmarks(t BenchTarget) []benchkit.Bench {
+func benchmarks(t BenchTarget) []benchkit.Bench {
 	cfg := t.Config
 	if cfg == nil && t.Symmetric != nil && t.Symmetric.selfAddr == "" && len(t.Symmetric.servers) > 0 {
 		cfg = t.Symmetric.servers[0].PeerConfig()
@@ -393,5 +393,5 @@ func GetBenchmarks(t BenchTarget) []benchkit.Bench {
 // given options against the target, delegating selection, the per-benchmark
 // metadata, and ordering to the benchkit harness.
 func RunBenchmarks(benchRegex *regexp.Regexp, options benchkit.Options, t BenchTarget) ([]*benchkit.Result, error) {
-	return benchkit.Run(benchRegex, options, GetBenchmarks(t))
+	return benchkit.Run(benchRegex, options, benchmarks(t))
 }

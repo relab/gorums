@@ -28,10 +28,10 @@ type SymmetricTarget struct {
 	selfAddr string // distributed mode only: this node's address in the peer list; enables the probe-stall self-diagnosis
 }
 
-// SetupSymmetricServers creates n local Gorums servers with the benchkit Control
+// setupSymmetricServers creates n local Gorums servers with the benchkit Control
 // plane and the gorums workload server registered and serving. Returns a
 // SymmetricTarget, a stop function, and any error.
-func SetupSymmetricServers(n int, serverOpts []gorums.ServerOption, dialOpts ...gorums.DialOption) (*SymmetricTarget, func(), error) {
+func setupSymmetricServers(n int, serverOpts []gorums.ServerOption, dialOpts ...gorums.DialOption) (*SymmetricTarget, func(), error) {
 	servers, stop, err := gorums.NewLocalServers(
 		n,
 		gorums.WithLocalServerOptions(serverOpts...),
@@ -52,7 +52,7 @@ func SetupSymmetricServers(n int, serverOpts []gorums.ServerOption, dialOpts ...
 	return &SymmetricTarget{servers: servers, controls: controls, numPeers: n, labels: labels}, stop, nil
 }
 
-// SetupRemoteServer creates a single Gorums server for distributed
+// setupRemoteServer creates a single Gorums server for distributed
 // benchmarking. selfAddr must appear in peerAddrs; the slice is sorted to
 // assign stable node IDs (1..N) across all machines.
 //
@@ -61,7 +61,7 @@ func SetupSymmetricServers(n int, serverOpts []gorums.ServerOption, dialOpts ...
 // ExitGrace) before exiting, so that slower peers can complete their final
 // cross-node RPCs without hitting a closed listener. The caller is responsible
 // for that linger; see cmd/benchmark.
-func SetupRemoteServer(selfAddr string, peerAddrs []string, serverOpts []gorums.ServerOption, dialOpts ...gorums.DialOption) (*SymmetricTarget, func(), error) {
+func setupRemoteServer(selfAddr string, peerAddrs []string, serverOpts []gorums.ServerOption, dialOpts ...gorums.DialOption) (*SymmetricTarget, func(), error) {
 	sorted := slices.Clone(peerAddrs)
 	slices.Sort(sorted)
 	idx := slices.Index(sorted, selfAddr)
@@ -119,7 +119,7 @@ func SetupRemoteServer(selfAddr string, peerAddrs []string, serverOpts []gorums.
 // channel is broken, the same class of issue that made the previous Done
 // barrier unreliable) or the whole cluster is unusually slow. The bound is
 // the inter-node completion skew, which is dominated by mesh-formation/
-// release skew in AwaitReady and therefore grows with cluster size; the
+// release skew in awaitReady and therefore grows with cluster size; the
 // trailing round-trips are sub-second and absorbed by the base term. The
 // result is clamped so a very large cluster does not linger excessively.
 func ExitGrace(numNodes int) time.Duration {
@@ -238,7 +238,7 @@ func anyPeerFinished(t *SymmetricTarget) bool {
 	return false
 }
 
-// readyStallTimeout bounds how long the outbound probe in AwaitReady may go
+// readyStallTimeout bounds how long the outbound probe in awaitReady may go
 // without any peer responding. A peer that died during startup (e.g. because
 // its listen port was taken) never responds, so waiting out the rest of the
 // readiness deadline only delays the inevitable failure; each response resets
@@ -258,7 +258,7 @@ var probeAttemptTimeout = 2 * time.Second
 // log; production code logs via benchkit.Logf.
 var probeLogf = benchkit.Logf
 
-// AwaitReady waits until every server in t is ready to run the benchmark: it
+// awaitReady waits until every server in t is ready to run the benchmark: it
 // validates round-trip connectivity to every outbound peer of every server,
 // sending each peer echoes until it responds, so every outbound connection is
 // established before the benchmark starts (gRPC dials lazily and may still be
@@ -268,7 +268,7 @@ var probeLogf = benchkit.Logf
 //
 // In dedup mode, call this after [gorums.Server.WaitForAll] so every shared
 // stream is live before the probe exercises it.
-func AwaitReady(ctx context.Context, t *SymmetricTarget) error {
+func awaitReady(ctx context.Context, t *SymmetricTarget) error {
 	for i, srv := range t.servers {
 		label := t.label(i)
 		if err := probeOutbound(ctx, srv, label); err != nil {

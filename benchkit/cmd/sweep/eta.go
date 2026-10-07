@@ -8,7 +8,7 @@ import (
 
 // perRunOverhead is the rough per-run cost outside the measurement window
 // (-time): killing lingering processes, checking that ports are free, launching
-// the nodes, the AwaitReady handshake and clock sync, the post-run exit grace
+// the nodes, the awaitReady handshake and clock sync, the post-run exit grace
 // (which scales with the node count and dominates this term), and downloading
 // the result files. -trim does not appear here: it only drops warmup samples
 // when summarizing and never extends a run's wall-clock. This constant forms
