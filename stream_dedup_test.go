@@ -297,7 +297,7 @@ func TestStreamDedupCallBeforePeerConnectsFailsFast(t *testing.T) {
 func TestStreamDedupRetainedConfigurationsRemainUsable(t *testing.T) {
 	servers := gorumstest.LocalServers(t, 3, gorums.WithStreamDedup())
 	for _, srv := range servers {
-		srv.RegisterHandler(mock.TestMethod, stringEchoHandler("echo"))
+		srv.RegisterHandler(mock.TestMethod, gorumstest.EchoHandler("echo"))
 	}
 
 	retained := servers[2].PeerConfig()
@@ -339,7 +339,7 @@ func TestStreamDedupRetainedConfigurationsRemainUsable(t *testing.T) {
 func TestStreamDedupMulticastAndQuorumCall(t *testing.T) {
 	servers := setupDedupServers(t, 3)
 	for _, srv := range servers {
-		srv.RegisterHandler(mock.TestMethod, stringEchoHandler("echo"))
+		srv.RegisterHandler(mock.TestMethod, gorumstest.EchoHandler("echo"))
 	}
 
 	ctx := gorumstest.Context(t, 3*time.Second)
@@ -382,7 +382,7 @@ func TestStreamDedupOwnerReconnectHealsBorrower(t *testing.T) {
 		})),
 	)
 	for _, srv := range servers {
-		srv.RegisterHandler(mock.TestMethod, stringEchoHandler("echo"))
+		srv.RegisterHandler(mock.TestMethod, gorumstest.EchoHandler("echo"))
 	}
 	waitForDedup(t, servers)
 
@@ -441,7 +441,7 @@ func TestStreamDedupChainedQuorumCall(t *testing.T) {
 	for i, srv := range servers {
 		myID := i + 1
 		srv.RegisterHandler(mock.TestMethod, outerChainedHandler(t, myID, false, mock.EchoMethod, (*gorums.Responses[*pb.StringValue]).Majority))
-		srv.RegisterHandler(mock.EchoMethod, stringEchoHandler("inner-echo"))
+		srv.RegisterHandler(mock.EchoMethod, gorumstest.EchoHandler("inner-echo"))
 	}
 
 	ctx := gorumstest.Context(t, 3*time.Second)
@@ -476,7 +476,7 @@ func TestStreamDedupBorrowerSlowHandlerDoesNotBlockOwnCalls(t *testing.T) {
 				<-unblock // slow handler, no Release
 				return gorums.NewResponseMessage(in, pb.String("slow")), nil
 			})
-			servers[0].RegisterHandler(mock.EchoMethod, stringEchoHandler("echo"))
+			servers[0].RegisterHandler(mock.EchoMethod, gorumstest.EchoHandler("echo"))
 			gorumstest.WaitForPeers(t, servers)
 			defer close(unblock)
 
@@ -521,7 +521,7 @@ func TestStreamDedupOwnerSlowHandlerDoesNotBlockOwnCalls(t *testing.T) {
 				<-unblock // slow handler, no Release
 				return gorums.NewResponseMessage(in, pb.String("slow")), nil
 			})
-			servers[1].RegisterHandler(mock.EchoMethod, stringEchoHandler("echo"))
+			servers[1].RegisterHandler(mock.EchoMethod, gorumstest.EchoHandler("echo"))
 			gorumstest.WaitForPeers(t, servers)
 			defer close(unblock)
 
@@ -569,7 +569,7 @@ func TestStreamDedupNestedCallToRequesterWithoutRelease(t *testing.T) {
 				}
 				return gorums.NewResponseMessage(in, pb.String("outer | "+resp.GetValue())), nil
 			})
-			servers[0].RegisterHandler(mock.EchoMethod, stringEchoHandler("echo"))
+			servers[0].RegisterHandler(mock.EchoMethod, gorumstest.EchoHandler("echo"))
 			gorumstest.WaitForPeers(t, servers)
 
 			n2 := peerNode(t, servers[0].PeerConfig(), 2)

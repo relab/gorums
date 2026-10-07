@@ -171,7 +171,7 @@ func TestOnewayCallAsync(t *testing.T) {
 func TestOnewayCallAsyncReportsSendError(t *testing.T) {
 	const numServers = 3
 	var stopNodes func(...int)
-	config := gorumstest.Config(t, numServers, gorumstest.DefaultServer, gorumstest.WithStopFunc(t, &stopNodes))
+	config := gorumstest.Config(t, numServers, nil, gorumstest.WithStopFunc(t, &stopNodes))
 	ctx := config.Context(t.Context())
 
 	// Warm up so the streams are established before they are torn down.
@@ -202,7 +202,7 @@ func TestOnewayCallAsyncReportsSendError(t *testing.T) {
 // terminal method has started dispatch panics, since interceptors cannot
 // influence the in-flight call.
 func TestCallInterceptAfterDispatchPanics(t *testing.T) {
-	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 5*time.Second)
 	call := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](config.Context(ctx), pb.String("x"), mock.TestMethod)
 	if _, err := call.Majority(); err != nil {
@@ -221,7 +221,7 @@ func TestCallInterceptAfterDispatchPanics(t *testing.T) {
 // an interceptor registered on the handle after Results had already been
 // called would silently fail to apply to the iterator the caller is holding.
 func TestCallInterceptAfterResultsPanics(t *testing.T) {
-	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 5*time.Second)
 	call := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](config.Context(ctx), pb.String("x"), mock.TestMethod)
 	_ = call.Results()
@@ -236,7 +236,7 @@ func TestCallInterceptAfterResultsPanics(t *testing.T) {
 // TestCallInterceptNilIgnored verifies that nil interceptors are ignored rather
 // than causing a panic or affecting the result.
 func TestCallInterceptNilIgnored(t *testing.T) {
-	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 5*time.Second)
 	resp, err := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](config.Context(ctx), pb.String("test"), mock.TestMethod).
 		Intercept(nil).
@@ -250,7 +250,7 @@ func TestCallInterceptNilIgnored(t *testing.T) {
 }
 
 func TestRemoteCallSuccess(t *testing.T) {
-	node := gorumstest.Node(t, gorumstest.DefaultServer)
+	node := gorumstest.Node(t, nil)
 
 	ctx := gorumstest.Context(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
@@ -264,7 +264,7 @@ func TestRemoteCallSuccess(t *testing.T) {
 }
 
 func TestRemoteCallDownedNode(t *testing.T) {
-	node := gorumstest.Node(t, gorumstest.DefaultServer, gorumstest.WithPreConnect(t, func(stopServers func()) {
+	node := gorumstest.Node(t, nil, gorumstest.WithPreConnect(t, func(stopServers func()) {
 		stopServers()
 		time.Sleep(300 * time.Millisecond) // wait for servers to fully stop
 	}))
@@ -281,7 +281,7 @@ func TestRemoteCallDownedNode(t *testing.T) {
 }
 
 func TestRemoteCallTimedOut(t *testing.T) {
-	node := gorumstest.Node(t, gorumstest.DefaultServer)
+	node := gorumstest.Node(t, nil)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 0*time.Second)
 	time.Sleep(50 * time.Millisecond)
@@ -297,7 +297,7 @@ func TestRemoteCallTimedOut(t *testing.T) {
 }
 
 func TestRemoteCallTypeMismatch(t *testing.T) {
-	node := gorumstest.Node(t, gorumstest.DefaultServer)
+	node := gorumstest.Node(t, nil)
 
 	ctx := gorumstest.Context(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
@@ -311,7 +311,7 @@ func TestRemoteCallTypeMismatch(t *testing.T) {
 }
 
 func TestRemoteCallConcurrentAccess(t *testing.T) {
-	node := gorumstest.Node(t, gorumstest.DefaultServer)
+	node := gorumstest.Node(t, nil)
 
 	concurrency := 10
 	errCh := make(chan error, concurrency)

@@ -43,7 +43,7 @@ func (to *testOptions) serverFunc(srvFn func(i int) ServerIface) func(i int) Ser
 	if srvFn == nil {
 		// Use default server, potentially with custom options
 		return func(i int) ServerIface {
-			return defaultTestServer(i, to.serverOpts...)
+			return newDefaultServer(i, to.serverOpts...)
 		}
 	}
 	if len(to.serverOpts) > 0 {

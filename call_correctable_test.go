@@ -12,7 +12,7 @@ import (
 )
 
 func TestCorrectableQuorumCall(t *testing.T) {
-	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 2*time.Second)
 
 	responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
@@ -66,9 +66,9 @@ func TestCorrectableQuorumCallStream(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Using StreamServerFn which sends 3 responses:
+			// Using StreamServer which sends 3 responses:
 			// "echo: val-1", "echo: val-2", "echo: val-3"
-			config := gorumstest.Config(t, 3, gorumstest.StreamServerFn)
+			config := gorumstest.Config(t, 3, gorumstest.StreamServer(10*time.Millisecond))
 			ctx := gorumstest.Context(t, 2*time.Second)
 
 			responses := gorumsimpl.QuorumCallStream[*pb.StringValue, *pb.StringValue](
@@ -94,9 +94,9 @@ func TestCorrectableQuorumCallStream(t *testing.T) {
 			}
 			// Note: The value might be from a higher level if updates happened fast,
 			// but for this test we expect at least the threshold level's value or higher.
-			// With StreamServerFn, level N returns "echo: test-N".
+			// With StreamServer, level N returns "echo: test-N".
 			// Since we wait for level N, we expect at least "echo: test-N".
-			// Actually, StreamServerFn sends 1, then 2, then 3. We check for non-empty response.
+			// Actually, StreamServer sends 1, then 2, then 3. We check for non-empty response.
 			if reply.GetValue() == "" {
 				t.Error("Expected non-empty response")
 			}
@@ -105,7 +105,7 @@ func TestCorrectableQuorumCallStream(t *testing.T) {
 }
 
 func TestCorrectableWatch(t *testing.T) {
-	config := gorumstest.Config(t, 3, gorumstest.StreamServerFn)
+	config := gorumstest.Config(t, 3, gorumstest.StreamServer(10*time.Millisecond))
 	ctx := gorumstest.Context(t, 2*time.Second)
 
 	responses := gorumsimpl.QuorumCallStream[*pb.StringValue, *pb.StringValue](
@@ -137,7 +137,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 	for _, numNodes := range []int{3, 5, 7, 9} {
 
 		b.Run(fmt.Sprintf("QuorumCall/%d", numNodes), func(b *testing.B) {
-			config := gorumstest.Config(b, numNodes, gorumstest.EchoServerFn)
+			config := gorumstest.Config(b, numNodes, gorumstest.EchoServer)
 			cfgCtx := config.Context(b.Context())
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
@@ -157,7 +157,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 		})
 
 		b.Run(fmt.Sprintf("QuorumCallIterator/%d", numNodes), func(b *testing.B) {
-			config := gorumstest.Config(b, numNodes, gorumstest.EchoServerFn)
+			config := gorumstest.Config(b, numNodes, gorumstest.EchoServer)
 			cfgCtx := config.Context(b.Context())
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
@@ -183,7 +183,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 		})
 
 		b.Run(fmt.Sprintf("QuorumCallStream/%d", numNodes), func(b *testing.B) {
-			config := gorumstest.Config(b, numNodes, gorumstest.StreamBenchmarkServerFn)
+			config := gorumstest.Config(b, numNodes, gorumstest.StreamServer(0))
 			cfgCtx := config.Context(b.Context())
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
@@ -203,7 +203,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 		})
 
 		b.Run(fmt.Sprintf("QuorumCallStreamIterator/%d", numNodes), func(b *testing.B) {
-			config := gorumstest.Config(b, numNodes, gorumstest.StreamBenchmarkServerFn)
+			config := gorumstest.Config(b, numNodes, gorumstest.StreamServer(0))
 			cfgCtx := config.Context(b.Context())
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()

@@ -66,7 +66,7 @@ func CountingInterceptor[Req, Resp proto.Message](
 // TestCustomLoggingInterceptor verifies that custom interceptors can be
 // created and used from an external package.
 func TestCustomLoggingInterceptor(t *testing.T) {
-	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 2*time.Second)
 
 	// Use the custom logging interceptor from this external package
@@ -87,7 +87,7 @@ func TestCustomLoggingInterceptor(t *testing.T) {
 
 // TestCustomFilterInterceptor verifies that filter interceptors work correctly.
 func TestCustomFilterInterceptor(t *testing.T) {
-	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 2*time.Second)
 
 	// Use a filter interceptor that only keeps responses from node 1
@@ -113,7 +113,7 @@ func TestCustomFilterInterceptor(t *testing.T) {
 
 // TestInterceptorChaining verifies that multiple custom interceptors can be chained.
 func TestInterceptorChaining(t *testing.T) {
-	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 2*time.Second)
 
 	var count int
@@ -144,7 +144,7 @@ func TestInterceptorChaining(t *testing.T) {
 
 // TestCustomInterceptorWithMapRequest verifies custom interceptors work with built-in ones.
 func TestCustomInterceptorWithMapRequest(t *testing.T) {
-	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 2*time.Second)
 
 	var count int
@@ -185,7 +185,7 @@ func TestCustomInterceptorWithMapRequest(t *testing.T) {
 // With MapRequest, each node gets a cloned message with individually marshaled payload.
 func BenchmarkQuorumCallMapRequest(b *testing.B) {
 	for _, numNodes := range []int{3, 7, 13} {
-		config := gorumstest.Config(b, numNodes, gorumstest.EchoServerFn)
+		config := gorumstest.Config(b, numNodes, gorumstest.EchoServer)
 		cfgCtx := config.Context(b.Context())
 
 		// Baseline: no interceptors — single marshal, shared message
