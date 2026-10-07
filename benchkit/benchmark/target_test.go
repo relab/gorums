@@ -67,7 +67,7 @@ func benchTarget(srv *gorums.Server, numPeers int) *SymmetricTarget {
 		controls: []*benchkit.Control{ctrl},
 		numPeers: numPeers,
 		selfAddr: srv.Addr(),
-		labels:   []string{fmt.Sprintf("node %d (%s)", ctrl.SelfID(), srv.Addr())},
+		labels:   []string{fmt.Sprintf("node %d (%s)", ctrl.ID(), srv.Addr())},
 	}
 }
 
