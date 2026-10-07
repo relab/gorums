@@ -14,8 +14,7 @@ func SetVerbose(v bool) { logVerbose = v }
 // Logf writes a formatted diagnostic message to stderr when verbose logging is
 // enabled. All diagnostic output in a sweep-launched binary must use Logf rather
 // than writing to os.Stdout: sweep only drains stderr, and unread stdout fills
-// the SSH channel window and blocks goroutines (see the diagnostic-output rule
-// in doc/benchkit-troubleshooting.html).
+// the SSH channel window and blocks goroutines.
 func Logf(format string, args ...any) {
 	if logVerbose {
 		fmt.Fprintf(os.Stderr, format, args...)
