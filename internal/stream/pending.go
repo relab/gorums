@@ -46,7 +46,7 @@ func (p *pendingCalls) add(msgID uint64, req Request) bool {
 	if len(p.calls) >= max(p.sweepAt, minSweepSize) {
 		p.sweepLocked()
 	}
-	req.SendTime = time.Now()
+	req.sendTime = time.Now()
 	p.seq++
 	call := pendingCall{req: req, seq: p.seq}
 	if p.onExpire != nil {

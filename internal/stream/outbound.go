@@ -107,7 +107,7 @@ func (c *OutboundChannel) run() {
 		}
 		if c.ctx.Err() != nil {
 			if req != nil {
-				req.ReplyError(c.id, ErrNodeClosed)
+				req.replyError(c.id, ErrNodeClosed)
 			}
 			return
 		}
@@ -119,7 +119,7 @@ func (c *OutboundChannel) run() {
 				c.recordHealth(err)
 			}
 			if req != nil {
-				req.ReplyError(c.id, err)
+				req.replyError(c.id, err)
 				req = nil
 			}
 			retry, connect = c.pace(&delay), false

@@ -108,10 +108,10 @@ func (e *endpoint) DroppedReplies() int64 {
 
 // LastErr implements [Channel.LastErr]. It reports the channel's current
 // health, not the outcome of any one request: [ErrSendStalled] while a send
-// has been blocked for [StallReportDelay] or longer, and otherwise the outcome
+// has been blocked for [stallReportDelay] or longer, and otherwise the outcome
 // of the latest stream operation.
 func (e *endpoint) LastErr() error {
-	if start := e.sendStart.Load(); start != 0 && time.Since(time.Unix(0, start)) >= StallReportDelay {
+	if start := e.sendStart.Load(); start != 0 && time.Since(time.Unix(0, start)) >= stallReportDelay {
 		return ErrSendStalled
 	}
 	if err := e.lastErr.Load(); err != nil {
