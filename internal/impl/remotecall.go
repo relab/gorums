@@ -10,7 +10,7 @@ import (
 //
 // This method should be used by generated code only.
 func RemoteCall[Req, Resp proto.Message](ctx *NodeContext, req Req, method string) (Resp, error) {
-	replyChan := make(chan NodeResponse[*stream.Message], 1)
+	responseChan := make(chan NodeResponse[*stream.Message], 1)
 	node := ctx.Node()
 	transport := conn.NodeTransport(node)
 	reqMsg, err := stream.NewMessage(ctx, transport.NextMsgID(), method, req)
@@ -18,10 +18,10 @@ func RemoteCall[Req, Resp proto.Message](ctx *NodeContext, req Req, method strin
 		var zero Resp
 		return zero, err
 	}
-	transport.Enqueue(stream.Request{Ctx: ctx, Msg: reqMsg, ResponseChan: replyChan})
+	transport.Enqueue(stream.Request{Ctx: ctx, Msg: reqMsg, ResponseChan: responseChan})
 
 	select {
-	case r := <-replyChan:
+	case r := <-responseChan:
 		resp := mapToCallResponse[Resp](r)
 		return resp.Value, resp.Err
 	case <-ctx.Done():

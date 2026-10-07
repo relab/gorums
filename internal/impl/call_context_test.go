@@ -90,7 +90,7 @@ func TestCallContextSendSharedMessageIDs(t *testing.T) {
 		config:  config,
 		request: pb.String("hello"),
 		method:  "test.Method",
-		oneway:  true, // fire-and-forget: no reply channel needed
+		oneway:  true, // fire-and-forget: no response channel needed
 	}
 	c.sendShared()
 

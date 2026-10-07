@@ -323,7 +323,7 @@ flowchart LR
 
 ### Call Engine (`internal/impl`)
 
-Each call constructor builds a `CallContext` that holds the request, the target `Config`, the reply channel, and the response iterator (`ResponseSeq`).
+Each call constructor builds a `CallContext` that holds the request, the target `Config`, the response channel, and the response iterator (`ResponseSeq`).
 A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`), as well as the `Async` and `Correctable` futures.
 A one-way call (`Multicast`, `Unicast`) returns a `OnewayCall`, whose `Send` waits for the send confirmations and whose `Async` returns an `OnewayAsync`.
 A `ClientInterceptor` wraps the response iterator and may register per-node request transformations before the call is dispatched.
@@ -335,7 +335,7 @@ classDiagram
     class CallContext~Req, Resp~ {
         request Req
         method string
-        replyChan
+        responseChan
         sendNow()
     }
     class Call~Req, Resp~ {
@@ -421,7 +421,7 @@ sequenceDiagram
     S->>G: Send(Message)
     G-->>S: Recv() response Message
     S->>S: handle: pendingCalls.take(msgID)
-    S-->>CC: Request.deliver to replyChan
+    S-->>CC: Request.deliver to responseChan
     CC-->>Call: ResponseSeq yields NodeResponse
     Call-->>Gen: majority response or QuorumCallError
 ```

@@ -126,13 +126,13 @@ func (c *OnewayCall[Req]) Async() *OnewayAsync {
 	return &OnewayAsync{collect: c.collect}
 }
 
-// dispatch installs the reply channel and sends the request exactly once.
+// dispatch installs the response channel and sends the request exactly once.
 // It panics if the handle was already consumed.
 func (c *OnewayCall[Req]) dispatch() {
 	if c.ctx.dispatched.Swap(true) {
 		panic("gorums: OnewayCall.Send or OnewayCall.Async called more than once on the same handle")
 	}
-	c.ctx.replyChan = make(chan NodeResponse[*stream.Message], c.ctx.config.Size())
+	c.ctx.responseChan = make(chan NodeResponse[*stream.Message], c.ctx.config.Size())
 	c.ctx.sendOnce.Do(c.ctx.send)
 }
 
@@ -171,12 +171,12 @@ func (c *OnewayCall[Req]) collect() error {
 // when no confirmation is available.
 func (c *OnewayCall[Req]) receive() (NodeResponse[*stream.Message], error) {
 	select {
-	case r := <-c.ctx.replyChan:
+	case r := <-c.ctx.responseChan:
 		return r, nil
 	default:
 	}
 	select {
-	case r := <-c.ctx.replyChan:
+	case r := <-c.ctx.responseChan:
 		return r, nil
 	case <-c.ctx.Done():
 		return NodeResponse[*stream.Message]{}, c.ctx.Err()
