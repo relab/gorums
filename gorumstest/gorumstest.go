@@ -266,6 +266,25 @@ func LocalServers(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.Se
 	return srvs
 }
 
+// WaitForPeers blocks until every server in srvs is connected to all the
+// peers in its [gorums.Server.PeerConfig], or fails the test after 10
+// seconds. Use it after [LocalServers] when a test needs every peer
+// connection before it issues calls. Under [gorums.WithStreamDedup], it waits
+// for the same condition as [gorums.Server.WaitForAll].
+func WaitForPeers(t testing.TB, srvs []*gorums.Server) {
+	t.Helper()
+	ctx := Context(t, 10*time.Second)
+	for i, srv := range srvs {
+		want := srv.PeerConfig().Size()
+		if err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
+			return cfg.Size() == want
+		}); err != nil {
+			t.Fatalf("server %d: WaitForPeers: %v (connected %v, want %v)",
+				i+1, err, srv.ConnectedPeers().NodeIDs(), srv.PeerConfig().NodeIDs())
+		}
+	}
+}
+
 // Closer returns a cleanup function that closes c.
 func Closer(t testing.TB, c io.Closer) func() {
 	t.Helper()

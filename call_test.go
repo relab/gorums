@@ -28,11 +28,7 @@ func TestOnewayNoResourceLeak(t *testing.T) {
 			return nil, nil
 		})
 	}
-	for _, srv := range servers {
-		srv.WaitForPeers(t.Context(), func(cfg gorums.Config) bool {
-			return cfg.Size() == 3
-		})
-	}
+	gorumstest.WaitForPeers(t, servers)
 	cfg := servers[0].PeerConfig()
 	ctx := gorumstest.Context(t, 5*time.Second)
 	for i := range 1000 {
@@ -67,11 +63,7 @@ func TestOnewayDroppedHandleDoesNotDispatch(t *testing.T) {
 			return nil, nil
 		})
 	}
-	for _, srv := range servers {
-		srv.WaitForPeers(t.Context(), func(cfg gorums.Config) bool {
-			return cfg.Size() == 3
-		})
-	}
+	gorumstest.WaitForPeers(t, servers)
 	cfg := servers[0].PeerConfig()
 	ctx := gorumstest.Context(t, 2*time.Second)
 	// Drop the handle without consuming it: nothing must be sent.
@@ -94,11 +86,7 @@ func TestOnewayCallDoubleDispatchPanics(t *testing.T) {
 			return nil, nil
 		})
 	}
-	for _, srv := range servers {
-		srv.WaitForPeers(t.Context(), func(cfg gorums.Config) bool {
-			return cfg.Size() == 3
-		})
-	}
+	gorumstest.WaitForPeers(t, servers)
 	cfg := servers[0].PeerConfig()
 
 	tests := []struct {
@@ -150,11 +138,7 @@ func TestOnewayCallAsync(t *testing.T) {
 			return nil, nil
 		})
 	}
-	for _, srv := range servers {
-		srv.WaitForPeers(t.Context(), func(cfg gorums.Config) bool {
-			return cfg.Size() == 3
-		})
-	}
+	gorumstest.WaitForPeers(t, servers)
 	cfg := servers[0].PeerConfig()
 	ctx := gorumstest.Context(t, 5*time.Second)
 
