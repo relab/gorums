@@ -2,8 +2,12 @@ package conn
 
 import (
 	"context"
+	"errors"
+	"slices"
 	"testing"
 	"time"
+
+	"github.com/relab/gorums/internal/stream"
 )
 
 func TestConfigWatch(t *testing.T) {
@@ -98,6 +102,123 @@ func TestConfigWatch(t *testing.T) {
 			}
 		case <-time.After(time.Second):
 			t.Error("channel should be closed promptly after ctx cancel")
+		}
+	})
+}
+
+func TestConfigSort(t *testing.T) {
+	const unmeasured = -1 * time.Second
+	// makeNode returns a node with the given latency and last error.
+	// An unmeasured node keeps the latency estimate of a fresh transport.
+	makeNode := func(id uint32, latency time.Duration, err error) *Node {
+		n := newTestNode(id, stream.NewChannelWithState(err))
+		if latency != unmeasured {
+			NodeTransport(n).Latency().Store(latency)
+		}
+		return n
+	}
+	someErr := errors.New("some error")
+	thenID := func(first func(a, b *Node) int) func(a, b *Node) int {
+		return func(a, b *Node) int {
+			if r := first(a, b); r != 0 {
+				return r
+			}
+			return ByID(a, b)
+		}
+	}
+	errNodes := func() Config {
+		return Config{
+			makeNode(100, unmeasured, nil),
+			makeNode(101, unmeasured, someErr),
+			makeNode(42, unmeasured, nil),
+			makeNode(99, unmeasured, someErr),
+		}
+	}
+
+	tests := []struct {
+		name    string
+		cfg     Config
+		cmp     func(a, b *Node) int
+		wantIDs []uint32
+	}{
+		{name: "ByID", cfg: errNodes(), cmp: ByID, wantIDs: []uint32{42, 99, 100, 101}},
+		// Stable sort: nodes with equal error status keep their relative order.
+		{name: "ByLastError", cfg: errNodes(), cmp: ByLastError, wantIDs: []uint32{100, 42, 101, 99}},
+		{name: "ByLastErrorThenID", cfg: errNodes(), cmp: thenID(ByLastError), wantIDs: []uint32{42, 100, 99, 101}},
+		{
+			// Unmeasured nodes sort after measured nodes.
+			name: "ByLatency",
+			cfg: Config{
+				makeNode(1, 30*time.Millisecond, nil),
+				makeNode(2, 10*time.Millisecond, nil),
+				makeNode(3, unmeasured, nil),
+				makeNode(4, 20*time.Millisecond, nil),
+			},
+			cmp:     ByLatency,
+			wantIDs: []uint32{2, 4, 1, 3},
+		},
+		{
+			// All latencies compare equal, so the stable sort keeps the order.
+			name: "ByLatency/AllUnmeasured",
+			cfg: Config{
+				makeNode(3, unmeasured, nil),
+				makeNode(1, unmeasured, nil),
+				makeNode(2, unmeasured, nil),
+			},
+			cmp:     ByLatency,
+			wantIDs: []uint32{3, 1, 2},
+		},
+		{
+			name: "ByLatencyThenID",
+			cfg: Config{
+				makeNode(10, 20*time.Millisecond, nil),
+				makeNode(5, 10*time.Millisecond, nil),
+				makeNode(7, 20*time.Millisecond, nil),
+			},
+			cmp:     thenID(ByLatency),
+			wantIDs: []uint32{5, 7, 10},
+		},
+		{
+			name: "ByLastErrorThenLatency",
+			cfg: Config{
+				makeNode(1, 10*time.Millisecond, someErr),
+				makeNode(2, 30*time.Millisecond, nil),
+				makeNode(3, unmeasured, nil),
+				makeNode(4, 20*time.Millisecond, nil),
+			},
+			cmp: func(a, b *Node) int {
+				if r := ByLastError(a, b); r != 0 {
+					return r
+				}
+				return ByLatency(a, b)
+			},
+			wantIDs: []uint32{4, 2, 3, 1},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			origIDs := tt.cfg.NodeIDs()
+			sorted := tt.cfg.Sort(tt.cmp)
+			if got := sorted.NodeIDs(); !slices.Equal(got, tt.wantIDs) {
+				t.Errorf("Sort: IDs = %v, want %v", got, tt.wantIDs)
+			}
+			if got := tt.cfg.NodeIDs(); !slices.Equal(got, origIDs) {
+				t.Errorf("Sort modified the original config: IDs = %v, want %v", got, origIDs)
+			}
+			if &sorted[0] == &tt.cfg[0] {
+				t.Error("Sort returned the original backing array")
+			}
+		})
+	}
+
+	t.Run("Empty/ReturnsNil", func(t *testing.T) {
+		for _, empty := range []Config{nil, {}} {
+			if got := empty.Sort(ByID); got != nil {
+				t.Errorf("Sort(ByID) on %#v = %v, want nil", empty, got)
+			}
+			if got := empty.Sort(ByLatency); got != nil {
+				t.Errorf("Sort(ByLatency) on %#v = %v, want nil", empty, got)
+			}
 		}
 	})
 }

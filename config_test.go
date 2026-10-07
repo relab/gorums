@@ -3,7 +3,6 @@ package gorums_test
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -296,74 +295,6 @@ func TestEmptyConfiguration(t *testing.T) {
 		qcErr := gorumstest.QuorumCallError(map[uint32]error{1: errors.New("boom")})
 		if got := empty.WithoutErrors(qcErr); got != nil {
 			t.Fatalf("empty.WithoutErrors(...) = %v, want nil", got)
-		}
-	})
-}
-
-func TestConfigSort(t *testing.T) {
-	cfg := gorumstest.UnreachableConfig(t, nodeList...)
-
-	t.Run("SortByID", func(t *testing.T) {
-		sorted := cfg.Sort(gorums.ByID)
-		if sorted.Size() != cfg.Size() {
-			t.Fatalf("sorted.Size() = %d, want %d", sorted.Size(), cfg.Size())
-		}
-		for i := 1; i < sorted.Size(); i++ {
-			if sorted[i].ID() < sorted[i-1].ID() {
-				t.Errorf("Sort(ID): not sorted at position %d (id %d < id %d)",
-					i, sorted[i].ID(), sorted[i-1].ID())
-			}
-		}
-	})
-
-	t.Run("SortByLatency/AllUnmeasured", func(t *testing.T) {
-		// Fresh config: no calls yet, so all nodes report latency < 0.
-		for _, n := range cfg.Nodes() {
-			if n.Latency() >= 0 {
-				t.Fatalf("expected no latency measurement on fresh node, got %v", n.Latency())
-			}
-		}
-		sorted := cfg.Sort(gorums.ByLatency)
-		if sorted.Size() != cfg.Size() {
-			t.Fatalf("sorted.Size() = %d, want %d", sorted.Size(), cfg.Size())
-		}
-		// When all nodes are unmeasured their reported latencies are all -1; thus, the
-		// Latency comparator returns 0 for every latency pair (the latencies are equal),
-		// so a stable sort must preserve the original order.
-		if got, want := sorted.NodeIDs(), cfg.NodeIDs(); !slices.Equal(got, want) {
-			t.Errorf("Sort(Latency) with all-unmeasured nodes changed order: got %v, want %v", got, want)
-		}
-	})
-
-	t.Run("ReturnsNewConfiguration", func(t *testing.T) {
-		sorted := cfg.Sort(gorums.ByID)
-		cfgSlice := cfg.Nodes()
-		sortedSlice := sorted.Nodes()
-		if len(cfgSlice) > 0 && len(sortedSlice) > 0 && &cfgSlice[0] == &sortedSlice[0] {
-			t.Error("Sort returned same backing array — violates immutability")
-		}
-	})
-
-	t.Run("Empty/ReturnsNil", func(t *testing.T) {
-		var empty gorums.Config
-		if got := empty.Sort(gorums.ByID); got != nil {
-			t.Fatalf("empty.Sort(ID) = %v, want nil", got)
-		}
-		if got := empty.Sort(gorums.ByLatency); got != nil {
-			t.Fatalf("empty.Sort(Latency) = %v, want nil", got)
-		}
-	})
-
-	t.Run("SortByLastNodeErrorThenLatency", func(t *testing.T) {
-		// Composing two comparators should not panic and must return a valid config.
-		sorted := cfg.Sort(func(a, b *gorums.Node) int {
-			if r := gorums.ByLastError(a, b); r != 0 {
-				return r
-			}
-			return gorums.ByLatency(a, b)
-		})
-		if sorted.Size() != cfg.Size() {
-			t.Fatalf("composed sort size = %d, want %d", sorted.Size(), cfg.Size())
 		}
 	})
 }
