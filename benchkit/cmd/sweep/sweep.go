@@ -14,7 +14,7 @@ type runSpec struct {
 }
 
 // sweepConfig holds the parameter ranges for a sweep.
-// The [params] method produces the Cartesian product of all combinations.
+// The [sweepConfig.runSpecs] method produces the Cartesian product of all combinations.
 // An empty sendBuffers or recvBuffers contributes one zero value, which selects
 // the benchmark binary's default.
 type sweepConfig struct {
@@ -38,8 +38,8 @@ func bufferValues(sizes []int) []int {
 	return sizes
 }
 
-// params returns an iterator over all swept benchmark parameter combinations.
-func (sc sweepConfig) params() iter.Seq[runSpec] {
+// runSpecs returns an iterator over all swept benchmark parameter combinations.
+func (sc sweepConfig) runSpecs() iter.Seq[runSpec] {
 	return func(yield func(runSpec) bool) {
 		reps := max(sc.reps, 1)
 		streamModes := sc.streamModes

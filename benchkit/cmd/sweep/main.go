@@ -376,8 +376,8 @@ func main() {
 
 	// Limit connections to the physical hosts actually needed for this sweep.
 	maxPhysical := 0
-	for params := range cfg.sweep.params() {
-		maxPhysical = max(maxPhysical, min(params.Nodes, len(hosts)))
+	for spec := range cfg.sweep.runSpecs() {
+		maxPhysical = max(maxPhysical, min(spec.Nodes, len(hosts)))
 	}
 	if maxPhysical < len(hosts) {
 		hosts = hosts[:maxPhysical]
@@ -478,19 +478,19 @@ func main() {
 			}
 		}
 	}
-	for params := range cfg.sweep.params() {
+	for spec := range cfg.sweep.runSpecs() {
 		runNum++
-		base := runBase(cfg.sweepLabel, params)
-		nodes := buildNodeAssignments(allHosts, params.Nodes, cfg.port)
+		base := runBase(cfg.sweepLabel, spec)
+		nodes := buildNodeAssignments(allHosts, spec.Nodes, cfg.port)
 		peers := buildPeerList(nodes)
-		writeManifest(cfg.outDir, base, params, nodes, cfg, gitSHA, binAbs)
+		writeManifest(cfg.outDir, base, spec, nodes, cfg, gitSHA, binAbs)
 		for _, n := range nodes {
 			for _, ext := range collectExts {
 				remoteFiles[n.host] = append(remoteFiles[n.host], filepath.Join(cfg.remoteDirs[n.host], resultFilename(base, n, ext)))
 			}
 		}
 
-		numHosts := min(params.Nodes, len(allHosts))
+		numHosts := min(spec.Nodes, len(allHosts))
 		sub := group
 		sub.Hosts = group.Hosts[:numHosts]
 
@@ -498,7 +498,7 @@ func main() {
 		// visible in the log) and recorded in sweep.log.
 		log.Printf("[%d/%d] %-8s  N=%-4d  workers=%-4d  payload=%-6d  rate=%-8d  stream=%-5s  bench=%s",
 			runNum, total, cfg.sweepLabel,
-			params.Nodes, params.Workers, params.Payload, params.Rate, params.StreamMode, params.Benchmark)
+			spec.Nodes, spec.Workers, spec.Payload, spec.Rate, spec.StreamMode, spec.Benchmark)
 		// Refresh the completion range using only the static per-run bounds.
 		if runNum > 1 {
 			log.Print(sweepProgressLine(time.Now(), cfg.duration, runNum-1, total))
@@ -523,7 +523,7 @@ func main() {
 		// each host's retransmission/timeout deltas — the evidence that points
 		// at a lossy link when a run comes out degraded (see tcpstats.go).
 		tcpBefore := captureTCPStats(sub)
-		if err := launchAndWait(sub, nodes, peers, params, base, cfg); err != nil {
+		if err := launchAndWait(sub, nodes, peers, spec, base, cfg); err != nil {
 			log.Printf("  error: %v", err)
 			// Snapshot host and socket state before collecting results: the
 			// SSH round-trips for collection take seconds, during which

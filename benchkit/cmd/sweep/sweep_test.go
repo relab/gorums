@@ -7,7 +7,7 @@ import (
 	"github.com/relab/gorums/benchkit"
 )
 
-func TestSweepParamsIncludeStreamModes(t *testing.T) {
+func TestSweepRunSpecsIncludeStreamModes(t *testing.T) {
 	sc := sweepConfig{
 		numNodes:    []int{3},
 		workers:     []int{1},
@@ -18,11 +18,11 @@ func TestSweepParamsIncludeStreamModes(t *testing.T) {
 		reps:        2,
 	}
 	var got []runSpec
-	for p := range sc.params() {
+	for p := range sc.runSpecs() {
 		got = append(got, p)
 	}
 	if len(got) != 4 {
-		t.Fatalf("params = %d, want 4", len(got))
+		t.Fatalf("runSpecs = %d, want 4", len(got))
 	}
 	modes := []string{got[0].StreamMode, got[1].StreamMode, got[2].StreamMode, got[3].StreamMode}
 	wantModes := []string{"dual", "dedup", "dual", "dedup"}
@@ -88,11 +88,11 @@ func TestEmptyAndExplicitZeroBuffersHaveSameIdentity(t *testing.T) {
 
 	only := func(sc sweepConfig) runSpec {
 		var specs []runSpec
-		for spec := range sc.params() {
+		for spec := range sc.runSpecs() {
 			specs = append(specs, spec)
 		}
 		if len(specs) != 1 {
-			t.Fatalf("params = %d, want 1", len(specs))
+			t.Fatalf("runSpecs = %d, want 1", len(specs))
 		}
 		return specs[0]
 	}
@@ -105,10 +105,10 @@ func TestEmptyAndExplicitZeroBuffersHaveSameIdentity(t *testing.T) {
 	}
 }
 
-// TestSweepParamsBufferAxes verifies that the buffer lists multiply into the
-// parameter product, that countRuns agrees with what params yields, and that
+// TestSweepRunSpecsBufferAxes verifies that the buffer lists multiply into the
+// parameter product, that countRuns agrees with what runSpecs yields, and that
 // an unset axis contributes exactly one unset combination.
-func TestSweepParamsBufferAxes(t *testing.T) {
+func TestSweepRunSpecsBufferAxes(t *testing.T) {
 	tests := []struct {
 		name        string
 		sendBuffers []int
@@ -128,11 +128,11 @@ func TestSweepParamsBufferAxes(t *testing.T) {
 				sendBuffers: tt.sendBuffers, recvBuffers: tt.recvBuffers,
 			}
 			var got []runSpec
-			for p := range sc.params() {
+			for p := range sc.runSpecs() {
 				got = append(got, p)
 			}
 			if len(got) != tt.want {
-				t.Fatalf("params = %d, want %d", len(got), tt.want)
+				t.Fatalf("runSpecs = %d, want %d", len(got), tt.want)
 			}
 			if n := countRuns(sc); n != tt.want {
 				t.Errorf("countRuns = %d, want %d", n, tt.want)
