@@ -301,3 +301,75 @@ func TestStaleBinaryWarning(t *testing.T) {
 		})
 	}
 }
+
+// TestUpdateManifestOutcomeDegraded verifies that a degraded outcome records
+// the degraded status and the flagged nodes with their relative throughput in
+// the manifest.
+func TestUpdateManifestOutcomeDegraded(t *testing.T) {
+	dir := t.TempDir()
+	base := "e1_Q_N5_W1_P0"
+	nodes := []nodeAssignment{{host: "bb2", port: 9000}, {host: "bb16", port: 9000}}
+	cfg := &config{sweepLabel: "e1", duration: time.Second}
+	writeManifest(dir, base, runSpec{
+		Dimensions: benchkit.Dimensions{Benchmark: "Q", Nodes: 5, Workers: 1},
+		Rep:        1,
+	}, nodes, cfg, "", "")
+
+	deg := []degradedNode{{Host: "bb16:9000", Throughput: 233, Relative: 0.045}}
+	tcp := map[string]map[string]uint64{"bb16": {"TcpExt.TCPTimeouts": 4900}}
+	err := updateManifestOutcome(dir, base, runOutcome{
+		status: runStatusDegraded, collectedFiles: 2, degraded: deg, tcpStats: tcp,
+	})
+	if err != nil {
+		t.Fatalf("updateManifestOutcome: %v", err)
+	}
+
+	data, err := os.ReadFile(manifestPath(dir, base))
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	var m runManifest
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("parse manifest: %v", err)
+	}
+	if m.Status != runStatusDegraded {
+		t.Errorf("Status = %q, want %q", m.Status, runStatusDegraded)
+	}
+	if len(m.DegradedNodes) != 1 || m.DegradedNodes[0].Host != "bb16:9000" {
+		t.Fatalf("DegradedNodes = %+v, want bb16:9000", m.DegradedNodes)
+	}
+	if m.DegradedNodes[0].Relative != 0.045 {
+		t.Errorf("Relative = %v, want 0.045", m.DegradedNodes[0].Relative)
+	}
+	if m.TCPStats["bb16"]["TcpExt.TCPTimeouts"] != 4900 {
+		t.Errorf("TCPStats = %v, want bb16 TCPTimeouts=4900", m.TCPStats)
+	}
+}
+
+// TestUpdateManifestDiagnosis verifies that the diagnosis is recorded without
+// disturbing any other manifest field, and that a second call overwrites it.
+func TestUpdateManifestDiagnosis(t *testing.T) {
+	dir := t.TempDir()
+	const base = "nscale_Symmetric_N2_W1_r1"
+	writeFailedManifest(t, dir, base, failurePhaseSetup)
+
+	if err := updateManifestDiagnosis(dir, base, "first verdict"); err != nil {
+		t.Fatalf("updateManifestDiagnosis: %v", err)
+	}
+	m := readManifest(t, dir, base)
+	if m.Diagnosis != "first verdict" {
+		t.Errorf("diagnosis = %q, want %q", m.Diagnosis, "first verdict")
+	}
+	// Other fields must survive the read-modify-write.
+	if m.Status != runStatusFailed || m.FailurePhase != failurePhaseSetup ||
+		m.Benchmark != "Symmetric" || m.Nodes != 2 {
+		t.Errorf("write-back disturbed other fields: %+v", m)
+	}
+
+	if err := updateManifestDiagnosis(dir, base, "second verdict"); err != nil {
+		t.Fatalf("updateManifestDiagnosis (overwrite): %v", err)
+	}
+	if m := readManifest(t, dir, base); m.Diagnosis != "second verdict" {
+		t.Errorf("diagnosis after overwrite = %q, want %q", m.Diagnosis, "second verdict")
+	}
+}

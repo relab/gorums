@@ -1,11 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"math"
-	"os"
 	"testing"
-	"time"
 
 	"github.com/relab/gorums/benchkit"
 )
@@ -203,49 +200,5 @@ func TestCollectNodeMeasurements(t *testing.T) {
 		if got[host] != m {
 			t.Errorf("measurement[%q] = %+v, want %+v", host, got[host], m)
 		}
-	}
-}
-
-// TestUpdateManifestOutcomeDegraded verifies that a degraded outcome records
-// the degraded status and the flagged nodes with their relative throughput in
-// the manifest.
-func TestUpdateManifestOutcomeDegraded(t *testing.T) {
-	dir := t.TempDir()
-	base := "e1_Q_N5_W1_P0"
-	nodes := []nodeAssignment{{host: "bb2", port: 9000}, {host: "bb16", port: 9000}}
-	cfg := &config{sweepLabel: "e1", duration: time.Second}
-	writeManifest(dir, base, runSpec{
-		Dimensions: benchkit.Dimensions{Benchmark: "Q", Nodes: 5, Workers: 1},
-		Rep:        1,
-	}, nodes, cfg, "", "")
-
-	deg := []degradedNode{{Host: "bb16:9000", Throughput: 233, Relative: 0.045}}
-	tcp := map[string]map[string]uint64{"bb16": {"TcpExt.TCPTimeouts": 4900}}
-	err := updateManifestOutcome(dir, base, runOutcome{
-		status: runStatusDegraded, collectedFiles: 2, degraded: deg, tcpStats: tcp,
-	})
-	if err != nil {
-		t.Fatalf("updateManifestOutcome: %v", err)
-	}
-
-	data, err := os.ReadFile(manifestPath(dir, base))
-	if err != nil {
-		t.Fatalf("read manifest: %v", err)
-	}
-	var m runManifest
-	if err := json.Unmarshal(data, &m); err != nil {
-		t.Fatalf("parse manifest: %v", err)
-	}
-	if m.Status != runStatusDegraded {
-		t.Errorf("Status = %q, want %q", m.Status, runStatusDegraded)
-	}
-	if len(m.DegradedNodes) != 1 || m.DegradedNodes[0].Host != "bb16:9000" {
-		t.Fatalf("DegradedNodes = %+v, want bb16:9000", m.DegradedNodes)
-	}
-	if m.DegradedNodes[0].Relative != 0.045 {
-		t.Errorf("Relative = %v, want 0.045", m.DegradedNodes[0].Relative)
-	}
-	if m.TCPStats["bb16"]["TcpExt.TCPTimeouts"] != 4900 {
-		t.Errorf("TCPStats = %v, want bb16 TCPTimeouts=4900", m.TCPStats)
 	}
 }
