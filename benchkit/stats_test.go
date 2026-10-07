@@ -36,7 +36,7 @@ func TestResultPercentilesAndLatencies(t *testing.T) {
 }
 
 // TestStatsOps verifies that Ops counts every recorded operation regardless of
-// how it was recorded, and that Clear resets the counter. ServerMeasured uses
+// how it was recorded, and that Reset clears the counter. ServerMeasured uses
 // it to derive client-side per-op memory stats from the client's own send
 // count rather than the aggregated server op count.
 func TestStatsOps(t *testing.T) {
@@ -48,23 +48,23 @@ func TestStatsOps(t *testing.T) {
 	if got := s.Ops(); got != 4 {
 		t.Errorf("Ops() = %d, want 4", got)
 	}
-	s.Clear()
+	s.Reset(StatsMode_EXACT)
 	if got := s.Ops(); got != 0 {
-		t.Errorf("Ops() after Clear = %d, want 0", got)
+		t.Errorf("Ops() after Reset = %d, want 0", got)
 	}
 }
 
-func TestStatsClearResetsSamples(t *testing.T) {
+func TestStatsResetClearsSamples(t *testing.T) {
 	s := &Stats{}
 	s.AddLatency(5 * time.Nanosecond)
 	s.AddLatency(7 * time.Nanosecond)
-	s.Clear()
+	s.Reset(StatsMode_EXACT)
 	r := s.GetResult()
 	if got := r.GetLatencies(); len(got) != 0 {
-		t.Errorf("Latencies after Clear = %v, want empty", got)
+		t.Errorf("Latencies after Reset = %v, want empty", got)
 	}
 	if got := r.Percentiles(0.5); got != nil {
-		t.Errorf("Percentiles after Clear = %v, want nil", got)
+		t.Errorf("Percentiles after Reset = %v, want nil", got)
 	}
 }
 
@@ -331,13 +331,13 @@ func TestStatsResetSwitchesMode(t *testing.T) {
 	}
 }
 
-func TestStatsClearResetsBySender(t *testing.T) {
+func TestStatsResetClearsBySender(t *testing.T) {
 	s := &Stats{}
 	s.AddLatencyBySender(1, 5*time.Nanosecond)
 	s.AddLatencyBySender(2, 7*time.Nanosecond)
-	s.Clear()
+	s.Reset(StatsMode_EXACT)
 	if got := s.GetResultCorrected(map[uint32]int64{1: 1, 2: 1}).GetLatencies(); len(got) != 0 {
-		t.Errorf("bySender latencies after Clear = %v, want empty", got)
+		t.Errorf("bySender latencies after Reset = %v, want empty", got)
 	}
 }
 
@@ -431,15 +431,15 @@ func TestStatsTickIntervalEmpty(t *testing.T) {
 	}
 }
 
-func TestStatsClearResetsIntervalState(t *testing.T) {
-	// After Clear, TickInterval should see no ops from before the clear.
+func TestStatsResetClearsIntervalState(t *testing.T) {
+	// After Reset, TickInterval should see no ops from before the reset.
 	s := &Stats{}
 	s.AddLatency(100 * time.Nanosecond)
 	s.AddLatency(200 * time.Nanosecond)
-	s.Clear()
+	s.Reset(StatsMode_EXACT)
 	_, _, count, opDelta := s.TickInterval()
 	if count != 0 || opDelta != 0 {
-		t.Errorf("TickInterval after Clear = (count=%d, opDelta=%d), want (0, 0)",
+		t.Errorf("TickInterval after Reset = (count=%d, opDelta=%d), want (0, 0)",
 			count, opDelta)
 	}
 }
