@@ -25,7 +25,8 @@ type (
 	ServerInterceptor func(ServerContext, *Message, Handler) (*Message, error)
 )
 
-// Server serves all ordering based RPCs using registered handlers.
+// Server serves Gorums calls on registered handlers, and can call its peers
+// and connected clients.
 type Server struct {
 	srv          *stream.Server
 	grpcServer   *grpc.Server
