@@ -127,7 +127,7 @@ func runAsyncQCBenchmark(opts benchkit.Options, config Config, f asyncQCFunc) (*
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
-	if warning := benchkit.PaceWarning(sent.Load(), offered); warning != "" {
+	if warning := benchkit.PaceWarning("", sent.Load(), offered); warning != "" {
 		fmt.Fprintln(os.Stderr, warning)
 	}
 

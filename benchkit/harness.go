@@ -330,14 +330,9 @@ const paceTolerance = 0.95
 // behind means the workers could not sustain the offered rate — sustaining
 // rate R at per-op latency L needs roughly R × L in-flight ops — so the run
 // degraded toward closed-loop saturation while the recorded rate markers
-// still claim the offered load.
-func PaceWarning(sent uint64, offered float64) string {
-	return paceWarning("", sent, offered)
-}
-
-// paceWarning formats the [PaceWarning] message; level, when not empty, names
-// the offered-load level that fell behind.
-func paceWarning(level string, sent uint64, offered float64) string {
+// still claim the offered load. level, when not empty, names the offered-load
+// level that fell behind.
+func PaceWarning(level string, sent uint64, offered float64) string {
 	if offered <= 0 || float64(sent) >= paceTolerance*offered {
 		return ""
 	}
@@ -367,7 +362,7 @@ func paceWarnings(levels []paceLevel, targets int) []string {
 		if len(levels) > 1 {
 			level = fmt.Sprintf(" at %d ops/s", l.rate)
 		}
-		if msg := paceWarning(level, l.sent, offered); msg != "" {
+		if msg := PaceWarning(level, l.sent, offered); msg != "" {
 			msgs = append(msgs, msg)
 		}
 	}

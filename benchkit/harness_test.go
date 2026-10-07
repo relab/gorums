@@ -374,9 +374,9 @@ func TestPaceWarning(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			msg := PaceWarning(tt.sent, tt.offered)
+			msg := PaceWarning("", tt.sent, tt.offered)
 			if got := msg != ""; got != tt.wantWarn {
-				t.Fatalf("PaceWarning(%d, %v) = %q, want warning: %v", tt.sent, tt.offered, msg, tt.wantWarn)
+				t.Fatalf("PaceWarning(\"\", %d, %v) = %q, want warning: %v", tt.sent, tt.offered, msg, tt.wantWarn)
 			}
 			if tt.wantWarn && !strings.Contains(msg, "-workers") {
 				t.Errorf("warning %q does not mention -workers", msg)
