@@ -11,7 +11,7 @@ func (f requestHandlerFunc) HandleRequest(ctx context.Context, msg *Message, rel
 	f(ctx, msg, release, send)
 }
 
-func TestReplyErrorDoesNotBlockOnCanceledRequest(t *testing.T) {
+func TestRequestReplyErrorDoesNotBlockOnCanceledRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	replyChan := make(chan response, 1)
 	replyChan <- response{NodeID: 99} // fill the channel
@@ -34,7 +34,7 @@ func TestReplyErrorDoesNotBlockOnCanceledRequest(t *testing.T) {
 	}
 }
 
-func TestReplyErrorPrefersDeliveryWhenCanceledAndReplyChanReady(t *testing.T) {
+func TestRequestReplyErrorPrefersDeliveryWhenCanceledAndReplyChanReady(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	replyChan := make(chan response, 1)
 	req := Request{
