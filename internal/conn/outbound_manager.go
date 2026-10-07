@@ -119,7 +119,7 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 		MsgIDGen:       m.getMsgID,
 		Metadata:       m.opts.Metadata,
 		DialOpts:       m.opts.GRPCDialOpts,
-		RequestHandler: m.opts.Handler,
+		Handler:        m.opts.Handler,
 		// A configuration that carries a server, as a peer or as a back-channel
 		// client, reconnects eagerly: the remote side keeps this node in its
 		// connected configuration, or sends its own calls on this stream under

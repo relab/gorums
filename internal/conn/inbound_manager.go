@@ -78,7 +78,7 @@ type InboundManager struct {
 	myID           uint32                // this server's own NodeID; always present in inboundCfg
 	knownNodes     map[uint32]*Node      // pre-created configured peers, including self when configured
 	clientNodes    map[uint32]*Node      // dynamically assigned peer-capable clients
-	peerConfig     Config                // the server's peer Config; set once by setPeerConfig after NewConfig builds it
+	peerConfig     Config                // the server's peer Config; set once by SetPeerConfig after NewConfig builds it
 	config         Config                // auto-updated connectivity-filtered subset of peerConfig, sorted by ID
 	inboundCfg     Config                // auto-updated slice of known peers with an inbound stream, sorted by ID
 	clientConfig   Config                // auto-updated slice of client peers, sorted by ID

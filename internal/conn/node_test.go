@@ -23,7 +23,7 @@ func newTestNode(id uint32, ch stream.Channel) *Node {
 
 func newTestNodeWithLatency(id uint32, latency time.Duration) *Node {
 	n := newTestNode(id, nil)
-	n.loadTransport().Latency().Store(latency)
+	NodeTransport(n).Latency().Store(latency)
 	return n
 }
 
@@ -157,7 +157,7 @@ func TestNodeEnqueueWithoutChannel(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			replyChan := make(chan stream.NodeResponse[*stream.Message], 1)
-			tt.node.loadTransport().Enqueue(stream.Request{Ctx: t.Context(), ResponseChan: replyChan})
+			NodeTransport(tt.node).Enqueue(stream.Request{Ctx: t.Context(), ResponseChan: replyChan})
 			select {
 			case r := <-replyChan:
 				if !errors.Is(r.Err, stream.ErrStreamDown) {
@@ -177,7 +177,7 @@ func TestNodeCloseCancelsAllPendingRequests(t *testing.T) {
 	ch := stream.NewInboundChannel(t.Context(), 1, newMockBidiStream(), stream.InboundOptions{SendBufferSize: 1})
 	node := newTestNode(1, ch)
 	reply := make(chan stream.NodeResponse[*stream.Message], 1)
-	node.loadTransport().Enqueue(stream.Request{
+	NodeTransport(node).Enqueue(stream.Request{
 		Ctx:          t.Context(),
 		Msg:          stream.Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
 		ResponseChan: reply,
@@ -297,8 +297,8 @@ func TestConfigWatch(t *testing.T) {
 		}
 
 		// Swap latencies: node 2 becomes fastest.
-		n1.loadTransport().Latency().Store(40 * time.Millisecond)
-		n2.loadTransport().Latency().Store(5 * time.Millisecond)
+		NodeTransport(n1).Latency().Store(40 * time.Millisecond)
+		NodeTransport(n2).Latency().Store(5 * time.Millisecond)
 
 		select {
 		case second := <-updates:
@@ -352,7 +352,7 @@ func BenchmarkNodeEnqueue(b *testing.B) {
 		n := newInboundNode(1, "127.0.0.1:9081", func() uint64 { return 0 })
 		b.ResetTimer()
 		for range b.N {
-			n.loadTransport().Enqueue(req)
+			NodeTransport(n).Enqueue(req)
 		}
 	})
 
@@ -360,7 +360,7 @@ func BenchmarkNodeEnqueue(b *testing.B) {
 		// Stub channel attached; measures the transport and channel loads
 		// without going through Channel.Enqueue, which requires a running goroutine.
 		n := newInboundNode(1, "127.0.0.1:9081", func() uint64 { return 0 })
-		n.loadTransport().StoreChannel(stream.NewChannelWithState(nil))
+		NodeTransport(n).StoreChannel(stream.NewChannelWithState(nil))
 		b.ResetTimer()
 		for range b.N {
 			_ = n.activeChannel()
@@ -401,9 +401,9 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 	// Wrap the outbound channel in a Node, adding the transport lookup that
 	// Node.Enqueue performs on every dispatch.
 	n := newInboundNode(1, lis.Addr().String(), func() uint64 { return 0 })
-	ch := stream.NewOutboundChannel(context.Background(), 1, conn, stream.OutboundOptions{SendBufferSize: 10, Latency: n.loadTransport().Latency()})
+	ch := stream.NewOutboundChannel(context.Background(), 1, conn, stream.OutboundOptions{SendBufferSize: 10, Latency: NodeTransport(n).Latency()})
 	b.Cleanup(func() { _ = ch.Close() })
-	n.loadTransport().StoreChannel(ch)
+	NodeTransport(n).StoreChannel(ch)
 
 	tests := []struct {
 		name string
@@ -425,7 +425,7 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 					Method:       mock.TestMethod,
 					Payload:      payload,
 				}.Build()
-				n.loadTransport().Enqueue(stream.Request{
+				NodeTransport(n).Enqueue(stream.Request{
 					Ctx:          context.Background(),
 					Msg:          reqMsg,
 					Oneway:       true,
