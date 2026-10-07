@@ -13,12 +13,17 @@ import (
 // the server-side allocations must be collected separately.
 func AppendServerStats(result *Result, replies map[uint32]*Result) {
 	for _, id := range slices.Sorted(maps.Keys(replies)) {
-		r := replies[id]
-		result.SetServerStats(append(result.GetServerStats(), MemoryStat_builder{
-			Allocs: r.GetAllocsPerOp() * r.GetTotalOps(),
-			Memory: r.GetMemPerOp() * r.GetTotalOps(),
-		}.Build()))
+		result.SetServerStats(append(result.GetServerStats(), serverMemoryStat(replies[id])))
 	}
+}
+
+// serverMemoryStat returns the total allocations and bytes allocated by the
+// server that sent reply, derived from its per-op counters.
+func serverMemoryStat(reply *Result) *MemoryStat {
+	return MemoryStat_builder{
+		Allocs: reply.GetAllocsPerOp() * reply.GetTotalOps(),
+		Memory: reply.GetMemPerOp() * reply.GetTotalOps(),
+	}.Build()
 }
 
 // AggregateServerResults combines per-server Stop replies into a single
@@ -52,10 +57,7 @@ func AggregateServerResults(replies map[uint32]*Result) (*Result, error) {
 		if h := reply.GetHistogram(); h != nil {
 			hists = append(hists, h)
 		}
-		resp.SetServerStats(append(resp.GetServerStats(), MemoryStat_builder{
-			Allocs: reply.GetAllocsPerOp() * reply.GetTotalOps(),
-			Memory: reply.GetMemPerOp() * reply.GetTotalOps(),
-		}.Build()))
+		resp.SetServerStats(append(resp.GetServerStats(), serverMemoryStat(reply)))
 	}
 	if len(allSamples) > 0 {
 		resp.SetLatencies(allSamples)
