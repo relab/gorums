@@ -293,7 +293,7 @@ func TestEmptyConfiguration(t *testing.T) {
 	})
 
 	t.Run("WithoutErrorsNil", func(t *testing.T) {
-		qcErr := gorums.TestQuorumCallError(t, map[uint32]error{1: errors.New("boom")})
+		qcErr := gorumstest.QuorumCallError(map[uint32]error{1: errors.New("boom")})
 		if got := empty.WithoutErrors(qcErr); got != nil {
 			t.Fatalf("empty.WithoutErrors(...) = %v, want nil", got)
 		}
@@ -701,31 +701,31 @@ func TestConfigWithoutErrors(t *testing.T) {
 	}{
 		{
 			name:         "ExcludeAllFailedNodes",
-			qcErr:        gorums.TestQuorumCallError(t, map[uint32]error{1: timeoutErr, 2: connRefusedErr}),
+			qcErr:        gorumstest.QuorumCallError(map[uint32]error{1: timeoutErr, 2: connRefusedErr}),
 			errorTypes:   nil,
 			wantExcluded: []uint32{1, 2},
 		},
 		{
 			name:         "ExcludeNodesWithSpecificError",
-			qcErr:        gorums.TestQuorumCallError(t, map[uint32]error{1: timeoutErr, 2: connRefusedErr, 3: otherErr}),
+			qcErr:        gorumstest.QuorumCallError(map[uint32]error{1: timeoutErr, 2: connRefusedErr, 3: otherErr}),
 			errorTypes:   []error{timeoutErr},
 			wantExcluded: []uint32{1},
 		},
 		{
 			name:         "ExcludeNodesWithMultipleErrorTypes",
-			qcErr:        gorums.TestQuorumCallError(t, map[uint32]error{1: timeoutErr, 2: connRefusedErr, 3: otherErr}),
+			qcErr:        gorumstest.QuorumCallError(map[uint32]error{1: timeoutErr, 2: connRefusedErr, 3: otherErr}),
 			errorTypes:   []error{timeoutErr, connRefusedErr},
 			wantExcluded: []uint32{1, 2},
 		},
 		{
 			name:         "NoMatchingErrors",
-			qcErr:        gorums.TestQuorumCallError(t, map[uint32]error{1: timeoutErr, 2: connRefusedErr}),
+			qcErr:        gorumstest.QuorumCallError(map[uint32]error{1: timeoutErr, 2: connRefusedErr}),
 			errorTypes:   []error{differentErr},
 			wantExcluded: []uint32{},
 		},
 		{
 			name:         "EmptyErrors",
-			qcErr:        gorums.TestQuorumCallError(t, map[uint32]error{}),
+			qcErr:        gorumstest.QuorumCallError(map[uint32]error{}),
 			errorTypes:   nil,
 			wantExcluded: []uint32{},
 		},
