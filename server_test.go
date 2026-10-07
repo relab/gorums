@@ -636,7 +636,7 @@ func TestServerSymmetricConfigurationRoutesMulticast(t *testing.T) {
 
 	// Register mock handler to each server
 	for _, srv := range servers {
-		srv.RegisterHandler(mock.Stream, func(_ gorums.ServerContext, _ *gorums.Message) (*gorums.Message, error) {
+		srv.RegisterHandler(mock.StreamMethod, func(_ gorums.ServerContext, _ *gorums.Message) (*gorums.Message, error) {
 			wg.Done()
 			return nil, nil
 		})
@@ -649,7 +649,7 @@ func TestServerSymmetricConfigurationRoutesMulticast(t *testing.T) {
 	err := gorumsimpl.Multicast(
 		cfg.Context(ctx),
 		pb.String("test"),
-		mock.Stream,
+		mock.StreamMethod,
 	).Send()
 	if err != nil {
 		t.Fatalf("multicast error: %v", err)
@@ -678,7 +678,7 @@ func TestServerHandlerCanMulticastViaConfig(t *testing.T) {
 				err := gorumsimpl.Multicast(
 					cfg.Context(t.Context()),
 					pb.String("inner-multicast"),
-					mock.Stream,
+					mock.StreamMethod,
 				).Send()
 				if err != nil {
 					return nil, err // failed to multicast
@@ -687,8 +687,8 @@ func TestServerHandlerCanMulticastViaConfig(t *testing.T) {
 			return nil, nil // one-way
 		})
 
-		srv.RegisterHandler(mock.Stream, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
-			t.Logf("Server %d received multicast on %v: %v", i+1, mock.Stream, in.Proto)
+		srv.RegisterHandler(mock.StreamMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+			t.Logf("Server %d received multicast on %v: %v", i+1, mock.StreamMethod, in.Proto)
 			wg.Done()
 			return nil, nil
 		})
@@ -818,7 +818,7 @@ func TestServerHandlerCanMulticastViaConnectedClients(t *testing.T) {
 			err := gorumsimpl.Multicast(
 				cfg.Context(t.Context()),
 				pb.String("inner-call"),
-				mock.Stream,
+				mock.StreamMethod,
 			).Send()
 			if err != nil {
 				return nil, err // failed to multicast
@@ -828,7 +828,7 @@ func TestServerHandlerCanMulticastViaConnectedClients(t *testing.T) {
 	})
 
 	// Client handles the back-channel multicast dispatched by the server.
-	clientSrv.RegisterHandler(mock.Stream, func(_ gorums.ServerContext, _ *gorums.Message) (*gorums.Message, error) {
+	clientSrv.RegisterHandler(mock.StreamMethod, func(_ gorums.ServerContext, _ *gorums.Message) (*gorums.Message, error) {
 		t.Log("CLIENT received inner multicast")
 		wg.Done()
 		return nil, nil

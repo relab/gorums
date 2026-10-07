@@ -593,7 +593,7 @@ func TestConnectedClientsServerCallsClient(t *testing.T) {
 			// that wait would stop this connection from reading further
 			// inbound frames.
 			ctx.Release()
-			if err := impl.Multicast(cfg.Context(ctx), pb.String("ping"), mock.Stream).Send(); err != nil {
+			if err := impl.Multicast(cfg.Context(ctx), pb.String("ping"), mock.StreamMethod).Send(); err != nil {
 				t.Errorf("back-channel Multicast: %v", err)
 			}
 		}
@@ -604,9 +604,9 @@ func TestConnectedClientsServerCallsClient(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	// Client: a Server whose back-channel mock.Stream handler is wired in via withServer.
+	// Client: a Server whose back-channel mock.StreamMethod handler is wired in via withServer.
 	clientSrv := NewServer()
-	clientSrv.RegisterHandler(mock.Stream, func(_ ServerContext, _ *Message) (*Message, error) {
+	clientSrv.RegisterHandler(mock.StreamMethod, func(_ ServerContext, _ *Message) (*Message, error) {
 		wg.Done()
 		return nil, nil
 	})
