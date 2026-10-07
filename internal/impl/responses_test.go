@@ -16,7 +16,7 @@ import (
 func makeCallContext[Req, Resp proto.Message](t *testing.T, numNodes int, responses []NodeResponse[proto.Message]) *CallContext[Req, Resp] {
 	t.Helper()
 
-	resultChan := make(chan NodeResponse[*stream.Message], len(responses))
+	responseChan := make(chan NodeResponse[*stream.Message], len(responses))
 	for _, r := range responses {
 		var sm *stream.Message
 		if r.Value != nil {
@@ -26,13 +26,13 @@ func makeCallContext[Req, Resp proto.Message](t *testing.T, numNodes int, respon
 				t.Fatalf("failed to marshal mock response: %v", err)
 			}
 		}
-		resultChan <- NodeResponse[*stream.Message]{
+		responseChan <- NodeResponse[*stream.Message]{
 			NodeID: r.NodeID,
 			Value:  sm,
 			Err:    r.Err,
 		}
 	}
-	close(resultChan)
+	close(responseChan)
 
 	config := make(Config, numNodes)
 	for i := range numNodes {
@@ -40,9 +40,9 @@ func makeCallContext[Req, Resp proto.Message](t *testing.T, numNodes int, respon
 	}
 
 	c := &CallContext[Req, Resp]{
-		Context:   t.Context(),
-		config:    config,
-		replyChan: resultChan,
+		Context:      t.Context(),
+		config:       config,
+		responseChan: responseChan,
 	}
 	// Mark sendOnce as done since test responses are already in the channel
 	c.sendOnce.Do(func() {})

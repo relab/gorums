@@ -15,10 +15,10 @@ import (
 // CallContext provides an interceptor with the context and state of a call.
 type CallContext[Req, Resp proto.Message] struct {
 	context.Context
-	config    Config
-	request   Req
-	method    string
-	replyChan chan NodeResponse[*stream.Message]
+	config       Config
+	request      Req
+	method       string
+	responseChan chan NodeResponse[*stream.Message]
 
 	// reqTransforms holds request transformation functions registered by interceptors.
 	reqTransforms []func(Req, *Node) Req
@@ -73,7 +73,7 @@ func (c *CallContext[Req, Resp]) intercept(ics ...ClientInterceptor[Req, Resp]) 
 }
 
 // newQuorumCallContext constructs a CallContext for quorum calls (two-way, always returns responses).
-// A reply channel is always created; streaming controls both its buffer size and the response iterator type.
+// A response channel is always created; streaming controls both its buffer size and the response iterator type.
 func newQuorumCallContext[Req, Resp proto.Message](
 	ctx *ConfigContext,
 	req Req,
@@ -86,12 +86,12 @@ func newQuorumCallContext[Req, Resp proto.Message](
 		n *= 10
 	}
 	callCtx := &CallContext[Req, Resp]{
-		Context:   ctx,
-		config:    config,
-		request:   req,
-		method:    method,
-		streaming: streaming,
-		replyChan: make(chan NodeResponse[*stream.Message], n),
+		Context:      ctx,
+		config:       config,
+		request:      req,
+		method:       method,
+		streaming:    streaming,
+		responseChan: make(chan NodeResponse[*stream.Message], n),
 	}
 	if streaming {
 		callCtx.responseSeq = callCtx.streamingResponseSeq()
@@ -142,11 +142,11 @@ func (c *CallContext[Req, Resp]) Size() int {
 	return c.config.Size()
 }
 
-// reportNodeError sends an error response for the given node to replyChan.
-// It is a no-op for fire-and-forget calls where replyChan is nil.
+// reportNodeError sends an error response for the given node to responseChan.
+// It is a no-op for fire-and-forget calls where responseChan is nil.
 func (c *CallContext[Req, Resp]) reportNodeError(nodeID uint32, err error) {
-	if c.replyChan != nil {
-		c.replyChan <- NodeResponse[*stream.Message]{NodeID: nodeID, Err: err}
+	if c.responseChan != nil {
+		c.responseChan <- NodeResponse[*stream.Message]{NodeID: nodeID, Err: err}
 	}
 }
 
@@ -158,7 +158,7 @@ func (c *CallContext[Req, Resp]) enqueue(n *Node, msg *stream.Message) {
 		Msg:          msg,
 		Streaming:    c.streaming,
 		Oneway:       c.oneway,
-		ResponseChan: c.replyChan,
+		ResponseChan: c.responseChan,
 	})
 }
 
@@ -251,7 +251,7 @@ func (c *CallContext[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 		c.sendNow()
 		for range c.Size() {
 			select {
-			case r := <-c.replyChan:
+			case r := <-c.responseChan:
 				res := mapToCallResponse[Resp](r)
 				if !yield(res) {
 					return // Consumer stopped iteration
@@ -271,7 +271,7 @@ func (c *CallContext[Req, Resp]) streamingResponseSeq() ResponseSeq[Resp] {
 		c.sendNow()
 		for {
 			select {
-			case r := <-c.replyChan:
+			case r := <-c.responseChan:
 				res := mapToCallResponse[Resp](r)
 				if !yield(res) {
 					return // Consumer stopped iteration
