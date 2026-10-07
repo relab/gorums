@@ -321,19 +321,9 @@ func TestServerServeRecordsListenerForAddrAndStop(t *testing.T) {
 func TestServerInvalidPeersPanics(t *testing.T) {
 	// Duplicate address makes the node source invalid.
 	invalid := gorums.WithNodeList([]string{"127.0.0.1:1", "127.0.0.1:1"})
-	assertPanics(t, "WithPeers", func() {
+	assertPanic(t, "gorums: invalid peer configuration:", func() {
 		gorums.NewServer(gorums.WithPeers(1, invalid))
 	})
-}
-
-func assertPanics(t *testing.T, name string, fn func()) {
-	t.Helper()
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("NewServer with invalid %s did not panic", name)
-		}
-	}()
-	fn()
 }
 
 // TestServerPeerChangeDeliversUsableConfig verifies that the last WithPeerChange

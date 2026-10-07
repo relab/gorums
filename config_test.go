@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 
@@ -188,7 +189,7 @@ func TestEmptyConfiguration(t *testing.T) {
 	populated := gorumstest.UnreachableConfig(t, nodeList...)
 
 	t.Run("ContextPanics", func(t *testing.T) {
-		assertPanicMessage(t, "gorums: Context called on an empty configuration", func() {
+		assertPanic(t, "gorums: Context called on an empty configuration", func() {
 			_ = empty.Context(t.Context())
 		})
 	})
@@ -367,15 +368,17 @@ func TestConfigSort(t *testing.T) {
 	})
 }
 
-func assertPanicMessage(t *testing.T, want string, fn func()) {
+// assertPanic fails the test unless fn panics with a message that starts
+// with wantPrefix.
+func assertPanic(t *testing.T, wantPrefix string, fn func()) {
 	t.Helper()
 	defer func() {
 		r := recover()
 		if r == nil {
-			t.Fatalf("expected panic %q, got no panic", want)
+			t.Fatalf("expected panic %q, got no panic", wantPrefix)
 		}
-		if got := fmt.Sprint(r); got != want {
-			t.Fatalf("panic = %q, want %q", got, want)
+		if got := fmt.Sprint(r); !strings.HasPrefix(got, wantPrefix) {
+			t.Fatalf("panic = %q, want prefix %q", got, wantPrefix)
 		}
 	}()
 	fn()
