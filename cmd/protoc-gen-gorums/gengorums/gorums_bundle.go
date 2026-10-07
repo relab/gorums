@@ -25,6 +25,29 @@ const (
 
 // GenerateBundleFile generates a file with static definitions for Gorums.
 func GenerateBundleFile(dst string) {
+	staticContent, err := staticBundle()
+	if err != nil {
+		log.Fatal(err)
+	}
+	currentContent, err := os.ReadFile(dst)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if diff := cmp.Diff(currentContent, staticContent); diff != "" {
+		fmt.Printf("change detected (-current +new):\n%s", diff)
+		fmt.Printf("\nReview changes above; to revert use:\n")
+		fmt.Printf("mv %s.bak %s\n", dst, dst)
+	}
+	err = os.WriteFile(dst, staticContent, 0o666)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// staticBundle returns the formatted bundle file content with static
+// definitions for Gorums. It loads the dev package from devPkgPath,
+// so the current directory must be the repository root.
+func staticBundle() ([]byte, error) {
 	pkg := loadPackage(devPkgPath)
 	code := printFiles(pkg)
 	pkgIdentMap, reservedIdents := findIdentifiers(pkg)
@@ -46,21 +69,9 @@ func GenerateBundleFile(dst string) {
 
 	staticContent, err := format.Source([]byte(src))
 	if err != nil {
-		log.Fatalf("formatting failed: %v", err)
+		return nil, fmt.Errorf("formatting failed: %w", err)
 	}
-	currentContent, err := os.ReadFile(dst)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if diff := cmp.Diff(currentContent, staticContent); diff != "" {
-		fmt.Printf("change detected (-current +new):\n%s", diff)
-		fmt.Printf("\nReview changes above; to revert use:\n")
-		fmt.Printf("mv %s.bak %s\n", dst, dst)
-	}
-	err = os.WriteFile(dst, staticContent, 0o666)
-	if err != nil {
-		log.Fatal(err)
-	}
+	return staticContent, nil
 }
 
 // loadPackage returns the parsed package.
