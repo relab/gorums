@@ -1,6 +1,7 @@
 package gorumstest
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/relab/gorums"
@@ -17,6 +18,8 @@ import (
 //		gorums.WithBufferSizes(10, 10), // ServerOption
 //		gorums.WithNodeList(...),       // NodeSource
 //	)
+//
+// [Config] and [Node] panic on an Option value of any other type.
 type Option any
 
 // testOptions holds extracted options from a slice of Option.
@@ -65,6 +68,7 @@ func (to *testOptions) nodeSource(addrs []string) gorums.NodeSource {
 }
 
 // extractTestOptions separates a slice of Option into their specific types.
+// It panics on a value of any other type.
 func extractTestOptions(opts []Option) testOptions {
 	var result testOptions
 	for _, opt := range opts {
@@ -81,6 +85,8 @@ func extractTestOptions(opts []Option) testOptions {
 			result.preConnectHook = o.hook
 		case skipGoleakProvider:
 			result.skipGoleak = true
+		default:
+			panic(fmt.Sprintf("gorumstest: unsupported Option type %T", opt))
 		}
 	}
 	return result
