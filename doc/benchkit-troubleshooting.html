@@ -220,7 +220,7 @@
         Lingering processes from a prior sweep are killed (SIGTERM, escalating to SIGKILL), and a port preflight
         skips the run within ~1&nbsp;s if a benchmark port is still busy, printing the <code>ss</code> line that
         names the foreign listener. Each node is then launched over SSH, binds the <em>wildcard</em> address, and
-        enters <code>AwaitReady</code>: an outbound probe that sends each peer round-trip echoes until it
+        enters <code>awaitReady</code>: an outbound probe that sends each peer round-trip echoes until it
         responds. The probe is progress-based &mdash; each response resets a 20&nbsp;s stall timer &mdash; so a
         peer that died at startup is reported within ~20&nbsp;s instead of at the 2-minute overall deadline,
         named by address with its last dial error. On probe failure the node prints a <code>[diag]</code>
@@ -337,7 +337,7 @@ prompt, so keeping this section accurate improves automated diagnoses, not just 
         <tr>
             <td><strong>Type A</strong> &mdash; setup</td>
             <td><code>failure_phase: setup</code>; <code>collected_files: 0</code></td>
-            <td>A node stalled in <code>AwaitReady</code>: inbound unreachability, a dead peer process, a busy
+            <td>A node stalled in <code>awaitReady</code>: inbound unreachability, a dead peer process, a busy
             port that slipped past the preflight. All nodes time out and exit; no results exist.</td>
         </tr>
         <tr>
@@ -373,7 +373,7 @@ log names that condition.</p>
 tooling relies on. Each entry describes the log signature to look for and what it points at.</p>
 
 <h3>4.1 Readiness-probe diagnosis</h3>
-<p>A node that cannot reach its peers during setup stalls in <code>AwaitReady</code> and fails the run with
+<p>A node that cannot reach its peers during setup stalls in <code>awaitReady</code> and fails the run with
 <code>outbound peers not ready: no outbound peer responded</code>, naming the unreachable peer by address with
 its last dial error. A host whose own inbound is unreachable passes its own probe (only outbound connectivity is
 exercised locally), so that condition surfaces on its <em>peers</em>. When the probe fails the node prints a
@@ -443,7 +443,7 @@ launcher that drains only stderr.</p>
 <ul>
     <li><strong>Busy ports and stale binaries.</strong> A busy benchmark port is skipped by the per-run port
         preflight in ~1&nbsp;s with a message naming the listener; a peer that dies at startup fails the run in
-        ~20&nbsp;s via the progress-based stall check in <code>AwaitReady</code>. <code>sweep -check</code> reports
+        ~20&nbsp;s via the progress-based stall check in <code>awaitReady</code>. <code>sweep -check</code> reports
         busy ports and lingering processes per host before a sweep, and sweep warns "rebuild with 'make sweep'"
         when the running binary's embedded VCS revision differs from the repository HEAD.</li>
     <li><strong>File-descriptor limits.</strong> A full N-node mesh holds N&minus;1 persistent gRPC connections

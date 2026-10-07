@@ -534,7 +534,7 @@ func main() {
 				log.Printf("  warning: partial result collection: %v", collectErr)
 			}
 			// Zero result files means the run never reached measurement (a
-			// launch or AwaitReady failure); a partial set means nodes ran but
+			// launch or awaitReady failure); a partial set means nodes ran but
 			// some failed mid-benchmark.
 			collected, missing := countResultFiles(cfg.outDir, base, nodes)
 			phase := failurePhaseSetup

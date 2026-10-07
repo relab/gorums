@@ -45,7 +45,7 @@ func setupDistributed(opts *benchkit.Options, self string, remotes []string, dia
 	opts.Remote = true
 	opts.NumNodes = len(remotes)
 
-	symTarget, symStop, err := SetupRemoteServer(self, remotes, opts.ServerOptions(), dialOpts...)
+	symTarget, symStop, err := setupRemoteServer(self, remotes, opts.ServerOptions(), dialOpts...)
 	if err != nil {
 		return target, nil, fmt.Errorf("remote server setup: %w", err)
 	}
@@ -67,7 +67,7 @@ func setupDistributed(opts *benchkit.Options, self string, remotes []string, dia
 	// by the probe's stall check.
 	readyCtx, readyCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer readyCancel()
-	if err := AwaitReady(readyCtx, symTarget); err != nil {
+	if err := awaitReady(readyCtx, symTarget); err != nil {
 		symStop()
 		return target, nil, fmt.Errorf("remote peers not ready: %w", err)
 	}
@@ -86,7 +86,7 @@ func setupLocal(opts *benchkit.Options, configSize int, dialOpts []gorums.DialOp
 	opts.Remote = false
 	opts.NumNodes = configSize
 
-	symTarget, symStop, err := SetupSymmetricServers(configSize, opts.ServerOptions(), dialOpts...)
+	symTarget, symStop, err := setupSymmetricServers(configSize, opts.ServerOptions(), dialOpts...)
 	if err != nil {
 		return target, nil, fmt.Errorf("symmetric servers setup: %w", err)
 	}
@@ -105,7 +105,7 @@ func setupLocal(opts *benchkit.Options, configSize int, dialOpts []gorums.DialOp
 	}
 	readyCtx, readyCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer readyCancel()
-	if err := AwaitReady(readyCtx, symTarget); err != nil {
+	if err := awaitReady(readyCtx, symTarget); err != nil {
 		symStop()
 		return target, nil, fmt.Errorf("symmetric servers not ready: %w", err)
 	}

@@ -56,12 +56,12 @@ func localServers(t *testing.T, n int, serverOpt gorums.ServerOption) []*gorums.
 
 // benchTarget wraps one server as a single-server SymmetricTarget with the
 // benchkit Control plane and workload server attached, so it can be passed to
-// AwaitReady and the other per-node setup helpers. numPeers is the full cluster
+// awaitReady and the other per-node setup helpers. numPeers is the full cluster
 // size (arms Done tracking and sizes the exit grace period). Call before
 // serving srv, since attaching registers services.
 func benchTarget(srv *gorums.Server, numPeers int) *SymmetricTarget {
 	ctrl := attachBenchServer(srv)
-	ctrl.ArmDone(numPeers) // match SetupRemoteServer, which arms Done tracking for the exit barrier
+	ctrl.ArmDone(numPeers) // match setupRemoteServer, which arms Done tracking for the exit barrier
 	return &SymmetricTarget{
 		servers:  []*gorums.Server{srv},
 		controls: []*benchkit.Control{ctrl},
@@ -74,7 +74,7 @@ func benchTarget(srv *gorums.Server, numPeers int) *SymmetricTarget {
 // localSymmetricTargets builds n single-server SymmetricTargets over one local
 // node list, each wrapping one node (target[i] is node ID i+1) and already
 // serving, so a test can drive per-node setup — dedup wait, probe — in a
-// controlled order, the way separate SetupRemoteServer instances do in a
+// controlled order, the way separate setupRemoteServer instances do in a
 // real distributed run, but without freeTCPAddrs's port-reuse race.
 func localSymmetricTargets(t *testing.T, n int, serverOpt gorums.ServerOption) []*SymmetricTarget {
 	t.Helper()
@@ -124,9 +124,9 @@ func TestSetupTargetLocalRejectsNonPositiveConfigSize(t *testing.T) {
 }
 
 // TestSetupSymmetricServersAppliesAllServerOptions verifies that
-// SetupSymmetricServers forwards every option in the given slice to the
+// setupSymmetricServers forwards every option in the given slice to the
 // in-process servers, not just the first. setupLocal previously called
-// SetupSymmetricServers with a single gorums.ServerOption argument (only
+// setupSymmetricServers with a single gorums.ServerOption argument (only
 // opts.StreamDedupOption()), so any other option opts.ServerOptions() would
 // have supplied — e.g. buffer sizes — was silently dropped for local-mode
 // runs; a local buffer-size sweep ran every arm with the default capacities
@@ -143,9 +143,9 @@ func TestSetupSymmetricServersAppliesAllServerOptions(t *testing.T) {
 		gorums.WithStreamDedup(),
 		gorums.WithConnectCallback(func(context.Context) { connects.Add(1) }),
 	}
-	target, stop, err := SetupSymmetricServers(3, opts, gorumstest.InsecureDialOptions(t))
+	target, stop, err := setupSymmetricServers(3, opts, gorumstest.InsecureDialOptions(t))
 	if err != nil {
-		t.Fatalf("SetupSymmetricServers: %v", err)
+		t.Fatalf("setupSymmetricServers: %v", err)
 	}
 	t.Cleanup(stop)
 
@@ -203,9 +203,9 @@ func TestSetupRemoteServerAppliesServerOption(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			target, stop, err := SetupRemoteServer(peers[1], peers, tt.serverOpts, gorumstest.InsecureDialOptions(t))
+			target, stop, err := setupRemoteServer(peers[1], peers, tt.serverOpts, gorumstest.InsecureDialOptions(t))
 			if err != nil {
-				t.Fatalf("SetupRemoteServer(%s): %v", peers[1], err)
+				t.Fatalf("setupRemoteServer(%s): %v", peers[1], err)
 			}
 			t.Cleanup(stop)
 
@@ -233,16 +233,16 @@ func TestSetupRemoteServerAppliesServerOption(t *testing.T) {
 // to 127.0.1.1 in /etc/hosts, which would put the listener on loopback and
 // make it unreachable for all peers (see doc/benchkit-troubleshooting.html).
 func TestSetupRemoteServerBindsWildcard(t *testing.T) {
-	// This test must exercise SetupRemoteServer directly, because it is
-	// SetupRemoteServer (not the local test framework, which binds 127.0.0.1)
-	// that binds the wildcard host. Port 0 lets SetupRemoteServer pick its own
+	// This test must exercise setupRemoteServer directly, because it is
+	// setupRemoteServer (not the local test framework, which binds 127.0.0.1)
+	// that binds the wildcard host. Port 0 lets setupRemoteServer pick its own
 	// free port, so no port is reserved and released beforehand — avoiding the
 	// bind-reuse race. The two peers differ only so the sort/self-index is
 	// stable; only self (the lower address) is bound.
 	peers := []string{"127.0.0.1:0", "127.0.0.2:0"}
-	target, stop, err := SetupRemoteServer(peers[0], peers, nil, gorumstest.InsecureDialOptions(t))
+	target, stop, err := setupRemoteServer(peers[0], peers, nil, gorumstest.InsecureDialOptions(t))
 	if err != nil {
-		t.Fatalf("SetupRemoteServer(%s): %v", peers[0], err)
+		t.Fatalf("setupRemoteServer(%s): %v", peers[0], err)
 	}
 	t.Cleanup(stop)
 
@@ -321,8 +321,8 @@ func TestAwaitReadyStaggeredRemoteStartup(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	errCh := make(chan error, 2)
-	go func() { errCh <- AwaitReady(ctx, target1) }()
-	go func() { errCh <- AwaitReady(ctx, target2) }()
+	go func() { errCh <- awaitReady(ctx, target1) }()
+	go func() { errCh <- awaitReady(ctx, target2) }()
 
 	var errs error
 	for range 2 {
@@ -331,7 +331,7 @@ func TestAwaitReadyStaggeredRemoteStartup(t *testing.T) {
 		}
 	}
 	if errs != nil {
-		t.Fatalf("AwaitReady after staggered startup: %v", errs)
+		t.Fatalf("awaitReady after staggered startup: %v", errs)
 	}
 	if got := target1.servers[0].ConnectedPeers().Size(); got != 2 {
 		t.Errorf("target1 connected config size = %d, want 2", got)
@@ -439,8 +439,8 @@ func TestDedupSetupProbesSharedTopology(t *testing.T) {
 
 	// Step 2: the probe must succeed against that shared topology.
 	for _, target := range targets {
-		if err := AwaitReady(ctx, target); err != nil {
-			t.Fatalf("AwaitReady: %v", err)
+		if err := awaitReady(ctx, target); err != nil {
+			t.Fatalf("awaitReady: %v", err)
 		}
 	}
 }
@@ -454,11 +454,11 @@ func TestAwaitPeersDoneOrGraceReturnsEarlyWhenAllSignal(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := AwaitReady(ctx, target1); err != nil {
-		t.Fatalf("AwaitReady(target1): %v", err)
+	if err := awaitReady(ctx, target1); err != nil {
+		t.Fatalf("awaitReady(target1): %v", err)
 	}
-	if err := AwaitReady(ctx, target2); err != nil {
-		t.Fatalf("AwaitReady(target2): %v", err)
+	if err := awaitReady(ctx, target2); err != nil {
+		t.Fatalf("awaitReady(target2): %v", err)
 	}
 
 	const grace = 10 * time.Second
@@ -497,11 +497,11 @@ func TestAwaitPeersDoneOrGraceFallsBackWhenPeerNeverSignals(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := AwaitReady(ctx, target1); err != nil {
-		t.Fatalf("AwaitReady(target1): %v", err)
+	if err := awaitReady(ctx, target1); err != nil {
+		t.Fatalf("awaitReady(target1): %v", err)
 	}
-	if err := AwaitReady(ctx, target2); err != nil {
-		t.Fatalf("AwaitReady(target2): %v", err)
+	if err := awaitReady(ctx, target2); err != nil {
+		t.Fatalf("awaitReady(target2): %v", err)
 	}
 
 	// target2 never signals Done; only target1 does.
@@ -529,7 +529,7 @@ func TestAwaitPeersDoneOrGraceFallsBackWhenPeerNeverSignals(t *testing.T) {
 // captureProbeLog redirects the outbound-probe progress log to a buffer for
 // the duration of the test, so probe tests can assert that stragglers were
 // logged by node ID. The probe logs from the calling goroutine only, so the
-// buffer needs no locking as long as it is read after AwaitReady returns.
+// buffer needs no locking as long as it is read after awaitReady returns.
 func captureProbeLog(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
@@ -575,11 +575,11 @@ func TestAwaitReadyProbeRetriesDroppedReply(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	start := time.Now()
-	if err := AwaitReady(ctx, target); err != nil {
-		t.Fatalf("AwaitReady with one dropped echo reply: %v", err)
+	if err := awaitReady(ctx, target); err != nil {
+		t.Fatalf("awaitReady with one dropped echo reply: %v", err)
 	}
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
-		t.Errorf("AwaitReady took %v, want one lost reply to cost roughly one probe round", elapsed)
+		t.Errorf("awaitReady took %v, want one lost reply to cost roughly one probe round", elapsed)
 	}
 	if got := probeLog.String(); !strings.Contains(got, "node 2") {
 		t.Errorf("probe log does not name straggler node 2; got:\n%s", got)
@@ -609,18 +609,18 @@ func TestAwaitReadyProbeFailsFastOnSilentPeer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	start := time.Now()
-	err := AwaitReady(ctx, target)
+	err := awaitReady(ctx, target)
 	elapsed := time.Since(start)
 	if err == nil {
-		t.Fatal("AwaitReady = nil error, want silent-peer probe failure")
+		t.Fatal("awaitReady = nil error, want silent-peer probe failure")
 	}
 	for _, want := range []string{"outbound peers not ready", "node 2", node2Addr} {
 		if !strings.Contains(err.Error(), want) {
-			t.Errorf("AwaitReady error %q does not contain %q", err, want)
+			t.Errorf("awaitReady error %q does not contain %q", err, want)
 		}
 	}
 	if elapsed > 5*time.Second {
-		t.Errorf("AwaitReady took %v, want fail-fast well under the 30s deadline", elapsed)
+		t.Errorf("awaitReady took %v, want fail-fast well under the 30s deadline", elapsed)
 	}
 }
 
@@ -642,13 +642,13 @@ func TestAwaitReadyReportsMissingRemotePeers(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	err := AwaitReady(ctx, target)
+	err := awaitReady(ctx, target)
 	if err == nil {
-		t.Fatal("AwaitReady = nil error, want missing peer error")
+		t.Fatal("awaitReady = nil error, want missing peer error")
 	}
 	for _, want := range []string{"outbound peers not ready", "node 2", node2Addr} {
 		if !strings.Contains(err.Error(), want) {
-			t.Errorf("AwaitReady error %q does not contain %q", err, want)
+			t.Errorf("awaitReady error %q does not contain %q", err, want)
 		}
 	}
 }
@@ -681,18 +681,18 @@ func TestAwaitReadyFailsFastOnStalledPeer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	start := time.Now()
-	err := AwaitReady(ctx, target)
+	err := awaitReady(ctx, target)
 	elapsed := time.Since(start)
 	if err == nil {
-		t.Fatal("AwaitReady = nil error, want stalled readiness error")
+		t.Fatal("awaitReady = nil error, want stalled readiness error")
 	}
 	for _, want := range []string{"outbound peers not ready", "no outbound peer responded", node2Addr} {
 		if !strings.Contains(err.Error(), want) {
-			t.Errorf("AwaitReady error %q does not contain %q", err, want)
+			t.Errorf("awaitReady error %q does not contain %q", err, want)
 		}
 	}
 	if elapsed > 5*time.Second {
-		t.Errorf("AwaitReady took %v, want fail-fast well under the 30s deadline", elapsed)
+		t.Errorf("awaitReady took %v, want fail-fast well under the 30s deadline", elapsed)
 	}
 
 	// The listener is up (wildcard-bound), so the self-dial probe of the
