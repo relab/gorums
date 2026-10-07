@@ -167,24 +167,24 @@ func (rw rawWriter) Write(p []byte) (n int, err error) {
 
 // ReadRPC is an RPC handler
 func (s *storageServer) ReadRPC(_ gorums.ServerContext, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
-	return s.Read(req)
+	return s.read(req)
 }
 
 // WriteRPC is an RPC handler
 func (s *storageServer) WriteRPC(_ gorums.ServerContext, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
-	return s.Write(req)
+	return s.write(req)
 }
 
 // WriteUnicast is an RPC handler for one-way unicast writes.
 func (s *storageServer) WriteUnicast(_ gorums.ServerContext, req *pb.WriteRequest) {
-	if _, err := s.Write(req); err != nil {
+	if _, err := s.write(req); err != nil {
 		s.logger.Printf("WriteUnicast error: %v", err)
 	}
 }
 
 // WriteMulticast is an RPC handler for one-way multicast writes.
 func (s *storageServer) WriteMulticast(_ gorums.ServerContext, req *pb.WriteRequest) {
-	_, err := s.Write(req)
+	_, err := s.write(req)
 	if err != nil {
 		s.logger.Printf("Write error: %v", err)
 	}
@@ -192,17 +192,17 @@ func (s *storageServer) WriteMulticast(_ gorums.ServerContext, req *pb.WriteRequ
 
 // ReadQC is an RPC handler for a quorum call.
 func (s *storageServer) ReadQC(_ gorums.ServerContext, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
-	return s.Read(req)
+	return s.read(req)
 }
 
 // WriteQC is an RPC handler for a quorum call.
 func (s *storageServer) WriteQC(_ gorums.ServerContext, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
-	return s.Write(req)
+	return s.write(req)
 }
 
 // ReadCorrectable is an RPC handler for a correctable quorum call. It sends multiple responses.
 func (s *storageServer) ReadCorrectable(_ gorums.ServerContext, req *pb.ReadRequest, send func(response *pb.ReadResponse)) {
-	resp, err := s.Read(req)
+	resp, err := s.read(req)
 	if err != nil {
 		s.logger.Printf("ReadCorrectable error: %v", err)
 		return
@@ -239,8 +239,8 @@ func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerContext, req *pb.W
 	return pb.WriteResponse_builder{New: true}.Build(), nil
 }
 
-// Read reads a value from storage
-func (s *storageServer) Read(req *pb.ReadRequest) (*pb.ReadResponse, error) {
+// read reads a value from storage.
+func (s *storageServer) read(req *pb.ReadRequest) (*pb.ReadResponse, error) {
 	s.logger.Printf("Read '%s'\n", req.GetKey())
 	s.mut.Lock()
 	defer s.mut.Unlock()
@@ -251,8 +251,8 @@ func (s *storageServer) Read(req *pb.ReadRequest) (*pb.ReadResponse, error) {
 	return pb.ReadResponse_builder{OK: true, Value: state.Value, Time: timestamppb.New(state.Time)}.Build(), nil
 }
 
-// Write writes a new value to storage if it is newer than the old value
-func (s *storageServer) Write(req *pb.WriteRequest) (*pb.WriteResponse, error) {
+// write writes a new value to storage if it is newer than the old value.
+func (s *storageServer) write(req *pb.WriteRequest) (*pb.WriteResponse, error) {
 	s.logger.Printf("Write '%s' = '%s'\n", req.GetKey(), req.GetValue())
 	s.mut.Lock()
 	defer s.mut.Unlock()

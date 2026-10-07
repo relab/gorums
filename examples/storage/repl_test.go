@@ -13,7 +13,7 @@ func TestSplitQuoted(t *testing.T) {
 		{`qc read foo`, []string{"qc", "read", "foo"}},
 		{`cfg 1:3 write foo bar`, []string{"cfg", "1:3", "write", "foo", "bar"}},
 		{`cfg 0,2 write foo 'bar baz'`, []string{"cfg", "0,2", "write", "foo", "bar baz"}},
-		{`qc write k ""`, []string{"qc", "write", "k", ""}}, // This is the failing case
+		{`qc write k ""`, []string{"qc", "write", "k", ""}}, // Empty double-quoted argument
 		{`qc write k ''`, []string{"qc", "write", "k", ""}}, // Single quotes too
 		{`qc write "" k`, []string{"qc", "write", "", "k"}},
 		{`""`, []string{""}},

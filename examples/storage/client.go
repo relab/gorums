@@ -21,7 +21,7 @@ func runClient(addresses []string) error {
 		return err
 	}
 	defer cfg.Close()
-	return Repl(cfg)
+	return runRepl(cfg)
 }
 
 // newestValue processes responses from a ReadQC call and returns the reply
