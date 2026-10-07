@@ -32,9 +32,9 @@ func buildBinaryResultFile(t *testing.T, name string, throughput float64, latenc
 	return data
 }
 
-// TestBinaryResultsDecode verifies that parseBinaryResultFile extracts name,
+// TestParseBinaryResultFile verifies that parseBinaryResultFile extracts name,
 // throughput, and latencies from a binary result file into the run summary.
-func TestBinaryResultsDecode(t *testing.T) {
+func TestParseBinaryResultFile(t *testing.T) {
 	wantName := "QuorumCall"
 	wantThroughput := 12345.6
 	wantLatencies := []int64{100, 200, 300}
@@ -65,9 +65,9 @@ func TestBinaryResultsDecode(t *testing.T) {
 	}
 }
 
-// TestBinaryResultsRejectsNonBinary verifies parseBinaryResultFile rejects a
+// TestParseBinaryResultFileRejectsNonBinary verifies parseBinaryResultFile rejects a
 // file that does not carry the binary magic header.
-func TestBinaryResultsRejectsNonBinary(t *testing.T) {
+func TestParseBinaryResultFileRejectsNonBinary(t *testing.T) {
 	byBench := make(map[string]*benchSummary)
 	if err := parseBinaryResultFile([]byte(`{"label":"x","results":[]}`), byBench, 0); err == nil {
 		t.Error("parseBinaryResultFile(non-binary) = nil error, want error")

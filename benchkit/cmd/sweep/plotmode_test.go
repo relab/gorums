@@ -851,3 +851,16 @@ func TestGenerateReportSaturationCurveNonRampedCompiles(t *testing.T) {
 		t.Fatalf("typst compile failed: %v\n%s", err, b)
 	}
 }
+
+func TestExcludedByBufferDimension(t *testing.T) {
+	dims := benchkit.Dimensions{SendBuffer: 256, RecvBuffer: 0}
+	if !excludedByDim(map[string]map[string]bool{"send_buffer": {"256": true}}, dims) {
+		t.Error("send_buffer=256 did not exclude matching dimensions")
+	}
+	if !excludedByDim(map[string]map[string]bool{"recv_buffer": {"0": true}}, dims) {
+		t.Error("recv_buffer=0 did not exclude matching dimensions")
+	}
+	if excludedByDim(map[string]map[string]bool{"send_buffer": {"64": true}}, dims) {
+		t.Error("send_buffer=64 excluded non-matching dimensions")
+	}
+}
