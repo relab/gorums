@@ -16,27 +16,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// mockBidiStream is a minimal stream.BidiStream for testing InboundManager.
-// Recv blocks until a message is sent or the stream is closed.
-type mockBidiStream struct {
-	ch chan *stream.Message
-}
-
-func newMockBidiStream() *mockBidiStream {
-	return &mockBidiStream{ch: make(chan *stream.Message, 10)}
-}
-
-func (m *mockBidiStream) close() { close(m.ch) }
-
-func (*mockBidiStream) Send(*stream.Message) error { return nil }
-func (m *mockBidiStream) Recv() (*stream.Message, error) {
-	msg, ok := <-m.ch
-	if !ok {
-		return nil, io.EOF
-	}
-	return msg, nil
-}
-
 // recordingBidiStream is a [stream.BidiStream] that records every message
 // passed to Send, so a test can observe which of several overlapping inbound
 // streams actually carried a reply.
@@ -85,23 +64,16 @@ func newInboundManager(t *testing.T, myID uint32, peerNodes NodeSource, onConfig
 	return im
 }
 
-// testNode is a minimal NodeSource for use in tests.
-type testNode struct {
-	addr string
-}
-
-func (n testNode) Addr() string { return n.addr }
-
 // Compile-time assertions: both node providers satisfy NodeSource.
-var _ NodeSource = nodeMap[testNode](nil)
+var _ NodeSource = nodeMap[mock.NodeAddr](nil)
 
 // newTestInboundManager creates an InboundManager with myID and three known peers.
 func newTestInboundManager(t *testing.T, myID uint32) *InboundManager {
 	t.Helper()
-	im := newInboundManager(t, myID, WithNodes(map[uint32]testNode{
-		1: {"127.0.0.1:9081"},
-		2: {"127.0.0.1:9082"},
-		3: {"127.0.0.1:9083"},
+	im := newInboundManager(t, myID, WithNodes(map[uint32]mock.NodeAddr{
+		1: "127.0.0.1:9081",
+		2: "127.0.0.1:9082",
+		3: "127.0.0.1:9083",
 	}), nil, nil)
 	return im
 }
@@ -116,39 +88,39 @@ func TestNewInboundManager(t *testing.T) {
 	}{
 		{
 			name: "ValidNodes",
-			opt: WithNodes(map[uint32]testNode{
-				1: {"127.0.0.1:9081"},
-				2: {"127.0.0.1:9082"},
-				3: {"127.0.0.1:9083"},
+			opt: WithNodes(map[uint32]mock.NodeAddr{
+				1: "127.0.0.1:9081",
+				2: "127.0.0.1:9082",
+				3: "127.0.0.1:9083",
 			}),
 			wantIDs:    []uint32{1, 2, 3},
 			wantCfgIDs: []uint32{1}, // only self-node until peers connect
 		},
 		{
 			name:    "EmptyMapRejected",
-			opt:     WithNodes(map[uint32]testNode{}),
+			opt:     WithNodes(map[uint32]mock.NodeAddr{}),
 			wantErr: "missing required node map",
 		},
 		{
 			name: "NodeZeroRejected",
-			opt: WithNodes(map[uint32]testNode{
-				0: {"127.0.0.1:9080"},
-				1: {"127.0.0.1:9081"},
+			opt: WithNodes(map[uint32]mock.NodeAddr{
+				0: "127.0.0.1:9080",
+				1: "127.0.0.1:9081",
 			}),
 			wantErr: "node 0 is reserved",
 		},
 		{
 			name: "DuplicateAddressRejected",
-			opt: WithNodes(map[uint32]testNode{
-				1: {"127.0.0.1:9081"},
-				2: {"127.0.0.1:9081"}, // same address as ID 1
+			opt: WithNodes(map[uint32]mock.NodeAddr{
+				1: "127.0.0.1:9081",
+				2: "127.0.0.1:9081", // same address as ID 1
 			}),
 			wantErr: "already in use by node",
 		},
 		{
 			name: "InvalidAddressRejected",
-			opt: WithNodes(map[uint32]testNode{
-				1: {"not-an-address"},
+			opt: WithNodes(map[uint32]mock.NodeAddr{
+				1: "not-an-address",
 			}),
 			wantErr: "invalid address",
 		},
@@ -194,21 +166,21 @@ func TestNewInboundManager(t *testing.T) {
 }
 
 func TestInboundManagerKeepsHighKnownPeerIDs(t *testing.T) {
-	im := newInboundManager(t, ClientIDStart, WithNodes(map[uint32]testNode{
-		ClientIDStart: {"127.0.0.1:9081"},
+	im := newInboundManager(t, ClientIDStart, WithNodes(map[uint32]mock.NodeAddr{
+		ClientIDStart: "127.0.0.1:9081",
 	}), nil, nil)
 
-	checkIDs(t, im.ConnectedPeers(), []uint32{ClientIDStart}, "known peers")
-	checkIDs(t, im.ConnectedClients(), []uint32{}, "dynamic clients")
+	mock.CheckNodeIDs(t, im.ConnectedPeers(), []uint32{ClientIDStart}, "known peers")
+	mock.CheckNodeIDs(t, im.ConnectedClients(), []uint32{}, "dynamic clients")
 }
 
 func TestInboundManagerDynamicClientIDSkipsKnownPeer(t *testing.T) {
-	im := newInboundManager(t, 1, WithNodes(map[uint32]testNode{
-		1:             {"127.0.0.1:9081"},
-		ClientIDStart: {"127.0.0.1:9082"},
+	im := newInboundManager(t, 1, WithNodes(map[uint32]mock.NodeAddr{
+		1:             "127.0.0.1:9081",
+		ClientIDStart: "127.0.0.1:9082",
 	}), nil, nil)
-	clientStream := newMockBidiStream()
-	t.Cleanup(clientStream.close)
+	clientStream := mock.NewBidiStream[*stream.Message]()
+	t.Cleanup(clientStream.Close)
 
 	_, cleanup, err := im.AcceptPeer(inboundCtx(t.Context(), 0), clientStream)
 	if err != nil {
@@ -216,7 +188,7 @@ func TestInboundManagerDynamicClientIDSkipsKnownPeer(t *testing.T) {
 	}
 	t.Cleanup(cleanup)
 
-	checkIDs(t, im.ConnectedClients(), []uint32{ClientIDStart + 1}, "dynamic clients")
+	mock.CheckNodeIDs(t, im.ConnectedClients(), []uint32{ClientIDStart + 1}, "dynamic clients")
 	if _, ok := im.knownNodes[ClientIDStart]; !ok {
 		t.Fatalf("known peer %d was overwritten by dynamic client", ClientIDStart)
 	}
@@ -306,15 +278,6 @@ func TestInboundManagerNodeIDMetadata(t *testing.T) {
 	}
 }
 
-// checkIDs asserts that cfg.NodeIDs() equals wantIDs, reporting label in any
-// failure message.
-func checkIDs(t *testing.T, cfg Config, wantIDs []uint32, label string) {
-	t.Helper()
-	if got := cfg.NodeIDs(); !slices.Equal(got, wantIDs) {
-		t.Errorf("%s: config IDs = %v; want %v", label, got, wantIDs)
-	}
-}
-
 // TestInboundManagerAcceptPeerUpdatesConfig checks that the Config is correctly
 // updated through sequences of peer connections and disconnections
 // (via AcceptPeer and its returned cleanup function), including out-of-order
@@ -383,14 +346,14 @@ func TestInboundManagerAcceptPeerUpdatesConfig(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			im := newTestInboundManager(t, 1)
-			checkIDs(t, im.ConnectedPeers(), []uint32{1}, "initial")
+			mock.CheckNodeIDs(t, im.ConnectedPeers(), []uint32{1}, "initial")
 
 			cleanups := make(map[uint32]func())
 			for i, s := range tc.steps {
 				switch s.op {
 				case "register":
-					inStream := newMockBidiStream()
-					t.Cleanup(inStream.close)
+					inStream := mock.NewBidiStream[*stream.Message]()
+					t.Cleanup(inStream.Close)
 					_, cleanup, _ := im.AcceptPeer(inboundCtx(t.Context(), s.id), inStream)
 					cleanups[s.id] = cleanup
 				case "unregister":
@@ -400,7 +363,7 @@ func TestInboundManagerAcceptPeerUpdatesConfig(t *testing.T) {
 				default:
 					t.Fatalf("unknown op %q in step %d", s.op, i)
 				}
-				checkIDs(t, im.ConnectedPeers(), s.wantIDs, fmt.Sprintf("step %d (%s id=%d)", i, s.op, s.id))
+				mock.CheckNodeIDs(t, im.ConnectedPeers(), s.wantIDs, fmt.Sprintf("step %d (%s id=%d)", i, s.op, s.id))
 			}
 		})
 	}
@@ -455,8 +418,8 @@ func TestInboundManagerAcceptPeer(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			inStream := newMockBidiStream()
-			defer inStream.close()
+			inStream := mock.NewBidiStream[*stream.Message]()
+			defer inStream.Close()
 			ch, cleanup, err := im.AcceptPeer(tc.ctx, inStream)
 			if tc.wantErr {
 				if err == nil {
@@ -487,17 +450,17 @@ func TestInboundManagerAcceptPeerInstallsNewActiveOnReconnect(t *testing.T) {
 	im := newTestInboundManager(t, 1)
 
 	// First connection for peer 3.
-	first := newMockBidiStream()
-	t.Cleanup(first.close)
+	first := mock.NewBidiStream[*stream.Message]()
+	t.Cleanup(first.Close)
 	im.AcceptPeer(inboundCtx(t.Context(), 3), first)
-	checkIDs(t, im.ConnectedPeers(), []uint32{1, 3}, "after first connect")
+	mock.CheckNodeIDs(t, im.ConnectedPeers(), []uint32{1, 3}, "after first connect")
 
 	// Peer 3 reconnects — the second AcceptPeer installs a new active channel.
-	second := newMockBidiStream()
-	t.Cleanup(second.close)
+	second := mock.NewBidiStream[*stream.Message]()
+	t.Cleanup(second.Close)
 	im.AcceptPeer(inboundCtx(t.Context(), 3), second)
 
-	checkIDs(t, im.ConnectedPeers(), []uint32{1, 3}, "after reconnect")
+	mock.CheckNodeIDs(t, im.ConnectedPeers(), []uint32{1, 3}, "after reconnect")
 	node := im.knownNodes[3]
 	if ch := node.activeChannel(); ch == nil {
 		t.Fatal("channel should not be nil after reconnect")
@@ -510,32 +473,32 @@ func TestInboundManagerAcceptPeerInstallsNewActiveOnReconnect(t *testing.T) {
 func TestInboundManagerAcceptPeerStaleCleanupDoesNotDetachReplacement(t *testing.T) {
 	im := newTestInboundManager(t, 1)
 
-	first := newMockBidiStream()
-	t.Cleanup(first.close)
+	first := mock.NewBidiStream[*stream.Message]()
+	t.Cleanup(first.Close)
 	_, cleanupFirst, err := im.AcceptPeer(inboundCtx(t.Context(), 2), first)
 	if err != nil {
 		t.Fatalf("AcceptPeer(first) error: %v", err)
 	}
-	checkIDs(t, im.ConnectedPeers(), []uint32{1, 2}, "after first connect")
+	mock.CheckNodeIDs(t, im.ConnectedPeers(), []uint32{1, 2}, "after first connect")
 
-	second := newMockBidiStream()
-	t.Cleanup(second.close)
+	second := mock.NewBidiStream[*stream.Message]()
+	t.Cleanup(second.Close)
 	_, cleanupSecond, err := im.AcceptPeer(inboundCtx(t.Context(), 2), second)
 	if err != nil {
 		t.Fatalf("AcceptPeer(second) error: %v", err)
 	}
-	checkIDs(t, im.ConnectedPeers(), []uint32{1, 2}, "after replacement")
+	mock.CheckNodeIDs(t, im.ConnectedPeers(), []uint32{1, 2}, "after replacement")
 
 	// Stale cleanup from the first connection must not detach the replacement.
 	cleanupFirst()
-	checkIDs(t, im.ConnectedPeers(), []uint32{1, 2}, "after stale cleanup")
+	mock.CheckNodeIDs(t, im.ConnectedPeers(), []uint32{1, 2}, "after stale cleanup")
 	if im.knownNodes[2].activeChannel() == nil {
 		t.Fatal("stale cleanup detached the replacement channel")
 	}
 
 	// Current cleanup should detach the active channel.
 	cleanupSecond()
-	checkIDs(t, im.ConnectedPeers(), []uint32{1}, "after current cleanup")
+	mock.CheckNodeIDs(t, im.ConnectedPeers(), []uint32{1}, "after current cleanup")
 	if im.knownNodes[2].activeChannel() != nil {
 		t.Fatal("current cleanup should detach the active channel")
 	}
@@ -558,8 +521,8 @@ func TestInboundManagerAcceptPeerOverlappingStreamsFailover(t *testing.T) {
 	im := newTestInboundManager(t, 1)
 
 	// The surviving stream registers first.
-	survivor := newMockBidiStream()
-	t.Cleanup(survivor.close)
+	survivor := mock.NewBidiStream[*stream.Message]()
+	t.Cleanup(survivor.Close)
 	_, cleanupSurvivor, err := im.AcceptPeer(inboundCtx(t.Context(), 2), survivor)
 	if err != nil {
 		t.Fatalf("AcceptPeer(survivor) error: %v", err)
@@ -570,25 +533,25 @@ func TestInboundManagerAcceptPeerOverlappingStreamsFailover(t *testing.T) {
 	}
 
 	// The doomed (soon-canceled) stream registers second.
-	doomed := newMockBidiStream()
-	t.Cleanup(doomed.close)
+	doomed := mock.NewBidiStream[*stream.Message]()
+	t.Cleanup(doomed.Close)
 	_, cleanupDoomed, err := im.AcceptPeer(inboundCtx(t.Context(), 2), doomed)
 	if err != nil {
 		t.Fatalf("AcceptPeer(doomed) error: %v", err)
 	}
-	checkIDs(t, im.ConnectedPeers(), []uint32{1, 2}, "both streams live")
+	mock.CheckNodeIDs(t, im.ConnectedPeers(), []uint32{1, 2}, "both streams live")
 
 	// The doomed stream ends first. Peer 2 must stay, failing over to the
 	// still-live survivor stream's channel.
 	cleanupDoomed()
-	checkIDs(t, im.ConnectedPeers(), []uint32{1, 2}, "after doomed stream ends")
+	mock.CheckNodeIDs(t, im.ConnectedPeers(), []uint32{1, 2}, "after doomed stream ends")
 	if got := im.knownNodes[2].activeChannel(); got != survivorCh {
 		t.Fatalf("active channel = %p after failover; want survivor %p", got, survivorCh)
 	}
 
 	// Only once the survivor stream also ends does the peer leave the config.
 	cleanupSurvivor()
-	checkIDs(t, im.ConnectedPeers(), []uint32{1}, "after survivor stream ends")
+	mock.CheckNodeIDs(t, im.ConnectedPeers(), []uint32{1}, "after survivor stream ends")
 	if im.knownNodes[2].activeChannel() != nil {
 		t.Fatal("active channel should be nil after all streams end")
 	}
@@ -605,9 +568,9 @@ func TestInboundManagerAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 		defer release()
 		send(msg)
 	})
-	im, err := NewInboundManager(1, WithNodes(map[uint32]testNode{
-		1: {"127.0.0.1:9081"},
-		2: {"127.0.0.1:9082"},
+	im, err := NewInboundManager(1, WithNodes(map[uint32]mock.NodeAddr{
+		1: "127.0.0.1:9081",
+		2: "127.0.0.1:9082",
 	}), 4, 0, nil, echo)
 	if err != nil {
 		t.Fatalf("NewInboundManager: %v", err)
@@ -656,10 +619,10 @@ func TestInboundManagerAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 // self-node present in the initial configuration.
 func TestInboundManagerOnConfigChangeFiringOnConstruction(t *testing.T) {
 	var calls [][]uint32
-	newInboundManager(t, 1, WithNodes(map[uint32]testNode{
-		1: {"127.0.0.1:9081"},
-		2: {"127.0.0.1:9082"},
-		3: {"127.0.0.1:9083"},
+	newInboundManager(t, 1, WithNodes(map[uint32]mock.NodeAddr{
+		1: "127.0.0.1:9081",
+		2: "127.0.0.1:9082",
+		3: "127.0.0.1:9083",
 	}), func(cfg Config) {
 		calls = append(calls, slices.Clone(cfg.NodeIDs()))
 	}, nil)
@@ -677,18 +640,18 @@ func TestInboundManagerOnConfigChangeFiringOnConstruction(t *testing.T) {
 // later disconnects.
 func TestInboundManagerOnConfigChangePeerConnectDisconnect(t *testing.T) {
 	var snapshots [][]uint32
-	im := newInboundManager(t, 1, WithNodes(map[uint32]testNode{
-		1: {"127.0.0.1:9081"},
-		2: {"127.0.0.1:9082"},
-		3: {"127.0.0.1:9083"},
+	im := newInboundManager(t, 1, WithNodes(map[uint32]mock.NodeAddr{
+		1: "127.0.0.1:9081",
+		2: "127.0.0.1:9082",
+		3: "127.0.0.1:9083",
 	}), func(cfg Config) {
 		snapshots = append(snapshots, slices.Clone(cfg.NodeIDs()))
 	}, nil)
 
 	snapshots = nil // discard the construction snapshot
 
-	stream2 := newMockBidiStream()
-	t.Cleanup(stream2.close)
+	stream2 := mock.NewBidiStream[*stream.Message]()
+	t.Cleanup(stream2.Close)
 	_, cleanup2, _ := im.AcceptPeer(inboundCtx(t.Context(), 2), stream2)
 
 	if len(snapshots) != 1 {
@@ -712,10 +675,10 @@ func TestInboundManagerOnConfigChangePeerConnectDisconnect(t *testing.T) {
 // fires in sorted ID order as multiple peers connect and disconnect.
 func TestInboundManagerOnConfigChangeMultiplePeers(t *testing.T) {
 	var snapshots [][]uint32
-	im := newInboundManager(t, 1, WithNodes(map[uint32]testNode{
-		1: {"127.0.0.1:9081"},
-		2: {"127.0.0.1:9082"},
-		3: {"127.0.0.1:9083"},
+	im := newInboundManager(t, 1, WithNodes(map[uint32]mock.NodeAddr{
+		1: "127.0.0.1:9081",
+		2: "127.0.0.1:9082",
+		3: "127.0.0.1:9083",
 	}), func(cfg Config) {
 		snapshots = append(snapshots, slices.Clone(cfg.NodeIDs()))
 	}, nil)
@@ -723,12 +686,12 @@ func TestInboundManagerOnConfigChangeMultiplePeers(t *testing.T) {
 	snapshots = nil // discard the construction snapshot
 
 	// Peers connect in reverse order; configs must always be sorted.
-	stream3 := newMockBidiStream()
-	t.Cleanup(stream3.close)
+	stream3 := mock.NewBidiStream[*stream.Message]()
+	t.Cleanup(stream3.Close)
 	_, cleanup3, _ := im.AcceptPeer(inboundCtx(t.Context(), 3), stream3)
 
-	stream2 := newMockBidiStream()
-	t.Cleanup(stream2.close)
+	stream2 := mock.NewBidiStream[*stream.Message]()
+	t.Cleanup(stream2.Close)
 	_, cleanup2, _ := im.AcceptPeer(inboundCtx(t.Context(), 2), stream2)
 
 	cleanup3()
@@ -754,17 +717,17 @@ func TestInboundManagerOnConfigChangeMultiplePeers(t *testing.T) {
 // function twice does not fire the callback a second time on the same disconnect.
 func TestInboundManagerOnConfigChangeIdempotentCleanup(t *testing.T) {
 	var callCount int
-	im := newInboundManager(t, 1, WithNodes(map[uint32]testNode{
-		1: {"127.0.0.1:9081"},
-		2: {"127.0.0.1:9082"},
+	im := newInboundManager(t, 1, WithNodes(map[uint32]mock.NodeAddr{
+		1: "127.0.0.1:9081",
+		2: "127.0.0.1:9082",
 	}), func(_ Config) {
 		callCount++
 	}, nil)
 
 	callCount = 0 // discard the construction call
 
-	stream2 := newMockBidiStream()
-	t.Cleanup(stream2.close)
+	stream2 := mock.NewBidiStream[*stream.Message]()
+	t.Cleanup(stream2.Close)
 	_, cleanup, _ := im.AcceptPeer(inboundCtx(t.Context(), 2), stream2)
 
 	if callCount != 1 {
@@ -825,8 +788,8 @@ func TestInboundManagerAcceptPeerCleanupDoesNotHoldManagerLock(t *testing.T) {
 	}
 	accepted := make(chan struct{})
 	go func() {
-		other := newMockBidiStream()
-		defer other.close()
+		other := mock.NewBidiStream[*stream.Message]()
+		defer other.Close()
 		_, otherCleanup, _ := im.AcceptPeer(inboundCtx(t.Context(), 3), other)
 		otherCleanup()
 		close(accepted)

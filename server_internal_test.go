@@ -71,46 +71,9 @@ func testTimeoutContext(t testing.TB, timeout time.Duration) context.Context {
 	return ctx
 }
 
-// mockBidiStream is a minimal stream.BidiStream for testing InboundManager.
-// Recv blocks until a message is sent or the stream is closed.
-type mockBidiStream struct {
-	ch chan *stream.Message
-}
-
-func newMockBidiStream() *mockBidiStream {
-	return &mockBidiStream{ch: make(chan *stream.Message, 10)}
-}
-
-func (m *mockBidiStream) close() { close(m.ch) }
-
-func (*mockBidiStream) Send(*stream.Message) error { return nil }
-func (m *mockBidiStream) Recv() (*stream.Message, error) {
-	msg, ok := <-m.ch
-	if !ok {
-		return nil, io.EOF
-	}
-	return msg, nil
-}
-
-// testNode is a minimal NodeSource for use in tests.
-type testNode struct {
-	addr string
-}
-
-func (n testNode) Addr() string { return n.addr }
-
 // inboundCtx returns a context carrying nodeID metadata, rooted at parent.
 func inboundCtx(parent context.Context, id uint32) context.Context {
 	return metadata.NewIncomingContext(parent, conn.MetadataWithNodeID(id))
-}
-
-// checkIDs asserts that cfg.NodeIDs() equals wantIDs, reporting label in any
-// failure message.
-func checkIDs(t *testing.T, cfg Config, wantIDs []uint32, label string) {
-	t.Helper()
-	if got := cfg.NodeIDs(); !slices.Equal(got, wantIDs) {
-		t.Errorf("%s: config IDs = %v; want %v", label, got, wantIDs)
-	}
 }
 
 // inboundPeers returns the server's inbound peer [Config]: the known peers with
@@ -162,9 +125,9 @@ func equalNodeIDs(ids []uint32) func(Config) bool {
 
 // peerNodes creates the peer NodeSource used by the E2E tests.
 func peerNodes() NodeSource {
-	return WithNodes(map[uint32]testNode{
-		1: {"127.0.0.1:9001"},
-		2: {"127.0.0.1:9002"},
+	return WithNodes(map[uint32]mock.NodeAddr{
+		1: "127.0.0.1:9001",
+		2: "127.0.0.1:9002",
 	})
 }
 
@@ -190,9 +153,9 @@ func connectAsPeer(t *testing.T, peerID uint32, addrs []string) Config {
 // connected peer backs the shared node with its live inbound stream; a
 // disconnected peer leaves it without a channel until the peer connects.
 func TestConfigExtendUsesKnownDedupPeer(t *testing.T) {
-	peers := map[uint32]testNode{
-		1: {"127.0.0.1:9081"},
-		2: {"127.0.0.1:9082"},
+	peers := map[uint32]mock.NodeAddr{
+		1: "127.0.0.1:9081",
+		2: "127.0.0.1:9082",
 	}
 	tests := []struct {
 		name      string
@@ -207,8 +170,8 @@ func TestConfigExtendUsesKnownDedupPeer(t *testing.T) {
 			srv := NewServer(WithPeers(2, WithNodes(peers), insecureDialOpts), WithStreamDedup())
 			t.Cleanup(srv.Stop)
 			if tt.connected {
-				peerStream := newMockBidiStream()
-				t.Cleanup(peerStream.close)
+				peerStream := mock.NewBidiStream[*stream.Message]()
+				t.Cleanup(peerStream.Close)
 				_, cleanup, err := srv.im.AcceptPeer(inboundCtx(t.Context(), 1), peerStream)
 				if err != nil {
 					t.Fatalf("AcceptPeer: %v", err)
@@ -216,13 +179,13 @@ func TestConfigExtendUsesKnownDedupPeer(t *testing.T) {
 				t.Cleanup(cleanup)
 			}
 
-			initial, err := NewConfig(WithNodes(map[uint32]testNode{2: peers[2]}), insecureDialOpts, withServer(srv), conn.WithStreamDedup())
+			initial, err := NewConfig(WithNodes(map[uint32]mock.NodeAddr{2: peers[2]}), insecureDialOpts, withServer(srv), conn.WithStreamDedup())
 			if err != nil {
 				t.Fatalf("initial configuration: %v", err)
 			}
 			t.Cleanup(testCloser(t, initial))
 
-			extended, err := initial.Extend(WithNodes(map[uint32]testNode{1: peers[1]}))
+			extended, err := initial.Extend(WithNodes(map[uint32]mock.NodeAddr{1: peers[1]}))
 			if err != nil {
 				t.Fatalf("Extend: %v", err)
 			}
@@ -255,9 +218,9 @@ func TestConfigExtendUsesKnownDedupPeer(t *testing.T) {
 // The check keeps a dedup node's calls on a peer channel that reaches the
 // process the node addresses.
 func TestStreamDedupBorrowValidatesPeerAddress(t *testing.T) {
-	peers := map[uint32]testNode{
-		2: {"127.0.0.1:9082"},
-		3: {"127.0.0.1:9083"}, // self (localID 3)
+	peers := map[uint32]mock.NodeAddr{
+		2: "127.0.0.1:9082",
+		3: "127.0.0.1:9083", // self (localID 3)
 	}
 	insecureDialOpts := WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
 	srv := NewServer(WithPeers(3, WithNodes(peers), insecureDialOpts), WithStreamDedup())
@@ -265,17 +228,17 @@ func TestStreamDedupBorrowValidatesPeerAddress(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		nodes   map[uint32]testNode
+		nodes   map[uint32]mock.NodeAddr
 		wantErr string
 	}{
 		{
 			name:    "AddressMismatch",
-			nodes:   map[uint32]testNode{2: {"127.0.0.1:9999"}},
+			nodes:   map[uint32]mock.NodeAddr{2: "127.0.0.1:9999"},
 			wantErr: "does not match peer address",
 		},
 		{
 			name:    "MissingPeer",
-			nodes:   map[uint32]testNode{1: {"127.0.0.1:9081"}},
+			nodes:   map[uint32]mock.NodeAddr{1: "127.0.0.1:9081"},
 			wantErr: "is not a configured peer",
 		},
 	}
@@ -366,12 +329,12 @@ func TestSelfNodeIDStreamRejectedEndToEnd(t *testing.T) {
 func TestKnownPeerConnects(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
-	checkIDs(t, inboundPeers(srv), []uint32{1}, "before connect")
+	mock.CheckNodeIDs(t, inboundPeers(srv), []uint32{1}, "before connect")
 
 	connectAsPeer(t, 2, addrs)
 
 	mustWaitForInbound(t, srv, equalNodeIDs([]uint32{1, 2}))
-	checkIDs(t, inboundPeers(srv), []uint32{1, 2}, "after connect")
+	mock.CheckNodeIDs(t, inboundPeers(srv), []uint32{1, 2}, "after connect")
 }
 
 // TestKnownPeerDisconnects verifies that when a peer closes its
@@ -389,7 +352,7 @@ func TestKnownPeerDisconnects(t *testing.T) {
 		t.Fatalf("cfg.Close() error: %v", err)
 	}
 	mustWaitForInbound(t, srv, equalNodeIDs([]uint32{1}))
-	checkIDs(t, inboundPeers(srv), []uint32{1}, "after disconnect")
+	mock.CheckNodeIDs(t, inboundPeers(srv), []uint32{1}, "after disconnect")
 }
 
 // TestUnknownPeerIgnored verifies that a client sending an
@@ -408,7 +371,7 @@ func TestUnknownPeerIgnored(t *testing.T) {
 
 	// Give the server time to process both connections.
 	time.Sleep(50 * time.Millisecond)
-	checkIDs(t, inboundPeers(srv), []uint32{1}, "external and unknown peers must not appear")
+	mock.CheckNodeIDs(t, inboundPeers(srv), []uint32{1}, "external and unknown peers must not appear")
 }
 
 // TestKnownPeerServerCallsClient verifies the full symmetric communication path:
@@ -509,7 +472,7 @@ func TestConnectedClientsConnects(t *testing.T) {
 	srv, addrs := testClientServer(t)
 
 	// Initially no peers (no self-node since myID == 0)
-	checkIDs(t, srv.ConnectedClients(), []uint32{}, "before connect")
+	mock.CheckNodeIDs(t, srv.ConnectedClients(), []uint32{}, "before connect")
 
 	connectAsPeerClient(t, addrs)
 
@@ -544,7 +507,7 @@ func TestConnectedClientsDisconnects(t *testing.T) {
 
 	// Wait for config to become empty.
 	mustWaitForClients(t, srv, func(cfg Config) bool { return len(cfg) == 0 })
-	checkIDs(t, srv.ConnectedClients(), []uint32{}, "after disconnect")
+	mock.CheckNodeIDs(t, srv.ConnectedClients(), []uint32{}, "after disconnect")
 }
 
 // TestConnectedClientsMixedMode verifies that a server with both WithPeers and
@@ -553,7 +516,7 @@ func TestConnectedClientsMixedMode(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
 	// Self-node (ID 1) is present initially.
-	checkIDs(t, inboundPeers(srv), []uint32{1}, "before connect")
+	mock.CheckNodeIDs(t, inboundPeers(srv), []uint32{1}, "before connect")
 
 	// Connect known peer (ID 2).
 	connectAsPeer(t, 2, addrs)
