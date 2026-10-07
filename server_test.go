@@ -23,29 +23,26 @@ import (
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+// TestServerConnectCallback verifies that the connect callback receives the
+// stream context carrying the metadata the client dialed with.
 func TestServerConnectCallback(t *testing.T) {
-	var message string
-	signal := make(chan struct{})
-
+	messages := make(chan string, 1)
 	srvOption := gorums.WithConnectCallback(func(ctx context.Context) {
-		m, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			return
+		if m, ok := metadata.FromIncomingContext(ctx); ok {
+			messages <- m.Get("message")[0]
 		}
-		message = m.Get("message")[0]
-		signal <- struct{}{}
 	})
 	dialOption := gorums.WithMetadata(metadata.New(map[string]string{"message": "hello"}))
 
 	gorumstest.Node(t, nil, srvOption, dialOption)
 
 	select {
-	case <-time.After(100 * time.Millisecond):
-	case <-signal:
-	}
-
-	if message != "hello" {
-		t.Errorf("incorrect message: got '%s', want 'hello'", message)
+	case message := <-messages:
+		if message != "hello" {
+			t.Errorf("connect callback message = %q, want %q", message, "hello")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("connect callback was not called")
 	}
 }
 
@@ -114,9 +111,9 @@ func TestServerInterceptorsChain(t *testing.T) {
 	}
 }
 
-// TestServerBufferSizesProcessRequests verifies that WithBufferSizes is accepted by
-// NewServer and that the server correctly processes concurrent requests for each
-// combination of receive and send buffer sizes, including the zero (unbuffered) case.
+// TestServerBufferSizesProcessRequests verifies that the server processes
+// concurrent requests for each combination of receive and send buffer sizes,
+// including size 0, which selects the default size.
 func TestServerBufferSizesProcessRequests(t *testing.T) {
 	const concurrency = 16
 	tests := []struct {
@@ -124,10 +121,10 @@ func TestServerBufferSizesProcessRequests(t *testing.T) {
 		recvSize uint
 		sendSize uint
 	}{
-		{name: "unbuffered", recvSize: 0, sendSize: 0},
-		{name: "recv-only", recvSize: 1, sendSize: 0},
-		{name: "send-only", recvSize: 0, sendSize: 1},
-		{name: "both-buffered", recvSize: concurrency, sendSize: concurrency},
+		{name: "Defaults", recvSize: 0, sendSize: 0},
+		{name: "RecvSize1", recvSize: 1, sendSize: 0},
+		{name: "SendSize1", recvSize: 0, sendSize: 1},
+		{name: "BothSizesConcurrency", recvSize: concurrency, sendSize: concurrency},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
