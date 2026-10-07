@@ -334,22 +334,11 @@ func probeOutbound(ctx context.Context, srv *gorums.Server, label string) error 
 	return nil
 }
 
-// nodeDetail formats node as "node ID (address)", appending its last recorded
-// error when one exists, so peer-naming diagnostics identify both the peer
-// and its known cause without cross-referencing logs.
-func nodeDetail(node *gorums.Node) string {
-	detail := fmt.Sprintf("node %d (%s)", node.ID(), node.Address())
-	if err := node.LastErr(); err != nil {
-		detail += fmt.Sprintf(": %v", err)
-	}
-	return detail
-}
-
 // pendingPeerDetails names each peer still pending in the outbound probe.
 func pendingPeerDetails(pending gorums.Config) string {
 	details := make([]string, 0, len(pending))
 	for _, node := range pending {
-		details = append(details, nodeDetail(node))
+		details = append(details, node.Detail())
 	}
 	return strings.Join(details, ", ")
 }
@@ -459,7 +448,7 @@ func unresponsiveOutbound(srv *gorums.Server) string {
 	details := make([]string, 0, out.Size())
 	for _, node := range out {
 		if err := node.LastErr(); err != nil {
-			details = append(details, nodeDetail(node))
+			details = append(details, node.Detail())
 		}
 	}
 	return strings.Join(details, ", ")
