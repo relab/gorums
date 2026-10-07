@@ -3,7 +3,7 @@
 package interceptors
 
 import (
-	"fmt"
+	"errors"
 	"log"
 	"time"
 
@@ -12,6 +12,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// LoggingInterceptor returns an interceptor that logs each request and its
+// response, tagged with addr, together with the time the handler took.
 func LoggingInterceptor(addr string) gorums.ServerInterceptor {
 	return func(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 		req := gorums.AsProto[proto.Message](in)
@@ -26,6 +28,7 @@ func LoggingInterceptor(addr string) gorums.ServerInterceptor {
 	}
 }
 
+// LoggingSimpleInterceptor logs each request and its response.
 func LoggingSimpleInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 	req := gorums.AsProto[proto.Message](in)
 	log.Printf("LoggingSimpleInterceptor(incoming): Method=%s, Message=%v)", in.GetMethod(), req)
@@ -35,13 +38,16 @@ func LoggingSimpleInterceptor(ctx gorums.ServerContext, in *gorums.Message, next
 	return out, err
 }
 
+// DelayedInterceptor delays each request before passing it on. The delay grows
+// with the length of the sender's network address; without a known sender
+// address there is no delay.
 func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 	// delay based on sending node address
 	delay := 0 * time.Millisecond
-	peer, ok := peer.FromContext(ctx)
-	if ok && peer.Addr != nil {
-		node := peer.Addr.String()
-		log.Printf("DelayedInterceptor: Received message from node %v", peer)
+	p, ok := peer.FromContext(ctx)
+	if ok && p.Addr != nil {
+		node := p.Addr.String()
+		log.Printf("DelayedInterceptor: Received message from node %v", p)
 		// Example: delay based on node address length
 		delay = time.Duration(len(node)) * 100 * time.Millisecond
 		log.Printf("DelayedInterceptor: Delaying message processing for %s based on node address length", delay)
@@ -62,12 +68,14 @@ func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCo
 		log.Printf("NoFooAllowedInterceptor: Received request for key '%s'", req.GetKey())
 		if req.GetKey() == "foo" {
 			log.Printf("NoFooAllowedInterceptor: Rejecting request for key 'foo'")
-			return nil, fmt.Errorf("requests for key 'foo' are not allowed")
+			return nil, errors.New("requests for key 'foo' are not allowed")
 		}
 	}
 	return next(ctx, in)
 }
 
+// MetadataInterceptor sets each request's metadata to the single entry
+// customKey=customValue before passing the request on.
 func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 	log.Printf("MetadataInterceptor: Adding custom metadata to message(customKey=customValue)")
 	// Add a custom metadata field
