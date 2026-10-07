@@ -13,9 +13,9 @@ import (
 // NodeResponse contains a node's response value or error.
 type NodeResponse[T any] = stream.NodeResponse[T]
 
-// mapToCallResponse converts a NodeResponse[*stream.Message] to a NodeResponse[Resp].
-// This is necessary because the channel layer's response router returns a
-// NodeResponse[*stream.Message] while the calltype expects a NodeResponse[Resp].
+// mapToCallResponse converts a NodeResponse[*stream.Message] from the stream
+// layer to the NodeResponse[Resp] that a call returns. It unmarshals the reply
+// and reports [ErrTypeMismatch] if the reply is not of type Resp.
 func mapToCallResponse[Resp proto.Message](channelResp NodeResponse[*stream.Message]) NodeResponse[Resp] {
 	callResp := NodeResponse[Resp]{
 		NodeID: channelResp.NodeID,

@@ -22,19 +22,8 @@ func RemoteCall[Req, Resp proto.Message](ctx *NodeContext, req Req, method strin
 
 	select {
 	case r := <-replyChan:
-		var zero Resp
-		if r.Err != nil {
-			return zero, r.Err
-		}
-		respMsg, err := unmarshalResponse(r.Value)
-		if err != nil {
-			return zero, err
-		}
-		resp, ok := respMsg.(Resp)
-		if !ok {
-			return zero, ErrTypeMismatch
-		}
-		return resp, nil
+		resp := mapToCallResponse[Resp](r)
+		return resp.Value, resp.Err
 	case <-ctx.Done():
 		var zero Resp
 		return zero, ctx.Err()
