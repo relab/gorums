@@ -1,6 +1,7 @@
 package benchkit
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"regexp"
@@ -839,5 +840,27 @@ func TestOptionsServerOptions(t *testing.T) {
 				t.Error("BufferSizesOption() = nil, want non-nil")
 			}
 		})
+	}
+}
+
+// TestListBenches verifies that ListBenches renders one aligned line per
+// bench naming its description, and nothing for an empty list.
+func TestListBenches(t *testing.T) {
+	var buf bytes.Buffer
+	ListBenches(&buf, []Bench{
+		{Name: "QuorumCall", Description: "quorum call workload"},
+		{Name: "Multicast", Description: "multicast workload"},
+	})
+	out := buf.String()
+	for _, want := range []string{"QuorumCall:", "quorum call workload", "Multicast:", "multicast workload"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("ListBenches output missing %q; got:\n%s", want, out)
+		}
+	}
+
+	var empty bytes.Buffer
+	ListBenches(&empty, nil)
+	if empty.Len() != 0 {
+		t.Errorf("ListBenches(nil) wrote %q, want empty output", empty.String())
 	}
 }
