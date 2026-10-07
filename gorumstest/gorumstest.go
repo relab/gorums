@@ -216,7 +216,7 @@ func Servers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []stri
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
 	if srvFn == nil {
-		srvFn = DefaultServer
+		srvFn = func(i int) ServerIface { return newDefaultServer(i) }
 	}
 	addrs, stopFn := servers.Start(t, numServers, srvFn)
 	// Register server cleanup SECOND so it runs BEFORE goleak check

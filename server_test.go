@@ -500,14 +500,6 @@ func createServerAndClient(t *testing.T) (*gorums.Server, *gorums.Server, gorums
 	return srv, clientSrv, cfg
 }
 
-// stringEchoHandler returns a handler that replies with prefix+": "+request value.
-func stringEchoHandler(prefix string) gorums.Handler {
-	return func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*pb.StringValue](in)
-		return gorums.NewResponseMessage(in, pb.String(prefix+": "+req.GetValue())), nil
-	}
-}
-
 func configContext(ctx gorums.ServerContext, client bool) (*gorums.ConfigContext, error) {
 	if client {
 		cfg := ctx.ConnectedClients()
@@ -564,7 +556,7 @@ func TestServerSymmetricConfigurationRoutesQuorumCalls(t *testing.T) {
 
 	// Register mock handler to each server
 	for _, srv := range servers {
-		srv.RegisterHandler(mock.TestMethod, stringEchoHandler("echo"))
+		srv.RegisterHandler(mock.TestMethod, gorumstest.EchoHandler("echo"))
 	}
 
 	gorumstest.WaitForPeers(t, servers)
@@ -737,7 +729,7 @@ func TestServerHandlerCanChainQuorumCallViaConfig(t *testing.T) {
 			for i, srv := range servers {
 				myID := i + 1
 				srv.RegisterHandler(mock.TestMethod, outerChainedHandler(t, myID, false, mock.EchoMethod, tt.innerFn))
-				srv.RegisterHandler(mock.EchoMethod, stringEchoHandler("inner-echo"))
+				srv.RegisterHandler(mock.EchoMethod, gorumstest.EchoHandler("inner-echo"))
 			}
 
 			gorumstest.WaitForPeers(t, servers)
@@ -772,7 +764,7 @@ func TestServerHandlerCanChainQuorumCallViaConnectedClients(t *testing.T) {
 	srv.RegisterHandler(mock.TestMethod, outerChainedHandler(t, 1, true, mock.EchoMethod, (*gorums.Responses[*pb.StringValue]).First))
 
 	// Client: handles EchoMethod calls dispatched back by the server via ConnectedClients.
-	clientSrv.RegisterHandler(mock.EchoMethod, stringEchoHandler("client-echo"))
+	clientSrv.RegisterHandler(mock.EchoMethod, gorumstest.EchoHandler("client-echo"))
 
 	awaitClientReady(t, srv, 1)
 
@@ -960,7 +952,7 @@ func TestServerLocalDispatchContentionSlowReplica(t *testing.T) {
 			})
 		} else {
 			// Servers 1, 2 (remote): respond immediately.
-			srv.RegisterHandler(mock.TestMethod, stringEchoHandler("echo"))
+			srv.RegisterHandler(mock.TestMethod, gorumstest.EchoHandler("echo"))
 		}
 	}
 

@@ -45,7 +45,7 @@ func TestAsync(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := gorumstest.Config(t, tt.numNodes, gorumstest.EchoServerFn)
+			config := gorumstest.Config(t, tt.numNodes, gorumstest.EchoServer)
 			ctx := gorumstest.Context(t, 2*time.Second)
 			responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 				config.Context(ctx),
@@ -69,7 +69,7 @@ func TestAsync(t *testing.T) {
 
 func TestAsync_Error(t *testing.T) {
 	// Use a configuration with no servers to force an error (or timeout)
-	config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
@@ -106,7 +106,7 @@ func TestAsyncDone(t *testing.T) {
 	})
 
 	t.Run("CompletedReportsDone", func(t *testing.T) {
-		config := gorumstest.Config(t, 3, gorumstest.EchoServerFn)
+		config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 		ctx := gorumstest.Context(t, 2*time.Second)
 		future := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 			config.Context(ctx),
@@ -125,7 +125,7 @@ func TestAsyncDone(t *testing.T) {
 
 func BenchmarkAsyncQuorumCall(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9} {
-		config := gorumstest.Config(b, numNodes, gorumstest.EchoServerFn)
+		config := gorumstest.Config(b, numNodes, gorumstest.EchoServer)
 		cfgCtx := config.Context(b.Context())
 
 		b.Run(fmt.Sprintf("AsyncMajority/%d", numNodes), func(b *testing.B) {
@@ -168,7 +168,7 @@ func BenchmarkAsyncQuorumCall(b *testing.B) {
 // sends the next request, so a completed two-way call issued after Async
 // proves that the one-way sends were confirmed.
 func TestOnewayAsyncWaitAfterContextEnds(t *testing.T) {
-	config := gorumstest.Config(t, 3, gorumstest.DefaultServer)
+	config := gorumstest.Config(t, 3, nil)
 	node := config.Nodes()[0]
 	tests := []struct {
 		name    string

@@ -15,16 +15,10 @@ import (
 // gRPC server.
 type ServerIface = servers.ServerIface
 
-// DefaultServer returns a mock server implementation suitable for use as
-// the srvFn argument to [Config], [Node], or [Servers].
-func DefaultServer(i int) ServerIface {
-	return defaultTestServer(i)
-}
-
-// defaultTestServer creates a test server with optional server options.
-// It backs both [DefaultServer] and the test helpers when server options
-// are provided.
-func defaultTestServer(i int, opts ...gorums.ServerOption) ServerIface {
+// newDefaultServer creates the mock server that [Config], [Node], and
+// [Servers] use when their srvFn argument is nil, with the given server
+// options.
+func newDefaultServer(i int, opts ...gorums.ServerOption) ServerIface {
 	srv := gorums.NewServer(opts...)
 	ts := testSrv{val: int32((i + 1) * 10)}
 	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
@@ -58,68 +52,45 @@ func (ts testSrv) GetValue(_ gorums.ServerContext, _ *pb.Int32Value) (*pb.Int32V
 	return pb.Int32(ts.val), nil
 }
 
-// EchoServerFn returns a server that echoes back its request, prefixed with
+// EchoHandler returns a handler that replies to a string-valued request with
+// prefix+": "+value.
+func EchoHandler(prefix string) gorums.Handler {
+	return func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+		req := gorums.AsProto[*pb.StringValue](in)
+		return gorums.NewResponseMessage(in, pb.String(prefix+": "+req.GetValue())), nil
+	}
+}
+
+// EchoServer returns a server that echoes back its request, prefixed with
 // "echo: ", suitable for use as the srvFn argument to [Config],
 // [Node], or [Servers].
-func EchoServerFn(_ int) ServerIface {
+func EchoServer(_ int) ServerIface {
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*pb.StringValue](in)
-		resp, err := echoSrv{}.Test(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorums.NewResponseMessage(in, resp), nil
-	})
-
+	srv.RegisterHandler(mock.TestMethod, EchoHandler("echo"))
 	return srv
 }
 
-// echoSrv implements a simple echo server handler for testing
-type echoSrv struct{}
+// StreamServer returns a srvFn for [Config], [Node], or [Servers] whose
+// servers respond to a request with three echoed responses, each followed by
+// delay. A zero delay sends the responses back-to-back.
+func StreamServer(delay time.Duration) func(int) ServerIface {
+	return func(int) ServerIface {
+		srv := gorums.NewServer()
+		srv.RegisterHandler(mock.StreamMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+			req := gorums.AsProto[*pb.StringValue](in)
+			val := req.GetValue()
 
-func (echoSrv) Test(_ gorums.ServerContext, req *pb.StringValue) (*pb.StringValue, error) {
-	return pb.String("echo: " + req.GetValue()), nil
-}
-
-// StreamServerFn returns a server that responds to a request with three
-// echoed responses, ten milliseconds apart, suitable for use as the srvFn
-// argument to [Config], [Node], or [Servers].
-func StreamServerFn(_ int) ServerIface {
-	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.StreamMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*pb.StringValue](in)
-		val := req.GetValue()
-
-		// Send 3 responses
-		for i := 1; i <= 3; i++ {
-			resp := pb.String(fmt.Sprintf("echo: %s-%d", val, i))
-			out := gorums.NewResponseMessage(in, resp)
-			ctx.SendMessage(out)
-			time.Sleep(10 * time.Millisecond)
-		}
-		return nil, nil
-	})
-	return srv
-}
-
-// StreamBenchmarkServerFn returns a server that responds to a request with
-// three echoed responses sent back-to-back, without the delay
-// [StreamServerFn] adds between responses, suitable for use as the srvFn
-// argument to [Config], [Node], or [Servers].
-func StreamBenchmarkServerFn(_ int) ServerIface {
-	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.StreamMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*pb.StringValue](in)
-		val := req.GetValue()
-
-		// Send 3 responses
-		for i := 1; i <= 3; i++ {
-			resp := pb.String(fmt.Sprintf("echo: %s-%d", val, i))
-			out := gorums.NewResponseMessage(in, resp)
-			ctx.SendMessage(out)
-		}
-		return nil, nil
-	})
-	return srv
+			// Send 3 responses
+			for i := 1; i <= 3; i++ {
+				resp := pb.String(fmt.Sprintf("echo: %s-%d", val, i))
+				out := gorums.NewResponseMessage(in, resp)
+				ctx.SendMessage(out)
+				if delay > 0 {
+					time.Sleep(delay)
+				}
+			}
+			return nil, nil
+		})
+		return srv
+	}
 }
