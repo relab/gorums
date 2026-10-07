@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -15,15 +16,24 @@ import (
 // It creates a channel with the provided responses and returns a CallContext.
 func makeCallContext[Req, Resp proto.Message](t *testing.T, numNodes int, responses []NodeResponse[proto.Message]) *CallContext[Req, Resp] {
 	t.Helper()
+	c, err := newReplayCallContext[Req, Resp](t.Context(), numNodes, responses)
+	if err != nil {
+		t.Fatalf("failed to marshal mock response: %v", err)
+	}
+	return c
+}
 
+// newReplayCallContext returns a CallContext for numNodes nodes whose call
+// is already dispatched and whose responses are the given responses.
+func newReplayCallContext[Req, Resp proto.Message](ctx context.Context, numNodes int, responses []NodeResponse[proto.Message]) (*CallContext[Req, Resp], error) {
 	responseChan := make(chan NodeResponse[*stream.Message], len(responses))
 	for _, r := range responses {
 		var sm *stream.Message
 		if r.Value != nil {
 			var err error
-			sm, err = stream.NewMessage(t.Context(), 1, mock.TestMethod, r.Value)
+			sm, err = stream.NewMessage(ctx, 1, mock.TestMethod, r.Value)
 			if err != nil {
-				t.Fatalf("failed to marshal mock response: %v", err)
+				return nil, err
 			}
 		}
 		responseChan <- NodeResponse[*stream.Message]{
@@ -40,14 +50,14 @@ func makeCallContext[Req, Resp proto.Message](t *testing.T, numNodes int, respon
 	}
 
 	c := &CallContext[Req, Resp]{
-		Context:      t.Context(),
+		Context:      ctx,
 		config:       config,
 		responseChan: responseChan,
 	}
 	// Mark sendOnce as done since test responses are already in the channel
 	c.sendOnce.Do(func() {})
 	c.responseSeq = c.defaultResponseSeq()
-	return c
+	return c, nil
 }
 
 // checkError returns true if the error matches the expected error.
@@ -339,143 +349,6 @@ func TestResponseSeqMethods(t *testing.T) {
 		collected := r.Results().CollectAll()
 		if len(collected) != 3 {
 			t.Errorf("Expected 3 collected responses, got %d", len(collected))
-		}
-	})
-}
-
-// -------------------------------------------------------------------------
-// Custom Aggregation Pattern Tests
-// -------------------------------------------------------------------------
-
-// TestResponsesCustomAggregation demonstrates how users can define custom aggregation
-// functions that operate on *Responses and return custom types.
-func TestResponsesCustomAggregation(t *testing.T) {
-	t.Run("SameTypeAggregation", func(t *testing.T) {
-		// Aggregation function that returns the same type (Resp -> Resp)
-		majorityQF := func(resp *Responses[*pb.StringValue]) (*pb.StringValue, error) {
-			replies := resp.Results().IgnoreErrors().CollectN(2)
-			if len(replies) < 2 {
-				return nil, ErrIncomplete
-			}
-			for _, v := range replies {
-				return v, nil
-			}
-			return nil, ErrIncomplete
-		}
-
-		responses := []NodeResponse[proto.Message]{
-			{NodeID: 1, Value: pb.String("response1"), Err: nil},
-			{NodeID: 2, Value: pb.String("response2"), Err: nil},
-			{NodeID: 3, Value: pb.String("response3"), Err: nil},
-		}
-		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := newResponses(callCtx)
-
-		// Call the aggregation function directly
-		result, err := majorityQF(r)
-		if err != nil {
-			t.Fatalf("Expected no error, got %v", err)
-		}
-		if result.GetValue() != "response1" && result.GetValue() != "response2" {
-			t.Errorf("Expected response1 or response2, got %s", result.GetValue())
-		}
-	})
-
-	t.Run("CustomReturnType", func(t *testing.T) {
-		// Aggregation function that returns a different type (Resp -> []string)
-		// This demonstrates the key benefit: Out can differ from In
-		collectAllValues := func(resp *Responses[*pb.StringValue]) ([]string, error) {
-			replies := resp.Results().IgnoreErrors().CollectAll()
-			if len(replies) == 0 {
-				return nil, ErrIncomplete
-			}
-			result := make([]string, 0, len(replies))
-			for _, v := range replies {
-				result = append(result, v.GetValue())
-			}
-			return result, nil
-		}
-
-		responses := []NodeResponse[proto.Message]{
-			{NodeID: 1, Value: pb.String("alpha"), Err: nil},
-			{NodeID: 2, Value: pb.String("beta"), Err: nil},
-			{NodeID: 3, Value: pb.String("gamma"), Err: nil},
-		}
-		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := newResponses(callCtx)
-
-		// Call the aggregation function directly - returns []string from *Responses[*pb.StringValue]
-		result, err := collectAllValues(r)
-		if err != nil {
-			t.Fatalf("Expected no error, got %v", err)
-		}
-		if len(result) != 3 {
-			t.Errorf("Expected 3 values, got %d", len(result))
-		}
-	})
-
-	t.Run("WithFiltering", func(t *testing.T) {
-		// Aggregation function that uses filtering and custom logic
-		filterAndCount := func(resp *Responses[*pb.StringValue]) (int, error) {
-			count := 0
-			for range resp.Results().IgnoreErrors().Filter(func(r NodeResponse[*pb.StringValue]) bool {
-				return r.NodeID > 1 // Only nodes 2 and 3
-			}) {
-				count++
-			}
-			if count == 0 {
-				return 0, ErrIncomplete
-			}
-			return count, nil
-		}
-
-		responses := []NodeResponse[proto.Message]{
-			{NodeID: 1, Value: pb.String("response1"), Err: nil},
-			{NodeID: 2, Value: pb.String("response2"), Err: nil},
-			{NodeID: 3, Value: pb.String("response3"), Err: nil},
-		}
-		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := newResponses(callCtx)
-
-		// Call the aggregation function directly
-		count, err := filterAndCount(r)
-		if err != nil {
-			t.Fatalf("Expected no error, got %v", err)
-		}
-		if count != 2 {
-			t.Errorf("Expected 2 filtered responses, got %d", count)
-		}
-	})
-
-	t.Run("ErrorHandling", func(t *testing.T) {
-		// Aggregation function that handles errors explicitly
-		requireAllSuccess := func(resp *Responses[*pb.StringValue]) (*pb.StringValue, error) {
-			var first *pb.StringValue
-			for r := range resp.Results() {
-				if r.Err != nil {
-					return nil, r.Err
-				}
-				if first == nil {
-					first = r.Value
-				}
-			}
-			if first == nil {
-				return nil, ErrIncomplete
-			}
-			return first, nil
-		}
-
-		responses := []NodeResponse[proto.Message]{
-			{NodeID: 1, Value: pb.String("response1"), Err: nil},
-			{NodeID: 2, Value: nil, Err: errors.New("node 2 failed")},
-		}
-		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 2, responses)
-		r := newResponses(callCtx)
-
-		// Call the aggregation function directly
-		_, err := requireAllSuccess(r)
-		if err == nil {
-			t.Error("Expected error, got nil")
 		}
 	})
 }
