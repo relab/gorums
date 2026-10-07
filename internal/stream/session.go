@@ -75,7 +75,7 @@ func (s *session) sendLoop(req *Request) *Request {
 			return req
 		}
 		if err := req.Ctx.Err(); err != nil {
-			req.replyError(s.id, err)
+			req.sendErrorResponse(s.id, err)
 			req = nil
 			continue
 		}
@@ -99,7 +99,7 @@ func (s *session) send(req Request) bool {
 	if err != nil {
 		s.fail(err)
 		if !req.wantServerResponse() {
-			req.replyError(s.id, cmp.Or(req.Ctx.Err(), err))
+			req.sendErrorResponse(s.id, cmp.Or(req.Ctx.Err(), err))
 		}
 		return false
 	}
@@ -198,9 +198,9 @@ func (s *session) retry(req Request) {
 	case s.requeue && !req.Streaming:
 		s.queue.push(req, false)
 	case s.requeue && s.ctx.Err() != nil:
-		req.replyError(s.id, ErrNodeClosed)
+		req.sendErrorResponse(s.id, ErrNodeClosed)
 	default:
-		req.replyError(s.id, ErrStreamDown)
+		req.sendErrorResponse(s.id, ErrStreamDown)
 	}
 }
 

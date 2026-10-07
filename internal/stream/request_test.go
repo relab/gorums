@@ -11,7 +11,7 @@ func (f requestHandlerFunc) HandleRequest(ctx context.Context, msg *Message, rel
 	f(ctx, msg, release, send)
 }
 
-func TestRequestReplyErrorDoesNotBlockOnCanceledRequest(t *testing.T) {
+func TestRequestSendErrorResponseDoesNotBlockOnCanceledRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	replyChan := make(chan response, 1)
 	replyChan <- response{NodeID: 99} // fill the channel
@@ -23,18 +23,18 @@ func TestRequestReplyErrorDoesNotBlockOnCanceledRequest(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		req.replyError(7, ErrStreamDown)
+		req.sendErrorResponse(7, ErrStreamDown)
 		close(done)
 	}()
 
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatal("ReplyError blocked on a canceled request with a full reply channel")
+		t.Fatal("sendErrorResponse blocked on a canceled request with a full response channel")
 	}
 }
 
-func TestRequestReplyErrorPrefersDeliveryWhenCanceledAndReplyChanReady(t *testing.T) {
+func TestRequestSendErrorResponsePrefersDeliveryWhenCanceledAndResponseChanReady(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	replyChan := make(chan response, 1)
 	req := Request{
@@ -43,7 +43,7 @@ func TestRequestReplyErrorPrefersDeliveryWhenCanceledAndReplyChanReady(t *testin
 	}
 	cancel()
 
-	req.replyError(7, ErrStreamDown)
+	req.sendErrorResponse(7, ErrStreamDown)
 
 	select {
 	case got := <-replyChan:
@@ -51,6 +51,6 @@ func TestRequestReplyErrorPrefersDeliveryWhenCanceledAndReplyChanReady(t *testin
 			t.Fatalf("reply error = %v, want ErrStreamDown", got.Err)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("ReplyError dropped a ready delivery on canceled context")
+		t.Fatal("sendErrorResponse dropped a ready delivery on canceled context")
 	}
 }

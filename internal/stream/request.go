@@ -44,8 +44,9 @@ func (r Request) deliver(resp response) bool {
 	}
 }
 
-// replyError sends err on the request's response channel, if it has one.
-func (r Request) replyError(nodeID uint32, err error) {
+// sendErrorResponse sends a response with err on the request's response
+// channel, if it has one.
+func (r Request) sendErrorResponse(nodeID uint32, err error) {
 	if r.ResponseChan != nil {
 		r.deliver(response{NodeID: nodeID, Err: err})
 	}

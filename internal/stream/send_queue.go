@@ -68,11 +68,12 @@ func (q *sendQueue) close() {
 	}
 }
 
-// fail replies err to req, or counts req as dropped if it has no response channel.
+// fail sends a response with err to req, or counts req as dropped if it has
+// no response channel.
 func (q *sendQueue) fail(req Request, err error) {
 	if req.ResponseChan == nil {
 		q.dropped.Add(1)
 		return
 	}
-	req.replyError(q.id, err)
+	req.sendErrorResponse(q.id, err)
 }
