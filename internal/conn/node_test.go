@@ -234,6 +234,31 @@ func TestNodeMissingTransportIsSafe(t *testing.T) {
 	}
 }
 
+func TestNodeDetail(t *testing.T) {
+	newNodeWithErr := func(id uint32, addr string, err error) *Node {
+		transport := stream.NewTransport(id, func() uint64 { return 0 })
+		transport.StoreChannel(stream.NewChannelWithState(err))
+		return newNode(id, addr, nil, transport)
+	}
+	tests := []struct {
+		name string
+		node *Node
+		want string
+	}{
+		{name: "Nil", node: nil, want: nilAngleString},
+		{name: "Healthy", node: newNodeWithErr(1, "127.0.0.1:9080", nil), want: "node 1 (127.0.0.1:9080)"},
+		{name: "NoTransport", node: newNode(2, "127.0.0.1:9081", nil, nil), want: "node 2 (127.0.0.1:9081)"},
+		{name: "Failing", node: newNodeWithErr(3, "127.0.0.1:9082", errors.New("connection refused")), want: "node 3 (127.0.0.1:9082): connection refused"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.node.Detail(); got != tt.want {
+				t.Errorf("Detail() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func printNodes(t *testing.T, nodes []*Node) {
 	t.Helper()
 	for i, n := range nodes {
