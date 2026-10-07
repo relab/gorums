@@ -157,6 +157,8 @@ There are three channel kinds:
 
 The two stream channels embed an `endpoint` with the send queue, the request dispatcher, the optional `RequestHandler`, and the `Latency` estimate.
 A `session` sends queued requests on its `BidiStream`, records two-way calls in `pendingCalls`, and routes received frames either to a pending call or to the dispatcher.
+The dispatcher runs handlers one at a time, in arrival order.
+A handler that returns without calling `Release` hands its goroutine to the next queued handler, so a busy stream keeps one goroutine and the stack it has grown; an early `Release` starts the next handler on a new goroutine.
 On the server side, `Server.NodeStream` asks a `PeerAcceptor` for the `InboundChannel` of each accepted stream.
 
 ```mermaid

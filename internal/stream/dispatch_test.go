@@ -3,6 +3,9 @@ package stream
 import (
 	"context"
 	"errors"
+	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -174,6 +177,66 @@ func TestDispatcherReleaseAdmitsNext(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("second handler did not start after release")
 	}
+}
+
+// TestDispatcherGoroutineReuse verifies that a handler which returns without
+// releasing hands its goroutine to the next queued handler, so a busy stream
+// keeps one goroutine and its grown stack, and that a handler which releases
+// early starts the next one on a new goroutine.
+func TestDispatcherGoroutineReuse(t *testing.T) {
+	tests := []struct {
+		name      string
+		release   bool // each handler releases before returning
+		wantReuse bool
+	}{
+		{name: "ReturnReusesGoroutine", release: false, wantReuse: true},
+		{name: "EarlyReleaseStartsNewGoroutine", release: true, wantReuse: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := newDispatcher(nil, 0)
+			const n = 5
+			ids := make([]uint64, n)
+			queued := make(chan struct{})
+			var wg sync.WaitGroup
+			wg.Add(n)
+			for i := range n {
+				ok := d.push(t.Context(), func(release func()) {
+					defer wg.Done()
+					if i == 0 {
+						<-queued // hold the first handler until the rest are queued
+					}
+					ids[i] = goroutineID()
+					if tt.release {
+						release()
+					}
+				})
+				if !ok {
+					t.Fatalf("push %d failed", i)
+				}
+			}
+			close(queued)
+			wg.Wait()
+			for i := 1; i < n; i++ {
+				if reused := ids[i] == ids[i-1]; reused != tt.wantReuse {
+					t.Fatalf("handler %d goroutine %d, handler %d goroutine %d: reused = %v, want %v",
+						i-1, ids[i-1], i, ids[i], reused, tt.wantReuse)
+				}
+			}
+		})
+	}
+}
+
+// goroutineID returns the calling goroutine's ID, parsed from the header line
+// of its stack trace ("goroutine N [...]").
+func goroutineID() uint64 {
+	var buf [64]byte
+	fields := strings.Fields(string(buf[:runtime.Stack(buf[:], false)]))
+	id, err := strconv.ParseUint(fields[1], 10, 64)
+	if err != nil {
+		panic("goroutineID: " + err.Error())
+	}
+	return id
 }
 
 // TestDispatcherBounded verifies that a full queue makes tryPush fail and push

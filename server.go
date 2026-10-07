@@ -283,8 +283,10 @@ func (s *Server) RegisterHandler(method string, handler Handler) {
 // is not invoked; two-way handlers return a response which is delivered via send.
 //
 // This is the "default interceptor"; it is the first and last handler in the chain.
-// It releases the request when the handler chain is done, unless the handler
-// or an interceptor in the chain already released it.
+// It calls release only when the handler or an interceptor calls
+// [ServerContext.Release]. Otherwise the caller releases the request when
+// HandleRequest returns, as [stream.RequestHandler] specifies, so the stream's
+// next request can run on the same goroutine.
 func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, release func(), send func(*stream.Message)) {
 	srvCtx := ServerContext{
 		Context: ctx,
@@ -292,7 +294,6 @@ func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, rele
 		send:    send,
 		srv:     s,
 	}
-	defer srvCtx.Release()
 
 	handler, ok := s.handlers[reqMsg.GetMethod()]
 	if !ok {
