@@ -80,6 +80,29 @@ func waitForDedupConcurrent(t *testing.T, servers []*gorums.Server) {
 	}
 }
 
+// newServerPair returns two started peer servers, with stream dedup if dedup
+// is true.
+func newServerPair(t *testing.T, dedup bool) []*gorums.Server {
+	t.Helper()
+	var opts []gorums.ServerOption
+	if dedup {
+		opts = append(opts, gorums.WithStreamDedup())
+	}
+	return gorumstest.LocalServers(t, 2, opts...)
+}
+
+// peerNode returns the node with the given id in cfg, or fails the test.
+func peerNode(t *testing.T, cfg gorums.Config, id uint32) *gorums.Node {
+	t.Helper()
+	for _, n := range cfg.Nodes() {
+		if n.ID() == id {
+			return n
+		}
+	}
+	t.Fatalf("node %d not in config", id)
+	return nil
+}
+
 func TestStreamDedupWaitForAllConcurrent(t *testing.T) {
 	for _, n := range []int{3, 5, 15, 50} {
 		t.Run(fmt.Sprintf("N=%d", n), func(t *testing.T) {
@@ -432,5 +455,166 @@ func TestStreamDedupChainedQuorumCall(t *testing.T) {
 	}
 	if got, want := res.GetValue(), "outer-call | inner-echo: outer-call"; !strings.Contains(got, want) {
 		t.Fatalf("QuorumCall response = %q, want to contain %q", got, want)
+	}
+}
+
+// TestStreamDedupBorrowerSlowHandlerDoesNotBlockOwnCalls verifies that while
+// the borrower (node 2) handles an owner (node 1) request without releasing,
+// the borrower's own unrelated call to node 1 still receives its reply.
+func TestStreamDedupBorrowerSlowHandlerDoesNotBlockOwnCalls(t *testing.T) {
+	for _, dedup := range []bool{false, true} {
+		name := "Dual"
+		if dedup {
+			name = "Dedup"
+		}
+		t.Run(name, func(t *testing.T) {
+			servers := newServerPair(t, dedup)
+			started := make(chan struct{}, 1)
+			unblock := make(chan struct{})
+			servers[1].RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+				started <- struct{}{}
+				<-unblock // slow handler, no Release
+				return gorums.NewResponseMessage(in, pb.String("slow")), nil
+			})
+			servers[0].RegisterHandler(mock.EchoMethod, stringEchoHandler("echo"))
+			gorumstest.WaitForPeers(t, servers)
+			defer close(unblock)
+
+			// node 1 -> node 2 slow request
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				n2 := peerNode(t, servers[0].PeerConfig(), 2)
+				_, _ = gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](n2.Context(ctx), pb.String("x"), mock.TestMethod)
+			}()
+			<-started
+
+			// node 2 -> node 1 unrelated echo
+			n1 := peerNode(t, servers[1].PeerConfig(), 1)
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			start := time.Now()
+			resp, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](n1.Context(ctx), pb.String("hi"), mock.EchoMethod)
+			t.Logf("dedup=%v node2->node1 echo: resp=%q err=%v elapsed=%v shared=%v", dedup, resp.GetValue(), err, time.Since(start), n1.IsShared())
+			if err != nil {
+				t.Errorf("node 2 -> node 1 echo failed while node 2 handles a node-1 request: %v", err)
+			}
+		})
+	}
+}
+
+// TestStreamDedupOwnerSlowHandlerDoesNotBlockOwnCalls verifies that while the
+// owner (node 1) handles two borrower (node 2) requests without releasing, the
+// owner's own unrelated call to node 2 still receives its reply.
+func TestStreamDedupOwnerSlowHandlerDoesNotBlockOwnCalls(t *testing.T) {
+	for _, dedup := range []bool{false, true} {
+		name := "Dual"
+		if dedup {
+			name = "Dedup"
+		}
+		t.Run(name, func(t *testing.T) {
+			servers := newServerPair(t, dedup)
+			started := make(chan struct{}, 4)
+			unblock := make(chan struct{})
+			servers[0].RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+				started <- struct{}{}
+				<-unblock // slow handler, no Release
+				return gorums.NewResponseMessage(in, pb.String("slow")), nil
+			})
+			servers[1].RegisterHandler(mock.EchoMethod, stringEchoHandler("echo"))
+			gorumstest.WaitForPeers(t, servers)
+			defer close(unblock)
+
+			n1 := peerNode(t, servers[1].PeerConfig(), 1)
+			for range 2 {
+				go func() {
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					_, _ = gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](n1.Context(ctx), pb.String("x"), mock.TestMethod)
+				}()
+			}
+			<-started
+			time.Sleep(100 * time.Millisecond) // let the second request arrive
+
+			n2 := peerNode(t, servers[0].PeerConfig(), 2)
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			start := time.Now()
+			resp, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](n2.Context(ctx), pb.String("hi"), mock.EchoMethod)
+			t.Logf("dedup=%v node1->node2 echo: resp=%q err=%v elapsed=%v", dedup, resp.GetValue(), err, time.Since(start))
+			if err != nil {
+				t.Errorf("node 1 -> node 2 echo failed while node 1 handles node-2 requests: %v", err)
+			}
+		})
+	}
+}
+
+// TestStreamDedupNestedCallToRequesterWithoutRelease verifies that the
+// borrower's handler can call the requesting owner before it calls Release.
+func TestStreamDedupNestedCallToRequesterWithoutRelease(t *testing.T) {
+	for _, dedup := range []bool{false, true} {
+		name := "Dual"
+		if dedup {
+			name = "Dedup"
+		}
+		t.Run(name, func(t *testing.T) {
+			servers := newServerPair(t, dedup)
+			servers[1].RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+				n1 := peerNode(t, ctx.PeerConfig(), 1)
+				cctx, cancel := context.WithTimeout(ctx, time.Second)
+				defer cancel()
+				resp, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](n1.Context(cctx), pb.String("inner"), mock.EchoMethod)
+				if err != nil {
+					return nil, err
+				}
+				return gorums.NewResponseMessage(in, pb.String("outer | "+resp.GetValue())), nil
+			})
+			servers[0].RegisterHandler(mock.EchoMethod, stringEchoHandler("echo"))
+			gorumstest.WaitForPeers(t, servers)
+
+			n2 := peerNode(t, servers[0].PeerConfig(), 2)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			start := time.Now()
+			resp, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](n2.Context(ctx), pb.String("x"), mock.TestMethod)
+			t.Logf("dedup=%v nested: resp=%q err=%v elapsed=%v", dedup, resp.GetValue(), err, time.Since(start))
+			if err != nil {
+				t.Errorf("nested call to requester failed: %v", err)
+			}
+		})
+	}
+}
+
+// TestStreamDedupInflightCallFailsWithStreamDown verifies that a borrower call
+// in flight when the shared stream drops fails with ErrStreamDown, so callers
+// that retry on it retry.
+func TestStreamDedupInflightCallFailsWithStreamDown(t *testing.T) {
+	servers := newServerPair(t, true)
+	owner, borrower := servers[0], servers[1]
+	started := make(chan struct{}, 1)
+	unblock := make(chan struct{})
+	defer close(unblock)
+	owner.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message) (*gorums.Message, error) {
+		started <- struct{}{}
+		select {
+		case <-unblock:
+		case <-ctx.Done():
+		}
+		return nil, ctx.Err()
+	})
+	waitForDedup(t, servers)
+	n1 := peerNode(t, borrower.PeerConfig(), 1)
+	errc := make(chan error, 1)
+	go func() {
+		c, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		_, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](n1.Context(c), pb.String("x"), mock.TestMethod)
+		errc <- err
+	}()
+	<-started
+	owner.Stop() // the owner's outbound channel closes; the shared stream drops
+	err := <-errc
+	if !errors.Is(err, gorums.ErrStreamDown) {
+		t.Errorf("in-flight call on dropped shared stream: got %v, want ErrStreamDown", err)
 	}
 }
