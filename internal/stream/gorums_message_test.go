@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"google.golang.org/grpc/metadata"
@@ -37,5 +38,50 @@ func TestMessageConstructorsPreservePayloadAndMetadata(t *testing.T) {
 				t.Fatalf("x-role = %v, want [replica]", values)
 			}
 		})
+	}
+}
+
+// TestMessageAppendToIncomingContext verifies that AppendToIncomingContext
+// adds a message's entries to a copy of the incoming metadata and leaves the
+// original metadata unchanged, and that a message without entries returns ctx
+// as it is, without allocating.
+func TestMessageAppendToIncomingContext(t *testing.T) {
+	withEntries := NewMessageFromPayload(metadata.NewOutgoingContext(t.Context(), metadata.Pairs("x-role", "replica")), 1, "test.Method", nil)
+	noEntries := NewMessageFromPayload(t.Context(), 2, "test.Method", nil)
+	tests := []struct {
+		name     string
+		incoming metadata.MD // nil means no incoming metadata
+		msg      *Message
+		want     metadata.MD // nil means no incoming metadata
+	}{
+		{"NoEntriesKeepsIncoming", metadata.Pairs("authority", "peer"), noEntries, metadata.Pairs("authority", "peer")},
+		{"NoEntriesNoIncoming", nil, noEntries, nil},
+		{"EntriesAppendToIncoming", metadata.Pairs("authority", "peer"), withEntries, metadata.Pairs("authority", "peer", "x-role", "replica")},
+		{"EntriesNoIncoming", nil, withEntries, metadata.Pairs("x-role", "replica")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			var original metadata.MD
+			if tt.incoming != nil {
+				original = tt.incoming.Copy()
+				ctx = metadata.NewIncomingContext(ctx, tt.incoming)
+			}
+			md, ok := metadata.FromIncomingContext(tt.msg.AppendToIncomingContext(ctx))
+			if ok != (tt.want != nil) {
+				t.Fatalf("incoming metadata present = %v, want %v", ok, tt.want != nil)
+			}
+			if ok && !reflect.DeepEqual(md, tt.want) {
+				t.Errorf("incoming metadata = %v, want %v", md, tt.want)
+			}
+			if tt.incoming != nil && !reflect.DeepEqual(tt.incoming, original) {
+				t.Errorf("original metadata changed to %v, want %v", tt.incoming, original)
+			}
+		})
+	}
+
+	ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("authority", "peer", "content-type", "application/grpc"))
+	if allocs := testing.AllocsPerRun(100, func() { noEntries.AppendToIncomingContext(ctx) }); allocs != 0 {
+		t.Errorf("AppendToIncomingContext without entries: %v allocs, want 0", allocs)
 	}
 }
