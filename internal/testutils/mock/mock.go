@@ -1,6 +1,6 @@
-// Package mock provides shared test fixtures for Gorums tests: mock service
-// registrations and request handlers that echo or record requests, so tests
-// can exercise the runtime without a real service definition.
+// Package mock registers a mock service descriptor in the global protobuf
+// registry, so tests can call its methods through the Gorums runtime without
+// a generated service definition.
 package mock
 
 import (
@@ -15,10 +15,10 @@ import (
 )
 
 func init() {
-	err := RegisterServices([]Service{
+	err := registerServices([]service{
 		{
 			Name: "mock.MockService",
-			Methods: []Method{
+			Methods: []method{
 				{Name: "Test", Input: &pb.StringValue{}, Output: &pb.StringValue{}},
 				{Name: "Echo", Input: &pb.StringValue{}, Output: &pb.StringValue{}},
 				{Name: "GetValue", Input: &pb.Int32Value{}, Output: &pb.Int32Value{}},
@@ -31,32 +31,32 @@ func init() {
 	}
 }
 
-// TestMethod, EchoMethod, GetValueMethod, and Stream are the methods supported by the mock package.
+// TestMethod, EchoMethod, GetValueMethod, and StreamMethod are the methods supported by the mock package.
 const (
 	TestMethod     = "mock.MockService.Test"
 	EchoMethod     = "mock.MockService.Echo"
 	GetValueMethod = "mock.MockService.GetValue"
-	Stream         = "mock.MockService.Stream"
+	StreamMethod   = "mock.MockService.Stream"
 )
 
-// Service represents a service to be registered.
-type Service struct {
+// service represents a service to be registered.
+type service struct {
 	Name    string // Full package and service name, e.g., "mock.MockService"
-	Methods []Method
+	Methods []method
 }
 
-// Method represents a method in a service.
-type Method struct {
+// method represents a method in a service.
+type method struct {
 	Name   string
 	Input  proto.Message
 	Output proto.Message
 }
 
-// RegisterServices registers the given services in the global registry.
+// registerServices registers the given services in the global registry.
 // It is safe to call multiple times, but services with the same package name
 // must be registered in the same call or be identical to previous registrations.
 // Returns an error if registration fails.
-func RegisterServices(services []Service) error {
+func registerServices(services []service) error {
 	// Group by package
 	packages := make(map[string][]*descriptorpb.ServiceDescriptorProto)
 

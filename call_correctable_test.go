@@ -74,7 +74,7 @@ func TestCorrectableQuorumCallStream(t *testing.T) {
 			responses := gorumsimpl.QuorumCallStream[*pb.StringValue, *pb.StringValue](
 				config.Context(ctx),
 				pb.String("test"),
-				mock.Stream,
+				mock.StreamMethod,
 			)
 
 			corr := responses.Correctable(tt.threshold)
@@ -111,7 +111,7 @@ func TestCorrectableWatch(t *testing.T) {
 	responses := gorumsimpl.QuorumCallStream[*pb.StringValue, *pb.StringValue](
 		config.Context(ctx),
 		pb.String("test"),
-		mock.Stream,
+		mock.StreamMethod,
 	)
 
 	corr := responses.Correctable(3)
@@ -191,7 +191,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 				responses := gorumsimpl.QuorumCallStream[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
-					mock.Stream,
+					mock.StreamMethod,
 				)
 				corr := responses.Correctable(threshold)
 				<-corr.Watch(threshold)
@@ -211,7 +211,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 				responses := gorumsimpl.QuorumCallStream[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
-					mock.Stream,
+					mock.StreamMethod,
 				)
 				count := 0
 				for resp := range responses.Results() {

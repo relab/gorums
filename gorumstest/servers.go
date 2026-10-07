@@ -81,7 +81,7 @@ func (echoSrv) Test(_ gorums.ServerContext, req *pb.StringValue) (*pb.StringValu
 // argument to [Config], [Node], or [Servers].
 func StreamServerFn(_ int) gorums.ServerIface {
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.Stream, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler(mock.StreamMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		val := req.GetValue()
 
@@ -103,7 +103,7 @@ func StreamServerFn(_ int) gorums.ServerIface {
 // argument to [Config], [Node], or [Servers].
 func StreamBenchmarkServerFn(_ int) gorums.ServerIface {
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.Stream, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler(mock.StreamMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
 		val := req.GetValue()
 
