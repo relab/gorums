@@ -2,6 +2,7 @@ package impl
 
 import (
 	"context"
+	"math/rand/v2"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -178,6 +179,10 @@ func (c *CallContext[Req, Resp]) send() {
 // per-node message construction. A shared dedup node sends on a stream that
 // also carries the remote peer's client-initiated IDs, so it gets its own
 // message with an ID from the server-initiated ID space to avoid collisions.
+//
+// The fan-out starts at a random node and wraps around, so no node is
+// always enqueued last; the node reached last waits longest for its share of
+// every call. Each node still receives its requests in call order.
 func (c *CallContext[Req, Resp]) sendShared() {
 	payload, err := proto.Marshal(c.request)
 	if err != nil {
@@ -191,7 +196,9 @@ func (c *CallContext[Req, Resp]) sendShared() {
 	// a node with a shared (deduplicated) stream needs a fresh server-space
 	// ID per send, so each such node gets its own message instead.
 	var sharedMsg *stream.Message
-	for _, n := range c.config {
+	start := rand.IntN(max(len(c.config), 1))
+	for i := range c.config {
+		n := c.config[(start+i)%len(c.config)]
 		if n.IsShared() {
 			c.enqueue(n, stream.NewMessageFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload))
 			continue
