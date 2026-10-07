@@ -3,7 +3,6 @@ package gorums_test
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -177,8 +176,12 @@ func TestQuorumCallPartialFailures(t *testing.T) {
 			}
 
 			if tt.failing > 0 {
-				// Collect indices to stop
-				stopNodes(slices.Collect(gorumstest.Range(tt.failing))...)
+				// Stop the first tt.failing servers
+				indices := make([]int, tt.failing)
+				for i := range indices {
+					indices[i] = i
+				}
+				stopNodes(indices...)
 				time.Sleep(50 * time.Millisecond)
 			}
 
