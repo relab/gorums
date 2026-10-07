@@ -57,11 +57,10 @@ func (c *OutboundChannel) pendingExists(msgID uint64) bool {
 	return false
 }
 
-// testChannel holds the channel and cleanup function.
+// testChannel holds an outbound channel and the gRPC server it connects to.
 type testChannel struct {
 	*OutboundChannel
 	srv *grpc.Server
-	lis net.Listener
 }
 
 // echoServer serves as a generic server that echoes back any message.
@@ -180,7 +179,6 @@ func setupChannelEager(t testing.TB, eagerReconnect bool, serverFn func(Gorums_N
 	tc := &testChannel{
 		OutboundChannel: c,
 		srv:             srv,
-		lis:             lis,
 	}
 
 	t.Cleanup(func() {
@@ -1200,10 +1198,10 @@ func (h *signalingRequestHandler) HandleRequest(_ context.Context, msg *Message,
 	}
 }
 
-// TestChannelReceiverDispatchesOnlyServerInitiatedUnknownMessages verifies that
+// TestChannelSessionDispatchesOnlyServerInitiatedUnknownMessages verifies that
 // an outbound session drops late responses that no longer have a pending call,
 // while still dispatching server-initiated requests to the handler.
-func TestChannelReceiverDispatchesOnlyServerInitiatedUnknownMessages(t *testing.T) {
+func TestChannelSessionDispatchesOnlyServerInitiatedUnknownMessages(t *testing.T) {
 	tests := []struct {
 		name       string
 		msgID      uint64
@@ -1268,7 +1266,7 @@ func TestChannelReceiverDispatchesOnlyServerInitiatedUnknownMessages(t *testing.
 	}
 }
 
-func TestChannelRouterLifecycle(t *testing.T) {
+func TestChannelPendingLifecycle(t *testing.T) {
 	tc := setupChannel(t, echoServer)
 
 	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
@@ -1276,16 +1274,16 @@ func TestChannelRouterLifecycle(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		oneway     bool
-		streaming  bool
-		wantRouter bool
-		wantPanic  bool
+		name        string
+		oneway      bool
+		streaming   bool
+		wantPending bool
+		wantPanic   bool
 	}{
-		{name: "Oneway/NoStreaming/Cleanup", oneway: true, streaming: false, wantRouter: false},
+		{name: "Oneway/NoStreaming/Cleanup", oneway: true, streaming: false, wantPending: false},
 		{name: "Oneway/Streaming/Invalid", oneway: true, streaming: true, wantPanic: true},
-		{name: "Twoway/NoStreaming/Cleanup", oneway: false, streaming: false, wantRouter: false},
-		{name: "Twoway/Streaming/KeepsRouterAlive", oneway: false, streaming: true, wantRouter: true},
+		{name: "Twoway/NoStreaming/Cleanup", oneway: false, streaming: false, wantPending: false},
+		{name: "Twoway/Streaming/KeepsPendingCall", oneway: false, streaming: true, wantPending: true},
 	}
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1303,8 +1301,8 @@ func TestChannelRouterLifecycle(t *testing.T) {
 			if resp.Err != nil {
 				t.Errorf("unexpected error: %v", resp.Err)
 			}
-			if exists := tc.pendingExists(msgID); exists != tt.wantRouter {
-				t.Errorf("pending call exists = %v, want %v", exists, tt.wantRouter)
+			if exists := tc.pendingExists(msgID); exists != tt.wantPending {
+				t.Errorf("pending call exists = %v, want %v", exists, tt.wantPending)
 			}
 			if tt.wantPanic && !panicRecovered {
 				t.Errorf("expected panic but none occurred")
