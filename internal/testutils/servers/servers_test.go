@@ -73,7 +73,7 @@ func TestServersStopIgnoresErrClosed(t *testing.T) {
 			srv := &closeGate{entered: make(chan struct{}), release: make(chan struct{})}
 			lis := &closeSeqListener{errAt: map[int]error{2: tt.closeErr}}
 			state := &serverState{srv: srv, lis: lis, stopped: make(chan struct{})}
-			go state.start(t)
+			go state.start()
 			<-srv.entered
 			tb := &recordTB{T: t}
 			state.stop(tb)

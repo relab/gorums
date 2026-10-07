@@ -26,7 +26,7 @@ type serverState struct {
 	stopped chan struct{}
 }
 
-func (s *serverState) start(_ testing.TB) {
+func (s *serverState) start() {
 	_ = s.srv.Serve(s.lis)
 	// Closing stopped signals stop whenever it runs, including after Serve
 	// has already returned, and never blocks this goroutine.
@@ -44,11 +44,11 @@ func (s *serverState) stop(t testing.TB) {
 	<-s.stopped
 }
 
-// setupServers starts numServers servers via srvFn on listeners obtained from
+// startServers starts numServers servers via srvFn on listeners obtained from
 // listenFn, and returns their addresses and a variadic stop function. The
 // stop function stops the servers at the given indices, or all servers if
 // called with no arguments.
-func setupServers(t testing.TB, numServers int, srvFn func(i int) ServerIface, listenFn func(i int) net.Listener) ([]string, func(...int)) {
+func startServers(t testing.TB, numServers int, srvFn func(i int) ServerIface, listenFn func(i int) net.Listener) ([]string, func(...int)) {
 	t.Helper()
 
 	addrs := make([]string, numServers)
@@ -63,7 +63,7 @@ func setupServers(t testing.TB, numServers int, srvFn func(i int) ServerIface, l
 		active[i] = state
 		muActive.Unlock()
 
-		go state.start(t)
+		go state.start()
 	}
 
 	stopNodesFn := func(indices ...int) {

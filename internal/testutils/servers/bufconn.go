@@ -87,7 +87,7 @@ func (r *bufconnRegistry) cleanup(t testing.TB) {
 func Start(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func(...int)) {
 	t.Helper()
 	listenFn := newListenFunc(t)
-	return setupServers(t, numServers, srvFn, func(int) net.Listener { return listenFn() })
+	return startServers(t, numServers, srvFn, func(int) net.Listener { return listenFn() })
 }
 
 // Listen returns a function that creates an in-memory bufconn listener with a

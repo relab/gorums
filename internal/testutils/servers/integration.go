@@ -22,7 +22,7 @@ func Start(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]strin
 		}
 		return lis
 	}
-	return setupServers(t, numServers, srvFn, listenFn)
+	return startServers(t, numServers, srvFn, listenFn)
 }
 
 // Listen returns a function that creates a TCP listener on a random localhost
