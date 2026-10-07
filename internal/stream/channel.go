@@ -18,7 +18,7 @@ type Channel interface {
 	// StreamUp reports whether the channel can currently carry requests.
 	StreamUp() bool
 	// LastErr returns [ErrSendStalled] while a send has been blocked for
-	// [StallReportDelay] or longer, and otherwise the error of the channel's
+	// [stallReportDelay] or longer, and otherwise the error of the channel's
 	// most recent stream operation, or nil if it succeeded.
 	LastErr() error
 	// DroppedReplies returns the number of handler replies dropped because

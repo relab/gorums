@@ -18,7 +18,7 @@ var (
 	// [Channel]).
 	ErrSendQueueFull = status.Error(codes.Unavailable, "send queue full")
 	// ErrSendStalled is reported by [Channel.LastErr] while a send on the
-	// node's stream has been blocked for [StallReportDelay] or longer, as when
+	// node's stream has been blocked for [stallReportDelay] or longer, as when
 	// the peer has stopped reading the stream.
 	ErrSendStalled = status.Error(codes.Unavailable, "send stalled")
 )
