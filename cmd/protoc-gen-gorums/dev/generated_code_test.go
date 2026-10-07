@@ -1,8 +1,9 @@
 // Package dev_test contains integration tests for the generated Gorums code.
 // These tests validate that the protoc-gen-gorums code generator produces
-// correct and functional code. They exercise the generated QuorumCall method
-// and its terminal methods (Majority, All, Threshold) along with custom
-// aggregation patterns using CollectAll.
+// correct and functional code. They exercise the generated server
+// registration, the generated QuorumCall method, and its terminal methods
+// (Majority, All, Threshold) along with custom aggregation patterns using
+// CollectAll.
 //
 // NOTE: These tests are intentionally separate from the core library tests
 // in the repository root. While they test similar functionality, they serve
@@ -18,94 +19,87 @@ import (
 	"github.com/relab/gorums/gorumstest"
 )
 
-const quorumCallMethod = "dev.ZorumsService.QuorumCall"
+// quorumCallServer implements the QuorumCall method of the generated
+// [dev.ZorumsServiceServer] interface. It returns the length of the request
+// value. The embedded interface is nil, so the other methods panic if called.
+type quorumCallServer struct {
+	dev.ZorumsServiceServer
+}
 
-func quorumCallServer(_ int) gorums.ServerIface {
+func (quorumCallServer) QuorumCall(_ gorums.ServerContext, req *dev.Request) (*dev.Response, error) {
+	resp := &dev.Response{}
+	resp.SetResult(int64(len(req.GetValue())))
+	return resp, nil
+}
+
+func newQuorumCallServer(_ int) gorums.ServerIface {
 	srv := gorums.NewServer()
-	srv.RegisterHandler(quorumCallMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*dev.Request](in)
-		resp := &dev.Response{}
-		resp.SetResult(int64(len(req.GetValue())))
-		return gorums.NewResponseMessage(in, resp), nil
-	})
+	dev.RegisterZorumsServiceServer(srv, quorumCallServer{})
 	return srv
 }
 
-func TestQuorumCallWithMajority(t *testing.T) {
-	config := gorumstest.Config(t, 3, quorumCallServer)
-	ctx := config.Context(gorumstest.Context(t, 2*time.Second))
-
-	req := &dev.Request{}
-	req.SetValue("test")
-
-	// Call QuorumCall and wait for a majority to respond
-	resp, err := dev.QuorumCall(ctx, req).Majority()
-	if err != nil {
-		t.Fatalf("QuorumCall.Majority() failed: %v", err)
+func TestGeneratedCodeQuorumCall(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		call  func(*dev.ConfigContext, *dev.Request) (int64, error)
+		want  int64
+	}{
+		{
+			name:  "Majority",
+			value: "test",
+			call: func(ctx *dev.ConfigContext, req *dev.Request) (int64, error) {
+				resp, err := dev.QuorumCall(ctx, req).Majority()
+				return resp.GetResult(), err
+			},
+			want: 4,
+		},
+		{
+			name:  "All",
+			value: "test",
+			call: func(ctx *dev.ConfigContext, req *dev.Request) (int64, error) {
+				resp, err := dev.QuorumCall(ctx, req).All()
+				return resp.GetResult(), err
+			},
+			want: 4,
+		},
+		{
+			name:  "Threshold",
+			value: "hello",
+			call: func(ctx *dev.ConfigContext, req *dev.Request) (int64, error) {
+				resp, err := dev.QuorumCall(ctx, req).Threshold(2)
+				return resp.GetResult(), err
+			},
+			want: 5,
+		},
+		{
+			// Each of the 3 servers returns len("hello"), so the sum is 15.
+			name:  "CollectAllSum",
+			value: "hello",
+			call: func(ctx *dev.ConfigContext, req *dev.Request) (int64, error) {
+				var total int64
+				for _, resp := range dev.QuorumCall(ctx, req).Results().CollectAll() {
+					total += resp.GetResult()
+				}
+				return total, nil
+			},
+			want: 15,
+		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := gorumstest.Config(t, 3, newQuorumCallServer)
+			ctx := config.Context(gorumstest.Context(t, 2*time.Second))
 
-	// The server returns len(req.Value) which is 4 for "test"
-	if resp.GetResult() != 4 {
-		t.Errorf("Expected result 4, got %d", resp.GetResult())
-	}
-}
-
-func TestQuorumCallWithAll(t *testing.T) {
-	config := gorumstest.Config(t, 3, quorumCallServer)
-	ctx := config.Context(gorumstest.Context(t, 2*time.Second))
-
-	req := &dev.Request{}
-	req.SetValue("test")
-
-	// Call QuorumCall and wait for all responses
-	resp, err := dev.QuorumCall(ctx, req).All()
-	if err != nil {
-		t.Fatalf("QuorumCall.All() failed: %v", err)
-	}
-
-	// The server returns len(req.Value) which is 4 for "test"
-	if resp.GetResult() != 4 {
-		t.Errorf("Expected result 4, got %d", resp.GetResult())
-	}
-}
-
-func TestQuorumCallWithThreshold(t *testing.T) {
-	config := gorumstest.Config(t, 3, quorumCallServer)
-	ctx := config.Context(gorumstest.Context(t, 2*time.Second))
-
-	req := &dev.Request{}
-	req.SetValue("hello")
-
-	// Use Threshold to wait for at least 2 responses
-	resp, err := dev.QuorumCall(ctx, req).Threshold(2)
-	if err != nil {
-		t.Fatalf("QuorumCall.Threshold() failed: %v", err)
-	}
-
-	// The server returns len(req.Value) which is 5 for "hello"
-	if resp.GetResult() != 5 {
-		t.Errorf("Expected result 5, got %d", resp.GetResult())
-	}
-}
-
-func TestQuorumCallWithCustomAggregation(t *testing.T) {
-	config := gorumstest.Config(t, 3, quorumCallServer)
-	ctx := config.Context(gorumstest.Context(t, 2*time.Second))
-
-	req := &dev.Request{}
-	req.SetValue("hello")
-
-	// Use CollectAll for custom aggregation (sum all results)
-	responses := dev.QuorumCall(ctx, req)
-	results := responses.Results().CollectAll()
-
-	var total int64
-	for _, resp := range results {
-		total += resp.GetResult()
-	}
-
-	// Each server returns 5 (len("hello")), so 3 servers = 15
-	if total != 15 {
-		t.Errorf("Expected total result 15, got %d", total)
+			req := &dev.Request{}
+			req.SetValue(tt.value)
+			got, err := tt.call(ctx, req)
+			if err != nil {
+				t.Fatalf("QuorumCall failed: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("QuorumCall result = %d, want %d", got, tt.want)
+			}
+		})
 	}
 }
