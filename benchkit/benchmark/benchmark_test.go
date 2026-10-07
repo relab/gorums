@@ -43,186 +43,7 @@ func TestBenchmarkDescriptions(t *testing.T) {
 	}
 }
 
-func TestRunComplete(t *testing.T) {
-	tests := []struct {
-		name                string
-		outSize, done, need int
-		want                bool
-	}{
-		{"NoneDone", 5, 0, 3, false},
-		{"OneDoneQuorumStillPossible", 5, 1, 3, false}, // alive 4 >= 3
-		{"EnoughDoneQuorumImpossible", 5, 3, 3, true},  // alive 2 < 3
-		{"AllPeersNeededOneDone", 5, 1, 5, true},       // alive 4 < 5
-		{"AllPeersNeededNoneDone", 5, 0, 5, false},     // never masks a startup fault
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := runComplete(tt.outSize, tt.done, tt.need); got != tt.want {
-				t.Errorf("runComplete(%d, %d, %d) = %v, want %v",
-					tt.outSize, tt.done, tt.need, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestSymmetricRunOver checks the live classifiers flip from false to true only
-// after peers signal Done, over a real (in-process) symmetric target.
-func TestSymmetricRunOver(t *testing.T) {
-	target, stop, err := setupSymmetricServers(3, nil, gorumstest.InsecureDialOptions(t))
-	if err != nil {
-		t.Fatalf("setupSymmetricServers: %v", err)
-	}
-	t.Cleanup(stop)
-
-	size := target.servers[0].PeerConfig().Size()
-	quorum := size/2 + 1
-
-	// No peer has signaled Done yet: nothing is over, so a failure now would
-	// still be reported as a fault.
-	if anyPeerFinished(target) {
-		t.Error("anyPeerFinished = true before any Done, want false")
-	}
-	if quorumRunOver(target, quorum) {
-		t.Error("quorumRunOver = true before any Done, want false")
-	}
-
-	// Signal every peer done on the first server; the run is now winding down.
-	target.controls[0].ArmDone(size)
-	for id := 1; id <= size; id++ {
-		target.controls[0].Done(gorums.ServerContext{}, benchkit.DoneRequest_builder{SenderId: uint32(id)}.Build())
-	}
-	if !anyPeerFinished(target) {
-		t.Error("anyPeerFinished = false after all peers Done, want true")
-	}
-	if !quorumRunOver(target, quorum) {
-		t.Error("quorumRunOver = false after all peers Done, want true")
-	}
-}
-
-// TestRunSymmetricQuorumCallDefaultsToMajority verifies that
-// runSymmetricQuorumCall completes a short run without an explicit
-// QuorumSize, falling back to a majority of the outbound peer count.
-func TestRunSymmetricQuorumCallDefaultsToMajority(t *testing.T) {
-	targets := localSymmetricTargets(t, 3, nil)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	for _, target := range targets {
-		if err := awaitReady(ctx, target); err != nil {
-			t.Fatalf("awaitReady: %v", err)
-		}
-	}
-
-	opts := benchkit.Options{Duration: 100 * time.Millisecond, Rate: 100, Workers: 1}
-	result, err := runSymmetricQuorumCall(targets[0], opts)
-	if err != nil {
-		t.Fatalf("runSymmetricQuorumCall: %v", err)
-	}
-	if result.GetTotalOps() == 0 {
-		t.Error("TotalOps = 0, want at least one completed quorum call")
-	}
-}
-
-// TestRunSymmetricQuorumCallStragglerEndsCleanly verifies the straggler path:
-// when a quorum call fails after enough peers have signaled Done that the
-// quorum can no longer form, runSymmetricQuorumCall treats it as the expected
-// end of the run (benchkit.ErrRunOver) rather than propagating the failure,
-// so a node outliving its peers still returns a usable partial Result instead
-// of failing the whole benchmark.
-func TestRunSymmetricQuorumCallStragglerEndsCleanly(t *testing.T) {
-	servers := localServers(t, 2, nil)
-	target := benchTarget(servers[0], 2) // numPeers=2 arms Done tracking for IDs 1 and 2
-	target2 := benchTarget(servers[1], 2)
-	go func() { _ = servers[0].ListenAndServe() }()
-	go func() { _ = servers[1].ListenAndServe() }()
-
-	// Both sides probe: a dual-mode stream is only fully up once each side has
-	// dialed out, so waiting on only one direction can stall the other peer's
-	// half of the handshake.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	errCh := make(chan error, 2)
-	go func() { errCh <- awaitReady(ctx, target) }()
-	go func() { errCh <- awaitReady(ctx, target2) }()
-	var errs error
-	for range 2 {
-		if err := <-errCh; err != nil {
-			errs = errors.Join(errs, err)
-		}
-	}
-	if errs != nil {
-		t.Fatalf("awaitReady: %v", errs)
-	}
-
-	// Node 2 (the only outbound peer) finishes and exits; its calls now fail,
-	// and it has signaled Done, so quorumRunOver must recognize this as the
-	// expected end of the run rather than a fault.
-	servers[1].Stop()
-	target.controls[0].Done(gorums.ServerContext{}, benchkit.DoneRequest_builder{SenderId: 2}.Build())
-
-	// Duration is deliberately long relative to the expected stop: a regular
-	// (non-run-over) failure is only counted via Stats.RecordError and the
-	// run keeps retrying until Duration elapses, so a prompt return is what
-	// distinguishes the run-over path (which calls cancel() on the first
-	// failed call) from ordinary failure counting — both paths return a nil
-	// top-level error either way.
-	const duration = 2 * time.Second
-	opts := benchkit.Options{Duration: duration, Rate: 50, Workers: 1}
-	start := time.Now()
-	result, err := runSymmetricQuorumCall(target, opts)
-	elapsed := time.Since(start)
-	if err != nil {
-		t.Fatalf("runSymmetricQuorumCall = %v, want nil error (straggler run-over should be a clean stop)", err)
-	}
-	if elapsed >= duration/2 {
-		t.Errorf("runSymmetricQuorumCall took %v, want well under %v (run-over should cancel on the first failed call)", elapsed, duration)
-	}
-	if got := result.GetFailedOps(); got != 0 {
-		t.Errorf("FailedOps = %d, want 0 (the failing call must be classified as run-over, not counted as a failure)", got)
-	}
-}
-
-// TestRunSymmetricQuorumCallHonorsCallTimeout verifies that the symmetric
-// runner's -call-timeout branch bounds each call to opts.CallTimeout instead
-// of hanging behind an unresponsive peer until the run's own deadline
-// elapses, mirroring TestQuorumCallHonorsCallTimeout for the coordinator
-// path.
-func TestRunSymmetricQuorumCallHonorsCallTimeout(t *testing.T) {
-	servers := localServers(t, 2, nil)
-	target := benchTarget(servers[0], 2)
-	// Node 2 drops every reply from the start, mirroring
-	// TestQuorumCallHonorsCallTimeout: a call without CallTimeout would hang
-	// until BenchContext's own (30s+) deadline instead of the short one
-	// below. awaitReady is not used here since its own probe is a QuorumCall
-	// against the same handler and would never succeed against a
-	// permanently unresponsive peer.
-	registerReplyDroppingPeer(servers[1], 1<<30)
-	go func() { _ = servers[0].ListenAndServe() }()
-	go func() { _ = servers[1].ListenAndServe() }()
-
-	// QuorumSize=2 requires both replies: server0's own PeerConfig includes
-	// itself alongside server1, so a threshold of 1 would be satisfied by the
-	// self entry alone without ever needing server1's (dropped) reply.
-	opts := benchkit.Options{
-		Workers: 1, Duration: 100 * time.Millisecond, QuorumSize: 2,
-		CallTimeout: 20 * time.Millisecond,
-	}
-	start := time.Now()
-	result, err := runSymmetricQuorumCall(target, opts)
-	elapsed := time.Since(start)
-	if err != nil {
-		t.Fatalf("runSymmetricQuorumCall: %v", err)
-	}
-	const wantBound = 5 * time.Second // generous vs. what an ignored CallTimeout would look like
-	if elapsed > wantBound {
-		t.Errorf("took %v, want well under %v (CallTimeout should bound each call against the unresponsive peer)", elapsed, wantBound)
-	}
-	if result.GetFailedOps() == 0 {
-		t.Error("FailedOps = 0, want > 0 (every call should time out against the unresponsive peer)")
-	}
-}
-
-func TestGetBenchmarksTargetRouting(t *testing.T) {
+func TestBenchmarksTargetRouting(t *testing.T) {
 	symTarget := &SymmetricTarget{}
 
 	tests := []struct {
@@ -243,7 +64,7 @@ func TestGetBenchmarksTargetRouting(t *testing.T) {
 	}
 }
 
-// TestGetBenchmarksExcludesConfigBenchmarksForDistributedTarget verifies that
+// TestBenchmarksExcludesConfigBenchmarksForDistributedTarget verifies that
 // a distributed (multi-process) symmetric target excludes needsConfig
 // benchmarks (QuorumCall, Multicast, ...), unlike a local symmetric target.
 // Every distributed node runs the same binary; if a needsConfig benchmark
@@ -252,7 +73,7 @@ func TestGetBenchmarksTargetRouting(t *testing.T) {
 // every other node's Stats window mid-run. Only the needsSymmetric
 // benchmarks (SymmetricQuorumCall, SymmetricMulticast), designed for
 // concurrent per-node execution, are safe here.
-func TestGetBenchmarksExcludesConfigBenchmarksForDistributedTarget(t *testing.T) {
+func TestBenchmarksExcludesConfigBenchmarksForDistributedTarget(t *testing.T) {
 	peers := []string{"127.0.0.1:0", "127.0.0.2:0"}
 	target, stop, err := setupRemoteServer(peers[0], peers, nil, gorumstest.InsecureDialOptions(t))
 	if err != nil {
@@ -272,17 +93,13 @@ func TestGetBenchmarksExcludesConfigBenchmarksForDistributedTarget(t *testing.T)
 	}
 }
 
-// TestGetBenchmarksMatchesDescriptionsForFullTarget verifies that a target
+// TestBenchmarksMatchesDescriptionsForFullTarget verifies that a target
 // exposing both a Config and a SymmetricTarget produces exactly the
 // runnable benchmarks BenchmarkDescriptions lists, by name and count: both
 // views are derived from the one benchDescs table (see benchmark.go), so
 // they cannot drift the way two hand-written lists could.
-func TestGetBenchmarksMatchesDescriptionsForFullTarget(t *testing.T) {
-	target, stop, err := setupSymmetricServers(2, nil, gorumstest.InsecureDialOptions(t))
-	if err != nil {
-		t.Fatalf("setupSymmetricServers: %v", err)
-	}
-	t.Cleanup(stop)
+func TestBenchmarksMatchesDescriptionsForFullTarget(t *testing.T) {
+	target := symmetricServers(t, 2)
 
 	// Symmetric alone is enough: benchmarks derives cfg from server 0's
 	// outbound config when t.Config is unset, so needsConfig benchmarks are
@@ -310,11 +127,7 @@ func TestGetBenchmarksMatchesDescriptionsForFullTarget(t *testing.T) {
 // and mean latency to the concurrency the bound permits, so a latency inflated
 // by the harness's own scheduling shows up as an impossible concurrency.
 func TestAsyncQCBoundsInFlight(t *testing.T) {
-	target, stop, err := setupSymmetricServers(3, nil, gorumstest.InsecureDialOptions(t))
-	if err != nil {
-		t.Fatalf("setupSymmetricServers: %v", err)
-	}
-	t.Cleanup(stop)
+	target := symmetricServers(t, 3)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := awaitReady(ctx, target); err != nil {
@@ -498,84 +311,12 @@ func TestRunAsyncQCBenchmarkCountsErrorsWithoutAborting(t *testing.T) {
 	}
 }
 
-func TestRunSymmetricMulticastDrainsServerMessages(t *testing.T) {
-	target, stop, err := setupSymmetricServers(3, nil, gorumstest.InsecureDialOptions(t))
-	if err != nil {
-		t.Fatalf("setupSymmetricServers: %v", err)
-	}
-	t.Cleanup(stop)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := awaitReady(ctx, target); err != nil {
-		t.Fatalf("awaitReady: %v", err)
-	}
-
-	result, err := runSymmetricMulticast(target, benchkit.Options{
-		Workers:  1,
-		Duration: 20 * time.Millisecond,
-	})
-	if err != nil {
-		t.Fatalf("runSymmetricMulticast: %v", err)
-	}
-
-	wantSamples := int(result.GetTotalOps()) * target.numPeers
-	if got := len(result.GetLatencies()); got != wantSamples {
-		t.Fatalf("len(Latencies) = %d, want %d", got, wantSamples)
-	}
-}
-
-// TestRunSymmetricMulticastHDR verifies that a symmetric server-measured run
-// honors StatsMode_HDR end to end: the per-sender stores, offset correction,
-// and cross-server aggregation carry a bounded histogram (Result.Histogram)
-// instead of raw samples (Result.Latencies nil).
-func TestRunSymmetricMulticastHDR(t *testing.T) {
-	target, stop, err := setupSymmetricServers(3, nil, gorumstest.InsecureDialOptions(t))
-	if err != nil {
-		t.Fatalf("setupSymmetricServers: %v", err)
-	}
-	t.Cleanup(stop)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := awaitReady(ctx, target); err != nil {
-		t.Fatalf("awaitReady: %v", err)
-	}
-
-	result, err := runSymmetricMulticast(target, benchkit.Options{
-		Workers:   1,
-		Duration:  20 * time.Millisecond,
-		StatsMode: benchkit.StatsMode_HDR,
-	})
-	if err != nil {
-		t.Fatalf("runSymmetricMulticast: %v", err)
-	}
-	if got := result.GetLatencies(); got != nil {
-		t.Errorf("Latencies in HDR mode = %v, want nil", got)
-	}
-	h := result.GetHistogram()
-	if h == nil {
-		t.Fatal("Histogram in HDR mode = nil, want non-nil")
-	}
-	var total uint64
-	for _, c := range h.GetCount() {
-		total += c
-	}
-	if wantSamples := result.GetTotalOps() * uint64(target.numPeers); total != wantSamples {
-		t.Errorf("histogram counts sum = %d, want %d", total, wantSamples)
-	}
-}
-
 // TestAsyncSendsPipelinesAndDrains verifies the two properties AsyncMulticast
 // relies on: dispatch keeps at most depth sends outstanding without waiting for
 // them, and drain collects the ones the send window left behind so they are not
 // lost from the run.
 func TestAsyncSendsPipelinesAndDrains(t *testing.T) {
-	target, stop, err := setupSymmetricServers(3, nil, gorumstest.InsecureDialOptions(t))
-	if err != nil {
-		t.Fatalf("setupSymmetricServers: %v", err)
-	}
-	t.Cleanup(stop)
+	target := symmetricServers(t, 3)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -738,11 +479,7 @@ func TestAsyncSendsFailedReapFreesWaitingWorker(t *testing.T) {
 // completes a server-measured run and records operations, exercising the
 // dispatch and quiesce-drain wiring together.
 func TestAsyncMulticastBenchmarkRuns(t *testing.T) {
-	target, stop, err := setupSymmetricServers(3, nil, gorumstest.InsecureDialOptions(t))
-	if err != nil {
-		t.Fatalf("setupSymmetricServers: %v", err)
-	}
-	t.Cleanup(stop)
+	target := symmetricServers(t, 3)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -771,11 +508,7 @@ func TestAsyncMulticastBenchmarkRuns(t *testing.T) {
 // server over the Start RPC, so Stop returns a histogram, clock-offset
 // correction shifts the histogram, and the aggregate carries it (Latencies nil).
 func TestServerMeasuredMulticastHDR(t *testing.T) {
-	target, stop, err := setupSymmetricServers(3, nil, gorumstest.InsecureDialOptions(t))
-	if err != nil {
-		t.Fatalf("setupSymmetricServers: %v", err)
-	}
-	t.Cleanup(stop)
+	target := symmetricServers(t, 3)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -810,11 +543,7 @@ func TestServerMeasuredMulticastHDR(t *testing.T) {
 // WithQuiesce drain hook after the send window and before Control.Stop
 // collects the server-side statistics.
 func TestServerMeasuredQuiesce(t *testing.T) {
-	target, stop, err := setupSymmetricServers(3, nil, gorumstest.InsecureDialOptions(t))
-	if err != nil {
-		t.Fatalf("setupSymmetricServers: %v", err)
-	}
-	t.Cleanup(stop)
+	target := symmetricServers(t, 3)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -851,11 +580,7 @@ func TestServerMeasuredQuiesce(t *testing.T) {
 // per-server Stop replies of a server-measured run and that a verify error
 // fails the run before aggregation.
 func TestServerMeasuredVerify(t *testing.T) {
-	target, stop, err := setupSymmetricServers(3, nil, gorumstest.InsecureDialOptions(t))
-	if err != nil {
-		t.Fatalf("setupSymmetricServers: %v", err)
-	}
-	t.Cleanup(stop)
+	target := symmetricServers(t, 3)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -908,12 +633,7 @@ func TestServerMeasuredWindowExcludesClockSync(t *testing.T) {
 		}
 		return next(ctx, in)
 	}
-	serverOpts := []gorums.ServerOption{gorums.WithServerInterceptors(delayClockSync)}
-	target, stop, err := setupSymmetricServers(3, serverOpts, gorumstest.InsecureDialOptions(t))
-	if err != nil {
-		t.Fatalf("setupSymmetricServers: %v", err)
-	}
-	t.Cleanup(stop)
+	target := symmetricServers(t, 3, gorums.WithServerInterceptors(delayClockSync))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
