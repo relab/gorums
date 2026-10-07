@@ -116,34 +116,6 @@ func (c Config) Equal(b Config) bool {
 	return true
 }
 
-// mgr returns the outboundManager for this configuration's nodes.
-func (c Config) mgr() *outboundManager {
-	if len(c) == 0 {
-		return nil
-	}
-	return c[0].mgr
-}
-
-// WaitForAllRequired reports whether the configuration must wait for its peers
-// to connect before calls can proceed. That is only the case under stream
-// deduplication with a server's inbound manager attached, where a higher-ID
-// peer borrows a lower-ID peer's dialed stream and cannot dial it itself.
-func WaitForAllRequired(c Config) bool {
-	mgr := c.mgr()
-	return mgr != nil && mgr.opts.StreamDedup && mgr.opts.InboundMgr != nil
-}
-
-// ValidateStreamDedup reports a configuration error if the configuration is set
-// up for stream deduplication but the local node ID is missing or is not one of
-// the server's peers. It returns nil when stream dedup is not in effect.
-func ValidateStreamDedup(c Config) error {
-	mgr := c.mgr()
-	if mgr == nil {
-		return nil
-	}
-	return mgr.validateStreamDedup()
-}
-
 // Close closes all node connections managed by this configuration.
 func (c Config) Close() error {
 	if mgr := c.mgr(); mgr != nil {
@@ -345,6 +317,39 @@ func (c Config) WithoutErrors(err QuorumCallError, errorTypes ...error) Config {
 		}
 	}
 	return nodes
+}
+
+// mgr returns the outboundManager for this configuration's nodes.
+func (c Config) mgr() *outboundManager {
+	if len(c) == 0 {
+		return nil
+	}
+	return c[0].mgr
+}
+
+// WaitForAllRequired reports whether calls on c must wait for its peers to
+// connect. That is only the case under stream deduplication with a server's
+// inbound manager attached, where a higher-ID peer borrows a lower-ID peer's
+// dialed stream and cannot dial it itself. When waiting is required, it
+// returns an error if the local node ID is zero or is not one of the server's
+// peers.
+//
+// WaitForAllRequired must stay a function, not a method on [Config]: the root
+// package aliases Config as gorums.Config, so every exported Config method
+// becomes public API.
+func WaitForAllRequired(c Config) (bool, error) {
+	mgr := c.mgr()
+	if mgr == nil || !mgr.opts.StreamDedup || mgr.opts.InboundMgr == nil {
+		return false, nil
+	}
+	localID := mgr.opts.LocalNodeID
+	if localID == 0 {
+		return false, errors.New("gorums: stream dedup requires a nonzero local node ID")
+	}
+	if !mgr.opts.InboundMgr.isKnown(localID) {
+		return false, fmt.Errorf("gorums: stream dedup server peer configuration does not contain local node %d", localID)
+	}
+	return true, nil
 }
 
 type set[K comparable] map[K]struct{}

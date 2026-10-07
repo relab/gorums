@@ -308,11 +308,12 @@ func (s *Server) WaitForAll(ctx context.Context) (Config, error) {
 	if cfg == nil {
 		return nil, nil
 	}
-	if !conn.WaitForAllRequired(cfg) {
-		return cfg, nil
-	}
-	if err := conn.ValidateStreamDedup(cfg); err != nil {
+	required, err := conn.WaitForAllRequired(cfg)
+	if err != nil {
 		return nil, err
+	}
+	if !required {
+		return cfg, nil
 	}
 	if err := s.WaitForPeers(ctx, func(connected Config) bool {
 		return connected.Size() == cfg.Size()
