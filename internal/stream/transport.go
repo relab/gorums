@@ -103,7 +103,7 @@ func (t *Transport) Enqueue(req Request) {
 		if t != nil {
 			id = t.id
 		}
-		req.replyError(id, ErrStreamDown)
+		req.sendErrorResponse(id, ErrStreamDown)
 		return
 	}
 	ch.Enqueue(req)

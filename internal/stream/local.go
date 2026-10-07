@@ -28,11 +28,11 @@ func (c *LocalChannel) Enqueue(req Request) {
 		panic("gorums: Oneway and Streaming are mutually exclusive")
 	}
 	if err := req.Ctx.Err(); err != nil {
-		req.replyError(c.id, err)
+		req.sendErrorResponse(c.id, err)
 		return
 	}
 	if c.handler == nil {
-		req.replyError(c.id, status.Error(codes.Unimplemented, "no request handler registered"))
+		req.sendErrorResponse(c.id, status.Error(codes.Unimplemented, "no request handler registered"))
 		return
 	}
 	ctx := req.Msg.appendToIncomingContext(req.Ctx)
@@ -44,12 +44,12 @@ func (c *LocalChannel) Enqueue(req Request) {
 	run := func(release func()) { c.handler.HandleRequest(ctx, req.Msg, release, send) }
 	if req.wantServerResponse() {
 		if !c.requests.tryPush(run) {
-			req.replyError(c.id, ErrSendQueueFull)
+			req.sendErrorResponse(c.id, ErrSendQueueFull)
 		}
 		return
 	}
 	if !c.requests.push(req.Ctx, run) {
-		req.replyError(c.id, req.Ctx.Err())
+		req.sendErrorResponse(c.id, req.Ctx.Err())
 		return
 	}
 	if req.wantSendConfirmation() {
