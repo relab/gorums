@@ -392,6 +392,6 @@ func benchmarks(t BenchTarget) []benchkit.Bench {
 // RunBenchmarks runs all the benchmarks that match the given regex with the
 // given options against the target, delegating selection, the per-benchmark
 // metadata, and ordering to the benchkit harness.
-func RunBenchmarks(benchRegex *regexp.Regexp, options benchkit.Options, t BenchTarget) ([]*benchkit.Result, error) {
-	return benchkit.Run(benchRegex, options, benchmarks(t))
+func RunBenchmarks(benchRegex *regexp.Regexp, opts benchkit.Options, t BenchTarget) ([]*benchkit.Result, error) {
+	return benchkit.Run(benchRegex, opts, benchmarks(t))
 }
