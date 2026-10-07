@@ -61,18 +61,8 @@ var funcMap = template.FuncMap{
 	"isStreamingServer": func(method *protogen.Method) bool {
 		return method.Desc.IsStreamingServer()
 	},
-	"docName": func(method *protogen.Method) string {
-		_, info := callType(method)
-		if info != nil {
-			return info.docName
-		}
-		return "unknown"
-	},
 	"fullName": func(method *protogen.Method) string {
 		return fmt.Sprintf("/%s/%s", method.Parent.Desc.FullName(), method.Desc.Name())
-	},
-	"serviceName": func(method *protogen.Method) string {
-		return string(method.Parent.Desc.Name())
 	},
 	"in": func(g *protogen.GeneratedFile, method *protogen.Method) string {
 		return g.QualifiedGoIdent(method.Input.GoIdent)
@@ -84,8 +74,6 @@ var funcMap = template.FuncMap{
 	"mapAsyncOutType":       mapAsyncOutType,
 	"mapCorrectableOutType": mapCorrectableOutType,
 	"unexport":              unexport,
-	"contains":              strings.Contains,
-	"field":                 field,
 }
 
 type mapFunc func(*protogen.GeneratedFile, *protogen.Method, map[string]string)
