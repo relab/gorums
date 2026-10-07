@@ -73,8 +73,8 @@ func newRepl(cfg pb.Config) *repl {
 	}
 }
 
-// ReadLine reads a line from the terminal in raw mode.
-func (r repl) ReadLine() (string, error) {
+// readLine reads a line from the terminal in raw mode.
+func (r repl) readLine() (string, error) {
 	fd := int(os.Stdin.Fd())
 	oldState, err := term.MakeRaw(fd)
 	if err != nil {
@@ -90,14 +90,14 @@ func (r repl) ReadLine() (string, error) {
 	return r.term.ReadLine()
 }
 
-// Repl runs an interactive Read-eval-print loop, that allows users to run commands that perform
+// runRepl runs an interactive Read-eval-print loop, that allows users to run commands that perform
 // RPCs and quorum calls using the configuration.
-func Repl(defaultCfg pb.Config) error {
+func runRepl(defaultCfg pb.Config) error {
 	r := newRepl(defaultCfg)
 
 	fmt.Println(help)
 	for {
-		l, err := r.ReadLine()
+		l, err := r.readLine()
 		if errors.Is(err, io.EOF) {
 			return nil
 		}
