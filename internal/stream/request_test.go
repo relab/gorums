@@ -7,9 +7,6 @@ import (
 	"time"
 )
 
-// requestHandlerFunc adapts a function to [RequestHandler].
-type requestHandlerFunc func(context.Context, *Message, func(), func(*Message))
-
 func (f requestHandlerFunc) HandleRequest(ctx context.Context, msg *Message, release func(), send func(*Message)) {
 	f(ctx, msg, release, send)
 }

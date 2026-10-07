@@ -3,8 +3,13 @@ package stream
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
+	"testing/synctest"
 	"time"
+
+	"github.com/relab/gorums/internal/testutils/mock"
+	"google.golang.org/grpc/metadata"
 )
 
 // newTestSession returns a session over a mock stream; it is not started.
@@ -220,4 +225,180 @@ func TestSessionSendMarksSendInProgress(t *testing.T) {
 	if e.sendStart.Load() != 0 {
 		t.Error("completed send did not clear its start")
 	}
+}
+
+// TestSessionDispatchNotWedgedByReentrantReply verifies that a back-channel
+// handler can reply on a full send queue and still let the next request run:
+// the reply is dropped instead of waiting for space, the handler returns, and
+// the dispatcher starts the next request.
+func TestSessionDispatchNotWedgedByReentrantReply(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// The handler answers every request on the session it was dispatched
+		// on: the reentrant back-channel reply.
+		dispatched := make(chan uint64, 8)
+		replied := make(chan uint64, 8)
+		handler := requestHandlerFunc(func(_ context.Context, msg *Message, release func(), send func(*Message)) {
+			defer release()
+			dispatched <- msg.GetMessageSeqNo()
+			send(Message_builder{MessageSeqNo: msg.GetMessageSeqNo(), Method: mock.TestMethod}.Build())
+			replied <- msg.GetMessageSeqNo()
+		})
+
+		// Capacity 0: once the send loop is occupied in Send, the queue has
+		// no slack, so a reply would have to wait for space.
+		stream := newBlockingSendStream()
+		e := newEndpoint(context.Background(), 1, 0, 0, handler, nil)
+		ctx, cancel := context.WithCancel(e.ctx)
+		s := newSession(ctx, cancel, &e, stream, true, true)
+		go s.sendLoop(nil)
+		defer func() {
+			stream.close()
+			e.cancel()
+			synctest.Wait()
+		}()
+
+		// Occupy the send loop: this one-way request is handed to it, and it
+		// then blocks in Send on a transport that never drains.
+		e.Enqueue(Request{
+			Ctx:    context.Background(),
+			Oneway: true,
+			Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
+		})
+		synctest.Wait()
+
+		// Route a back-channel request as the receive loop does. The handler
+		// replies on the same, now-full queue.
+		first := ServerSequenceNumber(1)
+		s.handle(Message_builder{MessageSeqNo: first, Method: mock.TestMethod}.Build())
+		synctest.Wait()
+
+		if got := drain(replied); !slices.Equal(got, []uint64{first}) {
+			t.Fatalf("replied = %v, want [%d]: the reply blocked on a full send queue", got, first)
+		}
+		if got := e.DroppedReplies(); got != 1 {
+			t.Fatalf("DroppedReplies() = %d, want 1: the reply did not reach the full send queue", got)
+		}
+
+		// The first handler has returned, so the dispatcher runs the next
+		// request, whose reply is dropped the same way.
+		second := ServerSequenceNumber(2)
+		s.handle(Message_builder{MessageSeqNo: second, Method: mock.TestMethod}.Build())
+		synctest.Wait()
+
+		if got, want := drain(dispatched), []uint64{first, second}; !slices.Equal(got, want) {
+			t.Fatalf("dispatched = %v, want %v", got, want)
+		}
+		if got := drain(replied); !slices.Equal(got, []uint64{second}) {
+			t.Fatalf("replied = %v, want [%d]", got, second)
+		}
+		if got := e.DroppedReplies(); got != 2 {
+			t.Errorf("DroppedReplies() = %d, want 2", got)
+		}
+	})
+}
+
+// TestSessionHandleKeepsReadingWhileHandlerUnreleased verifies that the
+// receive loop can queue the next request and deliver a response while a
+// handler has not released, and that the second request still waits for that
+// release.
+func TestSessionHandleKeepsReadingWhileHandlerUnreleased(t *testing.T) {
+	releaseFirst := make(chan struct{})
+	started := make(chan uint64, 2)
+	handler := requestHandlerFunc(func(_ context.Context, msg *Message, release func(), _ func(*Message)) {
+		started <- msg.GetMessageSeqNo()
+		if msg.GetMessageSeqNo() == ServerSequenceNumber(1) {
+			<-releaseFirst
+		}
+		release()
+	})
+	s := newTestSession(t, 0, handler, true, true)
+
+	replyCh := make(chan response, 1)
+	s.pending.add(42, Request{
+		Ctx:          context.Background(),
+		Msg:          &Message{},
+		ResponseChan: replyCh,
+	})
+
+	readerDone := make(chan struct{})
+	go func() {
+		defer close(readerDone)
+		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build())
+		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(2), Method: mock.TestMethod}.Build())
+		s.handle(Message_builder{MessageSeqNo: 42, Method: mock.TestMethod}.Build())
+	}()
+
+	select {
+	case id := <-started:
+		if id != ServerSequenceNumber(1) {
+			t.Fatalf("first handler id = %d, want %d", id, ServerSequenceNumber(1))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("first handler did not start")
+	}
+
+	select {
+	case <-replyCh:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("reply was not delivered while a handler was unreleased")
+	}
+
+	select {
+	case id := <-started:
+		t.Fatalf("handler %d started before the first handler released", id)
+	default:
+	}
+
+	select {
+	case <-readerDone:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("reader blocked dispatching the next request behind an unreleased handler")
+	}
+
+	close(releaseFirst)
+
+	select {
+	case id := <-started:
+		if id != ServerSequenceNumber(2) {
+			t.Fatalf("second handler id = %d, want %d", id, ServerSequenceNumber(2))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("second handler did not start after the first handler released")
+	}
+}
+
+// TestSessionHandleBackChannel verifies how an outbound session routes a
+// server-initiated request and an unknown response.
+func TestSessionHandleBackChannel(t *testing.T) {
+	t.Run("HandlerSeesMessageMetadata", func(t *testing.T) {
+		const key, want = "request-id", "dedup-metadata"
+		handlerMD := make(chan metadata.MD, 1)
+		handler := requestHandlerFunc(func(ctx context.Context, _ *Message, release func(), _ func(*Message)) {
+			defer release()
+			md, _ := metadata.FromIncomingContext(ctx)
+			handlerMD <- md
+		})
+		s := newTestSession(t, 0, handler, true, true)
+
+		msgCtx := metadata.NewOutgoingContext(t.Context(), metadata.Pairs(key, want))
+		msg, err := NewMessage(msgCtx, ServerSequenceNumber(1), mock.TestMethod, nil)
+		if err != nil {
+			t.Fatalf("NewMessage: %v", err)
+		}
+		s.handle(msg)
+		select {
+		case md := <-handlerMD:
+			if got := md.Get(key); len(got) != 1 || got[0] != want {
+				t.Fatalf("incoming metadata %q = %v, want [%q]", key, got, want)
+			}
+		case <-time.After(defaultTestTimeout):
+			t.Fatal("handler was not called")
+		}
+	})
+
+	t.Run("NoHandlerOrUnknownIDIsDropped", func(t *testing.T) {
+		s := newTestSession(t, 0, nil, true, true)
+		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build())
+		s.handle(Message_builder{MessageSeqNo: 999, Method: mock.TestMethod}.Build())
+	})
 }
