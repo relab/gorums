@@ -10,38 +10,9 @@ func TestTickerNilBufferSafe(t *testing.T) {
 	tk := NewTicker(0, s) // interval=0: no buffer, no goroutine
 	tk.Start(100)
 	tk.RateStep(200)
-	cv := tk.Stop()
-	if cv != 0 {
-		t.Errorf("cv = %v, want 0 (no ticks)", cv)
-	}
+	tk.Stop()
 	if tk.Events() != nil {
 		t.Error("Events() should be nil when interval == 0")
-	}
-}
-
-func TestTickerCVComputation(t *testing.T) {
-	s := NewStats(StatsMode_EXACT)
-	tk := NewTicker(0, s) // interval=0: no background goroutine
-	// Inject synthetic throughput samples directly to test CV arithmetic.
-	tk.updateCV(100)
-	tk.updateCV(200)
-	tk.updateCV(150)
-	cv := tk.cv()
-	// mean=150, stddev(sample)=50, cv=50/150≈0.333
-	const wantCV = 50.0 / 150.0
-	const eps = 1e-9
-	diff := cv - wantCV
-	if diff < -eps || diff > eps {
-		t.Errorf("cv = %v, want %v", cv, wantCV)
-	}
-}
-
-func TestTickerCVZeroWhenFewTicks(t *testing.T) {
-	s := NewStats(StatsMode_EXACT)
-	tk := NewTicker(0, s)
-	tk.updateCV(100) // only one sample
-	if cv := tk.cv(); cv != 0 {
-		t.Errorf("cv = %v, want 0 with single sample", cv)
 	}
 }
 
@@ -122,7 +93,7 @@ func TestTickerWithIntervalEmitsEvents(t *testing.T) {
 }
 
 // TestTickerRateStepConcurrentWithTicksIsRaceFree exercises the rate-ramping
-// path (T4): RateStep is called from the caller's goroutine while the
+// path: RateStep is called from the caller's goroutine while the
 // background ticker goroutine concurrently emits throughput/latency events
 // into the same eventBuffer. Run with -race to catch regressions.
 func TestTickerRateStepConcurrentWithTicksIsRaceFree(t *testing.T) {

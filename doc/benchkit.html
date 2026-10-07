@@ -806,8 +806,7 @@
 
         <p>The <code>Ticker</code> (<code>benchkit/ticker.go</code>) drives the interval stream. It ticks at the
             configured interval, snapshots the per-interval Welford state from <code>Stats</code>, emits the interval
-            events to the <code>EventBuffer</code> it owns, and accumulates a second-level Welford over per-interval
-            throughput for a whole-run coefficient of variation.</p>
+            events to the <code>EventBuffer</code> it owns.</p>
         <pre>
 <span class="c">// NewTicker allocates an EventBuffer when interval > 0; interval == 0
 // disables event collection entirely (no buffer, no goroutine).</span>
@@ -820,9 +819,8 @@
 <span class="c">// RateStep emits RATE_STEP with the new offered load (rate ramping, §7).</span>
 <span class="k">func</span> (t *Ticker) RateStep(rate int64)
 
-<span class="c">// Stop stops the goroutine, emits STOP, and returns the whole-run
-// throughput CV (0 if fewer than two intervals).</span>
-<span class="k">func</span> (t *Ticker) Stop() (throughputCV float64)
+<span class="c">// Stop stops the goroutine and emits STOP.</span>
+<span class="k">func</span> (t *Ticker) Stop()
 
 <span class="c">// Events returns the buffered events for Result.SetEvents; nil when
 // interval == 0.</span>
@@ -833,9 +831,8 @@
             least one sample. On shutdown the goroutine flushes the partial interval between the last tick and
             <code>Stop</code> (an empty tail emits nothing), so the summed interval ops always equal the recorded ops;
             the tail interval can be much shorter than the tick interval, so consumers derive per-interval throughput
-            from the recorded <code>duration</code>, never the configured interval. The whole-run CV returned by
-            <code>Stop</code> is available for logging; the persisted time series lets consumers compute a CV over any
-            window they choose (<a href="#trim">§10</a>).</p>
+            from the recorded <code>duration</code>, never the configured interval. The persisted time series lets
+            consumers compute a throughput CV over any window they choose (<a href="#trim">§10</a>).</p>
 
         <hr>
 
