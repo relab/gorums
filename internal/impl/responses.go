@@ -28,7 +28,7 @@ func mapToCallResponse[Resp proto.Message](channelResp NodeResponse[*stream.Mess
 		} else if val, ok := respMsg.(Resp); ok {
 			callResp.Value = val
 		} else {
-			callResp.Err = stream.ErrTypeMismatch
+			callResp.Err = ErrTypeMismatch
 		}
 	}
 	return callResp
