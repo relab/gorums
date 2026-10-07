@@ -1,6 +1,7 @@
 // Package mock registers a mock service descriptor in the global protobuf
 // registry, so tests can call its methods through the Gorums runtime without
-// a generated service definition.
+// a generated service definition. It also provides test doubles and helpers
+// shared by the tests of several packages.
 package mock
 
 import (
