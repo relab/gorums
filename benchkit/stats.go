@@ -182,7 +182,7 @@ type Stats struct {
 	iMean    float64
 	iM2      float64 // sum of squared deviations
 	iCount   uint64  // samples in the current interval
-	opCount  uint64  // total ops recorded since the last Clear
+	opCount  uint64  // total ops recorded since the last Reset
 	iOpStart uint64  // opCount at the start of the current interval
 }
 
@@ -250,7 +250,7 @@ func (s *Stats) AddOp() {
 	s.mut.Unlock()
 }
 
-// Ops returns the total number of operations recorded since the last Clear,
+// Ops returns the total number of operations recorded since the last Reset,
 // regardless of how they were recorded (AddLatency, AddOp, or
 // AddLatencyBySender). Server-measured runners use it to derive client-side
 // per-op statistics from the client's own send count.
@@ -264,7 +264,7 @@ func (s *Stats) Ops() uint64 {
 // resets it for the next interval. It returns the mean latency in nanoseconds,
 // the sample standard deviation in nanoseconds, the number of latency samples
 // in the interval, and the total op delta (total ops recorded via AddOp or
-// AddLatency since the last call to TickInterval or Clear). mean, stddev, and
+// AddLatency since the last call to TickInterval or Reset). mean, stddev, and
 // count are zero if no latency samples were recorded in the interval, but
 // opDelta reflects op-only intervals (server-measured runs record ops via
 // AddOp without a latency sample). Called by the Ticker goroutine on each
@@ -416,17 +416,10 @@ func (s *Stats) MemDelta() (mallocs, totalAlloc uint64) {
 		s.endMs.TotalAlloc - s.startMs.TotalAlloc
 }
 
-// Clear zeroes out all stats, including the aggregate store and the
-// per-interval Welford accumulator, keeping the current store mode.
-func (s *Stats) Clear() {
-	s.mut.Lock()
-	s.resetLocked(s.mode)
-	s.mut.Unlock()
-}
-
-// Reset zeroes out all stats and (re)configures the aggregate and per-sender
-// stores to mode, so one Stats can back consecutive runs, including runs that
-// select a different StatsMode. It is the mode-aware form of Clear.
+// Reset zeroes out all stats, including the aggregate store and the
+// per-interval Welford accumulator, and (re)configures the aggregate and
+// per-sender stores to mode, so one Stats can back consecutive runs, including
+// runs that select a different StatsMode.
 func (s *Stats) Reset(mode StatsMode) {
 	s.mut.Lock()
 	s.resetLocked(mode)
