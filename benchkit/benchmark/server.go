@@ -56,11 +56,11 @@ func attachBenchServer(srv *gorums.Server) *benchkit.Control {
 // gorums workload service on one listener.
 type Server struct {
 	*gorums.Server
-	ctrl *benchkit.Control
 }
 
 // NewBenchServer returns a new benchmark server.
 func NewBenchServer(opts ...gorums.ServerOption) *Server {
 	srv := gorums.NewServer(opts...)
-	return &Server{Server: srv, ctrl: attachBenchServer(srv)}
+	attachBenchServer(srv)
+	return &Server{Server: srv}
 }
