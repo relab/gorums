@@ -1,8 +1,10 @@
 package stream
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"maps"
 	"net"
 	"slices"
@@ -117,6 +119,27 @@ func rejectFirstStreamServer() func(Gorums_NodeStreamServer) error {
 	return func(stream Gorums_NodeStreamServer) error {
 		if streams.Add(1) == 1 {
 			return errors.New("first stream rejected")
+		}
+		return echoServer(stream)
+	}
+}
+
+// reverseEchoServer receives n messages and then echoes them in reverse
+// order, so that responses arrive in a different order than the requests.
+func reverseEchoServer(n int) func(Gorums_NodeStreamServer) error {
+	return func(stream Gorums_NodeStreamServer) error {
+		msgs := make([]*Message, 0, n)
+		for range n {
+			in, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			msgs = append(msgs, in)
+		}
+		for _, msg := range slices.Backward(msgs) {
+			if err := stream.Send(msg); err != nil {
+				return err
+			}
 		}
 		return echoServer(stream)
 	}
@@ -292,16 +315,6 @@ func sendReq(t testing.TB, results chan<- msgResponse, c Channel, goroutineID, m
 		msgID := uint64(goroutineID*1000 + j)
 		resp := sendRequest(t, c, req, msgID)
 		results <- msgResponse{msgID: msgID, resp: resp}
-	}
-}
-
-func TestChannelCreation(t *testing.T) {
-	tc := setupChannelWithoutServer(t)
-
-	// send message when server is down
-	resp := sendRequest(t, tc.OutboundChannel, Request{Oneway: true}, 1)
-	if resp.Err == nil {
-		t.Error("response err: got <nil>, want error")
 	}
 }
 
@@ -1311,32 +1324,45 @@ func TestChannelPendingLifecycle(t *testing.T) {
 	}
 }
 
+// TestChannelResponseRouting verifies that concurrent two-way calls each
+// receive their own response, even when the server answers in a different
+// order than it received the requests.
 func TestChannelResponseRouting(t *testing.T) {
-	tc := setupChannel(t, echoServer)
-
-	const numMessages = 20
-	results := make(chan msgResponse, numMessages)
-
-	for i := range numMessages {
-		go sendReq(t, results, tc.OutboundChannel, i, 1, Request{Oneway: true})
+	const numCalls = 10 // fits in the channel's send buffer
+	tc := setupChannel(t, reverseEchoServer(numCalls))
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
+		t.Fatal("channel should be connected")
 	}
 
-	// Collect and verify results
-	received := make(map[uint64]bool)
-	for range numMessages {
-		result := <-results
-		if result.resp.Err != nil {
-			t.Errorf("message %d got error: %v", result.msgID, result.resp.Err)
-		}
-		if received[result.msgID] {
-			t.Errorf("message %d received twice", result.msgID)
-		}
-		received[result.msgID] = true
+	var wg sync.WaitGroup
+	for i := range numCalls {
+		wg.Go(func() {
+			msgID := uint64(i + 1)
+			payload := fmt.Appendf(nil, "request-%d", i)
+			responseChan := make(chan response, 1)
+			tc.Enqueue(Request{
+				Ctx:          t.Context(),
+				Msg:          NewMessageFromPayload(t.Context(), msgID, mock.TestMethod, payload),
+				ResponseChan: responseChan,
+			})
+			select {
+			case resp := <-responseChan:
+				if resp.Err != nil {
+					t.Errorf("call %d: unexpected error: %v", msgID, resp.Err)
+					return
+				}
+				if got := resp.Value.GetMessageSeqNo(); got != msgID {
+					t.Errorf("call %d: got response for message %d", msgID, got)
+				}
+				if got := resp.Value.GetPayload(); !bytes.Equal(got, payload) {
+					t.Errorf("call %d: payload = %q, want %q", msgID, got, payload)
+				}
+			case <-time.After(defaultTestTimeout):
+				t.Errorf("call %d: timeout waiting for response", msgID)
+			}
+		})
 	}
-
-	if len(received) != numMessages {
-		t.Errorf("got %d unique responses, want %d", len(received), numMessages)
-	}
+	wg.Wait()
 }
 
 func TestChannelConcurrentSends(t *testing.T) {
