@@ -9,7 +9,7 @@ import (
 	"github.com/relab/gorums/benchkit"
 )
 
-// SetupTarget builds the BenchTarget for one of the three run modes and fills
+// SetupTarget builds the Target for one of the three run modes and fills
 // in the topology-derived Options fields (Remote, NumNodes):
 //
 //   - distributed: self is this node's listen address and remotes lists all
@@ -24,7 +24,7 @@ import (
 // defer) once the benchmarks finish. In distributed mode the caller must also
 // linger for ExitGrace before invoking cleanup, so slower peers can finish
 // their trailing cross-node RPCs before this node closes its listener.
-func SetupTarget(opts *benchkit.Options, self string, remotes []string, configSize int, dialOpts ...gorums.DialOption) (BenchTarget, func(), error) {
+func SetupTarget(opts *benchkit.Options, self string, remotes []string, configSize int, dialOpts ...gorums.DialOption) (Target, func(), error) {
 	switch {
 	case self != "":
 		return setupDistributed(opts, self, remotes, dialOpts)
@@ -37,8 +37,8 @@ func SetupTarget(opts *benchkit.Options, self string, remotes []string, configSi
 
 // setupDistributed builds the symmetric peer-to-peer target for one node of a
 // distributed run and waits until every peer is reachable.
-func setupDistributed(opts *benchkit.Options, self string, remotes []string, dialOpts []gorums.DialOption) (BenchTarget, func(), error) {
-	var target BenchTarget
+func setupDistributed(opts *benchkit.Options, self string, remotes []string, dialOpts []gorums.DialOption) (Target, func(), error) {
+	var target Target
 	if len(remotes) < 2 {
 		return target, nil, fmt.Errorf("distributed mode requires at least 2 remotes (including self)")
 	}
@@ -78,8 +78,8 @@ func setupDistributed(opts *benchkit.Options, self string, remotes []string, dia
 
 // setupLocal builds the symmetric target backed by configSize in-process
 // servers.
-func setupLocal(opts *benchkit.Options, configSize int, dialOpts []gorums.DialOption) (BenchTarget, func(), error) {
-	var target BenchTarget
+func setupLocal(opts *benchkit.Options, configSize int, dialOpts []gorums.DialOption) (Target, func(), error) {
+	var target Target
 	if configSize < 1 {
 		return target, nil, fmt.Errorf("local mode requires config-size >= 1, got %d", configSize)
 	}
@@ -125,8 +125,8 @@ func awaitStreamDedup(ctx context.Context, t *SymmetricTarget) error {
 
 // setupCoordinator builds the traditional coordinator-side configuration
 // against the given remote servers.
-func setupCoordinator(opts *benchkit.Options, remotes []string, configSize int, dialOpts []gorums.DialOption) (BenchTarget, func(), error) {
-	var target BenchTarget
+func setupCoordinator(opts *benchkit.Options, remotes []string, configSize int, dialOpts []gorums.DialOption) (Target, func(), error) {
+	var target Target
 	opts.Remote = true
 	numNodes := len(remotes)
 	if configSize < 1 || configSize > numNodes {

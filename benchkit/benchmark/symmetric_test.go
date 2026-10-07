@@ -65,12 +65,12 @@ func localServers(t *testing.T, n int, serverOpt gorums.ServerOption) []*gorums.
 	return servers
 }
 
-// benchTarget wraps one server as a single-server SymmetricTarget with the
+// singleServerTarget wraps one server as a single-server SymmetricTarget with the
 // benchkit Control plane and workload server attached, so it can be passed to
 // awaitReady and the other per-node setup helpers. numPeers is the full cluster
 // size (arms Done tracking and sizes the exit grace period). Call before
 // serving srv, since attaching registers services.
-func benchTarget(srv *gorums.Server, numPeers int) *SymmetricTarget {
+func singleServerTarget(srv *gorums.Server, numPeers int) *SymmetricTarget {
 	ctrl := attachBenchServer(srv)
 	ctrl.ArmDone(numPeers) // match setupRemoteServer, which arms Done tracking for the exit barrier
 	return &SymmetricTarget{
@@ -92,7 +92,7 @@ func localSymmetricTargets(t *testing.T, n int, serverOpt gorums.ServerOption) [
 	servers := localServers(t, n, serverOpt)
 	targets := make([]*SymmetricTarget, n)
 	for i, srv := range servers {
-		targets[i] = benchTarget(srv, n)
+		targets[i] = singleServerTarget(srv, n)
 	}
 	for _, srv := range servers {
 		go func() { _ = srv.ListenAndServe() }()
@@ -440,7 +440,7 @@ func TestSymmetricRunOver(t *testing.T) {
 // node 2 must retry across that gap rather than fail readiness.
 func TestAwaitReadyStaggeredRemoteStartup(t *testing.T) {
 	servers := localServers(t, 2, nil)
-	target1, target2 := benchTarget(servers[0], 2), benchTarget(servers[1], 2)
+	target1, target2 := singleServerTarget(servers[0], 2), singleServerTarget(servers[1], 2)
 
 	go func() { _ = servers[0].ListenAndServe() }()
 	time.Sleep(500 * time.Millisecond)
@@ -480,7 +480,7 @@ func TestAwaitReadyProbeRetriesDroppedReply(t *testing.T) {
 
 	// node 1 probes; node 2 drops one reply.
 	servers := localServers(t, 2, nil)
-	target := benchTarget(servers[0], 2)
+	target := singleServerTarget(servers[0], 2)
 	registerReplyDroppingPeer(servers[1], 1)
 	for _, srv := range servers {
 		go func() { _ = srv.ListenAndServe() }()
@@ -513,7 +513,7 @@ func TestAwaitReadyProbeFailsFastOnSilentPeer(t *testing.T) {
 
 	// node 1 probes; node 2 never answers echoes.
 	servers := localServers(t, 2, nil)
-	target := benchTarget(servers[0], 2)
+	target := singleServerTarget(servers[0], 2)
 	registerReplyDroppingPeer(servers[1], math.MaxInt64)
 	for _, srv := range servers {
 		go func() { _ = srv.ListenAndServe() }()
@@ -551,7 +551,7 @@ func TestAwaitReadyReportsMissingRemotePeers(t *testing.T) {
 	servers := localServers(t, 2, nil)
 	node2Addr := servers[1].Addr()
 	servers[1].Stop()
-	target := benchTarget(servers[0], 2)
+	target := singleServerTarget(servers[0], 2)
 	go func() { _ = servers[0].ListenAndServe() }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -589,7 +589,7 @@ func TestAwaitReadyFailsFastOnStalledPeer(t *testing.T) {
 	servers := localServers(t, 2, nil)
 	node1Addr, node2Addr := servers[0].Addr(), servers[1].Addr()
 	servers[1].Stop()
-	target := benchTarget(servers[0], 2)
+	target := singleServerTarget(servers[0], 2)
 	go func() { _ = servers[0].ListenAndServe() }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -656,8 +656,8 @@ func TestRunSymmetricQuorumCallDefaultsToMajority(t *testing.T) {
 // of failing the whole benchmark.
 func TestRunSymmetricQuorumCallStragglerEndsCleanly(t *testing.T) {
 	servers := localServers(t, 2, nil)
-	target := benchTarget(servers[0], 2) // numPeers=2 arms Done tracking for IDs 1 and 2
-	target2 := benchTarget(servers[1], 2)
+	target := singleServerTarget(servers[0], 2) // numPeers=2 arms Done tracking for IDs 1 and 2
+	target2 := singleServerTarget(servers[1], 2)
 	go func() { _ = servers[0].ListenAndServe() }()
 	go func() { _ = servers[1].ListenAndServe() }()
 
@@ -714,7 +714,7 @@ func TestRunSymmetricQuorumCallStragglerEndsCleanly(t *testing.T) {
 // path.
 func TestRunSymmetricQuorumCallHonorsCallTimeout(t *testing.T) {
 	servers := localServers(t, 2, nil)
-	target := benchTarget(servers[0], 2)
+	target := singleServerTarget(servers[0], 2)
 	// Node 2 drops every reply from the start, mirroring
 	// TestQuorumCallHonorsCallTimeout: a call without CallTimeout would hang
 	// until BenchContext's own (30s+) deadline instead of the short one

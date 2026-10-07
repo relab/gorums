@@ -15,8 +15,8 @@ import (
 	"github.com/relab/gorums/gorumstest"
 )
 
-func TestBenchmarkDescriptions(t *testing.T) {
-	descs := BenchmarkDescriptions()
+func TestDescriptions(t *testing.T) {
+	descs := Descriptions()
 	wantNames := []string{
 		"QuorumCall",
 		"AsyncQuorumCall",
@@ -48,11 +48,11 @@ func TestBenchmarksTargetRouting(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		t     BenchTarget
+		t     Target
 		count int
 	}{
-		{"empty", BenchTarget{}, 0},
-		{"symmetric only", BenchTarget{Symmetric: symTarget}, 2},
+		{"empty", Target{}, 0},
+		{"symmetric only", Target{Symmetric: symTarget}, 2},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -81,7 +81,7 @@ func TestBenchmarksExcludesConfigBenchmarksForDistributedTarget(t *testing.T) {
 	}
 	t.Cleanup(stop)
 
-	got := benchmarks(BenchTarget{Symmetric: target})
+	got := benchmarks(Target{Symmetric: target})
 	for _, b := range got {
 		if b.Name == "QuorumCall" || b.Name == "Multicast" || b.Name == "AsyncMulticast" || b.Name == "AsyncQuorumCall" || b.Name == "SlowServer" {
 			t.Errorf("benchmarks(distributed target) included needsConfig benchmark %q, want excluded", b.Name)
@@ -95,7 +95,7 @@ func TestBenchmarksExcludesConfigBenchmarksForDistributedTarget(t *testing.T) {
 
 // TestBenchmarksMatchesDescriptionsForFullTarget verifies that a target
 // exposing both a Config and a SymmetricTarget produces exactly the
-// runnable benchmarks BenchmarkDescriptions lists, by name and count: both
+// runnable benchmarks Descriptions lists, by name and count: both
 // views are derived from the one benchDescs table (see benchmark.go), so
 // they cannot drift the way two hand-written lists could.
 func TestBenchmarksMatchesDescriptionsForFullTarget(t *testing.T) {
@@ -104,19 +104,19 @@ func TestBenchmarksMatchesDescriptionsForFullTarget(t *testing.T) {
 	// Symmetric alone is enough: benchmarks derives cfg from server 0's
 	// outbound config when t.Config is unset, so needsConfig benchmarks are
 	// also included.
-	got := benchmarks(BenchTarget{Symmetric: target})
+	got := benchmarks(Target{Symmetric: target})
 	gotNames := make(map[string]bool, len(got))
 	for _, b := range got {
 		gotNames[b.Name] = true
 	}
 
-	wantDescs := BenchmarkDescriptions()
+	wantDescs := Descriptions()
 	if len(got) != len(wantDescs) {
-		t.Fatalf("benchmarks returned %d benchmarks, want %d (BenchmarkDescriptions)", len(got), len(wantDescs))
+		t.Fatalf("benchmarks returned %d benchmarks, want %d (Descriptions)", len(got), len(wantDescs))
 	}
 	for _, d := range wantDescs {
 		if !gotNames[d.Name] {
-			t.Errorf("BenchmarkDescriptions lists %q but benchmarks did not return it", d.Name)
+			t.Errorf("Descriptions lists %q but benchmarks did not return it", d.Name)
 		}
 	}
 }
@@ -487,7 +487,7 @@ func TestAsyncMulticastBenchmarkRuns(t *testing.T) {
 		t.Fatalf("awaitReady: %v", err)
 	}
 
-	benches := benchmarks(BenchTarget{Config: target.servers[0].PeerConfig()})
+	benches := benchmarks(Target{Config: target.servers[0].PeerConfig()})
 	idx := slices.IndexFunc(benches, func(b benchkit.Bench) bool { return b.Name == "AsyncMulticast" })
 	if idx < 0 {
 		t.Fatal("AsyncMulticast benchmark not registered")

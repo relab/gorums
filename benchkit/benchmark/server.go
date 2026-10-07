@@ -58,8 +58,8 @@ type Server struct {
 	*gorums.Server
 }
 
-// NewBenchServer returns a new benchmark server.
-func NewBenchServer(opts ...gorums.ServerOption) *Server {
+// NewServer returns a new benchmark server.
+func NewServer(opts ...gorums.ServerOption) *Server {
 	srv := gorums.NewServer(opts...)
 	attachBenchServer(srv)
 	return &Server{Server: srv}
