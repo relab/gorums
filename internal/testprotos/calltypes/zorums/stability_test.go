@@ -1,7 +1,6 @@
 package zorums_test
 
 import (
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,28 +48,22 @@ func moveFiles(t *testing.T, glob, toDir string) {
 
 func moveFile(t *testing.T, from, to string) {
 	t.Helper()
-	err := os.Rename(from, to)
+	if err := os.Rename(from, to); err == nil {
+		return
+	}
+	// Rename fails across devices, so copy and remove instead.
+	s, err := os.Stat(from)
 	if err != nil {
-		// Rename may fail if renaming across devices, so try copy instead
-		s, err := os.Stat(from)
-		if err != nil {
-			t.Fatal(err)
-		}
-		fromFile, err := os.Open(from)
-		if err != nil {
-			t.Fatal(err)
-		}
-		toFile, err := os.OpenFile(to, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, s.Mode())
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, err = io.Copy(toFile, fromFile)
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = os.Remove(from)
-		if err != nil {
-			t.Fatal(err)
-		}
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(from)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(to, data, s.Mode()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(from); err != nil {
+		t.Fatal(err)
 	}
 }
