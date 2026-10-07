@@ -32,7 +32,7 @@ func (quorumCallServer) QuorumCall(_ gorums.ServerContext, req *dev.Request) (*d
 	return resp, nil
 }
 
-func newQuorumCallServer(_ int) gorums.ServerIface {
+func newQuorumCallServer(_ int) gorumstest.ServerIface {
 	srv := gorums.NewServer()
 	dev.RegisterZorumsServiceServer(srv, quorumCallServer{})
 	return srv

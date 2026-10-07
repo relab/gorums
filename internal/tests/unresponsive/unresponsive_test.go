@@ -17,7 +17,7 @@ func (testSrv) TestUnresponsive(ctx gorums.ServerContext, _ *Empty) (resp *Empty
 	return nil, nil
 }
 
-func serverFn(_ int) gorums.ServerIface {
+func serverFn(_ int) gorumstest.ServerIface {
 	gorumsSrv := gorums.NewServer()
 	RegisterUnresponsiveServer(gorumsSrv, &testSrv{})
 	return gorumsSrv

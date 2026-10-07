@@ -102,13 +102,6 @@ func DialOptions(t testing.TB) gorums.DialOption {
 	return gorums.WithGRPCDialOptions(servers.DialOptions(t)...)
 }
 
-// startServers starts numServers servers via srvFn, adapting srvFn's
-// [gorums.ServerIface] result to the structurally identical
-// [servers.ServerIface].
-func startServers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface) ([]string, func(...int)) {
-	return servers.Start(t, numServers, func(i int) servers.ServerIface { return srvFn(i) })
-}
-
 // Config creates servers and a configuration for testing.
 // Both server and configuration cleanup are handled via t.Cleanup in the correct
 // order: the configuration is closed first, then servers are stopped.
@@ -123,7 +116,7 @@ func startServers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerI
 //
 // This is the recommended way to set up tests that need both servers and a configuration.
 // It ensures proper cleanup and detects goroutine leaks.
-func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, opts ...Option) gorums.Config {
+func Config(t testing.TB, numServers int, srvFn func(i int) ServerIface, opts ...Option) gorums.Config {
 	t.Helper()
 
 	testOpts := extractTestOptions(opts)
@@ -135,7 +128,7 @@ func Config(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface, 
 	}
 
 	// Start servers and register cleanup.
-	addrs, stopFn := startServers(t, numServers, testOpts.serverFunc(srvFn))
+	addrs, stopFn := servers.Start(t, numServers, testOpts.serverFunc(srvFn))
 	stopAllFn := func() { stopFn() } // wrap to call without arguments to stop all servers
 	t.Cleanup(stopAllFn)
 
@@ -189,7 +182,7 @@ func UnreachableConfig(t testing.TB, addrs ...string) gorums.Config {
 //
 // This is the recommended way to set up tests that need only a single server node.
 // It ensures proper cleanup and detects goroutine leaks.
-func Node(t testing.TB, srvFn func(i int) gorums.ServerIface, opts ...Option) *gorums.Node {
+func Node(t testing.TB, srvFn func(i int) ServerIface, opts ...Option) *gorums.Node {
 	t.Helper()
 	return Config(t, 1, srvFn, opts...).Nodes()[0]
 }
@@ -215,7 +208,7 @@ func Node(t testing.TB, srvFn func(i int) gorums.ServerIface, opts ...Option) *g
 // This function can be used by other packages for testing purposes, as long as
 // the required service, method, and message types are registered in the global
 // protobuf registry before calling this function.
-func Servers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface) []string {
+func Servers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []string {
 	t.Helper()
 	// Skip goleak check for benchmarks
 	if _, ok := t.(*testing.B); !ok {
@@ -225,7 +218,7 @@ func Servers(t testing.TB, numServers int, srvFn func(i int) gorums.ServerIface)
 	if srvFn == nil {
 		srvFn = DefaultServer
 	}
-	addrs, stopFn := startServers(t, numServers, srvFn)
+	addrs, stopFn := servers.Start(t, numServers, srvFn)
 	// Register server cleanup SECOND so it runs BEFORE goleak check
 	t.Cleanup(func() { stopFn() }) // wrap to call without arguments to stop all servers
 	return addrs
