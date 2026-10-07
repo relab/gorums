@@ -45,16 +45,24 @@ func NewMessageFromPayload(ctx context.Context, msgID uint64, method string, pay
 
 // AppendToIncomingContext appends client-specific metadata from the [Message] proto message
 // to the incoming gRPC context, allowing server implementations to extract and use said
-// metadata directly from the server method's context.
+// metadata directly from the server method's context. It never modifies ctx's own metadata,
+// and it returns ctx unchanged when the message has no metadata entries.
 //
 // This method is intended for Gorums internal use.
 func (x *Message) AppendToIncomingContext(ctx context.Context) context.Context {
-	existingMD, _ := metadata.FromIncomingContext(ctx)
-	newMD := existingMD.Copy() // copy to avoid mutating the original
-	for _, entry := range x.GetEntry() {
-		newMD.Append(entry.GetKey(), entry.GetValue())
+	entries := x.GetEntry()
+	if len(entries) == 0 {
+		return ctx
 	}
-	return metadata.NewIncomingContext(ctx, newMD)
+	// FromIncomingContext returns a copy, so appending leaves ctx's metadata unchanged.
+	md, _ := metadata.FromIncomingContext(ctx)
+	if md == nil {
+		md = make(metadata.MD, len(entries))
+	}
+	for _, entry := range entries {
+		md.Append(entry.GetKey(), entry.GetValue())
+	}
+	return metadata.NewIncomingContext(ctx, md)
 }
 
 func (x *Message) ErrorStatus() error {
