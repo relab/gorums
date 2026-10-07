@@ -169,7 +169,7 @@ func TestSessionDrainEndsWhenCallerIsDone(t *testing.T) {
 }
 
 // TestLastErrReportsStalledSend verifies that LastErr reports ErrSendStalled
-// while a send has been blocked for StallReportDelay or longer, and otherwise
+// while a send has been blocked for stallReportDelay or longer, and otherwise
 // the outcome of the latest stream operation.
 func TestLastErrReportsStalledSend(t *testing.T) {
 	streamErr := errors.New("stream broken")
