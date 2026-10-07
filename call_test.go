@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -178,7 +177,7 @@ func TestOnewayCallAsyncReportsSendError(t *testing.T) {
 	if err := gorumsimpl.Multicast(ctx, pb.String("warmup"), mock.TestMethod).Send(); err != nil {
 		t.Fatalf("warmup: %v", err)
 	}
-	stopNodes(slices.Collect(gorumstest.Range(numServers))...)
+	stopNodes() // stop all servers
 
 	// Retry until the torn-down streams are observed, as the quorum-call
 	// failure tests do; the send fails once the stream is gone, not the

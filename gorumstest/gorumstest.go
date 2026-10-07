@@ -10,7 +10,6 @@ package gorumstest
 import (
 	"context"
 	"io"
-	"iter"
 	"testing"
 	"time"
 
@@ -284,17 +283,6 @@ func Closer(t testing.TB, c io.Closer) func() {
 	return func() {
 		if err := c.Close(); err != nil {
 			t.Errorf("c.Close() = %q, expected no error", err.Error())
-		}
-	}
-}
-
-// Range yields the integers [0, n).
-func Range(n int) iter.Seq[int] {
-	return func(yield func(int) bool) {
-		for i := range n {
-			if !yield(i) {
-				return
-			}
 		}
 	}
 }
