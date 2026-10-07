@@ -41,7 +41,7 @@ func (testSrv) WhatIP(ctx gorums.ServerContext, _ *emptypb.Empty) (resp *IPAddr,
 	return IPAddr_builder{Addr: peerInfo.Addr.String()}.Build(), nil
 }
 
-func serverFn(_ int) gorums.ServerIface {
+func serverFn(_ int) gorumstest.ServerIface {
 	srv := gorums.NewServer()
 	RegisterMetadataTestServer(srv, &testSrv{})
 	return srv

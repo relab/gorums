@@ -6,19 +6,25 @@ import (
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/testutils/mock"
+	"github.com/relab/gorums/internal/testutils/servers"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+// ServerIface is the interface a server must implement to be started by
+// [Config], [Node], or [Servers]. [gorums.Server] implements it, as does a
+// gRPC server.
+type ServerIface = servers.ServerIface
+
 // DefaultServer returns a mock server implementation suitable for use as
 // the srvFn argument to [Config], [Node], or [Servers].
-func DefaultServer(i int) gorums.ServerIface {
+func DefaultServer(i int) ServerIface {
 	return defaultTestServer(i)
 }
 
 // defaultTestServer creates a test server with optional server options.
 // It backs both [DefaultServer] and the test helpers when server options
 // are provided.
-func defaultTestServer(i int, opts ...gorums.ServerOption) gorums.ServerIface {
+func defaultTestServer(i int, opts ...gorums.ServerOption) ServerIface {
 	srv := gorums.NewServer(opts...)
 	ts := testSrv{val: int32((i + 1) * 10)}
 	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
@@ -55,7 +61,7 @@ func (ts testSrv) GetValue(_ gorums.ServerContext, _ *pb.Int32Value) (*pb.Int32V
 // EchoServerFn returns a server that echoes back its request, prefixed with
 // "echo: ", suitable for use as the srvFn argument to [Config],
 // [Node], or [Servers].
-func EchoServerFn(_ int) gorums.ServerIface {
+func EchoServerFn(_ int) ServerIface {
 	srv := gorums.NewServer()
 	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
@@ -79,7 +85,7 @@ func (echoSrv) Test(_ gorums.ServerContext, req *pb.StringValue) (*pb.StringValu
 // StreamServerFn returns a server that responds to a request with three
 // echoed responses, ten milliseconds apart, suitable for use as the srvFn
 // argument to [Config], [Node], or [Servers].
-func StreamServerFn(_ int) gorums.ServerIface {
+func StreamServerFn(_ int) ServerIface {
 	srv := gorums.NewServer()
 	srv.RegisterHandler(mock.StreamMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
@@ -101,7 +107,7 @@ func StreamServerFn(_ int) gorums.ServerIface {
 // three echoed responses sent back-to-back, without the delay
 // [StreamServerFn] adds between responses, suitable for use as the srvFn
 // argument to [Config], [Node], or [Servers].
-func StreamBenchmarkServerFn(_ int) gorums.ServerIface {
+func StreamBenchmarkServerFn(_ int) ServerIface {
 	srv := gorums.NewServer()
 	srv.RegisterHandler(mock.StreamMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)

@@ -107,7 +107,7 @@ func (s *testSrv) UnaryRPC(_ gorums.ServerContext, req *Request) (resp *Response
 
 // serverFn creates a new server with an independent testSrv instance.
 // Each server needs its own testSrv to track ordering independently.
-func serverFn(_ int) gorums.ServerIface {
+func serverFn(_ int) gorumstest.ServerIface {
 	srv := gorums.NewServer()
 	RegisterGorumsTestServer(srv, &testSrv{})
 	return srv

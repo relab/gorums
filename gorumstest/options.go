@@ -39,10 +39,10 @@ func (to *testOptions) shouldSkipGoleak() bool {
 // with the provided server options and registers default handlers.
 // If srvFn is not nil and server options are provided, it panics since
 // options cannot be applied to a custom server function.
-func (to *testOptions) serverFunc(srvFn func(i int) gorums.ServerIface) func(i int) gorums.ServerIface {
+func (to *testOptions) serverFunc(srvFn func(i int) ServerIface) func(i int) ServerIface {
 	if srvFn == nil {
 		// Use default server, potentially with custom options
-		return func(i int) gorums.ServerIface {
+		return func(i int) ServerIface {
 			return defaultTestServer(i, to.serverOpts...)
 		}
 	}

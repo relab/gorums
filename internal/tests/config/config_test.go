@@ -16,7 +16,7 @@ func (cfgSrv) Read(_ gorums.ServerContext, req *Request) (resp *Response, err er
 	}.Build(), nil
 }
 
-func serverFn(_ int) gorums.ServerIface {
+func serverFn(_ int) gorumstest.ServerIface {
 	srv := gorums.NewServer()
 	RegisterConfigTestServer(srv, &cfgSrv{})
 	return srv

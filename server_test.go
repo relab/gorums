@@ -77,7 +77,7 @@ func (interceptorSrv) Test(_ gorums.ServerContext, req *pb.StringValue) (*pb.Str
 
 func TestServerInterceptorsChain(t *testing.T) {
 	// set up a server with two interceptors: i1, i2
-	interceptorServerFn := func(_ int) gorums.ServerIface {
+	interceptorServerFn := func(_ int) gorumstest.ServerIface {
 		interceptorSrv := &interceptorSrv{}
 		s := gorums.NewServer(gorums.WithServerInterceptors(
 			appendStringInterceptor("i1in-", "i1out"),
@@ -1150,7 +1150,7 @@ func TestServerGracefulStopWithOpenClientStream(t *testing.T) {
 	srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		return gorums.NewResponseMessage(in, pb.String("echo")), nil
 	})
-	cfg := gorumstest.Config(t, 1, func(int) gorums.ServerIface { return srv })
+	cfg := gorumstest.Config(t, 1, func(int) gorumstest.ServerIface { return srv })
 	node := cfg.Nodes()[0]
 
 	call := func() error {
@@ -1186,7 +1186,7 @@ func TestServerBackChannelNestedCallBeforeRelease(t *testing.T) {
 	srv.RegisterHandler(mock.EchoMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		return gorums.NewResponseMessage(in, pb.String("echo")), nil
 	})
-	addrs := gorumstest.Servers(t, 1, func(int) gorums.ServerIface { return srv })
+	addrs := gorumstest.Servers(t, 1, func(int) gorumstest.ServerIface { return srv })
 
 	var (
 		clientCfg      gorums.Config
@@ -1270,7 +1270,7 @@ func TestServerHandlerNestedCallBeforeRelease(t *testing.T) {
 		}
 		return gorums.NewResponseMessage(in, resp), nil
 	})
-	addrs := gorumstest.Servers(t, 1, func(int) gorums.ServerIface { return srv })
+	addrs := gorumstest.Servers(t, 1, func(int) gorumstest.ServerIface { return srv })
 
 	clientSrv := gorums.NewServer()
 	clientSrv.RegisterHandler(mock.EchoMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {

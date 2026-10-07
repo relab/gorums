@@ -13,7 +13,7 @@ import (
 // the target level is n (quorum size).
 func run(t testing.TB, n int, corr func(*ConfigContext, int) CorrectableResponse) {
 	t.Helper()
-	config := gorumstest.Config(t, n, func(_ int) gorums.ServerIface {
+	config := gorumstest.Config(t, n, func(_ int) gorumstest.ServerIface {
 		gorumsSrv := gorums.NewServer()
 		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
 		return gorumsSrv
@@ -53,7 +53,7 @@ func TestCorrectableStream(t *testing.T) {
 // TestCorrectableWithWatch tests progressive level watching using the type alias
 func TestCorrectableWithWatch(t *testing.T) {
 	n := 4
-	config := gorumstest.Config(t, n, func(_ int) gorums.ServerIface {
+	config := gorumstest.Config(t, n, func(_ int) gorumstest.ServerIface {
 		gorumsSrv := gorums.NewServer()
 		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
 		return gorumsSrv

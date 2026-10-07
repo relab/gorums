@@ -36,12 +36,12 @@ import (
 
 // testStartServers starts numServers servers via srvFn and stops them, and
 // verifies no goroutines were leaked, when the test finishes.
-func testStartServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []string {
+func testStartServers(t testing.TB, numServers int, srvFn func(i int) servers.ServerIface) []string {
 	t.Helper()
 	if _, ok := t.(*testing.B); !ok {
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
-	addrs, stopFn := servers.Start(t, numServers, func(i int) servers.ServerIface { return srvFn(i) })
+	addrs, stopFn := servers.Start(t, numServers, srvFn)
 	t.Cleanup(func() { stopFn() })
 	return addrs
 }
@@ -147,7 +147,7 @@ func testPeerServer(t *testing.T) (*Server, []string) {
 	t.Helper()
 	insecureDialOpts := WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
 	var srv *Server
-	addrs := testStartServers(t, 1, func(_ int) ServerIface {
+	addrs := testStartServers(t, 1, func(_ int) servers.ServerIface {
 		srv = NewServer(WithPeers(1, peerNodes(), insecureDialOpts))
 		return srv
 	})
@@ -301,7 +301,7 @@ func TestSelfNodeIDStreamRejectedEndToEnd(t *testing.T) {
 	insecureDialOpts := WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
 	var handlerCalls atomic.Int32
 	var srv *Server
-	addrs := testStartServers(t, 1, func(_ int) ServerIface {
+	addrs := testStartServers(t, 1, func(_ int) servers.ServerIface {
 		srv = NewServer(WithPeers(1, peerNodes(), insecureDialOpts))
 		srv.RegisterHandler(mock.TestMethod, func(_ ServerContext, in *Message) (*Message, error) {
 			handlerCalls.Add(1)
@@ -482,7 +482,7 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 func testClientServer(t *testing.T) (*Server, []string) {
 	t.Helper()
 	var srv *Server
-	addrs := testStartServers(t, 1, func(_ int) ServerIface {
+	addrs := testStartServers(t, 1, func(_ int) servers.ServerIface {
 		srv = NewServer()
 		return srv
 	})
@@ -599,7 +599,7 @@ func TestConnectedClientsServerCallsClient(t *testing.T) {
 		}
 		return nil, nil // one-way
 	})
-	addrs := testStartServers(t, 1, func(_ int) ServerIface { return srv })
+	addrs := testStartServers(t, 1, func(_ int) servers.ServerIface { return srv })
 
 	var wg sync.WaitGroup
 	wg.Add(1)
