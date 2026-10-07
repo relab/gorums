@@ -156,13 +156,13 @@ func SignalDone(ctx context.Context, t *SymmetricTarget) {
 		if out.Size() == 0 {
 			continue
 		}
-		req := benchkit.DoneRequest_builder{SenderId: t.controls[i].SelfID()}.Build()
+		req := benchkit.DoneRequest_builder{SenderId: t.controls[i].ID()}.Build()
 		// Report rather than return: Done is advisory, and a peer that already
 		// finished and exited makes a failed send the expected outcome, not a
 		// fault. Logging it still distinguishes that from a run where every
 		// send failed and no peer was ever told.
 		if err := benchkit.Done(out.Context(ctx), req).Send(); err != nil {
-			benchkit.Logf("Done signal from node %d: %v\n", t.controls[i].SelfID(), err)
+			benchkit.Logf("Done signal from node %d: %v\n", t.controls[i].ID(), err)
 		}
 	}
 }
@@ -559,7 +559,7 @@ func runSymmetricMulticast(t *SymmetricTarget, opts benchkit.Options) (*benchkit
 	sends := make([]func() error, len(t.servers))
 	for i, srv := range t.servers {
 		cfgCtx := srv.PeerConfig().Context(ctx)
-		senderID := t.controls[i].SelfID()
+		senderID := t.controls[i].ID()
 		sends[i] = func() error {
 			if err := Multicast(cfgCtx, newMsg(senderID)).Send(); err != nil {
 				return err
