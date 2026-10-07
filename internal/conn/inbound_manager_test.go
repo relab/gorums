@@ -281,7 +281,7 @@ func nodeIDCtx(id string) context.Context {
 	return metadata.NewIncomingContext(context.Background(), md)
 }
 
-func TestNodeID(t *testing.T) {
+func TestInboundManagerNodeIDMetadata(t *testing.T) {
 	tests := []struct {
 		name   string
 		ctx    context.Context
@@ -315,14 +315,14 @@ func checkIDs(t *testing.T, cfg Config, wantIDs []uint32, label string) {
 	}
 }
 
-// TestAcceptPeerUpdatesConfig checks that the Config is correctly
+// TestInboundManagerAcceptPeerUpdatesConfig checks that the Config is correctly
 // updated through sequences of peer connections and disconnections
 // (via AcceptPeer and its returned cleanup function), including out-of-order
 // connection, stream breakage followed by reconnect, and idempotent cleanups.
 //
 // The self-node (myID=1) is always present after construction,
 // and is included in every wantIDs slice.
-func TestAcceptPeerUpdatesConfig(t *testing.T) {
+func TestInboundManagerAcceptPeerUpdatesConfig(t *testing.T) {
 	type configStep struct {
 		op      string   // "register" or "unregister"
 		id      uint32   // peer ID
@@ -406,7 +406,7 @@ func TestAcceptPeerUpdatesConfig(t *testing.T) {
 	}
 }
 
-func TestAcceptPeer(t *testing.T) {
+func TestInboundManagerAcceptPeer(t *testing.T) {
 	im := newTestInboundManager(t, 1)
 
 	// tracked reports whether ch is the active channel of a node in im.
@@ -478,12 +478,12 @@ func TestAcceptPeer(t *testing.T) {
 	}
 }
 
-// TestAcceptPeerInstallsNewActiveOnReconnect verifies that calling AcceptPeer
+// TestInboundManagerAcceptPeerInstallsNewActiveOnReconnect verifies that calling AcceptPeer
 // for a peer that already has a live stream installs the new channel as the
 // node's active channel. The prior channel stays live until its own stream ends
 // (see the stale-cleanup and overlapping-failover tests); this test covers only
 // that the newest registration becomes active and the node has a channel.
-func TestAcceptPeerInstallsNewActiveOnReconnect(t *testing.T) {
+func TestInboundManagerAcceptPeerInstallsNewActiveOnReconnect(t *testing.T) {
 	im := newTestInboundManager(t, 1)
 
 	// First connection for peer 3.
@@ -504,10 +504,10 @@ func TestAcceptPeerInstallsNewActiveOnReconnect(t *testing.T) {
 	}
 }
 
-// TestAcceptPeerStaleCleanupDoesNotDetachReplacement verifies that when a peer
+// TestInboundManagerAcceptPeerStaleCleanupDoesNotDetachReplacement verifies that when a peer
 // reconnects, the cleanup function returned for the old stream cannot detach
 // the replacement channel.
-func TestAcceptPeerStaleCleanupDoesNotDetachReplacement(t *testing.T) {
+func TestInboundManagerAcceptPeerStaleCleanupDoesNotDetachReplacement(t *testing.T) {
 	im := newTestInboundManager(t, 1)
 
 	first := newMockBidiStream()
@@ -541,12 +541,12 @@ func TestAcceptPeerStaleCleanupDoesNotDetachReplacement(t *testing.T) {
 	}
 }
 
-// TestAcceptPeerOverlappingStreamsFailover verifies that when two inbound
+// TestInboundManagerAcceptPeerOverlappingStreamsFailover verifies that when two inbound
 // streams for the same peer overlap, tearing down the stream that registered
 // last does not drop the peer: the earlier-registered stream is still live, so
 // its channel must remain active and the peer must stay in the configuration.
 //
-// This is the inverse of TestAcceptPeerStaleCleanupDoesNotDetachReplacement.
+// This is the inverse of TestInboundManagerAcceptPeerStaleCleanupDoesNotDetachReplacement.
 // gRPC can open a second NodeStream for a peer over one connection during
 // connection churn, and server-side registration order (serialized by the
 // manager lock) can invert the client's stream-creation order: the stream the
@@ -554,7 +554,7 @@ func TestAcceptPeerStaleCleanupDoesNotDetachReplacement(t *testing.T) {
 // second. When that second registration's stream then ends, the peer fails
 // over to the still-live first stream, which keeps carrying the replies to the
 // requests it receives.
-func TestAcceptPeerOverlappingStreamsFailover(t *testing.T) {
+func TestInboundManagerAcceptPeerOverlappingStreamsFailover(t *testing.T) {
 	im := newTestInboundManager(t, 1)
 
 	// The surviving stream registers first.
@@ -594,13 +594,13 @@ func TestAcceptPeerOverlappingStreamsFailover(t *testing.T) {
 	}
 }
 
-// TestAcceptPeerReplyRidesReceivingStream verifies that during the multi-live
+// TestInboundManagerAcceptPeerReplyRidesReceivingStream verifies that during the multi-live
 // overlap window a reply for a request received on one inbound stream leaves on
 // that same stream, not on whichever stream happens to be the node's active
 // channel. The survivor registers first; a second stream registers and becomes
 // active; the reply to a request received on the survivor must still ride the
 // survivor's stream.
-func TestAcceptPeerReplyRidesReceivingStream(t *testing.T) {
+func TestInboundManagerAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 	echo := requestHandlerFunc(func(_ context.Context, msg *stream.Message, release func(), send func(*stream.Message)) {
 		defer release()
 		send(msg)
@@ -651,10 +651,10 @@ func TestAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 	}
 }
 
-// TestOnConfigChangeCallbackFiringOnConstruction verifies that the onConfigChange
+// TestInboundManagerOnConfigChangeFiringOnConstruction verifies that the onConfigChange
 // callback fires once during InboundManager construction, with only the
 // self-node present in the initial configuration.
-func TestOnConfigChangeCallbackFiringOnConstruction(t *testing.T) {
+func TestInboundManagerOnConfigChangeFiringOnConstruction(t *testing.T) {
 	var calls [][]uint32
 	newInboundManager(t, 1, WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9081"},
@@ -672,10 +672,10 @@ func TestOnConfigChangeCallbackFiringOnConstruction(t *testing.T) {
 	}
 }
 
-// TestOnConfigChangeCallbackPeerConnectDisconnect verifies that the onConfigChange
+// TestInboundManagerOnConfigChangePeerConnectDisconnect verifies that the onConfigChange
 // callback fires with the updated configuration when a known peer connects and
 // later disconnects.
-func TestOnConfigChangeCallbackPeerConnectDisconnect(t *testing.T) {
+func TestInboundManagerOnConfigChangePeerConnectDisconnect(t *testing.T) {
 	var snapshots [][]uint32
 	im := newInboundManager(t, 1, WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9081"},
@@ -708,9 +708,9 @@ func TestOnConfigChangeCallbackPeerConnectDisconnect(t *testing.T) {
 	}
 }
 
-// TestOnConfigChangeCallbackMultiplePeers verifies that the onChange callback
+// TestInboundManagerOnConfigChangeMultiplePeers verifies that the onChange callback
 // fires in sorted ID order as multiple peers connect and disconnect.
-func TestOnConfigChangeCallbackMultiplePeers(t *testing.T) {
+func TestInboundManagerOnConfigChangeMultiplePeers(t *testing.T) {
 	var snapshots [][]uint32
 	im := newInboundManager(t, 1, WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9081"},
@@ -750,9 +750,9 @@ func TestOnConfigChangeCallbackMultiplePeers(t *testing.T) {
 	}
 }
 
-// TestOnConfigChangeCallbackIdempotentCleanup verifies that calling the cleanup
+// TestInboundManagerOnConfigChangeIdempotentCleanup verifies that calling the cleanup
 // function twice does not fire the callback a second time on the same disconnect.
-func TestOnConfigChangeCallbackIdempotentCleanup(t *testing.T) {
+func TestInboundManagerOnConfigChangeIdempotentCleanup(t *testing.T) {
 	var callCount int
 	im := newInboundManager(t, 1, WithNodes(map[uint32]testNode{
 		1: {"127.0.0.1:9081"},
@@ -800,10 +800,10 @@ func (s *stuckSendStream) Recv() (*stream.Message, error) {
 	return nil, io.EOF
 }
 
-// TestAcceptPeerCleanupDoesNotHoldManagerLock verifies that a stream's cleanup,
+// TestInboundManagerAcceptPeerCleanupDoesNotHoldManagerLock verifies that a stream's cleanup,
 // which waits for the channel's send loop, does not block the manager while
 // that send loop is stuck on the peer.
-func TestAcceptPeerCleanupDoesNotHoldManagerLock(t *testing.T) {
+func TestInboundManagerAcceptPeerCleanupDoesNotHoldManagerLock(t *testing.T) {
 	im := newTestInboundManager(t, 1)
 	st := &stuckSendStream{entered: make(chan struct{}, 1), closed: make(chan struct{})}
 	ch, cleanup, err := im.AcceptPeer(inboundCtx(t.Context(), 2), st)
