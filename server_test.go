@@ -13,9 +13,11 @@ import (
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
+	"github.com/relab/gorums/internal/stream"
 	"github.com/relab/gorums/internal/testutils/mock"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -479,5 +481,62 @@ func TestServerPeerChangeDeliversUsableConfig(t *testing.T) {
 		if node != want {
 			t.Errorf("snapshot node %d is not PeerConfig's node", node.ID())
 		}
+	}
+}
+
+// TestServerHandleRequestRelease verifies that HandleRequest calls release
+// only when the handler does, and otherwise leaves the release on return to
+// its caller, whose dispatcher then runs the next request on the same
+// goroutine.
+func TestServerHandleRequestRelease(t *testing.T) {
+	payload, err := proto.Marshal(pb.String("x"))
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	tests := []struct {
+		name         string
+		method       string
+		handler      gorums.Handler
+		wantReleases int
+	}{
+		{
+			name:   "HandlerReturns",
+			method: mock.TestMethod,
+			handler: func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+				return gorums.NewResponseMessage(in, gorums.AsProto[*pb.StringValue](in)), nil
+			},
+			wantReleases: 0,
+		},
+		{
+			name:   "HandlerReleases",
+			method: mock.TestMethod,
+			handler: func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+				ctx.Release()
+				return gorums.NewResponseMessage(in, gorums.AsProto[*pb.StringValue](in)), nil
+			},
+			wantReleases: 1,
+		},
+		{
+			name:         "UnknownMethod",
+			method:       "unknown.Service/Method",
+			wantReleases: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := gorums.NewServer()
+			if tt.handler != nil {
+				srv.RegisterHandler(mock.TestMethod, tt.handler)
+			}
+			req := stream.Message_builder{Method: tt.method, Payload: payload}.Build()
+			releases, sends := 0, 0
+			srv.HandleRequest(t.Context(), req, func() { releases++ }, func(*stream.Message) { sends++ })
+			if releases != tt.wantReleases {
+				t.Errorf("release called %d times, want %d", releases, tt.wantReleases)
+			}
+			if sends != 1 {
+				t.Errorf("send called %d times, want 1", sends)
+			}
+		})
 	}
 }

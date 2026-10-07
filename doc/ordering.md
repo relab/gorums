@@ -51,7 +51,7 @@ type Server interface {
 // the Gorums server API
 type Server interface {
   // Handler receives a special server context object.
-  // Runs in its own goroutine.
+  // Runs on a dispatcher goroutine, not on the stream's receive goroutine.
   // Server waits until the handler returns
   // or until the handler calls Release() on the context object.
   RPC(gorums.ServerContext, *Request) (*Response, error)

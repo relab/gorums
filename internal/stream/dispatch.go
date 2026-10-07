@@ -9,9 +9,11 @@ import (
 // queues behind the running handler.
 const defaultRequestDispatchSize = 4096
 
-// dispatcher runs request handlers one at a time, in push order. Each handler
-// runs in its own goroutine, and the next handler starts when the running one
-// calls its release function or returns, whichever comes first.
+// dispatcher runs request handlers one at a time, in push order. The next
+// handler starts when the running one calls its release function or returns,
+// whichever comes first. A handler that returns without releasing hands its
+// goroutine to the next queued handler; a release before return starts the
+// next handler on a new goroutine.
 type dispatcher struct {
 	done  <-chan struct{} // stops the dispatcher; nil for one that never stops
 	slots chan struct{}   // one token per queued handler, bounding the queue
@@ -75,18 +77,31 @@ func (d *dispatcher) admit(run func(release func())) bool {
 	return true
 }
 
-// start runs run in a new goroutine and starts the next handler on release.
+// start runs run in a new goroutine. While each handler returns without
+// releasing, the same goroutine runs the next queued handler, so a busy stream
+// keeps one goroutine and the stack it has grown.
 func (d *dispatcher) start(run func(release func())) {
-	var once sync.Once
-	release := func() { once.Do(d.next) }
 	go func() {
-		defer release()
-		run(release)
+		for run != nil {
+			var once sync.Once
+			run(func() { once.Do(d.next) })
+			run = nil
+			once.Do(func() { run = d.take() })
+		}
 	}()
 }
 
-// next starts the oldest queued handler, if any.
+// next starts the oldest queued handler, if any, in a new goroutine.
 func (d *dispatcher) next() {
+	if run := d.take(); run != nil {
+		d.start(run)
+	}
+}
+
+// take removes and returns the oldest queued handler, or nil if the queue is
+// empty or the dispatcher has stopped, in which case it discards the queue and
+// marks the dispatcher idle.
+func (d *dispatcher) take() func(release func()) {
 	d.mu.Lock()
 	if d.stopped() {
 		for range d.queue {
@@ -97,14 +112,14 @@ func (d *dispatcher) next() {
 	if len(d.queue) == 0 {
 		d.running = false
 		d.mu.Unlock()
-		return
+		return nil
 	}
 	run := d.queue[0]
 	d.queue[0] = nil
 	d.queue = d.queue[1:]
 	d.mu.Unlock()
 	<-d.slots
-	d.start(run)
+	return run
 }
 
 // stopped reports whether done is closed.
