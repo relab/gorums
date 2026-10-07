@@ -28,7 +28,7 @@ func TestPendingCalls(t *testing.T) {
 				if !ok {
 					t.Fatalf("take %d failed", i)
 				}
-				if req.SendTime.IsZero() {
+				if req.sendTime.IsZero() {
 					t.Error("add did not stamp the send time")
 				}
 			}

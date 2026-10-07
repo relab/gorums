@@ -45,7 +45,7 @@ func NewTransport(id uint32, msgIDGen func() uint64) *Transport {
 	return &Transport{
 		id:       id,
 		channel:  new(channelRef),
-		latency:  NewLatency(),
+		latency:  newLatency(),
 		msgIDGen: msgIDGen,
 	}
 }
@@ -103,7 +103,7 @@ func (t *Transport) Enqueue(req Request) {
 		if t != nil {
 			id = t.id
 		}
-		req.ReplyError(id, ErrStreamDown)
+		req.replyError(id, ErrStreamDown)
 		return
 	}
 	ch.Enqueue(req)

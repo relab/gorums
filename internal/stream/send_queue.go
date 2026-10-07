@@ -74,5 +74,5 @@ func (q *sendQueue) fail(req Request, err error) {
 		q.dropped.Add(1)
 		return
 	}
-	req.ReplyError(q.id, err)
+	req.replyError(q.id, err)
 }

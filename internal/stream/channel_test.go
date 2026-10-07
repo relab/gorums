@@ -172,7 +172,7 @@ func setupChannelEager(t testing.TB, eagerReconnect bool, serverFn func(Gorums_N
 
 	c := NewOutboundChannel(t.Context(), 1, conn, OutboundOptions{
 		SendBufferSize: 10,
-		Latency:        NewLatency(),
+		Latency:        newLatency(),
 		EagerReconnect: eagerReconnect,
 	})
 	tc := &testChannel{

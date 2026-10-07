@@ -67,7 +67,7 @@ func (s *session) sendLoop(req *Request) *Request {
 			return req
 		}
 		if err := req.Ctx.Err(); err != nil {
-			req.ReplyError(s.id, err)
+			req.replyError(s.id, err)
 			req = nil
 			continue
 		}
@@ -91,7 +91,7 @@ func (s *session) send(req Request) bool {
 	if err != nil {
 		s.fail(err)
 		if !req.wantServerResponse() {
-			req.ReplyError(s.id, cmp.Or(req.Ctx.Err(), err))
+			req.replyError(s.id, cmp.Or(req.Ctx.Err(), err))
 		}
 		return false
 	}
@@ -126,7 +126,7 @@ func (s *session) handle(msg *Message) {
 	msgID := msg.GetMessageSeqNo()
 	if isServerSequenceNumber(msgID) == s.serverRequests {
 		if s.handler != nil {
-			ctx := msg.AppendToIncomingContext(s.ctx)
+			ctx := msg.appendToIncomingContext(s.ctx)
 			s.requests.push(s.ctx, func(release func()) {
 				s.handler.HandleRequest(ctx, msg, release, s.reply)
 			})
@@ -137,9 +137,9 @@ func (s *session) handle(msg *Message) {
 	if !ok {
 		return
 	}
-	resp := response{NodeID: s.id, Value: msg, Err: msg.ErrorStatus()}
+	resp := response{NodeID: s.id, Value: msg, Err: msg.errorStatus()}
 	if resp.Err == nil {
-		s.latency.observe(time.Since(req.SendTime))
+		s.latency.observe(time.Since(req.sendTime))
 	}
 	req.deliver(resp)
 }
@@ -190,9 +190,9 @@ func (s *session) retry(req Request) {
 	case s.requeue && !req.Streaming:
 		s.queue.push(req, false)
 	case s.requeue && s.ctx.Err() != nil:
-		req.ReplyError(s.id, ErrNodeClosed)
+		req.replyError(s.id, ErrNodeClosed)
 	default:
-		req.ReplyError(s.id, ErrStreamDown)
+		req.replyError(s.id, ErrStreamDown)
 	}
 }
 

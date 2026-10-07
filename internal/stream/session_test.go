@@ -10,7 +10,7 @@ import (
 // newTestSession returns a session over a mock stream; it is not started.
 func newTestSession(t *testing.T, sendBufferSize uint, handler RequestHandler, serverRequests, requeue bool) *session {
 	t.Helper()
-	e := newEndpoint(t.Context(), 1, sendBufferSize, 0, handler, NewLatency())
+	e := newEndpoint(t.Context(), 1, sendBufferSize, 0, handler, newLatency())
 	t.Cleanup(e.cancel)
 	ctx, cancel := context.WithCancel(e.ctx)
 	return newSession(ctx, cancel, &e, newMockBidiStream(), serverRequests, requeue)
@@ -176,9 +176,9 @@ func TestLastErrReportsStalledSend(t *testing.T) {
 	}{
 		{name: "NoSend", want: nil},
 		{name: "NoSendAfterError", lastErr: streamErr, want: streamErr},
-		{name: "ShortSend", blocked: StallReportDelay / 2, lastErr: streamErr, want: streamErr},
-		{name: "StalledSend", blocked: 2 * StallReportDelay, want: ErrSendStalled},
-		{name: "StalledSendAfterError", blocked: 2 * StallReportDelay, lastErr: streamErr, want: ErrSendStalled},
+		{name: "ShortSend", blocked: stallReportDelay / 2, lastErr: streamErr, want: streamErr},
+		{name: "StalledSend", blocked: 2 * stallReportDelay, want: ErrSendStalled},
+		{name: "StalledSendAfterError", blocked: 2 * stallReportDelay, lastErr: streamErr, want: ErrSendStalled},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

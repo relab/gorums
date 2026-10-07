@@ -26,7 +26,7 @@ func TestMessageConstructorsPreservePayloadAndMetadata(t *testing.T) {
 	}
 	for name, msg := range map[string]*Message{"proto": fromProto, "payload": fromPayload} {
 		t.Run(name, func(t *testing.T) {
-			got := msg.AppendToIncomingContext(context.Background())
+			got := msg.appendToIncomingContext(context.Background())
 			md, ok := metadata.FromIncomingContext(got)
 			if !ok {
 				t.Fatal("missing incoming metadata")
@@ -67,7 +67,7 @@ func TestMessageAppendToIncomingContext(t *testing.T) {
 				original = tt.incoming.Copy()
 				ctx = metadata.NewIncomingContext(ctx, tt.incoming)
 			}
-			md, ok := metadata.FromIncomingContext(tt.msg.AppendToIncomingContext(ctx))
+			md, ok := metadata.FromIncomingContext(tt.msg.appendToIncomingContext(ctx))
 			if ok != (tt.want != nil) {
 				t.Fatalf("incoming metadata present = %v, want %v", ok, tt.want != nil)
 			}
@@ -81,7 +81,7 @@ func TestMessageAppendToIncomingContext(t *testing.T) {
 	}
 
 	ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("authority", "peer", "content-type", "application/grpc"))
-	if allocs := testing.AllocsPerRun(100, func() { noEntries.AppendToIncomingContext(ctx) }); allocs != 0 {
+	if allocs := testing.AllocsPerRun(100, func() { noEntries.appendToIncomingContext(ctx) }); allocs != 0 {
 		t.Errorf("AppendToIncomingContext without entries: %v allocs, want 0", allocs)
 	}
 }

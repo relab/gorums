@@ -24,9 +24,9 @@ var (
 	ErrSendStalled = status.Error(codes.Unavailable, "send stalled")
 )
 
-// StallReportDelay is how long a send must be blocked before [Channel.LastErr]
+// stallReportDelay is how long a send must be blocked before [Channel.LastErr]
 // reports [ErrSendStalled].
-const StallReportDelay = time.Second
+const stallReportDelay = time.Second
 
 // BidiStream abstracts both client-side and server-side bidirectional streams.
 // Both grpc.BidiStreamingClient[Message, Message] and
@@ -43,7 +43,7 @@ type Request struct {
 	Streaming    bool
 	Oneway       bool
 	ResponseChan chan<- response
-	SendTime     time.Time
+	sendTime     time.Time
 }
 
 // wantServerResponse reports whether the request expects server responses:
@@ -75,8 +75,8 @@ func (r Request) deliver(resp response) bool {
 	}
 }
 
-// ReplyError sends err on the request's response channel, if it has one.
-func (r Request) ReplyError(nodeID uint32, err error) {
+// replyError sends err on the request's response channel, if it has one.
+func (r Request) replyError(nodeID uint32, err error) {
 	if r.ResponseChan != nil {
 		r.deliver(response{NodeID: nodeID, Err: err})
 	}

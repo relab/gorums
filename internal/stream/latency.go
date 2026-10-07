@@ -16,8 +16,8 @@ type Latency struct {
 	estimate time.Duration
 }
 
-// NewLatency returns a Latency with no estimate.
-func NewLatency() *Latency {
+// newLatency returns a Latency with no estimate.
+func newLatency() *Latency {
 	return &Latency{estimate: noLatency}
 }
 
