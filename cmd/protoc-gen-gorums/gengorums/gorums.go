@@ -138,7 +138,7 @@ func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
 	return nil
 }
 
-// GenerateFileContent generates the Gorums service definitions, excluding the package statement.
+// generateFileContent generates the Gorums service definitions, excluding the package statement.
 func generateFileContent(file *protogen.File, g *protogen.GeneratedFile) {
 	// 1. Data Types (Async/Correctable aliases)
 	genGorumsType(g, file.Services, "types")
@@ -249,13 +249,12 @@ func hasGorumsMethods(services []*protogen.Service) bool {
 	return false
 }
 
-// callTypeInfo holds information about the option type, the option type name,
-// documentation string for the option type, the template used to generate
-// a method annotated with the given option, and a chkFn function that returns
-// true if code for the option type should be generated for the given method.
+// callTypeInfo holds the extension for an option type, the template used to
+// generate a method annotated with the option, and a chkFn function that
+// returns true if code for the option type should be generated for the given
+// method.
 type callTypeInfo struct {
 	extInfo        *protoimpl.ExtensionInfo
-	docName        string
 	template       string
 	chkFn          func(m *protogen.Method) bool
 	nestedCallType map[string]*callTypeInfo
@@ -298,7 +297,6 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 
 	callTypeName(gorums.E_Remotecall): {
 		extInfo:  gorums.E_Remotecall,
-		docName:  "remotecall",
 		template: remoteCall,
 		chkFn: func(m *protogen.Method) bool {
 			return !hasMethodOption(m, gorumsCallTypes...)
@@ -312,7 +310,6 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		nestedCallType: map[string]*callTypeInfo{
 			"quorumcall": {
 				extInfo:  gorums.E_Quorumcall,
-				docName:  "quorum",
 				template: quorumCall,
 				chkFn: func(m *protogen.Method) bool {
 					return hasMethodOption(m, gorums.E_Quorumcall) && !m.Desc.IsStreamingServer()
@@ -320,7 +317,6 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			},
 			"quorumcall_stream": {
 				extInfo:  gorums.E_Quorumcall,
-				docName:  "streaming quorum",
 				template: quorumCallStream,
 				chkFn: func(m *protogen.Method) bool {
 					return hasMethodOption(m, gorums.E_Quorumcall) && m.Desc.IsStreamingServer()
@@ -330,7 +326,6 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	},
 	callTypeName(gorums.E_Multicast): {
 		extInfo:  gorums.E_Multicast,
-		docName:  "multicast",
 		template: multicastCall,
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Multicast)
@@ -338,7 +333,6 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	},
 	callTypeName(gorums.E_Unicast): {
 		extInfo:  gorums.E_Unicast,
-		docName:  "unicast",
 		template: unicastCall,
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Unicast)
