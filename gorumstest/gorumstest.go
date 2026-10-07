@@ -164,8 +164,8 @@ const unreachableSentinelAddr = "127.0.0.1:1"
 
 // UnreachableConfig returns a [gorums.Config] over addrs with no server
 // behind any address. Tests use it to obtain a valid configuration whose calls
-// can never complete. If addrs is empty, the configuration uses
-// [unreachableSentinelAddr].
+// can never complete. If addrs is empty, the configuration uses a single
+// loopback address with no server.
 func UnreachableConfig(t testing.TB, addrs ...string) gorums.Config {
 	t.Helper()
 	if len(addrs) == 0 {

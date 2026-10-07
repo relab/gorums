@@ -8,7 +8,7 @@ import (
 	"github.com/relab/gorums/gorumstest"
 )
 
-func TestCollectClosedChannel(t *testing.T) {
+func TestCollect(t *testing.T) {
 	tests := []struct {
 		name  string
 		send  []int
