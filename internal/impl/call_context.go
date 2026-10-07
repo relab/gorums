@@ -243,7 +243,7 @@ func (c *CallContext[Req, Resp]) transformAndMarshal(n *Node) *stream.Message {
 	return streamMsg
 }
 
-// defaultResponseSeq returns an iterator that yields at most c.expectedReplies responses
+// defaultResponseSeq returns an iterator that yields at most c.Size() responses
 // from nodes until the context is canceled or all expected responses are received.
 func (c *CallContext[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
