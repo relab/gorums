@@ -14,7 +14,7 @@ import (
 // the nested call runs once the handler returns.
 func TestLocalChannelReentrantCall(t *testing.T) {
 	var c *LocalChannel
-	nestedReply := make(chan response, 1)
+	nestedResponseChan := make(chan response, 1)
 	outerDone := make(chan error, 1)
 	handler := requestHandlerFunc(func(ctx context.Context, msg *Message, _ func(), send func(*Message)) {
 		if msg.GetMessageSeqNo() != 1 {
@@ -26,10 +26,10 @@ func TestLocalChannelReentrantCall(t *testing.T) {
 		c.Enqueue(Request{
 			Ctx:          context.Background(),
 			Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
-			ResponseChan: nestedReply,
+			ResponseChan: nestedResponseChan,
 		})
 		select {
-		case <-nestedReply:
+		case <-nestedResponseChan:
 			outerDone <- errors.New("nested call ran before the outer handler released")
 		case <-nestedCtx.Done():
 			outerDone <- nil
@@ -51,7 +51,7 @@ func TestLocalChannelReentrantCall(t *testing.T) {
 		t.Fatal("outer handler deadlocked on its nested call")
 	}
 	select {
-	case <-nestedReply:
+	case <-nestedResponseChan:
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("nested call did not run after the outer handler returned")
 	}

@@ -323,11 +323,11 @@ func TestSelfNodeIDStreamRejectedEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMessage() error: %v", err)
 	}
-	reply := make(chan NodeResponse[*stream.Message], 1)
-	conn.NodeTransport(node).Enqueue(stream.Request{Ctx: reqCtx, Msg: reqMsg, ResponseChan: reply})
+	responseChan := make(chan NodeResponse[*stream.Message], 1)
+	conn.NodeTransport(node).Enqueue(stream.Request{Ctx: reqCtx, Msg: reqMsg, ResponseChan: responseChan})
 
 	select {
-	case resp := <-reply:
+	case resp := <-responseChan:
 		if resp.Err == nil {
 			t.Fatal("call over a self-ID stream succeeded; want failure")
 		}
@@ -453,14 +453,14 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMessage() error: %v", err)
 	}
-	replyChan := make(chan NodeResponse[*stream.Message], 1)
+	responseChan := make(chan NodeResponse[*stream.Message], 1)
 
 	// Send the request through the inbound channel.
-	conn.NodeTransport(pNode).Enqueue(stream.Request{Ctx: ctx, Msg: reqMsg, ResponseChan: replyChan})
+	conn.NodeTransport(pNode).Enqueue(stream.Request{Ctx: ctx, Msg: reqMsg, ResponseChan: responseChan})
 
 	// Wait for the response from the client handler.
 	select {
-	case resp := <-replyChan:
+	case resp := <-responseChan:
 		if resp.Err != nil {
 			t.Fatalf("response error: %v", resp.Err)
 		}

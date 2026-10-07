@@ -19,7 +19,7 @@ import (
 
 // TestOnewayNoResourceLeak verifies that a one-way multicast does not register
 // a router entry, so no pending calls are left behind. One-way sends are
-// confirmed directly on the reply channel and never round-trip through the
+// confirmed directly on the response channel and never round-trip through the
 // router, which is what keeps the pending set empty.
 func TestOnewayNoResourceLeak(t *testing.T) {
 	servers := gorumstest.LocalServers(t, 3)

@@ -13,11 +13,11 @@ func (f requestHandlerFunc) HandleRequest(ctx context.Context, msg *Message, rel
 
 func TestRequestSendErrorResponseDoesNotBlockOnCanceledRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	replyChan := make(chan response, 1)
-	replyChan <- response{NodeID: 99} // fill the channel
+	responseChan := make(chan response, 1)
+	responseChan <- response{NodeID: 99} // fill the channel
 	req := Request{
 		Ctx:          ctx,
-		ResponseChan: replyChan,
+		ResponseChan: responseChan,
 	}
 	cancel()
 
@@ -36,19 +36,19 @@ func TestRequestSendErrorResponseDoesNotBlockOnCanceledRequest(t *testing.T) {
 
 func TestRequestSendErrorResponsePrefersDeliveryWhenCanceledAndResponseChanReady(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	replyChan := make(chan response, 1)
+	responseChan := make(chan response, 1)
 	req := Request{
 		Ctx:          ctx,
-		ResponseChan: replyChan,
+		ResponseChan: responseChan,
 	}
 	cancel()
 
 	req.sendErrorResponse(7, ErrStreamDown)
 
 	select {
-	case got := <-replyChan:
+	case got := <-responseChan:
 		if !errors.Is(got.Err, ErrStreamDown) {
-			t.Fatalf("reply error = %v, want ErrStreamDown", got.Err)
+			t.Fatalf("response error = %v, want ErrStreamDown", got.Err)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("sendErrorResponse dropped a ready delivery on canceled context")

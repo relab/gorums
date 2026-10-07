@@ -26,16 +26,16 @@ func newTestSession(t *testing.T, sendBufferSize uint, handler RequestHandler, s
 // response for the same call is dropped.
 func TestSessionHandleDeliversResponse(t *testing.T) {
 	s := newTestSession(t, 1, nil, true, true)
-	reply := make(chan response, 2)
-	s.pending.add(42, Request{Ctx: t.Context(), Msg: &Message{}, ResponseChan: reply})
+	responseChan := make(chan response, 2)
+	s.pending.add(42, Request{Ctx: t.Context(), Msg: &Message{}, ResponseChan: responseChan})
 
 	msg := Message_builder{MessageSeqNo: 42}.Build()
 	s.handle(msg)
 	s.handle(msg)
-	if got := len(reply); got != 1 {
+	if got := len(responseChan); got != 1 {
 		t.Fatalf("responses delivered = %d, want 1", got)
 	}
-	if got := (<-reply).NodeID; got != 1 {
+	if got := (<-responseChan).NodeID; got != 1 {
 		t.Errorf("NodeID = %d, want 1", got)
 	}
 	if s.latency.Load() < 0 {
@@ -48,9 +48,9 @@ func TestSessionHandleDeliversResponse(t *testing.T) {
 func TestSessionHandleDoesNotBlockOnCanceledRequest(t *testing.T) {
 	s := newTestSession(t, 1, nil, true, true)
 	ctx, cancel := context.WithCancel(t.Context())
-	reply := make(chan response, 1)
-	reply <- response{NodeID: 99} // fill the channel
-	s.pending.add(42, Request{Ctx: ctx, Msg: &Message{}, ResponseChan: reply})
+	responseChan := make(chan response, 1)
+	responseChan <- response{NodeID: 99} // fill the channel
+	s.pending.add(42, Request{Ctx: ctx, Msg: &Message{}, ResponseChan: responseChan})
 	cancel()
 
 	done := make(chan struct{})
@@ -61,7 +61,7 @@ func TestSessionHandleDoesNotBlockOnCanceledRequest(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatal("handle blocked on a canceled request with a full reply channel")
+		t.Fatal("handle blocked on a canceled request with a full response channel")
 	}
 }
 
@@ -84,8 +84,8 @@ func TestSessionEndRetriesPendingCalls(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newTestSession(t, 1, nil, true, tt.requeue)
-			reply := make(chan response, 1)
-			s.pending.add(1, Request{Ctx: t.Context(), Msg: &Message{}, Streaming: tt.streaming, ResponseChan: reply})
+			responseChan := make(chan response, 1)
+			s.pending.add(1, Request{Ctx: t.Context(), Msg: &Message{}, Streaming: tt.streaming, ResponseChan: responseChan})
 			if tt.closeChannel {
 				s.endpoint.cancel()
 			}
@@ -98,12 +98,12 @@ func TestSessionEndRetriesPendingCalls(t *testing.T) {
 			}
 			if tt.wantErr != nil {
 				select {
-				case got := <-reply:
+				case got := <-responseChan:
 					if !errors.Is(got.Err, tt.wantErr) {
 						t.Errorf("error = %v, want %v", got.Err, tt.wantErr)
 					}
 				default:
-					t.Errorf("no reply, want %v", tt.wantErr)
+					t.Errorf("no response, want %v", tt.wantErr)
 				}
 			}
 		})
@@ -313,11 +313,11 @@ func TestSessionHandleKeepsReadingWhileHandlerUnreleased(t *testing.T) {
 	})
 	s := newTestSession(t, 0, handler, true, true)
 
-	replyCh := make(chan response, 1)
+	responseChan := make(chan response, 1)
 	s.pending.add(42, Request{
 		Ctx:          context.Background(),
 		Msg:          &Message{},
-		ResponseChan: replyCh,
+		ResponseChan: responseChan,
 	})
 
 	readerDone := make(chan struct{})
@@ -338,9 +338,9 @@ func TestSessionHandleKeepsReadingWhileHandlerUnreleased(t *testing.T) {
 	}
 
 	select {
-	case <-replyCh:
+	case <-responseChan:
 	case <-time.After(200 * time.Millisecond):
-		t.Fatal("reply was not delivered while a handler was unreleased")
+		t.Fatal("response was not delivered while a handler was unreleased")
 	}
 
 	select {
