@@ -173,7 +173,7 @@ func TestStreamDedupSharedNodes(t *testing.T) {
 	const n = 5
 	t.Run("Dual", func(t *testing.T) {
 		servers := gorumstest.LocalServers(t, n)
-		awaitServerReady(t, servers)
+		gorumstest.WaitForPeers(t, servers)
 		for i, srv := range servers {
 			for _, node := range srv.PeerConfig().Nodes() {
 				if node.IsShared() {
