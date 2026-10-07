@@ -341,13 +341,7 @@ func TestServerPeerChangeDeliversUsableConfig(t *testing.T) {
 	}
 	last := snapshots[len(snapshots)-1]
 	for _, node := range last.Nodes() {
-		var want *gorums.Node
-		for _, n := range srv.PeerConfig().Nodes() {
-			if n.ID() == node.ID() {
-				want = n
-			}
-		}
-		if node != want {
+		if want := gorumstest.PeerNode(t, srv.PeerConfig(), node.ID()); node != want {
 			t.Errorf("snapshot node %d is not PeerConfig's node", node.ID())
 		}
 	}

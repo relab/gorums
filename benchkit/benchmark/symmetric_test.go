@@ -204,16 +204,7 @@ func TestSetupRemoteServerAppliesServerOption(t *testing.T) {
 			}
 			t.Cleanup(stop)
 
-			cfg := target.servers[0].PeerConfig()
-			var peer *gorums.Node
-			for _, n := range cfg.Nodes() {
-				if n.ID() == 1 {
-					peer = n
-				}
-			}
-			if peer == nil {
-				t.Fatalf("peer with ID 1 not in peer config %v", cfg.NodeIDs())
-			}
+			peer := gorumstest.PeerNode(t, target.servers[0].PeerConfig(), 1)
 			if got := peer.IsShared(); got != tt.wantShared {
 				t.Errorf("peer 1 IsShared() = %v, want %v; the ServerOption did not reach the server",
 					got, tt.wantShared)

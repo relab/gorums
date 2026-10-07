@@ -186,6 +186,18 @@ func Node(t testing.TB, srvFn func(i int) ServerIface, opts ...Option) *gorums.N
 	return Config(t, 1, srvFn, opts...).Nodes()[0]
 }
 
+// PeerNode returns the node with the given id in cfg, or fails the test.
+func PeerNode(t testing.TB, cfg gorums.Config, id uint32) *gorums.Node {
+	t.Helper()
+	for _, node := range cfg {
+		if node.ID() == id {
+			return node
+		}
+	}
+	t.Fatalf("node %d not in config %v", id, cfg.NodeIDs())
+	return nil
+}
+
 // Servers starts numServers gRPC servers using the given registration
 // function. Servers are automatically stopped when the test finishes via t.Cleanup.
 // The cleanup is registered first, so it runs after any subsequently registered
