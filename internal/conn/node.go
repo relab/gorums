@@ -310,13 +310,17 @@ func (n *Node) String() string {
 	return nilAngleString
 }
 
-// FullString returns a more descriptive string representation of n that
-// includes id, network address and latency information.
-func (n *Node) FullString() string {
-	if n != nil {
-		return fmt.Sprintf("node %d | addr: %s", n.id, n.addr)
+// Detail describes n as "node ID (address)" for diagnostics.
+// If n has a last error (see [Node.LastErr]), Detail appends ": error".
+func (n *Node) Detail() string {
+	if n == nil {
+		return nilAngleString
 	}
-	return nilAngleString
+	detail := fmt.Sprintf("node %d (%s)", n.id, n.addr)
+	if err := n.LastErr(); err != nil {
+		detail += fmt.Sprintf(": %v", err)
+	}
+	return detail
 }
 
 // LastErr returns the last error encountered (if any) for this node: a stream
