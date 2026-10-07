@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+// BidiStream abstracts both client-side and server-side bidirectional streams.
+// Both grpc.BidiStreamingClient[Message, Message] and
+// grpc.BidiStreamingServer[Message, Message] satisfy this interface.
+type BidiStream interface {
+	Send(*Message) error
+	Recv() (*Message, error)
+}
+
 // session is a channel's state for one gRPC stream. A session sends queued
 // requests on the stream, routes the frames received from the stream, and
 // holds the two-way calls awaiting responses on the stream. An inbound channel
