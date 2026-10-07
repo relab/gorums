@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"slices"
 	"sync"
 
 	"github.com/relab/gorums/internal/conn"
@@ -12,132 +13,17 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
-// serverOptions contains configuration options for creating a new Server.
-type serverOptions struct {
-	recvBufferSize  uint
-	sendBufferSize  uint
-	grpcOpts        []grpc.ServerOption
-	connectCallback func(context.Context)
-	interceptors    []ServerInterceptor
-	// Peer management options
-	myID             uint32
-	peerNodes        NodeSource   // Peers this server tracks and calls; set by WithPeers.
-	onConfigChange   func(Config) // Callback registered via [WithPeerChange]; invoked after each connected-peer config change.
-	listenAddr       string       // Listener address recorded by WithAddr; bound by ListenAndServe.
-	outboundDialOpts []DialOption
-}
-
-// ServerOption configures a [Server].
-type ServerOption func(*serverOptions)
-
-// WithBufferSizes configures the send and receive buffer sizes for the server.
-// The receiveSize is the number of requests received on each inbound stream
-// that can wait for the running handler; receiving from the stream waits while
-// that many are queued. Replies on that stream wait as well, so a handler that
-// calls the sending peer before [ServerContext.Release] waits for the reply
-// until its context ends if the peer fills the queue first. A receiveSize of 0
-// selects the default of 4096.
-//
-// The sendSize controls the capacity of the server's per-node send queue for
-// outgoing peer messages, with the same full-queue semantics as
-// [WithSendBufferSize]. Two-way requests fail fast when the queue is full.
-// One-way requests wait for space. A reply never waits: it fails fast, or is
-// dropped when it has no channel to report the error on. A sendSize of 0
-// selects [DefaultSendBufferSize]. Larger values may increase throughput at
-// the cost of higher latency.
-func WithBufferSizes(receiveSize, sendSize uint) ServerOption {
-	return func(o *serverOptions) {
-		o.recvBufferSize = receiveSize
-		o.sendBufferSize = sendSize
-	}
-}
-
-// WithGRPCServerOptions allows to set gRPC options for the server.
-func WithGRPCServerOptions(opts ...grpc.ServerOption) ServerOption {
-	return func(o *serverOptions) {
-		o.grpcOpts = append(o.grpcOpts, opts...)
-	}
-}
-
-// WithConnectCallback registers a callback function that will be called by the server
-// whenever a node connects or reconnects to the server. This allows access to the node's
-// stream context, which is passed to the callback function. The stream context can be
-// used to extract the metadata and peer information, if available.
-func WithConnectCallback(callback func(context.Context)) ServerOption {
-	return func(so *serverOptions) {
-		so.connectCallback = callback
-	}
-}
-
-// WithServerInterceptors registers server-side interceptors to run for every incoming request.
-// Interceptors are executed for each registered handler. Interceptors may modify both
-// the request and/or response messages, or perform additional actions before or after
-// calling the next handler in the chain. Interceptors are executed in the order they are
-// provided: the first element is executed first, and the last element calls the actual
-// server method handler.
-func WithServerInterceptors(i ...ServerInterceptor) ServerOption {
-	return func(opts *serverOptions) {
-		opts.interceptors = append(opts.interceptors, i...)
-	}
-}
-
-// WithPeers configures the fixed set of peer servers for this server.
-// myID is this server's own node ID and must be an entry in nodes.
-//
-// The peers become available from [Server.PeerConfig], and to handlers from
-// [ServerContext.PeerConfig], backed by connections this server establishes
-// using the given dial options. This is the configuration to invoke calls on.
-// It includes the local node, so quorum thresholds count the local replica;
-// calls to it are served in-process without a network round-trip. To observe
-// which peers are currently connected, use [Server.ConnectedPeers].
-//
-// The returned option only records the peer set; the [NewServer] call that
-// receives it panics if the node source is invalid, for example if it
-// contains a duplicate or malformed address.
-func WithPeers(myID uint32, nodes NodeSource, opts ...DialOption) ServerOption {
-	return func(o *serverOptions) {
-		o.myID = myID
-		o.peerNodes = nodes
-		o.outboundDialOpts = append(o.outboundDialOpts, opts...)
-	}
-}
-
-// WithPeerChange registers a callback invoked after each change to the
-// connected-peer [Config] (peer connect or disconnect). The callback runs
-// while internal locks are held, so it must not call [Server.ConnectedPeers]
-// or other blocking methods; use it only to signal or copy, not for long work.
-func WithPeerChange(callback func(Config)) ServerOption {
-	return func(o *serverOptions) {
-		o.onConfigChange = callback
-	}
-}
-
-// WithAddr records the address that [Server.ListenAndServe] binds.
-// It only stores the address; nothing is resolved or bound until
-// [Server.ListenAndServe] is called.
-func WithAddr(addr string) ServerOption {
-	return func(o *serverOptions) {
-		o.listenAddr = addr
-	}
-}
-
-// WithStreamDedup makes each pair of peers share a single connection for
-// calls in both directions instead of using one connection per direction.
-// It applies only to the peer [Config] built by [WithPeers].
-//
-// The lower-ID peer of each pair owns the shared connection: it dials the
-// higher-ID peer and re-establishes the connection whenever it drops. The
-// higher-ID peer never dials; its calls are sent over the connection its
-// peer opened, and fail with [ErrStreamDown] while that connection is down.
-// Call [Server.WaitForAll] once at startup to wait until the shared
-// connections are established before issuing calls.
-func WithStreamDedup() ServerOption {
-	return func(o *serverOptions) {
-		o.outboundDialOpts = append(o.outboundDialOpts, conn.WithStreamDedup())
-	}
-}
+type (
+	// Handler processes a request and returns a response.
+	Handler func(ServerContext, *Message) (*Message, error)
+	// ServerInterceptor intercepts and may modify incoming requests and outgoing responses.
+	// It receives a ServerContext, the incoming Message, and a Handler representing
+	// the next element in the chain. It returns a Message and an error.
+	ServerInterceptor func(ServerContext, *Message, Handler) (*Message, error)
+)
 
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
@@ -277,6 +163,24 @@ func (s *Server) newPeerConfig(nodes NodeSource, dialOpts []DialOption) (Config,
 // This function should only be used by generated code.
 func (s *Server) RegisterHandler(method string, handler Handler) {
 	s.handlers[method] = chainInterceptors(handler, s.interceptors...)
+}
+
+// chainInterceptors composes the provided interceptors around the final Handler and
+// returns a Handler that executes the chain. The execution order is the same as the
+// order of the interceptors in the slice: the first element is executed first, and
+// the last element calls the final handler (the server method).
+func chainInterceptors(final Handler, interceptors ...ServerInterceptor) Handler {
+	if len(interceptors) == 0 {
+		return final
+	}
+	handler := final
+	for _, curr := range slices.Backward(interceptors) {
+		next := handler
+		handler = func(ctx ServerContext, in *Message) (*Message, error) {
+			return curr(ctx, in, next)
+		}
+	}
+	return handler
 }
 
 // HandleRequest processes an incoming request from the stream, dispatching it
@@ -448,6 +352,74 @@ func (s *Server) Stop() {
 	if s.outbound != nil {
 		_ = s.outbound.Close()
 	}
+}
+
+// ServerContext is the context a Gorums server passes to a handler.
+// Requests on one stream run one at a time until the handler calls
+// [ServerContext.Release] or returns.
+type ServerContext struct {
+	context.Context
+	release func()
+	send    func(*stream.Message)
+	srv     *Server
+}
+
+// Release lets the next request on this handler's stream start, concurrently
+// with this handler. Replies to calls the handler makes arrive before and after
+// Release, so the handler may call the peer that sent the request. Before
+// Release, such a reply arrives only while the stream's dispatch queue has room
+// (see [WithBufferSizes]); call Release first if the peer may fill that queue
+// while the call is in flight. Call Release once the handler is done with state
+// that requests must access one at a time. It is safe to call Release multiple
+// times.
+func (ctx *ServerContext) Release() {
+	if ctx.release != nil {
+		ctx.release()
+	}
+}
+
+// SendMessage sends the given message to the client.
+// If marshaling fails, the error is encoded into the response envelope
+// and sent to the client; the stream is not closed.
+//
+// This function should only be used by generated code.
+func (ctx *ServerContext) SendMessage(out *Message) {
+	// If Proto is set, marshal it to payload before sending.
+	if out.Proto != nil && len(out.GetPayload()) == 0 {
+		payload, err := proto.Marshal(out.Proto)
+		if err == nil {
+			out.SetPayload(payload)
+		} else {
+			// Encode the marshal error into the response envelope; don't close the stream.
+			out = messageWithError(nil, out, err)
+		}
+	}
+	if ctx.send != nil {
+		ctx.send(out.Message)
+	}
+}
+
+// PeerConfig returns the [Config] of the peers configured with [WithPeers],
+// or nil if [WithPeers] was not used. It is the same configuration as
+// [Server.PeerConfig], so a handler can fan out calls to the server's peers.
+// Call [ServerContext.Release] before invoking calls on it, so that the next
+// request on this stream can start while the handler waits for responses.
+func (ctx *ServerContext) PeerConfig() Config {
+	if ctx.srv == nil {
+		return nil
+	}
+	return ctx.srv.PeerConfig()
+}
+
+// ConnectedClients returns a [Config] of the clients currently connected to
+// this server that can receive back-channel calls. It is the same
+// configuration as [Server.ConnectedClients]. An empty (non-nil)
+// configuration is returned when no clients are connected.
+func (ctx *ServerContext) ConnectedClients() Config {
+	if ctx.srv == nil {
+		return nil
+	}
+	return ctx.srv.ConnectedClients()
 }
 
 // compile-time assertion for interface compliance.
