@@ -12,3 +12,6 @@ var ErrSendFailure = errors.New("send failure")
 // ErrSkipNode is returned when a node is skipped by request transformations.
 // This allows the response iterator to account for all nodes without blocking.
 var ErrSkipNode = errors.New("skip node")
+
+// ErrTypeMismatch is returned when a response cannot be cast to the expected type.
+var ErrTypeMismatch = errors.New("response type mismatch")

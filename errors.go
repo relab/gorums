@@ -14,7 +14,7 @@ var ErrIncomplete = impl.ErrIncomplete
 var ErrSendFailure = impl.ErrSendFailure
 
 // ErrTypeMismatch is returned when a response cannot be cast to the expected type.
-var ErrTypeMismatch = stream.ErrTypeMismatch
+var ErrTypeMismatch = impl.ErrTypeMismatch
 
 // ErrStreamDown is returned for a call that cannot be delivered or retried
 // because the target node's stream is unavailable, such as a call over a

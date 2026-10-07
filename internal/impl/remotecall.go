@@ -32,7 +32,7 @@ func RemoteCall[Req, Resp proto.Message](ctx *NodeContext, req Req, method strin
 		}
 		resp, ok := respMsg.(Resp)
 		if !ok {
-			return zero, stream.ErrTypeMismatch
+			return zero, ErrTypeMismatch
 		}
 		return resp, nil
 	case <-ctx.Done():
