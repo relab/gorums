@@ -2,123 +2,10 @@ package stream
 
 import (
 	"context"
-	"errors"
-	"runtime"
-	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/relab/gorums/internal/testutils/mock"
-	"google.golang.org/grpc/metadata"
 )
-
-// TestSessionHandleKeepsReadingWhileHandlerUnreleased verifies that the
-// receive loop can queue the next request and deliver a response while a
-// handler has not released, and that the second request still waits for that
-// release.
-func TestSessionHandleKeepsReadingWhileHandlerUnreleased(t *testing.T) {
-	releaseFirst := make(chan struct{})
-	started := make(chan uint64, 2)
-	handler := requestHandlerFunc(func(_ context.Context, msg *Message, release func(), _ func(*Message)) {
-		started <- msg.GetMessageSeqNo()
-		if msg.GetMessageSeqNo() == ServerSequenceNumber(1) {
-			<-releaseFirst
-		}
-		release()
-	})
-	s := newTestSession(t, 0, handler, true, true)
-
-	replyCh := make(chan response, 1)
-	s.pending.add(42, Request{
-		Ctx:          context.Background(),
-		Msg:          &Message{},
-		ResponseChan: replyCh,
-	})
-
-	readerDone := make(chan struct{})
-	go func() {
-		defer close(readerDone)
-		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build())
-		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(2), Method: mock.TestMethod}.Build())
-		s.handle(Message_builder{MessageSeqNo: 42, Method: mock.TestMethod}.Build())
-	}()
-
-	select {
-	case id := <-started:
-		if id != ServerSequenceNumber(1) {
-			t.Fatalf("first handler id = %d, want %d", id, ServerSequenceNumber(1))
-		}
-	case <-time.After(time.Second):
-		t.Fatal("first handler did not start")
-	}
-
-	select {
-	case <-replyCh:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatal("reply was not delivered while a handler was unreleased")
-	}
-
-	select {
-	case id := <-started:
-		t.Fatalf("handler %d started before the first handler released", id)
-	default:
-	}
-
-	select {
-	case <-readerDone:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatal("reader blocked dispatching the next request behind an unreleased handler")
-	}
-
-	close(releaseFirst)
-
-	select {
-	case id := <-started:
-		if id != ServerSequenceNumber(2) {
-			t.Fatalf("second handler id = %d, want %d", id, ServerSequenceNumber(2))
-		}
-	case <-time.After(time.Second):
-		t.Fatal("second handler did not start after the first handler released")
-	}
-}
-
-// TestSessionHandleBackChannel verifies how an outbound session routes a
-// server-initiated request and an unknown response.
-func TestSessionHandleBackChannel(t *testing.T) {
-	t.Run("HandlerSeesMessageMetadata", func(t *testing.T) {
-		const key, want = "request-id", "dedup-metadata"
-		handlerMD := make(chan metadata.MD, 1)
-		handler := requestHandlerFunc(func(ctx context.Context, _ *Message, release func(), _ func(*Message)) {
-			defer release()
-			md, _ := metadata.FromIncomingContext(ctx)
-			handlerMD <- md
-		})
-		s := newTestSession(t, 0, handler, true, true)
-
-		msgCtx := metadata.NewOutgoingContext(t.Context(), metadata.Pairs(key, want))
-		msg, err := NewMessage(msgCtx, ServerSequenceNumber(1), mock.TestMethod, nil)
-		if err != nil {
-			t.Fatalf("NewMessage: %v", err)
-		}
-		s.handle(msg)
-		select {
-		case md := <-handlerMD:
-			if got := md.Get(key); len(got) != 1 || got[0] != want {
-				t.Fatalf("incoming metadata %q = %v, want [%q]", key, got, want)
-			}
-		case <-time.After(defaultTestTimeout):
-			t.Fatal("handler was not called")
-		}
-	})
-
-	t.Run("NoHandlerOrUnknownIDIsDropped", func(t *testing.T) {
-		s := newTestSession(t, 0, nil, true, true)
-		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build())
-		s.handle(Message_builder{MessageSeqNo: 999, Method: mock.TestMethod}.Build())
-	})
-}
 
 // TestDispatcherOrder verifies that handlers start in push order, each after
 // the previous one released or returned.
@@ -227,18 +114,6 @@ func TestDispatcherGoroutineReuse(t *testing.T) {
 	}
 }
 
-// goroutineID returns the calling goroutine's ID, parsed from the header line
-// of its stack trace ("goroutine N [...]").
-func goroutineID() uint64 {
-	var buf [64]byte
-	fields := strings.Fields(string(buf[:runtime.Stack(buf[:], false)]))
-	id, err := strconv.ParseUint(fields[1], 10, 64)
-	if err != nil {
-		panic("goroutineID: " + err.Error())
-	}
-	return id
-}
-
 // TestDispatcherBounded verifies that a full queue makes tryPush fail and push
 // wait, and that push ends with its context or the dispatcher's done channel.
 func TestDispatcherBounded(t *testing.T) {
@@ -272,53 +147,5 @@ func TestDispatcherBounded(t *testing.T) {
 		}
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("push did not end when the dispatcher stopped")
-	}
-}
-
-// TestLocalChannelReentrantCall verifies that a local handler which calls its
-// own node before releasing waits only as long as its context allows, and that
-// the nested call runs once the handler returns.
-func TestLocalChannelReentrantCall(t *testing.T) {
-	var c *LocalChannel
-	nestedReply := make(chan response, 1)
-	outerDone := make(chan error, 1)
-	handler := requestHandlerFunc(func(ctx context.Context, msg *Message, _ func(), send func(*Message)) {
-		if msg.GetMessageSeqNo() != 1 {
-			send(Message_builder{MessageSeqNo: msg.GetMessageSeqNo()}.Build())
-			return
-		}
-		nestedCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
-		defer cancel()
-		c.Enqueue(Request{
-			Ctx:          context.Background(),
-			Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
-			ResponseChan: nestedReply,
-		})
-		select {
-		case <-nestedReply:
-			outerDone <- errors.New("nested call ran before the outer handler released")
-		case <-nestedCtx.Done():
-			outerDone <- nil
-		}
-	})
-	c = NewLocalChannel(1, handler)
-
-	c.Enqueue(Request{
-		Ctx:          t.Context(),
-		Msg:          Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
-		ResponseChan: make(chan response, 1),
-	})
-	select {
-	case err := <-outerDone:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("outer handler deadlocked on its nested call")
-	}
-	select {
-	case <-nestedReply:
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("nested call did not run after the outer handler returned")
 	}
 }

@@ -10,12 +10,14 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 )
 
 const (
@@ -1464,24 +1466,6 @@ func TestChannelSessionEndWithFullQueue(t *testing.T) {
 	}
 }
 
-// mockBidiStream is a bidirectional stream for testing inbound channels.
-// Send echoes messages back via Recv (echo behavior).
-// Call close() to simulate the stream being torn down.
-type mockBidiStream struct {
-	msgQ   chan *Message
-	ctx    context.Context
-	cancel context.CancelFunc
-}
-
-func newMockBidiStream() *mockBidiStream {
-	ctx, cancel := context.WithCancel(context.Background())
-	return &mockBidiStream{
-		msgQ:   make(chan *Message, 16),
-		ctx:    ctx,
-		cancel: cancel,
-	}
-}
-
 // close simulates the stream being torn down, causing Recv to return an error.
 func (m *mockBidiStream) close() {
 	m.cancel()
@@ -1502,83 +1486,6 @@ func (m *mockBidiStream) Recv() (*Message, error) {
 		return msg, nil
 	case <-m.ctx.Done():
 		return nil, m.ctx.Err()
-	}
-}
-
-// TestInboundChannel verifies that an inbound channel sends a one-way request
-// and confirms it without a routed response.
-func TestInboundChannel(t *testing.T) {
-	stream := newMockBidiStream()
-	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 10})
-	t.Cleanup(func() {
-		_ = c.Close()
-	})
-
-	// Send a message and verify it is delivered to the stream.
-	resp := sendRequest(t, c, Request{Oneway: true}, 1)
-	if resp.Err != nil {
-		t.Errorf("unexpected error: %v", resp.Err)
-	}
-	if resp.NodeID != 1 {
-		t.Errorf("NodeID = %d, want 1", resp.NodeID)
-	}
-}
-
-// TestInboundChannelClose verifies that a closed inbound channel fails later
-// requests with ErrNodeClosed.
-func TestInboundChannelClose(t *testing.T) {
-	stream := newMockBidiStream()
-	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 10})
-
-	if err := c.Close(); err != nil {
-		t.Errorf("Close() error: %v", err)
-	}
-
-	// Subsequent sends should fail with ErrNodeClosed.
-	resp := sendRequest(t, c, Request{Oneway: true}, 2)
-	if resp.Err == nil {
-		t.Error("expected error after close, got nil")
-	} else if !errors.Is(resp.Err, ErrNodeClosed) {
-		t.Errorf("expected 'node closed' error, got: %v", resp.Err)
-	}
-
-	if !c.session.ended() {
-		t.Error("session still running after close")
-	}
-}
-
-// TestInboundChannelStreamDown verifies that an inbound channel whose stream
-// ended fails later requests with ErrNodeClosed instead of reconnecting.
-func TestInboundChannelStreamDown(t *testing.T) {
-	stream := newMockBidiStream()
-	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 10})
-
-	// Verify initial send works.
-	resp := sendRequest(t, c, Request{Oneway: true}, 1)
-	if resp.Err != nil {
-		t.Fatalf("initial send failed: %v", resp.Err)
-	}
-
-	// The stream ends, as Serve observes, and the channel is closed, as the
-	// NodeStream cleanup does.
-	stream.close()
-	if err := c.Serve(); err == nil {
-		t.Fatal("Serve returned nil after the stream ended")
-	}
-	if err := c.Close(); err != nil {
-		t.Fatalf("Close() error: %v", err)
-	}
-
-	// Sends after close must fail with ErrNodeClosed, not silently reconnect.
-	resp = sendRequest(t, c, Request{Oneway: true}, 2)
-	if resp.Err == nil {
-		t.Error("expected error after stream down, got nil")
-	} else if !errors.Is(resp.Err, ErrNodeClosed) {
-		t.Errorf("expected 'node closed' error, got: %v", resp.Err)
-	}
-
-	if !c.session.ended() {
-		t.Error("inbound session still running after its stream ended")
 	}
 }
 
@@ -1734,5 +1641,468 @@ func BenchmarkChannelSendParallel(b *testing.B) {
 				}
 			})
 		})
+	}
+}
+
+// TestChannelReplyOnFullQueue verifies that a handler reply on a full send
+// queue returns at once and is counted as dropped, even though it carries the
+// channel's never-cancelled context. With WaitingReplies, the reply instead
+// waits and is sent once the queue drains.
+func TestChannelReplyOnFullQueue(t *testing.T) {
+	tests := []struct {
+		name           string
+		waitingReplies bool
+	}{
+		{name: "Dropped", waitingReplies: false},
+		{name: "Waiting", waitingReplies: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				stream := newBlockingSendStream()
+				c := NewInboundChannel(context.Background(), 1, stream, InboundOptions{WaitingReplies: tt.waitingReplies})
+				defer func() {
+					stream.close()
+					_ = c.Close()
+					synctest.Wait()
+				}()
+
+				// Occupy the send loop so the queue is full and cannot drain.
+				c.Enqueue(Request{
+					Ctx:    context.Background(),
+					Oneway: true,
+					Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
+				})
+				synctest.Wait()
+
+				returned := make(chan struct{})
+				go func() {
+					c.reply(Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build())
+					close(returned)
+				}()
+				synctest.Wait()
+
+				select {
+				case <-returned:
+					if tt.waitingReplies {
+						t.Fatal("waiting reply returned on a full send queue")
+					}
+				default:
+					if !tt.waitingReplies {
+						t.Fatal("reply blocked on a full send queue")
+					}
+				}
+				wantDropped := int64(1)
+				if tt.waitingReplies {
+					wantDropped = 0
+				}
+				if got := c.DroppedReplies(); got != wantDropped {
+					t.Errorf("DroppedReplies() = %d, want %d", got, wantDropped)
+				}
+				if !tt.waitingReplies {
+					return
+				}
+				stream.release()
+				synctest.Wait()
+				<-returned
+				if got := drain(stream.sends); !slices.Equal(got, []uint64{1, 2}) {
+					t.Errorf("sent = %v, want [1 2]", got)
+				}
+			})
+		})
+	}
+}
+
+// TestChannelDroppedRepliesCountsOnlyUnreportableDrops verifies that
+// DroppedReplies counts a reply dropped on a full queue, but not a two-way
+// request that fails on the same full queue: its caller already observes
+// ErrSendQueueFull directly.
+func TestChannelDroppedRepliesCountsOnlyUnreportableDrops(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		stream := newBlockingSendStream()
+		c := NewInboundChannel(context.Background(), 1, stream, InboundOptions{})
+		defer func() {
+			stream.close()
+			_ = c.Close()
+			synctest.Wait()
+		}()
+
+		// Occupy the send loop so the queue is full and cannot drain.
+		c.Enqueue(Request{
+			Ctx:    context.Background(),
+			Oneway: true,
+			Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
+		})
+		synctest.Wait()
+
+		if got := c.DroppedReplies(); got != 0 {
+			t.Fatalf("DroppedReplies() = %d before any drop, want 0", got)
+		}
+
+		c.reply(Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build())
+		synctest.Wait()
+		if got := c.DroppedReplies(); got != 1 {
+			t.Errorf("DroppedReplies() = %d after a dropped reply, want 1", got)
+		}
+
+		reply := make(chan response, 1)
+		c.Enqueue(Request{
+			Ctx:          context.Background(),
+			ResponseChan: reply,
+			Msg:          Message_builder{MessageSeqNo: 3, Method: mock.TestMethod}.Build(),
+		})
+		synctest.Wait()
+		select {
+		case resp := <-reply:
+			if !errors.Is(resp.Err, ErrSendQueueFull) {
+				t.Errorf("reply error = %v, want ErrSendQueueFull", resp.Err)
+			}
+		default:
+			t.Fatal("two-way request did not fail on the full queue")
+		}
+		if got := c.DroppedReplies(); got != 1 {
+			t.Errorf("DroppedReplies() = %d after a two-way failure, want unchanged at 1", got)
+		}
+	})
+}
+
+// gatedSendStream is a stream whose Send blocks while the gate is closed, as a
+// send stalled by the peer's flow control does. Recv blocks until done closes.
+type gatedSendStream struct {
+	gate    chan struct{}
+	entered chan struct{}
+	done    chan struct{}
+	sent    atomic.Int32
+}
+
+func newGatedSendStream() *gatedSendStream {
+	return &gatedSendStream{
+		gate:    make(chan struct{}),
+		entered: make(chan struct{}, 1),
+		done:    make(chan struct{}),
+	}
+}
+
+func (s *gatedSendStream) Send(*Message) error {
+	select {
+	case s.entered <- struct{}{}:
+	default:
+	}
+	<-s.gate
+	s.sent.Add(1)
+	return nil
+}
+
+func (s *gatedSendStream) Recv() (*Message, error) {
+	<-s.done
+	return nil, context.Canceled
+}
+
+// TestChannelCancelledSendKeepsStream verifies that cancelling the context of a
+// request whose Send is stalled leaves the stream in place.
+func TestChannelCancelledSendKeepsStream(t *testing.T) {
+	t.Run("Inbound", func(t *testing.T) {
+		st := newGatedSendStream()
+		c := NewInboundChannel(t.Context(), 1, st, InboundOptions{SendBufferSize: 4})
+		t.Cleanup(func() {
+			close(st.done)
+			_ = c.Close()
+		})
+
+		ctx, cancel := context.WithCancel(t.Context())
+		c.Enqueue(Request{
+			Ctx:          ctx,
+			Msg:          Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
+			ResponseChan: make(chan response, 1),
+		})
+		select {
+		case <-st.entered:
+		case <-time.After(defaultTestTimeout):
+			t.Fatal("Send was not reached")
+		}
+		cancel()
+		time.Sleep(50 * time.Millisecond)
+		if c.session.ended() {
+			t.Fatal("cancelling a stalled send ended the stream")
+		}
+
+		// Once the stall ends, later requests are sent on the same stream.
+		close(st.gate)
+		c.Enqueue(Request{
+			Ctx:          t.Context(),
+			Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
+			ResponseChan: make(chan response, 1),
+		})
+		deadline := time.Now().Add(defaultTestTimeout)
+		for st.sent.Load() < 2 && time.Now().Before(deadline) {
+			time.Sleep(5 * time.Millisecond)
+		}
+		if got := st.sent.Load(); got < 2 {
+			t.Fatalf("sends after the stalled one: got %d total, want 2", got)
+		}
+	})
+
+	t.Run("Outbound", func(t *testing.T) {
+		// The server never reads, so a message larger than the flow-control
+		// window stalls the client's Send.
+		tc := setupChannel(t, holdServer)
+		if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
+			t.Fatal("channel never connected")
+		}
+		tc.mu.Lock()
+		sessions := slices.Collect(maps.Keys(tc.sessions))
+		tc.mu.Unlock()
+		if len(sessions) != 1 {
+			t.Fatalf("sessions = %d, want 1", len(sessions))
+		}
+
+		ctx, cancel := context.WithCancel(t.Context())
+		tc.Enqueue(Request{
+			Ctx:          ctx,
+			Msg:          Message_builder{MessageSeqNo: 1, Method: mock.TestMethod, Payload: make([]byte, 2<<20)}.Build(),
+			ResponseChan: make(chan response, 1),
+		})
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+		time.Sleep(50 * time.Millisecond)
+		if sessions[0].ended() {
+			t.Fatal("cancelling a stalled send ended the stream")
+		}
+	})
+}
+
+// holdFirstServer echoes every message immediately, except message 1, which it
+// answers only after delay. The delayed send stays off the receive loop and is
+// serialized with the other sends.
+func holdFirstServer(delay time.Duration) func(Gorums_NodeStreamServer) error {
+	return func(stream Gorums_NodeStreamServer) error {
+		var mu sync.Mutex
+		for {
+			in, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if in.GetMessageSeqNo() == 1 {
+				go func() {
+					time.Sleep(delay)
+					mu.Lock()
+					_ = stream.Send(in)
+					mu.Unlock()
+				}()
+				continue
+			}
+			mu.Lock()
+			err = stream.Send(in)
+			mu.Unlock()
+			if err != nil {
+				return err
+			}
+		}
+	}
+}
+
+// TestChannelGoAwayDoesNotStrandPendingCall sends a call, lets the server emit
+// GOAWAY from MaxConnectionAge while that call is still pending, then sends a
+// second call. The pending call must still complete.
+func TestChannelGoAwayDoesNotStrandPendingCall(t *testing.T) {
+	tc := setupChannel(t, holdFirstServer(800*time.Millisecond),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			MaxConnectionAge:      300 * time.Millisecond,
+			MaxConnectionAgeGrace: 30 * time.Second,
+		}))
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
+		t.Fatal("channel never connected")
+	}
+
+	r1 := make(chan response, 1)
+	tc.Enqueue(Request{
+		Ctx:          context.Background(),
+		Msg:          Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
+		ResponseChan: r1,
+	})
+
+	deadline := time.Now().Add(3 * time.Second)
+	for tc.conn.GetState() == connectivity.Ready && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if tc.conn.GetState() == connectivity.Ready {
+		t.Fatal("connection stayed Ready; MaxConnectionAge did not send GOAWAY")
+	}
+
+	r2 := make(chan response, 1)
+	tc.Enqueue(Request{
+		Ctx:          context.Background(),
+		Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
+		ResponseChan: r2,
+	})
+	select {
+	case resp := <-r2:
+		if resp.Err != nil {
+			t.Fatalf("second call: %v", resp.Err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("second call never completed")
+	}
+
+	select {
+	case resp := <-r1:
+		if resp.Err != nil {
+			t.Fatalf("pending call: %v", resp.Err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Errorf("pending call never completed; pending=%d", tc.PendingCount())
+	}
+}
+
+// TestChannelGoAwayEndsIdleStream verifies that a stream with no pending call
+// ends when its connection receives GOAWAY, so the server's drain can finish
+// without a grace period, and that later calls use a new stream.
+func TestChannelGoAwayEndsIdleStream(t *testing.T) {
+	streamEnded := make(chan struct{}, 4)
+	echo := holdFirstServer(0)
+	tc := setupChannel(t, func(stream Gorums_NodeStreamServer) error {
+		defer func() { streamEnded <- struct{}{} }()
+		return echo(stream)
+	}, grpc.KeepaliveParams(keepalive.ServerParameters{
+		MaxConnectionAge:      200 * time.Millisecond,
+		MaxConnectionAgeGrace: time.Hour,
+	}))
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
+		t.Fatal("channel never connected")
+	}
+
+	select {
+	case <-streamEnded:
+	case <-time.After(3 * time.Second):
+		t.Fatal("server stream did not end after GOAWAY")
+	}
+
+	r := make(chan response, 1)
+	tc.Enqueue(Request{
+		Ctx:          t.Context(),
+		Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
+		ResponseChan: r,
+	})
+	select {
+	case resp := <-r:
+		if resp.Err != nil {
+			t.Fatalf("call after GOAWAY: %v", resp.Err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("call after GOAWAY never completed")
+	}
+}
+
+// TestChannelGoAwayEndsStreamUnderLoad verifies that a stream whose connection
+// receives GOAWAY ends even while calls keep arriving: new calls go to a new
+// stream, so the drained stream's pending calls run out.
+func TestChannelGoAwayEndsStreamUnderLoad(t *testing.T) {
+	streamEnded := make(chan struct{}, 16)
+	tc := setupChannel(t, func(stream Gorums_NodeStreamServer) error {
+		defer func() { streamEnded <- struct{}{} }()
+		return delayServer(time.Millisecond)(stream)
+	}, grpc.KeepaliveParams(keepalive.ServerParameters{
+		MaxConnectionAge:      300 * time.Millisecond,
+		MaxConnectionAgeGrace: time.Hour,
+	}))
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
+		t.Fatal("channel never connected")
+	}
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	var msgID atomic.Uint64
+	errs := make(chan error, 8)
+	for range 8 {
+		wg.Go(func() {
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				r := make(chan response, 1)
+				tc.Enqueue(Request{
+					Ctx:          t.Context(),
+					Msg:          Message_builder{MessageSeqNo: msgID.Add(1), Method: mock.TestMethod}.Build(),
+					ResponseChan: r,
+				})
+				if resp := <-r; resp.Err != nil {
+					errs <- resp.Err
+					return
+				}
+			}
+		})
+	}
+
+	select {
+	case <-streamEnded:
+	case <-time.After(3 * time.Second):
+		t.Error("server stream did not end after GOAWAY while calls kept arriving")
+	}
+	close(stop)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Errorf("call failed: %v", err)
+	}
+}
+
+// TestChannelGoAwayEndsStreamAfterStreamingCall verifies that a stream whose
+// connection receives GOAWAY ends after the streaming call it carried is done,
+// as signaled by the call's context ending.
+func TestChannelGoAwayEndsStreamAfterStreamingCall(t *testing.T) {
+	carrierEnded := make(chan struct{}, 1)
+	tc := setupChannel(t, func(stream Gorums_NodeStreamServer) error {
+		carrier := false
+		defer func() {
+			if carrier {
+				carrierEnded <- struct{}{}
+			}
+		}()
+		for {
+			in, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			carrier = carrier || in.GetMessageSeqNo() == 1
+			if err := stream.Send(in); err != nil {
+				return err
+			}
+		}
+	}, grpc.KeepaliveParams(keepalive.ServerParameters{
+		MaxConnectionAge:      500 * time.Millisecond,
+		MaxConnectionAgeGrace: time.Hour,
+	}))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	r := make(chan response, 1)
+	tc.Enqueue(Request{
+		Ctx:          ctx,
+		Msg:          Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
+		Streaming:    true,
+		ResponseChan: r,
+	})
+	select {
+	case resp := <-r:
+		if resp.Err != nil {
+			t.Fatalf("streaming call: %v", resp.Err)
+		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("streaming call got no response")
+	}
+
+	// The streaming call stays pending, so its stream outlives GOAWAY.
+	select {
+	case <-carrierEnded:
+		t.Fatal("stream ended while its streaming call was live")
+	case <-time.After(time.Second):
+	}
+	cancel()
+	select {
+	case <-carrierEnded:
+	case <-time.After(3 * time.Second):
+		t.Fatal("stream did not end after GOAWAY once its streaming call was done")
 	}
 }
