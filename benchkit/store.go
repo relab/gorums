@@ -1,8 +1,9 @@
 package benchkit
 
-import "slices"
-
-import "iter"
+import (
+	"iter"
+	"slices"
+)
 
 // SampleStore accumulates latency samples for one benchmark run.
 // Implementations are not thread-safe; callers must serialize access.
