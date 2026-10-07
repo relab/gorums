@@ -8,10 +8,12 @@ import (
 	"strconv"
 )
 
+// Integer is the set of signed and unsigned integer types.
 type Integer interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
 }
 
+// signed reports whether T is a signed integer type.
 func signed[T Integer]() bool {
 	var x T
 	x = ^x // -1 if T is signed, 0xff..ff if T is unsigned
