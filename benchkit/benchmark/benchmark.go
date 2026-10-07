@@ -19,11 +19,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// BenchTarget carries the targets for benchmark execution. Set Config for
+// Target carries the targets for benchmark execution. Set Config for
 // traditional (coordinator→servers) benchmarks and Symmetric for peer-to-peer
 // benchmarks; either or both may be set. Benchmarks for unset targets are
 // not run.
-type BenchTarget struct {
+type Target struct {
 	Config    Config
 	Symmetric *SymmetricTarget
 }
@@ -208,23 +208,23 @@ func (a *asyncSends) drain() error {
 	}
 }
 
-// benchTargetNeeds identifies which BenchTarget field a benchDesc's build
+// targetNeeds identifies which Target field a benchDesc's build
 // function requires, so [benchmarks] can filter benchDescs by what the
 // caller's target actually provides.
-type benchTargetNeeds int
+type targetNeeds int
 
 const (
-	needsConfig    benchTargetNeeds = iota // requires a non-nil Config (traditional coordinator→servers)
-	needsSymmetric                         // requires a non-nil *SymmetricTarget (peer-to-peer)
+	needsConfig    targetNeeds = iota // requires a non-nil Config (traditional coordinator→servers)
+	needsSymmetric                    // requires a non-nil *SymmetricTarget (peer-to-peer)
 )
 
 // benchDesc is the single source of truth for one benchmark: its name and
-// description (used by -list via [BenchmarkDescriptions]) and how to build
+// description (used by -list via [Descriptions]) and how to build
 // its runnable closure (used by [benchmarks]).
 type benchDesc struct {
 	Name        string
 	Description string
-	Needs       benchTargetNeeds
+	Needs       targetNeeds
 	build       func(cfg Config, sym *SymmetricTarget) func(benchkit.Options) (*benchkit.Result, error)
 }
 
@@ -344,9 +344,9 @@ var benchDescs = []benchDesc{
 	},
 }
 
-// BenchmarkDescriptions returns name and description for every known
+// Descriptions returns name and description for every known
 // benchmark, regardless of which targets are available. Used by -list.
-func BenchmarkDescriptions() []benchkit.Bench {
+func Descriptions() []benchkit.Bench {
 	descs := make([]benchkit.Bench, len(benchDescs))
 	for i, d := range benchDescs {
 		descs[i] = benchkit.Bench{Name: d.Name, Description: d.Description}
@@ -363,7 +363,7 @@ func BenchmarkDescriptions() []benchkit.Bench {
 // Control.Start/Stop against the same peer group concurrently, resetting and
 // reading every other node's Stats window mid-run. Symmetric benchmarks are
 // included whenever t.Symmetric is set, local or distributed.
-func benchmarks(t BenchTarget) []benchkit.Bench {
+func benchmarks(t Target) []benchkit.Bench {
 	cfg := t.Config
 	if cfg == nil && t.Symmetric != nil && t.Symmetric.selfAddr == "" && len(t.Symmetric.servers) > 0 {
 		cfg = t.Symmetric.servers[0].PeerConfig()
@@ -389,9 +389,9 @@ func benchmarks(t BenchTarget) []benchkit.Bench {
 	return m
 }
 
-// RunBenchmarks runs all the benchmarks that match the given regex with the
+// Run runs all the benchmarks that match the given regex with the
 // given options against the target, delegating selection, the per-benchmark
 // metadata, and ordering to the benchkit harness.
-func RunBenchmarks(benchRegex *regexp.Regexp, opts benchkit.Options, t BenchTarget) ([]*benchkit.Result, error) {
+func Run(benchRegex *regexp.Regexp, opts benchkit.Options, t Target) ([]*benchkit.Result, error) {
 	return benchkit.Run(benchRegex, opts, benchmarks(t))
 }

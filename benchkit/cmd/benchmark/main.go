@@ -104,7 +104,7 @@ func (f *flags) dialOpts() []gorums.DialOption {
 // distributed (-self set), local (no -remotes), or coordinator (-remotes set).
 // It returns the target and a cleanup function that must be deferred by the
 // caller. The mode selection and setup live in benchmark.SetupTarget.
-func (f *flags) target(opts *benchkit.Options, dialOpts []gorums.DialOption) (benchmark.BenchTarget, func()) {
+func (f *flags) target(opts *benchkit.Options, dialOpts []gorums.DialOption) (benchmark.Target, func()) {
 	target, cleanup, err := benchmark.SetupTarget(opts, f.Self, f.Remotes, f.configSize, dialOpts...)
 	checkf("Failed to set up benchmark target: %v", err)
 	return target, cleanup
@@ -148,7 +148,7 @@ func runServer(addr string, recvSize, sendSize uint) {
 	lis, err := net.Listen("tcp", addr)
 	checkf("Failed to listen on '%s': %v", addr, err)
 
-	srv := benchmark.NewBenchServer(gorums.WithBufferSizes(recvSize, sendSize))
+	srv := benchmark.NewServer(gorums.WithBufferSizes(recvSize, sendSize))
 	go func() { checkf("serve failed: %v", srv.Serve(lis)) }()
 	benchkit.Logf("Running benchmark server on '%s'\n", addr)
 
@@ -161,7 +161,7 @@ func main() {
 	benchkit.SetVerbose(f.Verbose)
 
 	if f.list {
-		benchkit.ListBenches(os.Stdout, benchmark.BenchmarkDescriptions())
+		benchkit.ListBenches(os.Stdout, benchmark.Descriptions())
 		return
 	}
 
@@ -182,7 +182,7 @@ func main() {
 
 	opts.QuorumSize = f.quorumSize(opts.NumNodes)
 
-	results, err := benchmark.RunBenchmarks(f.Benchmarks, opts, target)
+	results, err := benchmark.Run(f.Benchmarks, opts, target)
 	checkf("Error running benchmarks: %v", err)
 
 	f.report(results, opts)
