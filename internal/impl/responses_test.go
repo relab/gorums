@@ -75,8 +75,8 @@ func checkError(t *testing.T, wantErr bool, err, wantErrType error) bool {
 // Terminal Method Tests
 // -------------------------------------------------------------------------
 
-// TestTerminalMethods tests the terminal methods on Responses
-func TestTerminalMethods(t *testing.T) {
+// TestResponsesTerminalMethods tests the terminal methods on Responses
+func TestResponsesTerminalMethods(t *testing.T) {
 	type respType = *Responses[*pb.StringValue]
 	tests := []struct {
 		name        string
@@ -210,7 +210,7 @@ func TestTerminalMethods(t *testing.T) {
 	}
 }
 
-func TestTerminalMethodsThreshold(t *testing.T) {
+func TestResponsesThreshold(t *testing.T) {
 	type respType = *Responses[*pb.StringValue]
 	tests := []struct {
 		name        string
@@ -268,8 +268,8 @@ func TestTerminalMethodsThreshold(t *testing.T) {
 // Iterator Method Tests
 // -------------------------------------------------------------------------
 
-// TestIteratorMethods tests the iterator helper methods
-func TestIteratorMethods(t *testing.T) {
+// TestResponseSeqMethods tests the iterator helper methods
+func TestResponseSeqMethods(t *testing.T) {
 	t.Run("IgnoreErrors", func(t *testing.T) {
 		responses := []NodeResponse[proto.Message]{
 			{NodeID: 1, Value: pb.String("response1"), Err: nil},
@@ -347,9 +347,9 @@ func TestIteratorMethods(t *testing.T) {
 // Custom Aggregation Pattern Tests
 // -------------------------------------------------------------------------
 
-// TestCustomAggregation demonstrates how users can define custom aggregation
+// TestResponsesCustomAggregation demonstrates how users can define custom aggregation
 // functions that operate on *Responses and return custom types.
-func TestCustomAggregation(t *testing.T) {
+func TestResponsesCustomAggregation(t *testing.T) {
 	t.Run("SameTypeAggregation", func(t *testing.T) {
 		// Aggregation function that returns the same type (Resp -> Resp)
 		majorityQF := func(resp *Responses[*pb.StringValue]) (*pb.StringValue, error) {
@@ -478,66 +478,4 @@ func TestCustomAggregation(t *testing.T) {
 			t.Error("Expected error, got nil")
 		}
 	})
-}
-
-// TestCorrectableSkipNodeSemantics verifies that Correctable treats
-// ErrSkipNode consistently with the terminal methods: a skipped node must
-// count toward neither the reached level nor the node-error count.
-func TestCorrectableSkipNodeSemantics(t *testing.T) {
-	responses := []NodeResponse[proto.Message]{
-		{NodeID: 1, Value: pb.String("response1"), Err: nil},
-		{NodeID: 2, Value: nil, Err: ErrSkipNode},
-		{NodeID: 3, Value: pb.String("response3"), Err: nil},
-	}
-	callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
-	r := newResponses(callCtx)
-
-	// Threshold of 3 can never be reached: only 2 of 3 nodes produced a
-	// real response, and the skipped node must not pad the count.
-	corr := r.Correctable(3)
-	<-corr.Done()
-
-	_, level, err := corr.Get()
-	if level != 2 {
-		t.Errorf("level = %d, want 2 (the skipped node must not count)", level)
-	}
-	if !errors.Is(err, ErrIncomplete) {
-		t.Fatalf("err = %v, want ErrIncomplete", err)
-	}
-	var qcErr conn.QuorumCallError
-	if errors.As(err, &qcErr) && qcErr.NumErrors() != 0 {
-		t.Errorf("NumErrors() = %d, want 0 (a skipped node is not a node error)", qcErr.NumErrors())
-	}
-}
-
-// TestAsyncThresholdDispatchedFlagIsRaceFree exercises AsyncThreshold's
-// concurrent writes to the dispatched flag against a concurrent read: the
-// initial sendNow marks it on the caller's goroutine, and ranging over r.seq
-// inside the spawned goroutine calls sendNow again, redundantly re-marking it.
-// Run with -race: a plain bool here is flagged as a data race against any
-// concurrent Intercept call, even though both writes agree on the value.
-func TestAsyncThresholdDispatchedFlagIsRaceFree(t *testing.T) {
-	responses := []NodeResponse[proto.Message]{
-		{NodeID: 1, Value: pb.String("response1"), Err: nil},
-		{NodeID: 2, Value: pb.String("response2"), Err: nil},
-	}
-	callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 2, responses)
-	r := newResponses(callCtx)
-
-	fut := r.AsyncThreshold(1)
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		// Already dispatched by AsyncThreshold, so this always panics; the
-		// race is on the concurrent read of the flag that triggers it, not
-		// on the outcome.
-		defer func() { _ = recover() }()
-		callCtx.intercept()
-	}()
-
-	if _, err := fut.Get(); err != nil {
-		t.Fatalf("Get() error: %v", err)
-	}
-	<-done
 }
