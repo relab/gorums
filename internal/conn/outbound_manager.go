@@ -140,23 +140,6 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 	return n, nil
 }
 
-// validateStreamDedup reports whether the server is correctly configured
-// for stream deduplication. It requires a nonzero local node ID that is
-// one of the server's own peers.
-func (m *outboundManager) validateStreamDedup() error {
-	if !m.opts.StreamDedup || m.opts.InboundMgr == nil {
-		return nil
-	}
-	localID := m.opts.LocalNodeID
-	if localID == 0 {
-		return errors.New("gorums: stream dedup requires a nonzero local node ID")
-	}
-	if !m.opts.InboundMgr.isKnown(localID) {
-		return fmt.Errorf("gorums: stream dedup server peer configuration does not contain local node %d", localID)
-	}
-	return nil
-}
-
 // getMsgID returns a unique message ID for a new RPC from this client's manager.
 // Client-initiated IDs never have the high bit set in practice: reaching 2^63
 // requires approximately 292,000 years at one million calls per second.
