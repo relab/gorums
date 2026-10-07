@@ -156,10 +156,10 @@ func TestNodeEnqueueWithoutChannel(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			replyChan := make(chan stream.NodeResponse[*stream.Message], 1)
-			NodeTransport(tt.node).Enqueue(stream.Request{Ctx: t.Context(), ResponseChan: replyChan})
+			responseChan := make(chan stream.NodeResponse[*stream.Message], 1)
+			NodeTransport(tt.node).Enqueue(stream.Request{Ctx: t.Context(), ResponseChan: responseChan})
 			select {
-			case r := <-replyChan:
+			case r := <-responseChan:
 				if !errors.Is(r.Err, stream.ErrStreamDown) {
 					t.Errorf("Enqueue error = %v, want %v", r.Err, stream.ErrStreamDown)
 				}
@@ -176,11 +176,11 @@ func TestNodeEnqueueWithoutChannel(t *testing.T) {
 func TestNodeCloseCancelsAllPendingRequests(t *testing.T) {
 	ch := stream.NewInboundChannel(t.Context(), 1, newMockBidiStream(), stream.InboundOptions{SendBufferSize: 1})
 	node := newTestNode(1, ch)
-	reply := make(chan stream.NodeResponse[*stream.Message], 1)
+	responseChan := make(chan stream.NodeResponse[*stream.Message], 1)
 	NodeTransport(node).Enqueue(stream.Request{
 		Ctx:          t.Context(),
 		Msg:          stream.Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
-		ResponseChan: reply,
+		ResponseChan: responseChan,
 	})
 	for deadline := time.Now().Add(time.Second); node.PendingCount() != 1; time.Sleep(time.Millisecond) {
 		if time.Now().After(deadline) {
@@ -192,7 +192,7 @@ func TestNodeCloseCancelsAllPendingRequests(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 	select {
-	case got := <-reply:
+	case got := <-responseChan:
 		if !errors.Is(got.Err, stream.ErrStreamDown) {
 			t.Fatalf("pending request error = %v, want ErrStreamDown", got.Err)
 		}
@@ -323,7 +323,7 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 			payload := make([]byte, tt.size)
 			b.ResetTimer()
 			for i := range b.N {
-				replyChan := make(chan stream.NodeResponse[*stream.Message], 1)
+				responseChan := make(chan stream.NodeResponse[*stream.Message], 1)
 				reqMsg := stream.Message_builder{
 					MessageSeqNo: uint64(i),
 					Method:       mock.TestMethod,
@@ -333,9 +333,9 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 					Ctx:          context.Background(),
 					Msg:          reqMsg,
 					Oneway:       true,
-					ResponseChan: replyChan,
+					ResponseChan: responseChan,
 				})
-				<-replyChan
+				<-responseChan
 			}
 		})
 	}

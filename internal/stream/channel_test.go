@@ -292,12 +292,12 @@ func sendRequest(t testing.TB, c Channel, req Request, msgID uint64) response {
 		t.Fatalf("NewMessage failed: %v", err)
 	}
 	req.Msg = reqMsg
-	replyChan := make(chan response, 1)
-	req.ResponseChan = replyChan
+	responseChan := make(chan response, 1)
+	req.ResponseChan = responseChan
 	c.Enqueue(req)
 
 	select {
-	case resp := <-replyChan:
+	case resp := <-responseChan:
 		return resp
 	case <-time.After(defaultTestTimeout):
 		t.Fatalf("timeout waiting for response to message %d", msgID)
@@ -529,12 +529,12 @@ func TestChannelCloseCancelsOnlyOwnedPendingRequests(t *testing.T) {
 	t.Cleanup(func() { _ = oldChannel.Close() })
 	t.Cleanup(func() { _ = newChannel.Close() })
 
-	oldReply := make(chan response, 1)
-	newReply := make(chan response, 1)
+	oldResponseChan := make(chan response, 1)
+	newResponseChan := make(chan response, 1)
 	oldMessage := Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build()
 	newMessage := Message_builder{MessageSeqNo: ServerSequenceNumber(2), Method: mock.TestMethod}.Build()
-	oldChannel.Enqueue(Request{Ctx: t.Context(), Msg: oldMessage, ResponseChan: oldReply})
-	newChannel.Enqueue(Request{Ctx: t.Context(), Msg: newMessage, ResponseChan: newReply})
+	oldChannel.Enqueue(Request{Ctx: t.Context(), Msg: oldMessage, ResponseChan: oldResponseChan})
+	newChannel.Enqueue(Request{Ctx: t.Context(), Msg: newMessage, ResponseChan: newResponseChan})
 
 	pending := func() int { return oldChannel.PendingCount() + newChannel.PendingCount() }
 	deadline := time.Now().Add(time.Second)
@@ -549,7 +549,7 @@ func TestChannelCloseCancelsOnlyOwnedPendingRequests(t *testing.T) {
 		t.Fatalf("old channel Close: %v", err)
 	}
 	select {
-	case got := <-oldReply:
+	case got := <-oldResponseChan:
 		if !errors.Is(got.Err, ErrStreamDown) {
 			t.Fatalf("old request error = %v, want ErrStreamDown", got.Err)
 		}
@@ -557,14 +557,14 @@ func TestChannelCloseCancelsOnlyOwnedPendingRequests(t *testing.T) {
 		t.Fatal("old request was not cancelled")
 	}
 	select {
-	case got := <-newReply:
+	case got := <-newResponseChan:
 		t.Fatalf("new request was cancelled by old channel: %v", got.Err)
 	default:
 	}
 
 	newChannel.session.handle(newMessage)
 	select {
-	case got := <-newReply:
+	case got := <-newResponseChan:
 		if got.Err != nil {
 			t.Fatalf("new request response error = %v", got.Err)
 		}
@@ -772,14 +772,14 @@ func TestChannelEnqueueRespectsRequestContext(t *testing.T) {
 	// The second request cannot be handed off; its Enqueue must block until
 	// the request's own context is cancelled.
 	ctx, cancel := context.WithCancel(context.Background())
-	reply := make(chan response, 1)
+	responseChan := make(chan response, 1)
 	enqueueReturned := make(chan struct{})
 	go func() {
 		defer close(enqueueReturned)
 		c.Enqueue(Request{
 			Ctx:          ctx,
 			Oneway:       true,
-			ResponseChan: reply,
+			ResponseChan: responseChan,
 			Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
 		})
 	}()
@@ -789,9 +789,9 @@ func TestChannelEnqueueRespectsRequestContext(t *testing.T) {
 	cancel()
 
 	select {
-	case resp := <-reply:
+	case resp := <-responseChan:
 		if !errors.Is(resp.Err, context.Canceled) {
-			t.Errorf("blocked Enqueue reply error = %v, want context.Canceled", resp.Err)
+			t.Errorf("blocked Enqueue response error = %v, want context.Canceled", resp.Err)
 		}
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Enqueue ignored request context cancellation; caller is stuck")
@@ -828,29 +828,29 @@ func TestChannelEnqueueTwoWayFailsFastWhenFull(t *testing.T) {
 	waitID(t, stream.entered, 1, "first send")
 
 	// A two-way request fills the queue's single slot.
-	reply2 := make(chan response, 1)
+	responseChan2 := make(chan response, 1)
 	c.Enqueue(Request{
 		Ctx:          context.Background(),
-		ResponseChan: reply2,
+		ResponseChan: responseChan2,
 		Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
 	})
 	select {
-	case resp := <-reply2:
-		t.Fatalf("second request should be queued, got early reply: %v", resp.Err)
+	case resp := <-responseChan2:
+		t.Fatalf("second request should be queued, got early response: %v", resp.Err)
 	default:
 	}
 
 	// The next two-way request finds the queue full and must fail fast.
-	reply3 := make(chan response, 1)
+	responseChan3 := make(chan response, 1)
 	c.Enqueue(Request{
 		Ctx:          context.Background(),
-		ResponseChan: reply3,
+		ResponseChan: responseChan3,
 		Msg:          Message_builder{MessageSeqNo: 3, Method: mock.TestMethod}.Build(),
 	})
 	select {
-	case resp := <-reply3:
+	case resp := <-responseChan3:
 		if !errors.Is(resp.Err, ErrSendQueueFull) {
-			t.Errorf("full-queue reply error = %v, want ErrSendQueueFull", resp.Err)
+			t.Errorf("full-queue response error = %v, want ErrSendQueueFull", resp.Err)
 		}
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("two-way Enqueue blocked on a full send queue instead of failing fast")
@@ -863,7 +863,7 @@ func TestChannelEnqueueTwoWayFailsFastWhenFull(t *testing.T) {
 }
 
 // TestChannelEnqueueOnewayBlocksWhenFull verifies that one-way requests wait
-// on a full queue: with no reply to await, backpressure paces a one-way
+// on a full queue: with no response to await, backpressure paces a one-way
 // producer, so the producer waits (cancellable via the request context) and
 // the message is kept.
 func TestChannelEnqueueOnewayBlocksWhenFull(t *testing.T) {
@@ -888,19 +888,19 @@ func TestChannelEnqueueOnewayBlocksWhenFull(t *testing.T) {
 	})
 
 	// The third one-way request must block in Enqueue, not fail.
-	reply3 := make(chan response, 1)
+	responseChan3 := make(chan response, 1)
 	enqueueReturned := make(chan struct{})
 	go func() {
 		defer close(enqueueReturned)
 		c.Enqueue(Request{
 			Ctx:          context.Background(),
 			Oneway:       true,
-			ResponseChan: reply3,
+			ResponseChan: responseChan3,
 			Msg:          Message_builder{MessageSeqNo: 3, Method: mock.TestMethod}.Build(),
 		})
 	}()
 	select {
-	case resp := <-reply3:
+	case resp := <-responseChan3:
 		t.Fatalf("one-way Enqueue on a full queue returned early with: %v", resp.Err)
 	case <-enqueueReturned:
 		t.Fatal("one-way Enqueue returned without queue space; expected it to block")
@@ -911,7 +911,7 @@ func TestChannelEnqueueOnewayBlocksWhenFull(t *testing.T) {
 	// Releasing the stream drains the queue; the blocked request completes.
 	stream.release()
 	select {
-	case resp := <-reply3:
+	case resp := <-responseChan3:
 		if resp.Err != nil {
 			t.Errorf("blocked one-way request failed after release: %v", resp.Err)
 		}
@@ -1078,14 +1078,14 @@ func TestChannelCancelImmediatelyAfterSendRecovers(t *testing.T) {
 	const iterations = 200
 	for i := range iterations {
 		ctx, cancel := context.WithCancel(context.Background())
-		reply := make(chan response, 1)
+		responseChan := make(chan response, 1)
 		tc.Enqueue(Request{
 			Ctx:          ctx,
 			Msg:          Message_builder{MessageSeqNo: uint64(i + 1), Method: mock.TestMethod}.Build(),
-			ResponseChan: reply,
+			ResponseChan: responseChan,
 		})
 		select {
-		case resp := <-reply:
+		case resp := <-responseChan:
 			cancel() // cancel the instant the response arrives
 			if resp.Err != nil {
 				t.Fatalf("request %d failed: %v", i+1, resp.Err)
@@ -1152,14 +1152,14 @@ func TestChannelEagerReconnectRedialsWithoutSends(t *testing.T) {
 	}
 
 	// The replacement stream must carry a request round trip.
-	replyCh := make(chan response, 1)
+	responseChan := make(chan response, 1)
 	tc.Enqueue(Request{
 		Ctx:          t.Context(),
 		Msg:          Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
-		ResponseChan: replyCh,
+		ResponseChan: responseChan,
 	})
 	select {
-	case resp := <-replyCh:
+	case resp := <-responseChan:
 		if resp.Err != nil {
 			t.Fatalf("echo over redialed stream failed: %v", resp.Err)
 		}
@@ -1464,10 +1464,10 @@ func TestChannelSessionEndWithFullQueue(t *testing.T) {
 	s := newSession(ctx, cancel, &e, stream, true, true)
 
 	const numPending = sendBufSize + 2
-	replies := make(chan response, numPending)
+	responseChan := make(chan response, numPending)
 	for i := range numPending {
 		msg := Message_builder{MessageSeqNo: uint64(1000 + i), Method: mock.TestMethod}.Build()
-		s.pending.add(msg.GetMessageSeqNo(), Request{Ctx: t.Context(), Msg: msg, ResponseChan: replies})
+		s.pending.add(msg.GetMessageSeqNo(), Request{Ctx: t.Context(), Msg: msg, ResponseChan: responseChan})
 	}
 
 	done := make(chan struct{})
@@ -1484,7 +1484,7 @@ func TestChannelSessionEndWithFullQueue(t *testing.T) {
 		t.Errorf("requeued calls = %d, want %d", got, sendBufSize)
 	}
 	for range numPending - sendBufSize {
-		if got := <-replies; !errors.Is(got.Err, ErrSendQueueFull) {
+		if got := <-responseChan; !errors.Is(got.Err, ErrSendQueueFull) {
 			t.Errorf("overflow call error = %v, want ErrSendQueueFull", got.Err)
 		}
 	}
@@ -1535,12 +1535,12 @@ func BenchmarkChannelFirstRequest(b *testing.B) {
 		ctx, cancel := context.WithTimeout(b.Context(), defaultTestTimeout)
 		reqMsg, _ := NewMessage(ctx, 1, mock.TestMethod, nil)
 		req := Request{Ctx: ctx, Msg: reqMsg}
-		replyChan := make(chan response, 1)
-		req.ResponseChan = replyChan
+		responseChan := make(chan response, 1)
+		req.ResponseChan = responseChan
 		tc.Enqueue(req)
 
 		select {
-		case resp := <-replyChan:
+		case resp := <-responseChan:
 			if resp.Err != nil {
 				b.Logf("request error (may occur during rapid cycles): %v", resp.Err)
 			}
@@ -1564,12 +1564,12 @@ func BenchmarkChannelReconnect(b *testing.B) {
 	ctx := context.Background()
 	reqMsg, _ := NewMessage(ctx, 0, mock.TestMethod, nil)
 	req := Request{Ctx: ctx, Msg: reqMsg}
-	replyChan := make(chan response, 1)
-	req.ResponseChan = replyChan
+	responseChan := make(chan response, 1)
+	req.ResponseChan = responseChan
 	tc.Enqueue(req)
 
 	select {
-	case resp := <-replyChan:
+	case resp := <-responseChan:
 		if resp.Err != nil {
 			b.Fatalf("initial request error: %v", resp.Err)
 		}
@@ -1585,12 +1585,12 @@ func BenchmarkChannelReconnect(b *testing.B) {
 		ctx := context.Background()
 		reqMsg, _ := NewMessage(ctx, uint64(i+1), mock.TestMethod, nil)
 		req := Request{Ctx: ctx, Msg: reqMsg}
-		replyChan := make(chan response, 1)
-		req.ResponseChan = replyChan
+		responseChan := make(chan response, 1)
+		req.ResponseChan = responseChan
 		tc.Enqueue(req)
 
 		select {
-		case <-replyChan:
+		case <-responseChan:
 			// errors are ignored in benchmarks.
 		case <-time.After(500 * time.Millisecond):
 			b.Fatalf("timeout on request %d", i)
@@ -1617,15 +1617,15 @@ func BenchmarkChannelSend(b *testing.B) {
 			b.ResetTimer()
 			for i := range b.N {
 				// Optimization: reuse chan if we know it's 1-buffered and read.
-				replyChan := make(chan response, 1)
+				responseChan := make(chan response, 1)
 				msg := Message_builder{
 					MessageSeqNo: uint64(i),
 					Method:       mock.TestMethod,
 					Payload:      payload,
 				}.Build()
-				req := Request{Ctx: context.Background(), Msg: msg, Oneway: true, ResponseChan: replyChan}
+				req := Request{Ctx: context.Background(), Msg: msg, Oneway: true, ResponseChan: responseChan}
 				tc.Enqueue(req)
-				<-replyChan
+				<-responseChan
 			}
 		})
 	}
@@ -1652,16 +1652,16 @@ func BenchmarkChannelSendParallel(b *testing.B) {
 			b.ResetTimer()
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					replyChan := make(chan response, 1)
+					responseChan := make(chan response, 1)
 					id := msgID.Add(1)
 					msg := Message_builder{
 						MessageSeqNo: id,
 						Method:       mock.TestMethod,
 						Payload:      payload,
 					}.Build()
-					req := Request{Ctx: context.Background(), Msg: msg, Oneway: true, ResponseChan: replyChan}
+					req := Request{Ctx: context.Background(), Msg: msg, Oneway: true, ResponseChan: responseChan}
 					tc.Enqueue(req)
-					<-replyChan
+					<-responseChan
 				}
 			})
 		})
@@ -1769,17 +1769,17 @@ func TestChannelDroppedRepliesCountsOnlyUnreportableDrops(t *testing.T) {
 			t.Errorf("DroppedReplies() = %d after a dropped reply, want 1", got)
 		}
 
-		reply := make(chan response, 1)
+		responseChan := make(chan response, 1)
 		c.Enqueue(Request{
 			Ctx:          context.Background(),
-			ResponseChan: reply,
+			ResponseChan: responseChan,
 			Msg:          Message_builder{MessageSeqNo: 3, Method: mock.TestMethod}.Build(),
 		})
 		synctest.Wait()
 		select {
-		case resp := <-reply:
+		case resp := <-responseChan:
 			if !errors.Is(resp.Err, ErrSendQueueFull) {
-				t.Errorf("reply error = %v, want ErrSendQueueFull", resp.Err)
+				t.Errorf("response error = %v, want ErrSendQueueFull", resp.Err)
 			}
 		default:
 			t.Fatal("two-way request did not fail on the full queue")
