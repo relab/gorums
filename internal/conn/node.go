@@ -35,7 +35,7 @@ func (c NodeContext) Node() *Node {
 // reusing the peer's channel, latency estimate, and server-space message-ID generator.
 // It returns nil if the peer has no transport.
 func sharedNodeTransport(peer *Node) *stream.Transport {
-	transport := peer.loadTransport()
+	transport := NodeTransport(peer)
 	if transport == nil {
 		return nil
 	}
@@ -67,22 +67,16 @@ func newNode(id uint32, addr string, mgr *outboundManager, transport *stream.Tra
 	return &Node{id: id, addr: addr, mgr: mgr, transport: transport}
 }
 
-// loadTransport returns the node's transport; it is safe on a nil node and
-// returns nil for a zero-value node.
-func (n *Node) loadTransport() *stream.Transport {
-	if n == nil {
-		return nil
-	}
-	return n.transport
-}
-
 // NodeTransport returns the node's transport, giving the call engine access to
 // the send path ([stream.Transport.NextMsgID], [stream.Transport.Enqueue])
 // without exposing those operations as methods on the public [Node] type. It is
 // safe on a nil node. This is the seam between the connectivity layer and the
 // call engine in the runtime.
 func NodeTransport(n *Node) *stream.Transport {
-	return n.loadTransport()
+	if n == nil {
+		return nil
+	}
+	return n.transport
 }
 
 // Context creates a new NodeContext from the given parent context
@@ -106,7 +100,7 @@ type nodeOptions struct {
 	MsgIDGen       func() uint64
 	Metadata       metadata.MD
 	DialOpts       []grpc.DialOption
-	RequestHandler stream.RequestHandler
+	Handler        stream.RequestHandler
 	EagerReconnect bool             // re-establish a lost stream proactively; see [stream.OutboundOptions]
 	OnStreamChange func()           // optional; invoked on outbound stream transitions
 	Manager        *outboundManager // owning manager
@@ -136,7 +130,7 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 	// Create new outbound channel and establish gRPC node stream
 	transport.StoreChannel(stream.NewOutboundChannel(ctx, n.id, conn, stream.OutboundOptions{
 		SendBufferSize: opts.SendBufferSize,
-		Handler:        opts.RequestHandler,
+		Handler:        opts.Handler,
 		Latency:        transport.Latency(),
 		EagerReconnect: opts.EagerReconnect,
 		OnStreamChange: opts.OnStreamChange,
@@ -186,7 +180,7 @@ func (n *Node) IsOutbound() bool {
 // as the higher-ID peer of a pair does under stream deduplication. Callers can
 // use it to derive their own stream-topology statistics.
 func (n *Node) IsShared() bool {
-	return n.loadTransport().IsShared()
+	return NodeTransport(n).IsShared()
 }
 
 // PendingCount returns the number of calls awaiting responses on the node's
@@ -225,7 +219,7 @@ func (n *Node) isUp() bool {
 // activeChannel returns the current transport's channel, or nil if the node
 // has no transport or no attached channel.
 func (n *Node) activeChannel() stream.Channel {
-	return n.loadTransport().LoadChannel()
+	return NodeTransport(n).LoadChannel()
 }
 
 // attachStream attaches a new inbound channel to the node when a peer connects
@@ -243,7 +237,7 @@ func (n *Node) activeChannel() stream.Channel {
 // idempotent and returns true only when it removed the node's last live
 // channel (the peer left the configuration).
 func (n *Node) attachStream(streamCtx context.Context, inboundStream stream.BidiStream, opts stream.InboundOptions) (newCh *stream.InboundChannel, detach func() bool) {
-	transport := n.loadTransport()
+	transport := NodeTransport(n)
 	opts.Latency = transport.Latency()
 	newCh = stream.NewInboundChannel(streamCtx, n.id, inboundStream, opts)
 	n.inboundMu.Lock()
@@ -272,7 +266,7 @@ func (n *Node) close() error {
 	if n == nil {
 		return nil
 	}
-	return n.loadTransport().Close()
+	return NodeTransport(n).Close()
 }
 
 // ID returns the ID of n.
@@ -355,7 +349,7 @@ func (n *Node) LastErr() error {
 // Use the [ByLatency] comparator with [Config.Sort] to order nodes
 // by their current observed latency.
 func (n *Node) Latency() time.Duration {
-	return n.loadTransport().Latency().Load()
+	return NodeTransport(n).Latency().Load()
 }
 
 // ByID compares nodes by their identifier in increasing order.
