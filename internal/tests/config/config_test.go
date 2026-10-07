@@ -1,9 +1,8 @@
 package config
 
 import (
-	"context"
-	"fmt"
 	"testing"
+	"time"
 
 	gorums "github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
@@ -27,9 +26,8 @@ func serverFn(_ int) gorums.ServerIface {
 // method on the different configurations created below.
 func TestConfig(t *testing.T) {
 	callRPC := func(config Config) {
-		cfgCtx := config.Context(context.Background())
+		cfgCtx := config.Context(gorumstest.Context(t, 5*time.Second))
 		for i := range 5 {
-			// Use the new terminal method API - wait for a majority
 			resp, err := Read(cfgCtx,
 				Request_builder{Num: uint64(i)}.Build()).Majority()
 			if err != nil {
@@ -42,21 +40,17 @@ func TestConfig(t *testing.T) {
 	}
 
 	c1 := gorumstest.Config(t, 6, serverFn)
-	fmt.Println("--- c1 ", c1.Nodes())
 	callRPC(c1)
 
 	// Create c2 by removing 2 nodes from c1.
 	c2 := c1.Remove(1, 2)
-	fmt.Println("--- c2 ", c2.Nodes())
 	callRPC(c2)
 
 	// Create c3 = c1 ∪ c2
 	c3 := c1.Union(c2)
-	fmt.Println("--- c3 ", c3.Nodes())
 	callRPC(c3)
 
 	// Create c4 = c3 \ c2
 	c4 := c3.Difference(c2)
-	fmt.Println("--- c4 ", c4.Nodes())
 	callRPC(c4)
 }

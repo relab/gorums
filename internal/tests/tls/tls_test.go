@@ -26,17 +26,17 @@ func (testSrv) TestTLS(ctx gorums.ServerContext, _ *Request) (resp *Response, er
 func TestTLSConnection(t *testing.T) {
 	cert, key, err := generateCert()
 	if err != nil {
-		t.Errorf("Failed to generate certificate: %v", err)
+		t.Fatalf("Failed to generate certificate: %v", err)
 	}
 
 	cp := x509.NewCertPool()
 	if !cp.AppendCertsFromPEM(cert) {
-		t.Errorf("Failed to add cert to pool.")
+		t.Fatalf("Failed to add cert to pool.")
 	}
 
 	tlsCert, err := tls.X509KeyPair(cert, key)
 	if err != nil {
-		t.Errorf("Failed to parse cert: %v", err)
+		t.Fatalf("Failed to parse cert: %v", err)
 	}
 
 	srvFn := func(_ int) gorums.ServerIface {

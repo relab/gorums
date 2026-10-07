@@ -23,16 +23,21 @@ func serverFn(_ int) gorums.ServerIface {
 	return gorumsSrv
 }
 
-// TestUnresponsiveServer checks that the client is not blocked when the server is not receiving messages
+// TestUnresponsiveServer verifies that a call to a server that never replies
+// returns when the call's context ends, so the client is not blocked.
 func TestUnresponsiveServer(t *testing.T) {
 	node := gorumstest.Node(t, serverFn)
 
 	for range 100 {
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
+		start := time.Now()
 		_, err := TestUnresponsive(node.Context(ctx), &Empty{})
-		if err != nil && errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
 		cancel()
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("TestUnresponsive() error = %v, want %v", err, context.DeadlineExceeded)
+		}
+		if elapsed := time.Since(start); elapsed > time.Second {
+			t.Fatalf("TestUnresponsive() returned after %v, want shortly after the 10ms deadline", elapsed)
+		}
 	}
 }
