@@ -230,16 +230,7 @@ func TestDedupBackChannelOrdering(t *testing.T) {
 		}
 	}
 
-	var target *gorums.Node
-	for _, node := range servers[1].PeerConfig() {
-		if node.ID() == 1 {
-			target = node
-			break
-		}
-	}
-	if target == nil {
-		t.Fatal("node 1 not found in server 2 outbound configuration")
-	}
+	target := gorumstest.PeerNode(t, servers[1].PeerConfig(), 1)
 	if !target.IsShared() {
 		t.Fatal("node 1 is not using the deduplicated stream")
 	}

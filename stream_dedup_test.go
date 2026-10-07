@@ -91,18 +91,6 @@ func newServerPair(t *testing.T, dedup bool) []*gorums.Server {
 	return gorumstest.LocalServers(t, 2, opts...)
 }
 
-// peerNode returns the node with the given id in cfg, or fails the test.
-func peerNode(t *testing.T, cfg gorums.Config, id uint32) *gorums.Node {
-	t.Helper()
-	for _, n := range cfg.Nodes() {
-		if n.ID() == id {
-			return n
-		}
-	}
-	t.Fatalf("node %d not in config", id)
-	return nil
-}
-
 func TestStreamDedupWaitForAllConcurrent(t *testing.T) {
 	for _, n := range []int{3, 5, 15, 50} {
 		t.Run(fmt.Sprintf("N=%d", n), func(t *testing.T) {
@@ -264,16 +252,7 @@ func TestStreamDedupCallBeforePeerConnectsFailsFast(t *testing.T) {
 	}
 	t.Cleanup(stop)
 
-	var node1 *gorums.Node
-	for _, node := range servers[1].PeerConfig().Nodes() {
-		if node.ID() == 1 {
-			node1 = node
-			break
-		}
-	}
-	if node1 == nil {
-		t.Fatal("server 2 outbound configuration does not contain node 1")
-	}
+	node1 := gorumstest.PeerNode(t, servers[1].PeerConfig(), 1)
 
 	ctx := gorumstest.Context(t, 5*time.Second)
 	start := time.Now()
@@ -407,16 +386,7 @@ func TestStreamDedupOwnerReconnectHealsBorrower(t *testing.T) {
 	}
 
 	// Locate the borrower's shared node for the owner.
-	var owner *gorums.Node
-	for _, node := range borrower.PeerConfig().Nodes() {
-		if node.ID() == ownerID {
-			owner = node
-			break
-		}
-	}
-	if owner == nil {
-		t.Fatal("borrower configuration does not contain the owner node")
-	}
+	owner := gorumstest.PeerNode(t, borrower.PeerConfig(), ownerID)
 
 	// The borrower's call to the owner recovers. Retrying tolerates the
 	// recurring age cycle: a drop can land between the observation above and
@@ -484,13 +454,13 @@ func TestStreamDedupBorrowerSlowHandlerDoesNotBlockOwnCalls(t *testing.T) {
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
-				n2 := peerNode(t, servers[0].PeerConfig(), 2)
+				n2 := gorumstest.PeerNode(t, servers[0].PeerConfig(), 2)
 				_, _ = gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](n2.Context(ctx), pb.String("x"), mock.TestMethod)
 			}()
 			<-started
 
 			// node 2 -> node 1 unrelated echo
-			n1 := peerNode(t, servers[1].PeerConfig(), 1)
+			n1 := gorumstest.PeerNode(t, servers[1].PeerConfig(), 1)
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
 			start := time.Now()
@@ -525,7 +495,7 @@ func TestStreamDedupOwnerSlowHandlerDoesNotBlockOwnCalls(t *testing.T) {
 			gorumstest.WaitForPeers(t, servers)
 			defer close(unblock)
 
-			n1 := peerNode(t, servers[1].PeerConfig(), 1)
+			n1 := gorumstest.PeerNode(t, servers[1].PeerConfig(), 1)
 			for range 2 {
 				go func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -536,7 +506,7 @@ func TestStreamDedupOwnerSlowHandlerDoesNotBlockOwnCalls(t *testing.T) {
 			<-started
 			time.Sleep(100 * time.Millisecond) // let the second request arrive
 
-			n2 := peerNode(t, servers[0].PeerConfig(), 2)
+			n2 := gorumstest.PeerNode(t, servers[0].PeerConfig(), 2)
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
 			start := time.Now()
@@ -560,7 +530,7 @@ func TestStreamDedupNestedCallToRequesterWithoutRelease(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			servers := newServerPair(t, dedup)
 			servers[1].RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
-				n1 := peerNode(t, ctx.PeerConfig(), 1)
+				n1 := gorumstest.PeerNode(t, ctx.PeerConfig(), 1)
 				cctx, cancel := context.WithTimeout(ctx, time.Second)
 				defer cancel()
 				resp, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](n1.Context(cctx), pb.String("inner"), mock.EchoMethod)
@@ -572,7 +542,7 @@ func TestStreamDedupNestedCallToRequesterWithoutRelease(t *testing.T) {
 			servers[0].RegisterHandler(mock.EchoMethod, gorumstest.EchoHandler("echo"))
 			gorumstest.WaitForPeers(t, servers)
 
-			n2 := peerNode(t, servers[0].PeerConfig(), 2)
+			n2 := gorumstest.PeerNode(t, servers[0].PeerConfig(), 2)
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			start := time.Now()
@@ -603,7 +573,7 @@ func TestStreamDedupInflightCallFailsWithStreamDown(t *testing.T) {
 		return nil, ctx.Err()
 	})
 	waitForDedup(t, servers)
-	n1 := peerNode(t, borrower.PeerConfig(), 1)
+	n1 := gorumstest.PeerNode(t, borrower.PeerConfig(), 1)
 	errc := make(chan error, 1)
 	go func() {
 		c, cancel := context.WithTimeout(t.Context(), 5*time.Second)
