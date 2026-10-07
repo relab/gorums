@@ -393,6 +393,7 @@ classDiagram
 
 A quorum call is dispatched lazily, on the first iteration of its response iterator, so that interceptors can be registered first.
 Each node's channel sends on its own goroutine, and responses are matched to pending calls by message ID.
+The fan-out starts at a random node of the configuration and wraps around, so no node is always enqueued last; each node still receives a caller's requests in call order.
 
 ```mermaid
 sequenceDiagram
@@ -408,7 +409,7 @@ sequenceDiagram
     Call->>CC: newQuorumCallContext
     Gen->>Call: Majority()
     Call->>CC: iterate ResponseSeq (sendNow)
-    loop each node in Config
+    loop each node in Config, from a random start
         CC->>T: conn.NodeTransport(n).Enqueue(Request)
         T->>Ch: Channel.Enqueue: push on sendQueue
     end

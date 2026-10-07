@@ -2,6 +2,7 @@ package impl
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -41,6 +42,24 @@ func (h *seqNoRecorder) first(t *testing.T) uint64 {
 	}
 	t.Fatal("timed out waiting for request dispatch")
 	return 0
+}
+
+// wait returns the recorded sequence numbers once n requests have been
+// dispatched, waiting briefly for the asynchronous handler dispatch.
+func (h *seqNoRecorder) wait(t *testing.T, n int) []uint64 {
+	t.Helper()
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
+		h.mu.Lock()
+		if len(h.seqNos) >= n {
+			seqNos := slices.Clone(h.seqNos)
+			h.mu.Unlock()
+			return seqNos
+		}
+		h.mu.Unlock()
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %d dispatched requests", n)
+	return nil
 }
 
 // TestCallContextSendSharedMessageIDs verifies that sendShared reuses a
@@ -85,5 +104,56 @@ func TestCallContextSendSharedMessageIDs(t *testing.T) {
 	}
 	if shared != stream.ServerSequenceNumber(1) {
 		t.Errorf("shared node ID = %d, want server-initiated ID %d", shared, stream.ServerSequenceNumber(1))
+	}
+}
+
+// TestCallContextSendSharedFanOutStart verifies that sendShared reaches every
+// node once per call and starts its fan-out at varying nodes, so that no node
+// is reached last in every call. Each node is a shared node that draws its
+// message ID from one counter when it is visited, so the node holding a call's
+// lowest ID was visited first.
+func TestCallContextSendSharedFanOutStart(t *testing.T) {
+	const nodes, calls = 4, 200
+	var serverID atomic.Uint64
+	serverGen := func() uint64 { return stream.ServerSequenceNumber(serverID.Add(1)) }
+	clientGen := func() uint64 { return 0 }
+
+	recorders := make([]*seqNoRecorder, nodes)
+	config := make(Config, nodes)
+	for i := range config {
+		recorders[i] = &seqNoRecorder{}
+		id := uint32(i + 1)
+		transport := stream.NewTransport(id, clientGen)
+		transport.StoreChannel(stream.NewLocalChannel(id, recorders[i]))
+		config[i] = conn.NewNodeForTest(id, stream.NewSharedTransportWithGen(transport, serverGen))
+	}
+
+	for range calls {
+		c := &CallContext[*pb.StringValue, *pb.StringValue]{
+			Context: t.Context(),
+			config:  config,
+			request: pb.String("hello"),
+			method:  "test.Method",
+			oneway:  true,
+		}
+		c.sendShared()
+	}
+
+	// Call k holds the IDs nodes*k+1 through nodes*k+nodes, in visit order.
+	serverBit := stream.ServerSequenceNumber(0)
+	for i, r := range recorders {
+		seqNos := r.wait(t, calls)
+		if len(seqNos) != calls {
+			t.Fatalf("node %d got %d requests, want %d", i+1, len(seqNos), calls)
+		}
+		first := 0
+		for _, seqNo := range seqNos {
+			if (seqNo&^serverBit-1)%nodes == 0 {
+				first++
+			}
+		}
+		if first == 0 {
+			t.Errorf("node %d was never visited first in %d calls", i+1, calls)
+		}
 	}
 }
