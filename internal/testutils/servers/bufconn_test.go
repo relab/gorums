@@ -12,7 +12,7 @@ import (
 // TestStartDialRacesSecondStart verifies that a dial for t, as issued by the
 // DialOptions dialer from a background gRPC connection attempt, is safe while
 // a second Start for the same t populates its address map. Run it with -race.
-func TestStartDialRacesSecondStart(t *testing.T) {
+func TestBufconnStartDialRacesSecondStart(t *testing.T) {
 	_, stop1 := Start(t, 1, func(int) ServerIface { return grpc.NewServer() })
 	t.Cleanup(func() { stop1() })
 

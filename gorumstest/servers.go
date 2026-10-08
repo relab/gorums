@@ -73,7 +73,7 @@ func LocalServers(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.Se
 	srvs, stop, err := gorums.NewLocalServers(n,
 		gorums.WithLocalServerOptions(opts...),
 		gorums.WithLocalDialOptions(DialOptions(t)),
-		gorums.WithLocalListeners(servers.Listen(t)),
+		gorums.WithLocalListeners(servers.ListenFunc(t)),
 	)
 	if err != nil {
 		t.Fatal(err)
