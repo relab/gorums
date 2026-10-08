@@ -473,7 +473,7 @@ func StopRemote(cc *gorums.ConfigContext, opts Options, result *Result) (map[uin
 	if err != nil {
 		return nil, err
 	}
-	AppendServerStats(result, replies)
+	result.addServerStats(replies)
 	return replies, nil
 }
 

@@ -7,13 +7,13 @@ import (
 	"github.com/relab/gorums"
 )
 
-// AppendServerStats attaches per-server memory statistics from Stop RPC replies
-// to an existing result. It is used by client-measured benchmarks (QuorumCall,
-// AsyncQuorumCall) where the client's latency samples are already in result but
-// the server-side allocations must be collected separately.
-func AppendServerStats(result *Result, replies map[uint32]*Result) {
+// addServerStats appends the memory statistics of each server's Stop reply
+// to x, in node ID order. Client-measured benchmarks, such as QuorumCall and
+// AsyncQuorumCall, use it: x already holds the client's latency samples, and
+// each server reports its allocations in its own reply.
+func (x *Result) addServerStats(replies map[uint32]*Result) {
 	for _, id := range slices.Sorted(maps.Keys(replies)) {
-		result.SetServerStats(append(result.GetServerStats(), serverMemoryStat(replies[id])))
+		x.SetServerStats(append(x.GetServerStats(), serverMemoryStat(replies[id])))
 	}
 }
 
