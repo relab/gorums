@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -16,24 +15,14 @@ import (
 // It creates a channel with the provided responses and returns a CallContext.
 func makeCallContext[Req, Resp proto.Message](t *testing.T, numNodes int, responses []NodeResponse[proto.Message]) *CallContext[Req, Resp] {
 	t.Helper()
-	c, err := newReplayCallContext[Req, Resp](t.Context(), numNodes, responses)
-	if err != nil {
-		t.Fatalf("failed to marshal mock response: %v", err)
-	}
-	return c
-}
-
-// newReplayCallContext returns a CallContext for numNodes nodes whose call
-// is already dispatched and whose responses are the given responses.
-func newReplayCallContext[Req, Resp proto.Message](ctx context.Context, numNodes int, responses []NodeResponse[proto.Message]) (*CallContext[Req, Resp], error) {
 	responseChan := make(chan NodeResponse[*stream.Message], len(responses))
 	for _, r := range responses {
 		var sm *stream.Message
 		if r.Value != nil {
 			var err error
-			sm, err = stream.NewMessage(ctx, 1, mock.TestMethod, r.Value)
+			sm, err = stream.NewMessage(t.Context(), 1, mock.TestMethod, r.Value)
 			if err != nil {
-				return nil, err
+				t.Fatalf("failed to marshal mock response: %v", err)
 			}
 		}
 		responseChan <- NodeResponse[*stream.Message]{
@@ -50,14 +39,14 @@ func newReplayCallContext[Req, Resp proto.Message](ctx context.Context, numNodes
 	}
 
 	c := &CallContext[Req, Resp]{
-		Context:      ctx,
+		Context:      t.Context(),
 		config:       config,
 		responseChan: responseChan,
 	}
 	// Mark sendOnce as done since test responses are already in the channel
 	c.sendOnce.Do(func() {})
 	c.responseSeq = c.defaultResponseSeq()
-	return c, nil
+	return c
 }
 
 // checkError returns true if the error matches the expected error.
