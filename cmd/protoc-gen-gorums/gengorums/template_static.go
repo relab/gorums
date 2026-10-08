@@ -16,7 +16,7 @@ var staticCode = `// The type aliases below are useful Gorums types that we make
 // meaning that proto message types with these names would collide with the
 // generated aliases and cause a compile error.
 //
-// The bundler (gorums_bundle.go) is responsible for discovering these
+// The protoc-gen-gorums bundler is responsible for discovering these
 // aliases and any other identifiers defined herein, and adding them to
 // the reserved identifiers list.
 //
