@@ -339,14 +339,14 @@ func (c Config) mgr() *outboundManager {
 // becomes public API.
 func WaitForAllRequired(c Config) (bool, error) {
 	mgr := c.mgr()
-	if mgr == nil || !mgr.opts.StreamDedup || mgr.opts.InboundMgr == nil {
+	if mgr == nil || !mgr.opts.StreamDedup || mgr.opts.InboundManager == nil {
 		return false, nil
 	}
 	localID := mgr.opts.LocalNodeID
 	if localID == 0 {
 		return false, errors.New("gorums: stream dedup requires a nonzero local node ID")
 	}
-	if !mgr.opts.InboundMgr.isKnown(localID) {
+	if !mgr.opts.InboundManager.isKnown(localID) {
 		return false, fmt.Errorf("gorums: stream dedup server peer configuration does not contain local node %d", localID)
 	}
 	return true, nil

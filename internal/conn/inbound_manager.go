@@ -74,23 +74,23 @@ func MetadataWithNodeID(id uint32) metadata.MD {
 //
 // InboundManager is safe for concurrent use.
 type InboundManager struct {
-	mu             sync.RWMutex
-	myID           uint32                // this server's own NodeID; always present in inboundCfg
-	knownNodes     map[uint32]*Node      // pre-created configured peers, including self when configured
-	clientNodes    map[uint32]*Node      // dynamically assigned peer-capable clients
-	peerConfig     Config                // the server's peer Config; set once by SetPeerConfig after NewConfig builds it
-	config         Config                // auto-updated connectivity-filtered subset of peerConfig, sorted by ID
-	inboundCfg     Config                // auto-updated slice of known peers with an inbound stream, sorted by ID
-	clientConfig   Config                // auto-updated slice of client peers, sorted by ID
-	nextMsgID      atomic.Uint64         // counter for server-initiated message IDs
-	sendBufferSize uint                  // send buffer size for inbound channels
-	dispatchSize   uint                  // request dispatch queue size for inbound channels
-	handler        stream.RequestHandler // handler for dispatching incoming requests on all inbound nodes
-	onConfigChange func(Config)          // optional; called after each connected-peer config change
-	nextClientID   uint64                // next candidate ID for a client peer; uint64 represents exhaustion
-	configCh       chan struct{}         // closed and replaced on each config/clientConfig change; protected by mu
-	stopCh         chan struct{}         // closed on shutdown to unblock waiters; never replaced
-	stopOnce       sync.Once             // ensures stopCh is closed exactly once
+	mu               sync.RWMutex
+	myID             uint32                // this server's own NodeID; always present in inboundPeers
+	knownNodes       map[uint32]*Node      // pre-created configured peers, including self when configured
+	clientNodes      map[uint32]*Node      // dynamically assigned peer-capable clients
+	peerConfig       Config                // the server's peer Config; set once by SetPeerConfig after NewConfig builds it
+	connectedPeers   Config                // auto-updated connectivity-filtered subset of peerConfig, sorted by ID
+	inboundPeers     Config                // auto-updated slice of known peers with an inbound stream, sorted by ID
+	connectedClients Config                // auto-updated slice of client peers, sorted by ID
+	msgIDs           atomic.Uint64         // counter for server-initiated message IDs
+	sendBufferSize   uint                  // send buffer size for inbound channels
+	dispatchSize     uint                  // request dispatch queue size for inbound channels
+	handler          stream.RequestHandler // handler for dispatching incoming requests on all inbound nodes
+	onConfigChange   func(Config)          // optional; called after each connected-peer config change
+	nextClientID     uint64                // next candidate ID for a client peer; uint64 represents exhaustion
+	configCh         chan struct{}         // closed and replaced on each connectedPeers/connectedClients change; protected by mu
+	stopCh           chan struct{}         // closed on shutdown to unblock waiters; never replaced
+	stopOnce         sync.Once             // ensures stopCh is closed exactly once
 }
 
 // ClientIDStart is the starting ID for dynamically assigned client peers.
@@ -110,12 +110,12 @@ const ClientIDStart = 1 << 20
 // their send queue and request dispatch capacities; a dispatchSize of 0
 // selects the default. It returns an error if peerNodes is invalid, for
 // example because of an invalid address or a duplicate node.
-func NewInboundManager(myID uint32, peerNodes NodeSource, sendBuffer, dispatchSize uint, onConfigChange func(Config), handler stream.RequestHandler) (*InboundManager, error) {
+func NewInboundManager(myID uint32, peerNodes NodeSource, sendBufferSize, dispatchSize uint, onConfigChange func(Config), handler stream.RequestHandler) (*InboundManager, error) {
 	im := &InboundManager{
 		myID:           myID,
 		knownNodes:     make(map[uint32]*Node),
 		clientNodes:    make(map[uint32]*Node),
-		sendBufferSize: sendBuffer,
+		sendBufferSize: sendBufferSize,
 		dispatchSize:   dispatchSize,
 		handler:        handler,
 		onConfigChange: onConfigChange,
@@ -153,7 +153,7 @@ func (im *InboundManager) ConnectedPeers() Config {
 	}
 	im.mu.RLock()
 	defer im.mu.RUnlock()
-	return im.config
+	return im.connectedPeers
 }
 
 // SetPeerConfig installs the server's peer [Config], from which the
@@ -185,7 +185,7 @@ func (im *InboundManager) ConnectedClients() Config {
 	}
 	im.mu.RLock()
 	defer im.mu.RUnlock()
-	return im.clientConfig
+	return im.connectedClients
 }
 
 // NodeID returns this server's own nodeID.
@@ -196,12 +196,12 @@ func (im *InboundManager) NodeID() uint32 {
 	return im.myID
 }
 
-// getMsgID returns the next unique message ID for server-initiated calls.
+// nextMsgID returns the next unique message ID for server-initiated calls.
 // The high bit is always set to avoid collision with client-initiated IDs.
 // Exhausting the remaining 63-bit counter space requires approximately
 // 292,000 years at one million calls per second.
-func (im *InboundManager) getMsgID() uint64 {
-	return stream.ServerSequenceNumber(im.nextMsgID.Add(1))
+func (im *InboundManager) nextMsgID() uint64 {
+	return stream.ServerSequenceNumber(im.msgIDs.Add(1))
 }
 
 // newNode creates a peer node for the given id and normalized addr and
@@ -212,9 +212,9 @@ func (im *InboundManager) getMsgID() uint64 {
 func (im *InboundManager) newNode(id uint32, addr string) (*Node, error) {
 	var node *Node
 	if id == im.myID && im.handler != nil {
-		node = newLocalNode(id, addr, im.getMsgID, im.handler, nil)
+		node = newLocalNode(id, addr, im.nextMsgID, im.handler, nil)
 	} else {
-		node = newInboundNode(id, addr, im.getMsgID)
+		node = newInboundNode(id, addr, im.nextMsgID)
 	}
 	im.knownNodes[id] = node
 	return node, nil
@@ -324,7 +324,7 @@ func (im *InboundManager) acceptClient(streamCtx context.Context, inboundStream 
 	if err != nil {
 		return nil, func() {}, err
 	}
-	node := newInboundNode(id, "client", im.getMsgID)
+	node := newInboundNode(id, "client", im.nextMsgID)
 	newCh, detach := node.attachStream(streamCtx, inboundStream, im.inboundOptions())
 	im.clientNodes[id] = node
 	im.rebuildConfig()
@@ -382,8 +382,8 @@ func (im *InboundManager) rebuildConfig() {
 	}
 	slices.SortFunc(inboundCfg, ByID)
 	slices.SortFunc(clientCfg, ByID)
-	im.inboundCfg = inboundCfg
-	im.clientConfig = clientCfg
+	im.inboundPeers = inboundCfg
+	im.connectedClients = clientCfg
 
 	cfg := inboundCfg
 	if im.peerConfig != nil {
@@ -395,8 +395,8 @@ func (im *InboundManager) rebuildConfig() {
 		}
 		slices.SortFunc(cfg, ByID)
 	}
-	cfgChanged := !slices.Equal(im.config, cfg)
-	im.config = cfg
+	cfgChanged := !slices.Equal(im.connectedPeers, cfg)
+	im.connectedPeers = cfg
 	if cfgChanged && im.onConfigChange != nil {
 		im.onConfigChange(cfg)
 	}
@@ -440,7 +440,7 @@ func (im *InboundManager) waitForConfig(ctx context.Context, cond func() bool) e
 // call back into im or otherwise acquire additional locks.
 func (im *InboundManager) WaitForPeers(ctx context.Context, cond func(Config) bool) error {
 	return im.waitForConfig(ctx, func() bool {
-		return cond(im.config)
+		return cond(im.connectedPeers)
 	})
 }
 
@@ -450,7 +450,7 @@ func (im *InboundManager) WaitForPeers(ctx context.Context, cond func(Config) bo
 // locks.
 func (im *InboundManager) WaitForClients(ctx context.Context, cond func(Config) bool) error {
 	return im.waitForConfig(ctx, func() bool {
-		return cond(im.clientConfig)
+		return cond(im.connectedClients)
 	})
 }
 
@@ -461,7 +461,7 @@ func (im *InboundManager) WaitForClients(ctx context.Context, cond func(Config) 
 func (im *InboundManager) InboundPeers() Config {
 	im.mu.RLock()
 	defer im.mu.RUnlock()
-	return im.inboundCfg
+	return im.inboundPeers
 }
 
 // WaitForInbound blocks until cond returns true for the current inbound peer
@@ -470,7 +470,7 @@ func (im *InboundManager) InboundPeers() Config {
 // call back into im or otherwise acquire additional locks.
 func (im *InboundManager) WaitForInbound(ctx context.Context, cond func(Config) bool) error {
 	return im.waitForConfig(ctx, func() bool {
-		return cond(im.inboundCfg)
+		return cond(im.inboundPeers)
 	})
 }
 
