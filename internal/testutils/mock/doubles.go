@@ -3,37 +3,63 @@ package mock
 import (
 	"io"
 	"slices"
+	"sync"
 	"testing"
 )
 
 // The test doubles in this file must not import internal/stream or
 // internal/conn: package-internal tests of both import this package.
 
-// BidiStream is a bidirectional stream double for message type M.
-// Send discards every message. Recv blocks until [BidiStream.Close] is called
-// and then returns io.EOF. The type *BidiStream[*stream.Message] satisfies
-// stream.BidiStream.
+// BidiStream is a bidirectional stream double for message type M. Recv
+// blocks until a message is available or [BidiStream.Close] is called, and
+// returns io.EOF after Close. A stream from [NewBidiStream] discards every sent
+// message; a stream from [NewEchoBidiStream] returns sent messages from Recv in
+// order. The type *BidiStream[*stream.Message] satisfies stream.BidiStream.
 type BidiStream[M any] struct {
-	done chan struct{}
+	echo      chan M // nil unless the stream echoes
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
-// NewBidiStream returns an open [BidiStream].
+// NewBidiStream returns an open [BidiStream] that discards sent messages.
 func NewBidiStream[M any]() *BidiStream[M] {
 	return &BidiStream[M]{done: make(chan struct{})}
 }
 
-// Send discards msg and returns nil.
-func (*BidiStream[M]) Send(M) error { return nil }
-
-// Recv blocks until s is closed and then returns io.EOF.
-func (s *BidiStream[M]) Recv() (M, error) {
-	<-s.done
-	var zero M
-	return zero, io.EOF
+// NewEchoBidiStream returns an open [BidiStream] that returns sent messages
+// from Recv. Send blocks while 16 sent messages wait to be received.
+func NewEchoBidiStream[M any]() *BidiStream[M] {
+	return &BidiStream[M]{echo: make(chan M, 16), done: make(chan struct{})}
 }
 
-// Close closes s, which makes Recv return io.EOF. Call Close only once.
-func (s *BidiStream[M]) Close() { close(s.done) }
+// Send discards msg, or queues it for Recv if s echoes. Send on a closed
+// echoing stream returns io.EOF.
+func (s *BidiStream[M]) Send(msg M) error {
+	if s.echo == nil {
+		return nil
+	}
+	select {
+	case s.echo <- msg:
+		return nil
+	case <-s.done:
+		return io.EOF
+	}
+}
+
+// Recv returns the next echoed message, or io.EOF once s is closed.
+func (s *BidiStream[M]) Recv() (M, error) {
+	select {
+	case msg := <-s.echo:
+		return msg, nil
+	case <-s.done:
+		var zero M
+		return zero, io.EOF
+	}
+}
+
+// Close closes s, which makes Recv return io.EOF. It is safe to call Close
+// more than once.
+func (s *BidiStream[M]) Close() { s.closeOnce.Do(func() { close(s.done) }) }
 
 // NodeAddr is a node network address that implements conn.NodeAddress,
 // so a map[uint32]NodeAddr can be passed to conn.WithNodes.

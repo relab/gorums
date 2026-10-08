@@ -10,24 +10,6 @@ import (
 // requestHandlerFunc adapts a function to [RequestHandler].
 type requestHandlerFunc func(context.Context, *Message, func(), func(*Message))
 
-// mockBidiStream is a bidirectional stream for testing inbound channels.
-// Send echoes messages back via Recv (echo behavior).
-// Call close() to simulate the stream being torn down.
-type mockBidiStream struct {
-	msgQ   chan *Message
-	ctx    context.Context
-	cancel context.CancelFunc
-}
-
-func newMockBidiStream() *mockBidiStream {
-	ctx, cancel := context.WithCancel(context.Background())
-	return &mockBidiStream{
-		msgQ:   make(chan *Message, 16),
-		ctx:    ctx,
-		cancel: cancel,
-	}
-}
-
 // goroutineID returns the calling goroutine's ID, parsed from the header line
 // of its stack trace ("goroutine N [...]").
 func goroutineID() uint64 {
