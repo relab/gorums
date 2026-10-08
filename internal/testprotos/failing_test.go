@@ -30,7 +30,7 @@ func TestFailingProtoFiles(t *testing.T) {
 					_ = os.Remove(f)
 				}
 			})
-			out, err := protoc.Run("sourceRelative", tt.proto)
+			out, err := protoc.Run(tt.proto)
 			if err == nil {
 				t.Fatalf("expected protoc to fail with:\n%s", out)
 			}
