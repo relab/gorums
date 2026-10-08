@@ -25,7 +25,7 @@ const (
 	// finishing and the next starting.
 	healthProbeTimeout = 8 * time.Second
 	// healthProbePings and healthProbePingDeadlineS size the ping-ring bonus
-	// check. They are tighter than netcheck's preflight probe (netcheck.go),
+	// check. They are tighter than the preflight probe of [checkNetworkHealth],
 	// which affords a full 8s deadline before the sweep even starts; this
 	// probe runs mid-sweep and must stay cheap.
 	healthProbePings         = 5
@@ -130,7 +130,7 @@ func healthProbePath(outdir, base string) string {
 // <outdir>/logs/<base>_health.txt. remoteRoot is the storage namespace
 // diagCommand inspects for free space and staleness (cfg.remoteDir, not a
 // hardcoded path), so the probe reports on the directory the sweep actually
-// uses. It reuses the diag.go probe machinery over g's already-connected SSH
+// uses. It reuses the [diagCommand] probe machinery over g's already-connected SSH
 // sessions rather than opening new connections. It returns the written path,
 // or "" when there was nothing to probe or the probe could not even be
 // started; either way it is best-effort — a probe failure is logged and

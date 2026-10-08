@@ -24,7 +24,7 @@ const (
 
 	// runStatusDegraded marks a run that completed with all result files
 	// collected but where at least one node's throughput fell below the
-	// -degraded-below fraction of the run median (see degraded.go). Its data
+	// -degraded-below fraction of the run median (see [findDegradedNodes]). Its data
 	// is intact and flows into the per-node plot data for diagnosis, but the
 	// aggregate is contaminated by the slow node, so headline plots treat it
 	// like a failure.
@@ -70,7 +70,7 @@ type runManifest struct {
 
 	// TCPStats holds per-host TCP counter deltas over the run (host alias →
 	// counter → increase), recorded for every run as loss forensics; see
-	// tcpstats.go. A host with no advanced counters is omitted.
+	// [diffTCPStats]. A host with no advanced counters is omitted.
 	TCPStats map[string]map[string]uint64 `json:"tcp_stats,omitempty"`
 
 	Diagnosis string `json:"diagnosis,omitempty"` // LLM triage verdict from sweep -explain

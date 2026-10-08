@@ -39,7 +39,7 @@ type hostDiag struct {
 }
 
 // checkTCPAllowlist names the /proc/net counters read for the -check table.
-// It is separate from the manifest's tcpCounterAllowlist (see tcpstats.go): the
+// It is separate from the manifest's [tcpCounterAllowlist]: the
 // check reports a since-boot retransmit ratio (RetransSegs/OutSegs) and the
 // setup-loss counter (TCPSynRetrans), so it needs OutSegs as the denominator,
 // which the per-run manifest deltas do not record.

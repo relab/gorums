@@ -11,8 +11,8 @@ import (
 // values (latencies in nanoseconds), after the HdrHistogram design
 // (hdrhistogram.org): bucket widths grow with the value's magnitude so every
 // recorded value is resolved to the configured number of significant figures,
-// in O(1) record time and constant memory. It backs StatsMode_HDR (see
-// store.go).
+// in O(1) record time and constant memory. It backs StatsMode_HDR through
+// [hdrStore].
 //
 // The API mirrors the common HdrHistogram bindings (RecordValue,
 // ValueAtQuantile, Mean, StdDev, TotalCount, Min, Max), so switching to a

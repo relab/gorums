@@ -82,7 +82,7 @@ func TestPlotDataExactSamples(t *testing.T) {
 
 // TestAggregatePlotRunUsesMeasurementMode verifies that aggregatePlotRun
 // sums throughput from client-measured nodes only when any exist, matching
-// mergeResults (summary.go) exactly: a PBFT-style primary-client run reports
+// [mergeResults] exactly: a PBFT-style primary-client run reports
 // the primary's client ops/s, not primary+Σbackup execute rates, even though
 // the server-measured backups here also carry latency samples (server
 // measured EXACT results do) — the case that defeats a "has latency data"

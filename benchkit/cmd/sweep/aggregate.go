@@ -166,7 +166,7 @@ const repOutlierSpread = 1.4
 // repOutliers describes every repetition whose throughput differs from its
 // configuration's median by more than spread in either direction, in run-base
 // order. It is the report's defense in depth behind the sweep's own per-node
-// bounds (see degraded.go): a directory collected before those bounds existed,
+// bounds (see [findDegradedNodes]): a directory collected before those bounds existed,
 // or with them disabled, still gets its contaminated repetitions named rather
 // than silently averaged in. Repetitions already flagged degraded are left out,
 // since they are reported as such, and a configuration with fewer than three
