@@ -9,7 +9,7 @@ import (
 // and for each call type in the service definition. It returns an error if the
 // file cannot be generated as written.
 func GenerateDevFiles(gen *protogen.Plugin, file *protogen.File) error {
-	if ok, err := gorumsGuard(gen, file); !ok {
+	if ok, err := shouldGenerate(gen, file); !ok {
 		return err
 	}
 	for gorumsType := range gorumsCallTypesInfo {

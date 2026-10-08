@@ -17,7 +17,7 @@ import (
 // GenerateFile generates a _gorums.pb.go file containing Gorums service
 // definitions. It returns an error if the file cannot be generated as written.
 func GenerateFile(gen *protogen.Plugin, file *protogen.File) error {
-	if ok, err := gorumsGuard(gen, file); !ok {
+	if ok, err := shouldGenerate(gen, file); !ok {
 		return err
 	}
 	filename := file.GeneratedFilenamePrefix + "_gorums.pb.go"
@@ -66,10 +66,10 @@ func genVersionCheck(g *protogen.GeneratedFile) {
 	g.P()
 }
 
-// gorumsGuard reports whether there is something for Gorums to generate for
-// the given file. It returns an error, and false, if the file has Gorums
+// shouldGenerate reports whether there is something for Gorums to generate
+// for the given file. It returns an error, and false, if the file has Gorums
 // methods but cannot be generated as written.
-func gorumsGuard(gen *protogen.Plugin, file *protogen.File) (bool, error) {
+func shouldGenerate(gen *protogen.Plugin, file *protogen.File) (bool, error) {
 	if len(file.Services) == 0 || !hasGorumsMethods(file.Services) {
 		// there is nothing for this plugin to do
 		return false, nil
@@ -176,52 +176,58 @@ func genReferenceImports(g *protogen.GeneratedFile, services []*protogen.Service
 	}
 }
 
-// genGorumsType generates Gorums methods and corresponding data structures for the given call type.
-func genGorumsType(g *protogen.GeneratedFile, services []*protogen.Service, callType string) {
-	if callTypeInfo := gorumsCallTypesInfo[callType]; callTypeInfo.extInfo == nil {
+// genGorumsType generates the service-level code for the named entry in
+// [gorumsCallTypesInfo], such as "types" or "server". It generates nothing
+// for an entry that belongs to a method option.
+func genGorumsType(g *protogen.GeneratedFile, services []*protogen.Service, name string) {
+	if info := gorumsCallTypesInfo[name]; info.ext == nil {
 		// servicesData hold the services to generate and a reference to the file in which
 		// the services should be generated. This is data to be used by template generator.
 		type servicesData struct {
 			GenFile  *protogen.GeneratedFile
 			Services []*protogen.Service
 		}
-		g.P(mustExecute(parseTemplate(callType, callTypeInfo.template), servicesData{g, services}))
+		g.P(mustExecute(parseTemplate(name, info.template), servicesData{g, services}))
 	}
 }
 
-// genGorumsMethods generates Gorums methods for the given call type.
-func genGorumsMethods(g *protogen.GeneratedFile, services []*protogen.Service, callType string) {
+// genGorumsMethods generates the Gorums methods of the given services whose
+// call type is target. An empty target generates the methods of all call
+// types.
+func genGorumsMethods(g *protogen.GeneratedFile, services []*protogen.Service, target string) {
 	for _, service := range services {
 		for _, method := range service.Methods {
-			genMethod(g, method, callType)
+			genMethod(g, method, target)
 		}
 	}
 }
 
-// genMethod generates the Gorums method for the given method and call type.
-func genMethod(g *protogen.GeneratedFile, method *protogen.Method, targetType string) {
-	typeName, info := callType(method)
+// genMethod generates the Gorums method for the given method if its call
+// type is target. An empty target matches any call type.
+func genMethod(g *protogen.GeneratedFile, method *protogen.Method, target string) {
+	name, info := callType(method)
 	if info == nil {
 		return
 	}
-	if targetType != "" && targetType != typeName {
+	if target != "" && target != name {
 		return
 	}
 	type methodData struct {
 		GenFile *protogen.GeneratedFile
 		Method  *protogen.Method
 	}
-	g.P(mustExecute(parseTemplate(typeName, info.template), methodData{g, method}))
+	g.P(mustExecute(parseTemplate(name, info.template), methodData{g, method}))
 }
 
-// callType returns call type information for the given method.
-// If the given method has specified a Gorums method option that
-// correspond to a call type, this call type is returned. Further,
-// if the call type has a sub call type, then this is returned instead.
+// callType returns the name and information of the call type that matches
+// the given method. The name is the key in [gorumsCallTypesInfo]. If that
+// entry has a nested call type that matches the method, the returned
+// information is the nested entry's. It returns "" and nil if no call type
+// matches.
 func callType(method *protogen.Method) (string, *callTypeInfo) {
-	for name, callTypeInfo := range gorumsCallTypesInfo {
-		if callType := callTypeInfo.deriveCallType(method); callType.check(method) {
-			return name, callType
+	for name, info := range gorumsCallTypesInfo {
+		if info = info.resolve(method); info.matches(method) {
+			return name, info
 		}
 	}
 	return "", nil
@@ -232,7 +238,7 @@ func callType(method *protogen.Method) (string, *callTypeInfo) {
 func hasGorumsMethods(services []*protogen.Service) bool {
 	for _, service := range services {
 		for _, method := range service.Methods {
-			if _, callType := callType(method); callType != nil {
+			if _, info := callType(method); info != nil {
 				return true
 			}
 		}
@@ -240,31 +246,39 @@ func hasGorumsMethods(services []*protogen.Service) bool {
 	return false
 }
 
-// callTypeInfo holds the extension for an option type, the template used to
-// generate a method annotated with the option, and a chkFn function that
-// returns true if code for the option type should be generated for the given
-// method.
+// callTypeInfo describes how to generate code for one call type.
 type callTypeInfo struct {
-	extInfo        *protoimpl.ExtensionInfo
-	template       string
-	chkFn          func(m *protogen.Method) bool
-	nestedCallType map[string]*callTypeInfo
+	// ext is the Gorums method option of this call type.
+	// It is nil for the service-level entries, such as "types" and "server".
+	ext *protoimpl.ExtensionInfo
+	// template generates the code for this call type. For a method option,
+	// it generates one method; for a service-level entry, it generates the
+	// code for all services. It is empty if nested holds the templates.
+	template string
+	// match reports whether a method has this call type.
+	// It is nil for the service-level entries, which match no method.
+	match func(m *protogen.Method) bool
+	// nested holds the variants of this call type, keyed by variant name.
+	// The variant whose match accepts a method replaces this entry for that
+	// method. The variants of an entry are mutually exclusive.
+	nested map[string]*callTypeInfo
 }
 
-// check returns true if the given method is associated with this call type.
-func (c *callTypeInfo) check(m *protogen.Method) bool {
-	if c != nil && c.chkFn != nil {
-		return c.chkFn(m)
+// matches reports whether the given method has this call type.
+func (c *callTypeInfo) matches(m *protogen.Method) bool {
+	if c != nil && c.match != nil {
+		return c.match(m)
 	}
 	return false
 }
 
-// deriveCallType resolves the nested call type if any.
-func (c *callTypeInfo) deriveCallType(m *protogen.Method) *callTypeInfo {
+// resolve returns the nested call type that matches the given method,
+// or c if no nested call type matches.
+func (c *callTypeInfo) resolve(m *protogen.Method) *callTypeInfo {
 	if c != nil {
-		for _, nestedCallType := range c.nestedCallType {
-			if nestedCallType.chkFn(m) {
-				return nestedCallType
+		for _, nested := range c.nested {
+			if nested.match(m) {
+				return nested
 			}
 		}
 	}
@@ -277,55 +291,54 @@ func callTypeName(ext *protoimpl.ExtensionInfo) string {
 	return s[strings.LastIndex(s, ".")+1:]
 }
 
-// gorumsCallTypesInfo maps Gorums call type names to callTypeInfo.
-// This includes details such as the template, extension info and
-// a chkFn function used to check for the particular call type.
-// The entries in this map is used to generate dev/zorums_{type}.pb.go
-// files for the different keys.
+// gorumsCallTypesInfo maps each Gorums call type name to its [callTypeInfo].
+// The method option entries are mutually exclusive: at most one matches a
+// given method. In dev mode, each key names a generated
+// zorums_{key}_gorums.pb.go file.
 var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	"types":  {template: dataTypes},
 	"server": {template: server},
 
 	callTypeName(gorums.E_Remotecall): {
-		extInfo:  gorums.E_Remotecall,
+		ext:      gorums.E_Remotecall,
 		template: remoteCall,
-		chkFn: func(m *protogen.Method) bool {
+		match: func(m *protogen.Method) bool {
 			return !hasMethodOption(m, gorumsCallTypes...)
 		},
 	},
 	callTypeName(gorums.E_Quorumcall): {
-		extInfo: gorums.E_Quorumcall,
-		chkFn: func(m *protogen.Method) bool {
+		ext: gorums.E_Quorumcall,
+		match: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Quorumcall)
 		},
-		nestedCallType: map[string]*callTypeInfo{
+		nested: map[string]*callTypeInfo{
 			"quorumcall": {
-				extInfo:  gorums.E_Quorumcall,
+				ext:      gorums.E_Quorumcall,
 				template: quorumCall,
-				chkFn: func(m *protogen.Method) bool {
+				match: func(m *protogen.Method) bool {
 					return hasMethodOption(m, gorums.E_Quorumcall) && !m.Desc.IsStreamingServer()
 				},
 			},
 			"quorumcall_stream": {
-				extInfo:  gorums.E_Quorumcall,
+				ext:      gorums.E_Quorumcall,
 				template: quorumCallStream,
-				chkFn: func(m *protogen.Method) bool {
+				match: func(m *protogen.Method) bool {
 					return hasMethodOption(m, gorums.E_Quorumcall) && m.Desc.IsStreamingServer()
 				},
 			},
 		},
 	},
 	callTypeName(gorums.E_Multicast): {
-		extInfo:  gorums.E_Multicast,
+		ext:      gorums.E_Multicast,
 		template: multicastCall,
-		chkFn: func(m *protogen.Method) bool {
+		match: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Multicast)
 		},
 	},
 	callTypeName(gorums.E_Unicast): {
-		extInfo:  gorums.E_Unicast,
+		ext:      gorums.E_Unicast,
 		template: unicastCall,
-		chkFn: func(m *protogen.Method) bool {
+		match: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Unicast)
 		},
 	},
@@ -339,11 +352,11 @@ var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Unicast,
 }
 
-// hasMethodOption returns true if the method has one of the given method options.
-func hasMethodOption(method *protogen.Method, methodOptions ...*protoimpl.ExtensionInfo) bool {
-	ext := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
-	for _, callType := range methodOptions {
-		if proto.HasExtension(ext, callType) {
+// hasMethodOption reports whether the method has one of the given method options.
+func hasMethodOption(method *protogen.Method, exts ...*protoimpl.ExtensionInfo) bool {
+	options := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
+	for _, ext := range exts {
+		if proto.HasExtension(options, ext) {
 			return true
 		}
 	}
