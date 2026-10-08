@@ -35,10 +35,10 @@ These aliases make the most commonly used Gorums types available without requiri
 Each name declared in `aliases.go` (and any other non-ignored file in `dev/`) is also added to the **reserved identifier list**.
 The Gorums generator rejects proto files whose messages, enums, or RPC methods use a reserved identifier as their Go name, checking every file of the service's Go package, since such a name collides with the generated alias.
 
-The bundler (`gorums_bundle.go`) discovers reserved identifiers by inspecting `TypesInfo.Defs` for all exported, package-scope declarations in the dev package.
+The bundler (`gengorums/bundle.go`) discovers reserved identifiers by inspecting `TypesInfo.Defs` for all exported, package-scope declarations in the dev package.
 This means that simply declaring a type alias (or any other exported top-level name) in `aliases.go` is sufficient to reserve that name — no extra annotation is needed.
 
-The `TestReservedIdentifiers` test in `gengorums/gorums_bundle_test.go` pins the expected set.
+The `TestBundleReservedIdentifiers` test in `gengorums/bundle_test.go` pins the expected set.
 If you add or remove an alias, update that test to match.
 
 Any changes to templates or static code requires the invocation of `make` in order to:
