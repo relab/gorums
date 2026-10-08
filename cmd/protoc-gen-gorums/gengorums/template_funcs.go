@@ -10,28 +10,12 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 )
 
-// importMap holds the mapping between short-hand import name
-// and full import path for the default package.
+// importMap maps a package name to its import path. The templates' use
+// function resolves a "pkg.Ident" reference through it, and [addImport]
+// adds the packages that [staticCode] imports.
 var importMap = map[string]protogen.GoImportPath{
-	"io":           protogen.GoImportPath("io"),
-	"time":         protogen.GoImportPath("time"),
-	"fmt":          protogen.GoImportPath("fmt"),
-	"log":          protogen.GoImportPath("log"),
-	"math":         protogen.GoImportPath("math"),
-	"rand":         protogen.GoImportPath("math/rand"),
-	"sync":         protogen.GoImportPath("sync"),
-	"atomic":       protogen.GoImportPath("sync/atomic"),
-	"context":      protogen.GoImportPath("context"),
-	"trace":        protogen.GoImportPath("golang.org/x/net/trace"),
-	"grpc":         protogen.GoImportPath("google.golang.org/grpc"),
-	"codes":        protogen.GoImportPath("google.golang.org/grpc/codes"),
-	"status":       protogen.GoImportPath("google.golang.org/grpc/status"),
-	"backoff":      protogen.GoImportPath("google.golang.org/grpc/backoff"),
-	"proto":        protogen.GoImportPath("google.golang.org/protobuf/proto"),
-	"gorums":       protogen.GoImportPath("github.com/relab/gorums"),
-	"gorumsimpl":   protogen.GoImportPath("github.com/relab/gorums/runtime/gorumsimpl"),
-	"stream":       protogen.GoImportPath("github.com/relab/gorums/internal/stream"),
-	"protoreflect": protogen.GoImportPath("google.golang.org/protobuf/reflect/protoreflect"),
+	"gorums":     protogen.GoImportPath("github.com/relab/gorums"),
+	"gorumsimpl": protogen.GoImportPath("github.com/relab/gorums/runtime/gorumsimpl"),
 }
 
 func addImport(path, ident string, g *protogen.GeneratedFile) string {
