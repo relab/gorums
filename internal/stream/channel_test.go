@@ -520,8 +520,8 @@ func TestChannelEagerReconnectRecordsStreamFailure(t *testing.T) {
 // TestChannelCloseCancelsOnlyOwnedPendingRequests verifies that closing one
 // of a node's inbound channels fails only the calls pending on that channel.
 func TestChannelCloseCancelsOnlyOwnedPendingRequests(t *testing.T) {
-	oldStream := mock.NewEchoBidiStream[*Message]()
-	newStream := mock.NewEchoBidiStream[*Message]()
+	oldStream := mock.NewBidiStream[*Message]()
+	newStream := mock.NewBidiStream[*Message]()
 	t.Cleanup(oldStream.Close)
 	t.Cleanup(newStream.Close)
 	oldChannel := NewInboundChannel(t.Context(), 1, oldStream, InboundOptions{SendBufferSize: 1})
@@ -1234,7 +1234,7 @@ func TestChannelSessionDispatchesOnlyServerInitiatedUnknownMessages(t *testing.T
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stream := mock.NewEchoBidiStream[*Message]()
+			stream := mock.NewBidiStream[*Message]()
 			handler := &signalingRequestHandler{called: make(chan *Message, 1)}
 			e := newEndpoint(t.Context(), 1, 1, 0, handler, nil)
 			ctx, cancel := context.WithCancel(e.ctx)
@@ -1247,12 +1247,11 @@ func TestChannelSessionDispatchesOnlyServerInitiatedUnknownMessages(t *testing.T
 				close(done)
 			}()
 
-			// The echo stream delivers the sent message to the session's Recv.
-			if err := stream.Send(Message_builder{
+			if err := stream.Deliver(Message_builder{
 				MessageSeqNo: tt.msgID,
 				Method:       mock.TestMethod,
 			}.Build()); err != nil {
-				t.Fatalf("Send() error: %v", err)
+				t.Fatalf("Deliver() error: %v", err)
 			}
 
 			if tt.wantHandle {

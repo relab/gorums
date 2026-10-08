@@ -16,36 +16,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// recordingBidiStream is a [stream.BidiStream] that records every message
-// passed to Send, so a test can observe which of several overlapping inbound
-// streams actually carried a reply.
-type recordingBidiStream struct {
-	sent chan *stream.Message
-	recv chan *stream.Message
-}
-
-func newRecordingBidiStream() *recordingBidiStream {
-	return &recordingBidiStream{
-		sent: make(chan *stream.Message, 16),
-		recv: make(chan *stream.Message, 16),
-	}
-}
-
-func (s *recordingBidiStream) Send(msg *stream.Message) error {
-	s.sent <- msg
-	return nil
-}
-
-func (s *recordingBidiStream) Recv() (*stream.Message, error) {
-	msg, ok := <-s.recv
-	if !ok {
-		return nil, io.EOF
-	}
-	return msg, nil
-}
-
-func (s *recordingBidiStream) close() { close(s.recv) }
-
 // requestHandlerFunc adapts a function to [stream.RequestHandler].
 type requestHandlerFunc func(context.Context, *stream.Message, func(), func(*stream.Message))
 
@@ -576,8 +546,8 @@ func TestInboundManagerAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 		t.Fatalf("NewInboundManager: %v", err)
 	}
 
-	survivor := newRecordingBidiStream()
-	t.Cleanup(survivor.close)
+	survivor := mock.NewRecordingBidiStream[*stream.Message]()
+	t.Cleanup(survivor.Close)
 	survivorCh, cleanupSurvivor, err := im.AcceptPeer(inboundCtx(t.Context(), 2), survivor)
 	if err != nil {
 		t.Fatalf("AcceptPeer(survivor) error: %v", err)
@@ -585,8 +555,8 @@ func TestInboundManagerAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 	t.Cleanup(cleanupSurvivor)
 
 	// A second stream registers and becomes the node's active channel.
-	active := newRecordingBidiStream()
-	t.Cleanup(active.close)
+	active := mock.NewRecordingBidiStream[*stream.Message]()
+	t.Cleanup(active.Close)
 	_, cleanupActive, err := im.AcceptPeer(inboundCtx(t.Context(), 2), active)
 	if err != nil {
 		t.Fatalf("AcceptPeer(active) error: %v", err)
@@ -596,10 +566,12 @@ func TestInboundManagerAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 	// The survivor receives a request; the handler echoes it as the reply.
 	const replySeqNo = 42
 	go func() { _ = survivorCh.Serve() }()
-	survivor.recv <- stream.Message_builder{MessageSeqNo: replySeqNo, Method: mock.TestMethod}.Build()
+	if err := survivor.Deliver(stream.Message_builder{MessageSeqNo: replySeqNo, Method: mock.TestMethod}.Build()); err != nil {
+		t.Fatalf("Deliver() error: %v", err)
+	}
 
 	select {
-	case got := <-survivor.sent:
+	case got := <-survivor.Sent():
 		if got.GetMessageSeqNo() != replySeqNo {
 			t.Errorf("survivor stream carried message %d; want %d", got.GetMessageSeqNo(), replySeqNo)
 		}
@@ -607,7 +579,7 @@ func TestInboundManagerAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 		t.Fatal("reply for a request received on the survivor stream never rode that stream")
 	}
 	select {
-	case got := <-active.sent:
+	case got := <-active.Sent():
 		t.Errorf("reply rode the active stream (message %d) instead of the receiving stream", got.GetMessageSeqNo())
 	case <-time.After(100 * time.Millisecond):
 		// Expected: the active stream carried nothing.
