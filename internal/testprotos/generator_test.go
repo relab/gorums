@@ -12,7 +12,6 @@ import (
 
 var skipDirs = map[string]struct{}{
 	"failing": {},
-	"zorums":  {},
 }
 
 // TestGenerateProtoFiles generates single RPC calls for different call types.
@@ -41,7 +40,7 @@ func TestGenerateProtoFiles(t *testing.T) {
 
 	err = filepath.Walk(".",
 		taskFn(".proto", func(path string) error {
-			_, err := protoc.Run(path)
+			_, err := protoc.Run(".", path)
 			return err
 		}))
 	if err != nil {

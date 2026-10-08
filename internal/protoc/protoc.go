@@ -9,17 +9,19 @@ import (
 )
 
 // Run runs protoc with the Go and Gorums plugins, writing source-relative
-// output next to each input. The last argument should be the proto filename.
+// output under outDir. With outDir ".", the output lands next to each input.
+// The import paths are the current directory and the repository root.
+// The last argument should be the proto filename.
 // Run returns protoc's combined output, and an error if the repository root
 // cannot be found or protoc fails.
-func Run(args ...string) (string, error) {
+func Run(outDir string, args ...string) (string, error) {
 	root, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return "", fmt.Errorf("protoc: find repository root: %w", err)
 	}
 	cmd := exec.Command("protoc", "-I.:"+strings.TrimSpace(string(root)),
-		"--go_out=paths=source_relative:.",
-		"--gorums_out=paths=source_relative:.",
+		"--go_out=paths=source_relative:"+outDir,
+		"--gorums_out=paths=source_relative:"+outDir,
 		"--go_opt=default_api_level=API_OPAQUE",
 	)
 	cmd.Args = append(cmd.Args, args...)
