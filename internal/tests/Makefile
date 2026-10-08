@@ -1,7 +1,7 @@
 # Tests that should be run each time
-TESTS := ordering metadata tls unresponsive oneway config correctable
+TESTS := ordering metadata tls unresponsive oneway correctable
 
-.PHONY: all clean ordering metadata tls unresponsive oneway config correctable
+.PHONY: all clean ordering metadata tls unresponsive oneway correctable
 
 all: $(TESTS)
 
@@ -14,8 +14,6 @@ tls: tls/tls.pb.go tls/tls_gorums.pb.go
 unresponsive: unresponsive/unresponsive.pb.go unresponsive/unresponsive_gorums.pb.go
 
 oneway: oneway/oneway.pb.go oneway/oneway_gorums.pb.go
-
-config: config/config.pb.go config/config_gorums.pb.go
 
 correctable: correctable/correctable.pb.go correctable/correctable_gorums.pb.go
 

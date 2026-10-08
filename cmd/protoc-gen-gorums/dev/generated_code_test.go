@@ -103,3 +103,48 @@ func TestGeneratedCodeQuorumCall(t *testing.T) {
 		})
 	}
 }
+
+// TestGeneratedCodeDerivedConfig checks that the generated QuorumCall works on
+// configurations derived with Remove, Union, and Difference.
+func TestGeneratedCodeDerivedConfig(t *testing.T) {
+	base := gorumstest.Config(t, 6, newQuorumCallServer)
+	removed := base.Remove(1, 2)
+	union := base.Union(removed)
+
+	tests := []struct {
+		name     string
+		config   dev.Config
+		wantSize int
+	}{
+		{name: "Base", config: base, wantSize: 6},
+		{name: "Remove", config: removed, wantSize: 4},
+		{name: "Union", config: union, wantSize: 6},
+		{name: "Difference", config: union.Difference(removed), wantSize: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.config.Size(); got != tt.wantSize {
+				t.Fatalf("config.Size() = %d, want %d", got, tt.wantSize)
+			}
+			ctx := tt.config.Context(gorumstest.Context(t, 2*time.Second))
+			req := &dev.Request{}
+			req.SetValue("test")
+
+			resp, err := dev.QuorumCall(ctx, req).Majority()
+			if err != nil {
+				t.Fatalf("QuorumCall failed: %v", err)
+			}
+			if got := resp.GetResult(); got != 4 {
+				t.Errorf("QuorumCall result = %d, want 4", got)
+			}
+
+			replies := 0
+			for range dev.QuorumCall(ctx, req).Results().CollectAll() {
+				replies++
+			}
+			if replies != tt.wantSize {
+				t.Errorf("CollectAll got %d replies, want %d", replies, tt.wantSize)
+			}
+		})
+	}
+}
