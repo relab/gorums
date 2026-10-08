@@ -25,9 +25,9 @@ func Start(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]strin
 	return startServers(t, numServers, srvFn, listenFn)
 }
 
-// Listen returns a function that creates a TCP listener on a random localhost
+// ListenFunc returns a function that creates a TCP listener on a random localhost
 // port.
-func Listen(_ testing.TB) func() (net.Listener, error) {
+func ListenFunc(_ testing.TB) func() (net.Listener, error) {
 	return func() (net.Listener, error) { return net.Listen("tcp", "127.0.0.1:0") }
 }
 

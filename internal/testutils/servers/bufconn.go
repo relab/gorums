@@ -90,9 +90,9 @@ func Start(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]strin
 	return startServers(t, numServers, srvFn, func(int) net.Listener { return listenFn() })
 }
 
-// Listen returns a function that creates an in-memory bufconn listener with a
+// ListenFunc returns a function that creates an in-memory bufconn listener with a
 // unique address, which the dialer from [DialOptions] for t can reach.
-func Listen(t testing.TB) func() (net.Listener, error) {
+func ListenFunc(t testing.TB) func() (net.Listener, error) {
 	listenFn := newListenFunc(t)
 	return func() (net.Listener, error) { return listenFn(), nil }
 }
