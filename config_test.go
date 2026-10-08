@@ -9,25 +9,18 @@ import (
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
+	"github.com/relab/gorums/internal/testutils/mock"
 )
 
 var (
 	nodeList = []string{"127.0.0.1:9081", "127.0.0.1:9082", "127.0.0.1:9083"}
-	nodeMap  = map[uint32]testNode{
-		1: {addr: "127.0.0.1:9081"},
-		2: {addr: "127.0.0.1:9082"},
-		3: {addr: "127.0.0.1:9083"},
-		4: {addr: "127.0.0.1:9084"},
+	nodeMap  = map[uint32]mock.NodeAddr{
+		1: "127.0.0.1:9081",
+		2: "127.0.0.1:9082",
+		3: "127.0.0.1:9083",
+		4: "127.0.0.1:9084",
 	}
 )
-
-type testNode struct {
-	addr string
-}
-
-func (n testNode) Addr() string {
-	return n.addr
-}
 
 func TestNewConfig(t *testing.T) {
 	tests := []struct {
@@ -53,22 +46,22 @@ func TestNewConfig(t *testing.T) {
 		},
 		{
 			name:    "WithNodes/Reject/EmptyNodeMap",
-			nodes:   gorums.WithNodes(map[uint32]testNode{}),
+			nodes:   gorums.WithNodes(map[uint32]mock.NodeAddr{}),
 			wantErr: "gorums: missing required node map",
 		},
 		{
 			name: "WithNodes/Reject/ZeroID",
-			nodes: gorums.WithNodes(map[uint32]testNode{
-				0: {addr: "127.0.0.1:9080"}, // ID 0 should be rejected
-				1: {addr: "127.0.0.1:9081"},
+			nodes: gorums.WithNodes(map[uint32]mock.NodeAddr{
+				0: "127.0.0.1:9080", // ID 0 should be rejected
+				1: "127.0.0.1:9081",
 			}),
 			wantErr: "gorums: node 0 is reserved",
 		},
 		{
 			name: "WithNodes/Reject/DuplicateAddress",
-			nodes: gorums.WithNodes(map[uint32]testNode{
-				1: {addr: "127.0.0.1:9081"},
-				2: {addr: "127.0.0.1:9081"}, // Duplicate address
+			nodes: gorums.WithNodes(map[uint32]mock.NodeAddr{
+				1: "127.0.0.1:9081",
+				2: "127.0.0.1:9081", // Duplicate address
 			}),
 			wantErr: `gorums: address "127.0.0.1:9081" already in use by node 1`,
 		},
@@ -82,9 +75,9 @@ func TestNewConfig(t *testing.T) {
 		},
 		{
 			name: "WithNodes/Reject/NormalizedDuplicateAddress",
-			nodes: gorums.WithNodes(map[uint32]testNode{
-				1: {addr: "localhost:9081"},
-				2: {addr: "127.0.0.1:9081"}, // Same resolved address
+			nodes: gorums.WithNodes(map[uint32]mock.NodeAddr{
+				1: "localhost:9081",
+				2: "127.0.0.1:9081", // Same resolved address
 			}),
 			wantErr: `gorums: address "127.0.0.1:9081" already in use by node 1`,
 		},
@@ -340,41 +333,41 @@ func TestConfigExtend(t *testing.T) {
 		{
 			name:         "WithNodes/Success",
 			initialNodes: initialNodes,
-			extendNodes: gorums.WithNodes(map[uint32]testNode{
-				10: {addr: "127.0.0.1:9090"},
-				11: {addr: "127.0.0.1:9091"},
+			extendNodes: gorums.WithNodes(map[uint32]mock.NodeAddr{
+				10: "127.0.0.1:9090",
+				11: "127.0.0.1:9091",
 			}),
 			wantSize: 4, // 2 initial + 2 new
 		},
 		{
 			name:         "WithNodes/Reject/ZeroID",
 			initialNodes: initialNodes,
-			extendNodes: gorums.WithNodes(map[uint32]testNode{
-				0: {addr: "127.0.0.1:9090"}, // ID 0 should be rejected
+			extendNodes: gorums.WithNodes(map[uint32]mock.NodeAddr{
+				0: "127.0.0.1:9090", // ID 0 should be rejected
 			}),
 			wantErr: "gorums: node 0 is reserved",
 		},
 		{
 			name:         "WithNodes/Reject/IDConflict",
 			initialNodes: initialNodes,
-			extendNodes: gorums.WithNodes(map[uint32]testNode{
-				2: {addr: "127.0.0.1:9090"}, // ID 2 already exists, rejected
+			extendNodes: gorums.WithNodes(map[uint32]mock.NodeAddr{
+				2: "127.0.0.1:9090", // ID 2 already exists, rejected
 			}),
 			wantErr: `gorums: node 2 already in use by "127.0.0.1:9082"`,
 		},
 		{
 			name:         "WithNodes/Reject/AddressConflict",
 			initialNodes: initialNodes,
-			extendNodes: gorums.WithNodes(map[uint32]testNode{
-				3: {addr: "127.0.0.1:9081"}, // Same address as ID 1
+			extendNodes: gorums.WithNodes(map[uint32]mock.NodeAddr{
+				3: "127.0.0.1:9081", // Same address as ID 1
 			}),
 			wantErr: `gorums: address "127.0.0.1:9081" already in use by node 1`,
 		},
 		{
 			name:         "WithNodes/Reject/NormalizedAddressConflict",
 			initialNodes: initialNodes,
-			extendNodes: gorums.WithNodes(map[uint32]testNode{
-				3: {addr: "localhost:9081"}, // Resolves to same as existing node 1
+			extendNodes: gorums.WithNodes(map[uint32]mock.NodeAddr{
+				3: "localhost:9081", // Resolves to same as existing node 1
 			}),
 			wantErr: `gorums: address "127.0.0.1:9081" already in use by node 1`,
 		},
@@ -420,12 +413,12 @@ func TestConfigExtendConcurrent(t *testing.T) {
 	// Create multiple node maps to extend with, each containing a unique new node.
 	// These maps will be used concurrently to verify that Extend can safely mutate
 	// the shared node registry under concurrent use (race-free configuration creation).
-	nodeMaps := []map[uint32]testNode{
-		{2: {addr: addrs[1]}},
-		{3: {addr: addrs[2]}},
-		{4: {addr: addrs[3]}},
-		{5: {addr: addrs[4]}},
-		{6: {addr: addrs[5]}},
+	nodeMaps := []map[uint32]mock.NodeAddr{
+		{2: mock.NodeAddr(addrs[1])},
+		{3: mock.NodeAddr(addrs[2])},
+		{4: mock.NodeAddr(addrs[3])},
+		{5: mock.NodeAddr(addrs[4])},
+		{6: mock.NodeAddr(addrs[5])},
 	}
 
 	errCh := make(chan error, len(nodeMaps))
