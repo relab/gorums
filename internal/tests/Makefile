@@ -5,7 +5,7 @@ TESTS := ordering metadata tls unresponsive oneway correctable
 
 all: $(TESTS)
 
-ordering: ordering/order.pb.go ordering/order_gorums.pb.go
+ordering: ordering/ordering.pb.go ordering/ordering_gorums.pb.go
 
 metadata: metadata/metadata.pb.go metadata/metadata_gorums.pb.go
 
