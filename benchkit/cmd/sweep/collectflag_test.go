@@ -21,7 +21,7 @@ func TestNormalizeOptionalPathArgs(t *testing.T) {
 	// the single-dash forms, must be normalized the same way; otherwise
 	// "--collect <path>" parses <path> as a bare boolean followed by a stray
 	// positional argument, silently collecting the latest run instead of the
-	// requested one (see main.go's flag.NArg() check for the other half of
+	// requested one (see the flag.NArg() check in main for the other half of
 	// this fix).
 	got = normalizeOptionalPathArgs([]string{"sweep", "--collect", "/local/a run", "-outdir", "out"})
 	want = []string{"sweep", "--collect=/local/a run", "-outdir", "out"}

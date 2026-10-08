@@ -242,7 +242,7 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 }
 
 // benchEchoServer is a minimal raw gRPC echo server for BenchmarkNodeEnqueueSend.
-// It mirrors echoServer in internal/stream/channel_test.go: Recv and Send in a
+// It mirrors the echoServer test helper of package stream: Recv and Send in a
 // loop with no proto marshal/unmarshal and no per-request goroutines, so the
 // server-side cost is identical to what BenchmarkChannelSend measures.
 type benchEchoServer struct {

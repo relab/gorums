@@ -754,7 +754,7 @@ func fdLimitStmt(n int) string {
 // rather than to sweep.log. Closes done when the reader is exhausted.
 //
 // The scanner's buffer is grown well past bufio.Scanner's 64 KiB default (to
-// match offsets.go's own scan of this same log content): a line past the
+// match [collectOffsets]' own scan of this same log content): a line past the
 // default cap stops the scan with bufio.ErrTooLong, and launchAndWait's own
 // doc explains why that must not leave rc unread — the SSH channel window
 // fills and the remote process blocks on its next write, wedging the run

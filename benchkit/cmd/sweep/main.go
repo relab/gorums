@@ -158,14 +158,14 @@ type config struct {
 	exportCompactDir string // -export-compact: sweep work directory to rebuild; empty = do not rebuild
 
 	// The degradation bounds each node's measurement must respect, relative to
-	// the run median (see degraded.go); a non-positive value disables that
+	// the run median (see [findDegradedNodes]); a non-positive value disables that
 	// check.
 	degradedBelow        float64 // -degraded-below: minimum throughput
 	degradedAbove        float64 // -degraded-above: maximum throughput
 	degradedLatencyBelow float64 // -degraded-latency-below: minimum median latency
 
 	// netcheck probes every host link with a ping ring before the sweep and
-	// aborts on heavy packet loss (see netcheck.go).
+	// aborts on heavy packet loss (see [checkNetworkHealth]).
 	netcheck bool // -netcheck
 
 	// fdLimit raises the soft open-file limit (ulimit -Sn) for each launched
@@ -175,7 +175,7 @@ type config struct {
 	fdLimit int // -fd-limit
 
 	// Cluster-local driver: run the orchestration on a host inside the cluster
-	// so per-run SSH and the binary upload stay on the LAN (see driver.go).
+	// so per-run SSH and the binary upload stay on the LAN (see [runDriver]).
 	driver       string // -driver: driver host alias, or "first" for hosts[0]; "" = run locally
 	collect      string // -collect [path]: collect a finished driver run; no path selects the latest
 	collectNow   string // -collect-now [path]: snapshot a run even when it is still active
@@ -192,7 +192,7 @@ type config struct {
 	// LLM failure triage: when -explain is set, the failed runs are diagnosed by
 	// a model after the sweep completes. With -driver the driven sweep does this
 	// on the driver before exporting, so the diagnoses travel back in the manifests
-	// (see explain.go and llm.go).
+	// (see [triageFailedRuns] and [llmProvider]).
 	explain         bool   // -explain: triage failed runs after the sweep
 	explainCheck    bool   // -explain-check: verify the triage LLM responds, then exit
 	explainProvider string // -explain-provider: local, openai, or claude
@@ -471,7 +471,7 @@ func main() {
 		}
 		// Post-incident health probe: the implicated host(s) are re-probed
 		// immediately, while the evidence (load, retransmit counters) is
-		// still fresh — see health.go.
+		// still fresh; see [runHealthProbe].
 		if hosts := healthProbeHosts(o, base, nodes); len(hosts) > 0 {
 			if path := runHealthProbe(group, allHosts, cfg.prog, cfg.port, hosts, cfg.outDir, base, cfg.remoteDir); path != "" {
 				log.Printf("  health probe (%s): %s", strings.Join(hosts, ","), path)
@@ -521,7 +521,7 @@ func main() {
 		}
 		// TCP counters are snapshotted around the run so the manifest records
 		// each host's retransmission/timeout deltas — the evidence that points
-		// at a lossy link when a run comes out degraded (see tcpstats.go).
+		// at a lossy link when a run comes out degraded (see [captureTCPStats]).
 		tcpBefore := captureTCPStats(sub)
 		if err := launchAndWait(sub, nodes, peers, spec, base, cfg); err != nil {
 			log.Printf("  error: %v", err)
@@ -639,7 +639,7 @@ func collectRunArtifacts(g iago.Group, base string, nodes []nodeAssignment, cfg 
 	err := collectResults(g, base, nodes, cfg, collectExts)
 	// Bridge collected binary files to protojson for local sweeps. Driven sweeps
 	// keep the remote output compact by reducing successful runs to plot CSVs;
-	// if the raw archive is collected later, driver.go regenerates protojson on
+	// if the raw archive is collected later, [convertDirBinaryResults] regenerates protojson on
 	// the laptop from the downloaded binpb files.
 	if !cfg.driven {
 		convertBinaryResults(cfg.outDir, base, nodes)

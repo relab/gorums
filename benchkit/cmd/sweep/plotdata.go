@@ -512,8 +512,8 @@ func aggregatePlotRun(base string, m runManifest, bench string, entries []plotNo
 	var latency benchkit.LatencyDist
 	// Performance signal: when any node is client-measured, sum only those
 	// throughputs so a PBFT -client=primary run reports primary client ops/s
-	// rather than primary+Σbackup execute rates. Matches mergeResults
-	// (summary.go), which drives the printed run summary from the same
+	// rather than primary+Σbackup execute rates. Matches [mergeResults],
+	// which drives the printed run summary from the same
 	// MeasurementMode; using "has latency data" as a proxy here instead would
 	// disagree with that summary for a run whose server-measured backups also
 	// record latency samples (server-measured EXACT results do, alongside
@@ -640,7 +640,7 @@ func cdfProbAt(i, n int) float64 {
 }
 
 // plotRunsCSVHeader and plotRunCSVFields are shared by writePlotRunsCSV (the
-// on-disk plotdata/runs.csv export) and summaryRows (explain.go's LLM triage
+// on-disk plotdata/runs.csv export) and [summaryRows] (the LLM triage
 // prompt, which filters the same rows in memory instead of writing a file).
 func plotRunsCSVHeader() []string {
 	header := append([]string{"base", "label", "status", "rep"}, dimensionColumns()...)

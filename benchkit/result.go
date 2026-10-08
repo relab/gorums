@@ -43,7 +43,7 @@ func (x *Result) SetPerOpMemoryFromServerStats(sent uint64) {
 }
 
 // Row returns the result's display cells in column order: Name, Throughput,
-// Latency, Std.dev, p50, p95, p99, B/op, allocs/op. PrintResults (table.go)
+// Latency, Std.dev, p50, p95, p99, B/op, allocs/op. [PrintResults]
 // consumes these cells directly, rather than parsing Format's joined string,
 // so adding, removing, or reordering columns here cannot silently break table
 // rendering.

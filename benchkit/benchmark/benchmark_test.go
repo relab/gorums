@@ -96,7 +96,7 @@ func TestBenchmarksExcludesConfigBenchmarksForDistributedTarget(t *testing.T) {
 // TestBenchmarksMatchesDescriptionsForFullTarget verifies that a target
 // exposing both a Config and a SymmetricTarget produces exactly the
 // runnable benchmarks Descriptions lists, by name and count: both
-// views are derived from the one benchDescs table (see benchmark.go), so
+// views are derived from the one benchDescs table, so
 // they cannot drift the way two hand-written lists could.
 func TestBenchmarksMatchesDescriptionsForFullTarget(t *testing.T) {
 	target := symmetricServers(t, 2)
