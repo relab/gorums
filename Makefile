@@ -121,10 +121,10 @@ benchtest: compiletests
 bench: compiletests
 	go test -run=^$$ -bench=. -benchtime=1s -count=10 . ./internal/tests/oneway
 
-# Run stress tests that use longer durations for thorough testing.
-# These tests are excluded from normal test runs via the 'stress' build tag.
+# Run the ordering tests for a fixed duration instead of a fixed number of
+# iterations. The -stress test flag is defined only in internal/tests/ordering.
 stresstest: compiletests
-	go test -tags=stress $(workspace_packages)
+	go test -count=1 ./internal/tests/ordering -stress
 
 # Warning: will probably run for 10 minutes; the timeout does not work
 stressdev: tools
