@@ -5,15 +5,15 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/cmd/protoc-gen-gorums/dev"
 	"github.com/relab/gorums/internal/stream"
-	"github.com/relab/gorums/internal/tests/config"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func TestNewResponseMessage(t *testing.T) {
-	req := config.Request_builder{Num: 99}.Build()
-	resp := config.Response_builder{Name: "test", Num: 42}.Build()
+	req := dev.Request_builder{Value: "request"}.Build()
+	resp := dev.Response_builder{Result: 42}.Build()
 
 	streamIn := stream.Message_builder{
 		MessageSeqNo: 100,
@@ -26,7 +26,7 @@ func TestNewResponseMessage(t *testing.T) {
 	tests := []struct {
 		name string
 		in   *gorums.Message
-		resp *config.Response
+		resp *dev.Response
 		want *gorums.Message
 	}{
 		{
@@ -45,7 +45,7 @@ func TestNewResponseMessage(t *testing.T) {
 			name: "NilReq/NilResp/StreamIn/StreamOut",
 			in:   &gorums.Message{Proto: nil, Message: streamIn},
 			resp: nil,
-			want: &gorums.Message{Proto: (*config.Response)(nil), Message: streamOut},
+			want: &gorums.Message{Proto: (*dev.Response)(nil), Message: streamOut},
 		},
 		{
 			name: "NilReq/Resp/StreamIn/StreamOut",
@@ -57,7 +57,7 @@ func TestNewResponseMessage(t *testing.T) {
 			name: "Req/NilResp/StreamIn/StreamOut",
 			in:   &gorums.Message{Proto: req, Message: streamIn},
 			resp: nil,
-			want: &gorums.Message{Proto: (*config.Response)(nil), Message: streamOut},
+			want: &gorums.Message{Proto: (*dev.Response)(nil), Message: streamOut},
 		},
 		{
 			name: "Req/Resp/StreamIn/StreamOut",
@@ -97,16 +97,16 @@ func TestAsProto(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		msg     *gorums.Message
-		wantNil bool
-		wantNum uint64
+		name       string
+		msg        *gorums.Message
+		wantNil    bool
+		wantResult int64
 	}{
 		{
-			name:    "Success",
-			msg:     gorums.NewResponseMessage(&gorums.Message{}, config.Response_builder{Name: "test", Num: 42}.Build()),
-			wantNil: false,
-			wantNum: 42,
+			name:       "Success",
+			msg:        gorums.NewResponseMessage(&gorums.Message{}, dev.Response_builder{Result: 42}.Build()),
+			wantNil:    false,
+			wantResult: 42,
 		},
 		{
 			name:    "NilMessage",
@@ -115,7 +115,7 @@ func TestAsProto(t *testing.T) {
 		},
 		{
 			name:    "WrongType",
-			msg:     gorums.NewResponseMessage(&gorums.Message{}, config.Request_builder{Num: 99}.Build()),
+			msg:     gorums.NewResponseMessage(&gorums.Message{}, dev.Request_builder{Value: "request"}.Build()),
 			wantNil: true,
 		},
 	}
@@ -123,7 +123,7 @@ func TestAsProto(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			req := gorums.AsProto[*config.Response](tc.msg)
+			req := gorums.AsProto[*dev.Response](tc.msg)
 			if tc.wantNil {
 				if req != nil {
 					t.Errorf("AsProto(%v) returned %v, want nil", tc.msg, req)
@@ -131,10 +131,10 @@ func TestAsProto(t *testing.T) {
 				return
 			}
 			if req == nil {
-				t.Errorf("AsProto(%v) returned nil, want *config.Response", tc.msg)
+				t.Errorf("AsProto(%v) returned nil, want *dev.Response", tc.msg)
 			}
-			if got := req.GetNum(); got != tc.wantNum {
-				t.Errorf("Num() = %d, want %d", got, tc.wantNum)
+			if got := req.GetResult(); got != tc.wantResult {
+				t.Errorf("GetResult() = %d, want %d", got, tc.wantResult)
 			}
 		})
 	}
