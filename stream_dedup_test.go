@@ -118,8 +118,8 @@ func TestStreamDedupWaitForAllRejectsInvalidSetup(t *testing.T) {
 			opts: func(t *testing.T) []gorums.ServerOption {
 				return []gorums.ServerOption{
 					gorums.WithStreamDedup(),
-					gorums.WithPeers(0, gorums.WithNodes(map[uint32]testNode{
-						1: {addr: "127.0.0.1:9081"},
+					gorums.WithPeers(0, gorums.WithNodes(map[uint32]mock.NodeAddr{
+						1: "127.0.0.1:9081",
 					}), gorumstest.InsecureDialOptions(t)),
 				}
 			},
@@ -132,8 +132,8 @@ func TestStreamDedupWaitForAllRejectsInvalidSetup(t *testing.T) {
 			opts: func(t *testing.T) []gorums.ServerOption {
 				return []gorums.ServerOption{
 					gorums.WithStreamDedup(),
-					gorums.WithPeers(2, gorums.WithNodes(map[uint32]testNode{
-						1: {addr: "127.0.0.1:9081"},
+					gorums.WithPeers(2, gorums.WithNodes(map[uint32]mock.NodeAddr{
+						1: "127.0.0.1:9081",
 					}), gorumstest.InsecureDialOptions(t)),
 				}
 			},
