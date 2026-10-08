@@ -23,7 +23,8 @@ const (
 	devPkgPath = "./cmd/protoc-gen-gorums/dev"
 )
 
-// GenerateBundleFile generates a file with static definitions for Gorums.
+// GenerateBundleFile writes the file dst, which declares [pkgIdentMap],
+// [reservedIdents], and [staticCode] from the static code in the dev package.
 func GenerateBundleFile(dst string) {
 	staticContent, err := staticBundle()
 	if err != nil {
@@ -184,7 +185,7 @@ func addUniqueIdentifier(pkgIdents map[string][]string, path, name string) {
 func printFiles(pkg *packages.Package) string {
 	out := &bytes.Buffer{}
 	for _, f := range pkg.Syntax {
-		// filter files in dev package that shouldn't be bundled in template_static.go
+		// filter files in dev package that shouldn't be bundled into staticCode
 		fileName := pkg.Fset.File(f.Pos()).Name()
 		if ignore(fileName) {
 			continue
