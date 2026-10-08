@@ -217,7 +217,7 @@ func TestSetupRemoteServerAppliesServerOption(t *testing.T) {
 // binds the wildcard address rather than whatever the local host resolves its
 // own name to. Hosts following the Debian convention map their own hostname
 // to 127.0.1.1 in /etc/hosts, which would put the listener on loopback and
-// make it unreachable for all peers (see doc/benchkit-troubleshooting.html).
+// make it unreachable for all peers.
 func TestSetupRemoteServerBindsWildcard(t *testing.T) {
 	// This test must exercise setupRemoteServer directly, because it is
 	// setupRemoteServer (not the local test framework, which binds 127.0.0.1)
@@ -562,8 +562,7 @@ func TestAwaitReadyReportsMissingRemotePeers(t *testing.T) {
 // readyStallTimeout after the last peer responded, instead of waiting out the
 // full context deadline when a peer never starts. It also verifies the
 // failure emits the probe-stall self-diagnosis: the bound listener address, a
-// self-dial probe of the advertised address, and a goroutine dump (see
-// doc/benchkit-troubleshooting.html).
+// self-dial probe of the advertised address, and a goroutine dump.
 func TestAwaitReadyFailsFastOnStalledPeer(t *testing.T) {
 	defer func(d time.Duration) { readyStallTimeout = d }(readyStallTimeout)
 	readyStallTimeout = 500 * time.Millisecond

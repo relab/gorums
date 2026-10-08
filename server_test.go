@@ -752,7 +752,7 @@ func TestServerHandlerCanMulticastViaConnectedClients(t *testing.T) {
 //
 // Gorums only guarantees FIFO ordering for sequentially issued quorum calls.
 // Concurrent quorum calls (from separate goroutines) violate the FIFO ordering
-// contract (see doc/ordering.md) and are therefore not tested.
+// contract and are therefore not tested.
 //
 // Each subtest creates its own isolated servers so that goroutines left over
 // from one subtest cannot contaminate the next.

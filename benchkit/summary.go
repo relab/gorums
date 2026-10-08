@@ -8,7 +8,7 @@ import (
 
 // Summary is one Result reduced over a trimmed read-time window. The benchmark
 // binary records the whole run; presentation tools call Summarize to exclude
-// the startup transient without re-running anything (see doc/benchkit.html §10).
+// the startup transient without re-running anything.
 // The validity flags state which fields carry meaningful data, so callers never
 // infer validity from zero values.
 type Summary struct {

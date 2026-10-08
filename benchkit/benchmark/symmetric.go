@@ -75,7 +75,7 @@ func setupRemoteServer(selfAddr string, peerAddrs []string, serverOpts []gorums.
 	// hostname binds the single IP the local resolver returns for it, and
 	// hosts following the Debian convention resolve their own name to the
 	// loopback address 127.0.1.1, leaving the listener unreachable for all
-	// peers (see doc/benchkit-troubleshooting.html). selfAddr is still used
+	// peers. selfAddr is still used
 	// for node identity and ID assignment above.
 	_, port, err := net.SplitHostPort(selfAddr)
 	if err != nil {
@@ -350,7 +350,7 @@ var diagWriter io.Writer = os.Stderr
 // diagnoseProbeStall writes a network self-diagnosis to w when the outbound
 // readiness probe fails in distributed mode. At that point this process is
 // still alive on the affected host, which makes it ideally placed to
-// discriminate the known failure classes (see doc/benchkit-troubleshooting.html):
+// discriminate the known failure classes:
 //
 //   - self-dial fails and the bound address differs from the advertised
 //     address: the listener is bound to the wrong interface because the
