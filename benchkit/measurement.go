@@ -60,9 +60,9 @@ func (m *Measurement) start() {
 	m.Stats.Start()
 }
 
-// stop ends the measurement clock and stops the ticker. The whole-run CV that
-// Ticker.Stop returns is recomputed at read time over the trimmed intervals, so
-// it is not persisted here.
+// stop ends the measurement clock and stops the ticker. Readers compute the
+// whole-run throughput CV from the persisted interval events, over the trimmed
+// window they choose, so nothing about it is recorded here.
 func (m *Measurement) stop() {
 	if !m.started || m.stopped {
 		return
