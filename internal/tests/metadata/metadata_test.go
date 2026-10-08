@@ -47,40 +47,42 @@ func serverFn(_ int) gorumstest.ServerIface {
 	return srv
 }
 
+// TestMetadata checks that the server receives metadata set as a dial option
+// for the node and metadata set per message in the outgoing context.
 func TestMetadata(t *testing.T) {
-	want := uint32(1)
+	const want = uint32(1)
 	md := metadata.New(map[string]string{
 		"id": fmt.Sprint(want),
 	})
 
-	node := gorumstest.Node(t, serverFn, gorums.WithMetadata(md))
-	nodeCtx := node.Context(t.Context())
-	resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
-	if err != nil {
-		t.Fatalf("RPC error: %v", err)
+	tests := []struct {
+		name   string
+		nodeMD bool
+		msgMD  bool
+	}{
+		{name: "DialOption", nodeMD: true},
+		{name: "PerMessage", msgMD: true},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var opts []gorumstest.Option
+			if tt.nodeMD {
+				opts = append(opts, gorums.WithMetadata(md))
+			}
+			node := gorumstest.Node(t, serverFn, opts...)
 
-	if resp.GetID() != want {
-		t.Fatalf("IDFromMD() == %d, want %d", resp.GetID(), want)
-	}
-}
-
-func TestPerMessageMetadata(t *testing.T) {
-	node := gorumstest.Node(t, serverFn)
-
-	want := uint32(1)
-	md := metadata.New(map[string]string{
-		"id": fmt.Sprint(want),
-	})
-	ctx := metadata.NewOutgoingContext(t.Context(), md)
-	nodeCtx := node.Context(ctx)
-	resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
-	if err != nil {
-		t.Fatalf("RPC error: %v", err)
-	}
-
-	if resp.GetID() != want {
-		t.Fatalf("IDFromMD() == %d, want %d", resp.GetID(), want)
+			ctx := t.Context()
+			if tt.msgMD {
+				ctx = metadata.NewOutgoingContext(ctx, md)
+			}
+			resp, err := IDFromMD(node.Context(ctx), &emptypb.Empty{})
+			if err != nil {
+				t.Fatalf("RPC error: %v", err)
+			}
+			if got := resp.GetID(); got != want {
+				t.Fatalf("IDFromMD() = %d, want %d", got, want)
+			}
+		})
 	}
 }
 
@@ -129,7 +131,7 @@ func TestPerMessageMetadataAcrossStreamTopologies(t *testing.T) {
 	}
 }
 
-func TestCanGetPeerInfo(t *testing.T) {
+func TestMetadataPeerInfo(t *testing.T) {
 	node := gorumstest.Node(t, serverFn)
 	nodeCtx := node.Context(t.Context())
 	ip, err := WhatIP(nodeCtx, &emptypb.Empty{})
