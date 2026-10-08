@@ -691,55 +691,14 @@ func TestChannelContext(t *testing.T) {
 	}
 }
 
-// blockingSendStream blocks every Send until release() is called and blocks
-// Recv until the stream is closed. It keeps the channel's sender goroutine
-// occupied mid-send so the send queue backs up, simulating a peer that has
-// stopped reading (exhausted flow-control windows). Each Send announces its
-// message ID on entered when it starts and on sends when it completes, so
-// tests can deterministically wait for the sender to be occupied and assert
-// FIFO delivery order.
-type blockingSendStream struct {
-	released chan struct{}
-	closed   chan struct{}
-	entered  chan uint64
-	sends    chan uint64
-}
-
-func newBlockingSendStream() *blockingSendStream {
-	return &blockingSendStream{
-		released: make(chan struct{}),
-		closed:   make(chan struct{}),
-		entered:  make(chan uint64, 16),
-		sends:    make(chan uint64, 16),
-	}
-}
-
-func (s *blockingSendStream) Send(msg *Message) error {
-	s.entered <- msg.GetMessageSeqNo()
-	select {
-	case <-s.released:
-		s.sends <- msg.GetMessageSeqNo()
-		return nil
-	case <-s.closed:
-		return context.Canceled
-	}
-}
-
-func (s *blockingSendStream) Recv() (*Message, error) {
-	<-s.closed
-	return nil, context.Canceled
-}
-
-func (s *blockingSendStream) release() { close(s.released) }
-func (s *blockingSendStream) close()   { close(s.closed) }
-
-// waitID waits for an ID on ch (a blockingSendStream signal channel) and
-// fails the test if it does not match want or does not arrive in time.
-func waitID(t *testing.T, ch <-chan uint64, want uint64, what string) {
+// waitID waits for a message on ch, such as the Entered or Sent channel of
+// a gated mock stream, and fails the test if its ID is not want or it does
+// not arrive in time.
+func waitID(t *testing.T, ch <-chan *Message, want uint64, what string) {
 	t.Helper()
 	select {
-	case id := <-ch:
-		if id != want {
+	case msg := <-ch:
+		if id := msg.GetMessageSeqNo(); id != want {
 			t.Fatalf("%s: message ID = %d, want %d", what, id, want)
 		}
 	case <-time.After(defaultTestTimeout):
@@ -752,12 +711,12 @@ func waitID(t *testing.T, ch <-chan uint64, want uint64, what string) {
 // cancelled, so a per-call deadline unblocks a worker stuck behind a peer that
 // stopped reading.
 func TestChannelEnqueueRespectsRequestContext(t *testing.T) {
-	stream := newBlockingSendStream()
+	stream := mock.NewGatedBidiStream[*Message]()
 	// Capacity 0: the queue has no slack, so a second request blocks in
 	// Enqueue as soon as the sender goroutine is occupied in Send.
 	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 0})
 	t.Cleanup(func() {
-		stream.close()
+		stream.Close()
 		_ = c.Close()
 	})
 
@@ -811,11 +770,11 @@ func TestChannelEnqueueRespectsRequestContext(t *testing.T) {
 // via the remaining peers instead of stalling the caller behind one peer
 // that stopped reading.
 func TestChannelEnqueueTwoWayFailsFastWhenFull(t *testing.T) {
-	stream := newBlockingSendStream()
+	stream := mock.NewGatedBidiStream[*Message]()
 	// Capacity 1: one request occupies the sender, one fills the queue.
 	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 1})
 	t.Cleanup(func() {
-		stream.close()
+		stream.Close()
 		_ = c.Close()
 	})
 
@@ -825,7 +784,7 @@ func TestChannelEnqueueTwoWayFailsFastWhenFull(t *testing.T) {
 		Oneway: true,
 		Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
 	})
-	waitID(t, stream.entered, 1, "first send")
+	waitID(t, stream.Entered(), 1, "first send")
 
 	// A two-way request fills the queue's single slot.
 	responseChan2 := make(chan response, 1)
@@ -857,9 +816,9 @@ func TestChannelEnqueueTwoWayFailsFastWhenFull(t *testing.T) {
 	}
 
 	// FIFO: releasing the stream completes message 1, then message 2 follows.
-	stream.release()
-	waitID(t, stream.sends, 1, "first send completion")
-	waitID(t, stream.sends, 2, "queued send completion")
+	stream.Release()
+	waitID(t, stream.Sent(), 1, "first send completion")
+	waitID(t, stream.Sent(), 2, "queued send completion")
 }
 
 // TestChannelEnqueueOnewayBlocksWhenFull verifies that one-way requests wait
@@ -867,10 +826,10 @@ func TestChannelEnqueueTwoWayFailsFastWhenFull(t *testing.T) {
 // producer, so the producer waits (cancellable via the request context) and
 // the message is kept.
 func TestChannelEnqueueOnewayBlocksWhenFull(t *testing.T) {
-	stream := newBlockingSendStream()
+	stream := mock.NewGatedBidiStream[*Message]()
 	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 1})
 	t.Cleanup(func() {
-		stream.close()
+		stream.Close()
 		_ = c.Close()
 	})
 
@@ -880,7 +839,7 @@ func TestChannelEnqueueOnewayBlocksWhenFull(t *testing.T) {
 		Oneway: true,
 		Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
 	})
-	waitID(t, stream.entered, 1, "first send")
+	waitID(t, stream.Entered(), 1, "first send")
 	c.Enqueue(Request{
 		Ctx:    context.Background(),
 		Oneway: true,
@@ -909,7 +868,7 @@ func TestChannelEnqueueOnewayBlocksWhenFull(t *testing.T) {
 	}
 
 	// Releasing the stream drains the queue; the blocked request completes.
-	stream.release()
+	stream.Release()
 	select {
 	case resp := <-responseChan3:
 		if resp.Err != nil {
@@ -918,9 +877,9 @@ func TestChannelEnqueueOnewayBlocksWhenFull(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("blocked one-way request did not complete after queue drained")
 	}
-	waitID(t, stream.sends, 1, "first send completion")
-	waitID(t, stream.sends, 2, "queued send completion")
-	waitID(t, stream.sends, 3, "unblocked send completion")
+	waitID(t, stream.Sent(), 1, "first send completion")
+	waitID(t, stream.Sent(), 2, "queued send completion")
+	waitID(t, stream.Sent(), 3, "unblocked send completion")
 }
 
 // TestChannelFirstRequestLatency verifies that the first request does not wait
@@ -1458,8 +1417,8 @@ func TestChannelDeadlock(t *testing.T) {
 // a call: each is either queued again or fails with ErrSendQueueFull.
 func TestChannelSessionEndWithFullQueue(t *testing.T) {
 	const sendBufSize = 2
-	stream := newBlockingSendStream()
-	t.Cleanup(stream.close)
+	stream := mock.NewGatedBidiStream[*Message]()
+	t.Cleanup(stream.Close)
 	e := newEndpoint(t.Context(), 1, sendBufSize, 0, nil, nil)
 	t.Cleanup(e.cancel)
 	ctx, cancel := context.WithCancel(e.ctx)
@@ -1662,10 +1621,10 @@ func TestChannelReplyOnFullQueue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				stream := newBlockingSendStream()
+				stream := mock.NewGatedBidiStream[*Message]()
 				c := NewInboundChannel(context.Background(), 1, stream, InboundOptions{WaitingReplies: tt.waitingReplies})
 				defer func() {
-					stream.close()
+					stream.Close()
 					_ = c.Close()
 					synctest.Wait()
 				}()
@@ -1705,10 +1664,10 @@ func TestChannelReplyOnFullQueue(t *testing.T) {
 				if !tt.waitingReplies {
 					return
 				}
-				stream.release()
+				stream.Release()
 				synctest.Wait()
 				<-returned
-				if got := drain(stream.sends); !slices.Equal(got, []uint64{1, 2}) {
+				if got := messageIDs(drain(stream.Sent())); !slices.Equal(got, []uint64{1, 2}) {
 					t.Errorf("sent = %v, want [1 2]", got)
 				}
 			})
@@ -1722,10 +1681,10 @@ func TestChannelReplyOnFullQueue(t *testing.T) {
 // ErrSendQueueFull directly.
 func TestChannelDroppedRepliesCountsOnlyUnreportableDrops(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		stream := newBlockingSendStream()
+		stream := mock.NewGatedBidiStream[*Message]()
 		c := NewInboundChannel(context.Background(), 1, stream, InboundOptions{})
 		defer func() {
-			stream.close()
+			stream.Close()
 			_ = c.Close()
 			synctest.Wait()
 		}()
@@ -1769,46 +1728,14 @@ func TestChannelDroppedRepliesCountsOnlyUnreportableDrops(t *testing.T) {
 	})
 }
 
-// gatedSendStream is a stream whose Send blocks while the gate is closed, as a
-// send stalled by the peer's flow control does. Recv blocks until done closes.
-type gatedSendStream struct {
-	gate    chan struct{}
-	entered chan struct{}
-	done    chan struct{}
-	sent    atomic.Int32
-}
-
-func newGatedSendStream() *gatedSendStream {
-	return &gatedSendStream{
-		gate:    make(chan struct{}),
-		entered: make(chan struct{}, 1),
-		done:    make(chan struct{}),
-	}
-}
-
-func (s *gatedSendStream) Send(*Message) error {
-	select {
-	case s.entered <- struct{}{}:
-	default:
-	}
-	<-s.gate
-	s.sent.Add(1)
-	return nil
-}
-
-func (s *gatedSendStream) Recv() (*Message, error) {
-	<-s.done
-	return nil, context.Canceled
-}
-
 // TestChannelCancelledSendKeepsStream verifies that cancelling the context of a
 // request whose Send is stalled leaves the stream in place.
 func TestChannelCancelledSendKeepsStream(t *testing.T) {
 	t.Run("Inbound", func(t *testing.T) {
-		st := newGatedSendStream()
+		st := mock.NewGatedBidiStream[*Message]()
 		c := NewInboundChannel(t.Context(), 1, st, InboundOptions{SendBufferSize: 4})
 		t.Cleanup(func() {
-			close(st.done)
+			st.Close()
 			_ = c.Close()
 		})
 
@@ -1819,7 +1746,7 @@ func TestChannelCancelledSendKeepsStream(t *testing.T) {
 			ResponseChan: make(chan response, 1),
 		})
 		select {
-		case <-st.entered:
+		case <-st.Entered():
 		case <-time.After(defaultTestTimeout):
 			t.Fatal("Send was not reached")
 		}
@@ -1830,19 +1757,14 @@ func TestChannelCancelledSendKeepsStream(t *testing.T) {
 		}
 
 		// Once the stall ends, later requests are sent on the same stream.
-		close(st.gate)
+		st.Release()
 		c.Enqueue(Request{
 			Ctx:          t.Context(),
 			Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
 			ResponseChan: make(chan response, 1),
 		})
-		deadline := time.Now().Add(defaultTestTimeout)
-		for st.sent.Load() < 2 && time.Now().Before(deadline) {
-			time.Sleep(5 * time.Millisecond)
-		}
-		if got := st.sent.Load(); got < 2 {
-			t.Fatalf("sends after the stalled one: got %d total, want 2", got)
-		}
+		waitID(t, st.Sent(), 1, "stalled send completion")
+		waitID(t, st.Sent(), 2, "later send completion")
 	})
 
 	t.Run("Outbound", func(t *testing.T) {
