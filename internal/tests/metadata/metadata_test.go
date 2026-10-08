@@ -2,12 +2,12 @@ package metadata
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
-	"github.com/relab/gorums/internal/strconv"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -26,11 +26,11 @@ func (testSrv) IDFromMD(ctx gorums.ServerContext, _ *emptypb.Empty) (resp *NodeI
 	if len(v) < 1 {
 		return nil, status.Error(codes.NotFound, "missing metadata field: id")
 	}
-	id, err := strconv.ParseInteger[uint32](v[0], 10)
+	id, err := strconv.ParseUint(v[0], 10, 32)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "value of id field: %q is not a number: %v", v[0], err)
 	}
-	return NodeID_builder{ID: id}.Build(), nil
+	return NodeID_builder{ID: uint32(id)}.Build(), nil
 }
 
 func (testSrv) WhatIP(ctx gorums.ServerContext, _ *emptypb.Empty) (resp *IPAddr, err error) {
