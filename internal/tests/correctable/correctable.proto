@@ -1,7 +1,7 @@
 edition = "2023";
 
 package correctable;
-option go_package              = "github.com/relab/gorums/tests/correctable";
+option go_package              = "github.com/relab/gorums/internal/tests/correctable";
 option features.field_presence = IMPLICIT;
 
 import "gorums.proto";

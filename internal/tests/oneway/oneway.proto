@@ -1,7 +1,7 @@
 edition = "2023";
 
 package oneway;
-option go_package = "github.com/relab/gorums/tests/oneway";
+option go_package = "github.com/relab/gorums/internal/tests/oneway";
 
 option features.field_presence = IMPLICIT;
 
