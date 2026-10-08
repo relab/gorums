@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"sync"
 	"sync/atomic"
-
-	"github.com/relab/gorums/internal/strconv"
 
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc/codes"
@@ -37,11 +36,11 @@ func nodeID(ctx context.Context) uint32 {
 	if len(vals) == 0 {
 		return 0
 	}
-	id, err := strconv.ParseInteger[uint32](vals[0], 10)
+	id, err := strconv.ParseUint(vals[0], 10, 32)
 	if err != nil || id == 0 {
 		return 0
 	}
-	return id
+	return uint32(id)
 }
 
 // hasPeerMetadata reports whether ctx contains the gorums-node-id metadata key,
@@ -58,7 +57,7 @@ func hasPeerMetadata(ctx context.Context) bool {
 
 // MetadataWithNodeID returns a metadata.MD containing the gorums-node-id key with the given id value.
 func MetadataWithNodeID(id uint32) metadata.MD {
-	return metadata.Pairs(gorumsNodeIDKey, strconv.Format(id, 10))
+	return metadata.Pairs(gorumsNodeIDKey, strconv.FormatUint(uint64(id), 10))
 }
 
 // InboundManager manages server-side awareness of connected peers. It is
