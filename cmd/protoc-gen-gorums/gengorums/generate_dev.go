@@ -5,9 +5,10 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 )
 
-// GenerateDevFiles generates a zorums_{{gorumsType}}_gorums.pb.go file for each Gorums datatype
-// and for each call type in the service definition. It returns an error if the
-// file cannot be generated as written.
+// GenerateDevFiles generates a separate {prefix}_{name}_gorums.pb.go file for
+// each call type name in [gorumsCallTypesInfo], where prefix is the generated
+// file name prefix of file. It returns an error if the file cannot be
+// generated as written.
 func GenerateDevFiles(gen *protogen.Plugin, file *protogen.File) error {
 	if ok, err := shouldGenerate(gen, file); !ok {
 		return err
