@@ -12,7 +12,8 @@ import (
 // TestInboundChannel verifies that an inbound channel sends a one-way request
 // and confirms it without a routed response.
 func TestInboundChannel(t *testing.T) {
-	stream := mock.NewEchoBidiStream[*Message]()
+	stream := mock.NewRecordingBidiStream[*Message]()
+	t.Cleanup(stream.Close)
 	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 10})
 	t.Cleanup(func() {
 		_ = c.Close()
@@ -26,12 +27,20 @@ func TestInboundChannel(t *testing.T) {
 	if resp.NodeID != 1 {
 		t.Errorf("NodeID = %d, want 1", resp.NodeID)
 	}
+	select {
+	case msg := <-stream.Sent():
+		if msg.GetMessageSeqNo() != 1 {
+			t.Errorf("sent message ID = %d, want 1", msg.GetMessageSeqNo())
+		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("request was not sent on the stream")
+	}
 }
 
 // TestInboundChannelClose verifies that a closed inbound channel fails later
 // requests with ErrNodeClosed.
 func TestInboundChannelClose(t *testing.T) {
-	stream := mock.NewEchoBidiStream[*Message]()
+	stream := mock.NewBidiStream[*Message]()
 	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 10})
 
 	if err := c.Close(); err != nil {
@@ -54,7 +63,7 @@ func TestInboundChannelClose(t *testing.T) {
 // TestInboundChannelStreamDown verifies that an inbound channel whose stream
 // ended fails later requests with ErrNodeClosed instead of reconnecting.
 func TestInboundChannelStreamDown(t *testing.T) {
-	stream := mock.NewEchoBidiStream[*Message]()
+	stream := mock.NewBidiStream[*Message]()
 	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 10})
 
 	// Verify initial send works.

@@ -18,7 +18,7 @@ func newTestSession(t *testing.T, sendBufferSize uint, handler RequestHandler, s
 	e := newEndpoint(t.Context(), 1, sendBufferSize, 0, handler, newLatency())
 	t.Cleanup(e.cancel)
 	ctx, cancel := context.WithCancel(e.ctx)
-	return newSession(ctx, cancel, &e, mock.NewEchoBidiStream[*Message](), serverRequests, requeue)
+	return newSession(ctx, cancel, &e, mock.NewBidiStream[*Message](), serverRequests, requeue)
 }
 
 // TestSessionHandleDeliversResponse verifies that a response is delivered to
