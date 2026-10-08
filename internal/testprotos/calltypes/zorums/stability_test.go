@@ -13,14 +13,14 @@ import (
 // variations of Gorums specific code generation. The test objective is to discover
 // if the output changes between runs over the same proto file.
 func TestGorumsStability(t *testing.T) {
-	_, err := protoc.Run("sourceRelative", "zorums.proto")
+	_, err := protoc.Run("zorums.proto")
 	if err != nil {
 		t.Fatal(err)
 	}
 	dir1 := t.TempDir()
 	moveFiles(t, "zorums*.pb.go", dir1)
 
-	_, err = protoc.Run("sourceRelative", "zorums.proto")
+	_, err = protoc.Run("zorums.proto")
 	if err != nil {
 		t.Fatal(err)
 	}

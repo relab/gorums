@@ -41,7 +41,7 @@ func TestGenerateProtoFiles(t *testing.T) {
 
 	err = filepath.Walk(".",
 		taskFn(".proto", func(path string) error {
-			_, err := protoc.Run("sourceRelative", path)
+			_, err := protoc.Run(path)
 			return err
 		}))
 	if err != nil {
