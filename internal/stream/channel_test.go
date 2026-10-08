@@ -520,10 +520,10 @@ func TestChannelEagerReconnectRecordsStreamFailure(t *testing.T) {
 // TestChannelCloseCancelsOnlyOwnedPendingRequests verifies that closing one
 // of a node's inbound channels fails only the calls pending on that channel.
 func TestChannelCloseCancelsOnlyOwnedPendingRequests(t *testing.T) {
-	oldStream := newMockBidiStream()
-	newStream := newMockBidiStream()
-	t.Cleanup(oldStream.close)
-	t.Cleanup(newStream.close)
+	oldStream := mock.NewEchoBidiStream[*Message]()
+	newStream := mock.NewEchoBidiStream[*Message]()
+	t.Cleanup(oldStream.Close)
+	t.Cleanup(newStream.Close)
 	oldChannel := NewInboundChannel(t.Context(), 1, oldStream, InboundOptions{SendBufferSize: 1})
 	newChannel := NewInboundChannel(t.Context(), 1, newStream, InboundOptions{SendBufferSize: 1})
 	t.Cleanup(func() { _ = oldChannel.Close() })
@@ -1234,7 +1234,7 @@ func TestChannelSessionDispatchesOnlyServerInitiatedUnknownMessages(t *testing.T
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stream := newMockBidiStream()
+			stream := mock.NewEchoBidiStream[*Message]()
 			handler := &signalingRequestHandler{called: make(chan *Message, 1)}
 			e := newEndpoint(t.Context(), 1, 1, 0, handler, nil)
 			ctx, cancel := context.WithCancel(e.ctx)
@@ -1247,10 +1247,13 @@ func TestChannelSessionDispatchesOnlyServerInitiatedUnknownMessages(t *testing.T
 				close(done)
 			}()
 
-			stream.msgQ <- Message_builder{
+			// The echo stream delivers the sent message to the session's Recv.
+			if err := stream.Send(Message_builder{
 				MessageSeqNo: tt.msgID,
 				Method:       mock.TestMethod,
-			}.Build()
+			}.Build()); err != nil {
+				t.Fatalf("Send() error: %v", err)
+			}
 
 			if tt.wantHandle {
 				select {
@@ -1269,7 +1272,7 @@ func TestChannelSessionDispatchesOnlyServerInitiatedUnknownMessages(t *testing.T
 				}
 			}
 
-			stream.close()
+			stream.Close()
 			select {
 			case <-done:
 			case <-time.After(defaultTestTimeout):
@@ -1487,29 +1490,6 @@ func TestChannelSessionEndWithFullQueue(t *testing.T) {
 		if got := <-responseChan; !errors.Is(got.Err, ErrSendQueueFull) {
 			t.Errorf("overflow call error = %v, want ErrSendQueueFull", got.Err)
 		}
-	}
-}
-
-// close simulates the stream being torn down, causing Recv to return an error.
-func (m *mockBidiStream) close() {
-	m.cancel()
-}
-
-func (m *mockBidiStream) Send(msg *Message) error {
-	select {
-	case m.msgQ <- msg:
-		return nil
-	case <-m.ctx.Done():
-		return m.ctx.Err()
-	}
-}
-
-func (m *mockBidiStream) Recv() (*Message, error) {
-	select {
-	case msg := <-m.msgQ:
-		return msg, nil
-	case <-m.ctx.Done():
-		return nil, m.ctx.Err()
 	}
 }
 
