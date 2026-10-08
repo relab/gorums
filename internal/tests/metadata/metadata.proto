@@ -1,7 +1,7 @@
 edition = "2023";
 
 package metadata;
-option go_package = "github.com/relab/gorums/tests/metadata";
+option go_package = "github.com/relab/gorums/internal/tests/metadata";
 
 option features.field_presence = IMPLICIT;
 

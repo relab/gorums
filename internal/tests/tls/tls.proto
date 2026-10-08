@@ -1,7 +1,7 @@
 edition = "2023";
 
 package tls;
-option go_package = "github.com/relab/gorums/tests/tls";
+option go_package = "github.com/relab/gorums/internal/tests/tls";
 
 option features.field_presence = IMPLICIT;
 

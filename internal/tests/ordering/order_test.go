@@ -109,7 +109,7 @@ func (s *testSrv) UnaryRPC(_ gorums.ServerContext, req *Request) (resp *Response
 // Each server needs its own testSrv to track ordering independently.
 func serverFn(_ int) gorumstest.ServerIface {
 	srv := gorums.NewServer()
-	RegisterGorumsTestServer(srv, &testSrv{})
+	RegisterOrderingServer(srv, &testSrv{})
 	return srv
 }
 
@@ -221,7 +221,7 @@ func TestDedupBackChannelOrdering(t *testing.T) {
 	var releaseOnce sync.Once
 	releaseFirst := func() { releaseOnce.Do(func() { close(handler.releaseFirst) }) }
 	t.Cleanup(releaseFirst)
-	RegisterGorumsTestServer(servers[0], handler)
+	RegisterOrderingServer(servers[0], handler)
 
 	ctx := gorumstest.Context(t, 10*time.Second)
 	for _, srv := range servers {

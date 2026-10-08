@@ -1,13 +1,13 @@
 edition = "2023";
 
 package ordering;
-option go_package = "github.com/relab/gorums/tests/ordering";
+option go_package = "github.com/relab/gorums/internal/tests/ordering";
 
 option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
 
-service GorumsTest {
+service Ordering {
     rpc QuorumCall(Request) returns (Response) {
         option (gorums.quorumcall) = true;
     }
