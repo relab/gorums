@@ -38,8 +38,8 @@ func TestWithSendBufferSizeDefault(t *testing.T) {
 			if tt.opt != nil {
 				tt.opt(&opts)
 			}
-			if opts.SendBuffer != tt.want {
-				t.Errorf("sendBuffer = %d, want %d", opts.SendBuffer, tt.want)
+			if opts.SendBufferSize != tt.want {
+				t.Errorf("SendBufferSize = %d, want %d", opts.SendBufferSize, tt.want)
 			}
 		})
 	}

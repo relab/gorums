@@ -18,7 +18,7 @@ type DialOption = conn.DialOption
 // the client should use when initially connecting to each node in its pool.
 func WithGRPCDialOptions(opts ...grpc.DialOption) DialOption {
 	return func(o *conn.DialOptions) {
-		o.GRPCDialOpts = append(o.GRPCDialOpts, opts...)
+		o.GRPCDialOptions = append(o.GRPCDialOptions, opts...)
 	}
 }
 
@@ -49,7 +49,7 @@ func WithSendBufferSize(size uint) DialOption {
 		if size == 0 {
 			size = conn.DefaultSendBufferSize
 		}
-		o.SendBuffer = size
+		o.SendBufferSize = size
 	}
 }
 
@@ -102,7 +102,7 @@ func withServer(srv *Server) DialOption {
 	return func(o *conn.DialOptions) {
 		o.Handler = srv
 		o.LocalNodeID = srv.NodeID()
-		o.InboundMgr = srv.im
+		o.InboundManager = srv.im
 		o.Metadata = metadata.Join(o.Metadata, conn.MetadataWithNodeID(srv.NodeID()))
 	}
 }
