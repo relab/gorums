@@ -3,6 +3,7 @@ package ordering
 import (
 	"context"
 	"errors"
+	"flag"
 	"iter"
 	"sync"
 	"testing"
@@ -13,8 +14,8 @@ import (
 )
 
 // stressMode controls whether tests run in stress mode (time-based) or normal mode (iteration-based).
-// This is set to true in order_stress_test.go via the stress build tag.
-var stressMode = false
+// Enable it with go test -stress.
+var stressMode = flag.Bool("stress", false, "run the ordering tests for a fixed duration instead of a fixed number of iterations")
 
 // testIterations is the number of iterations for ordering tests in normal mode.
 const testIterations = 100
@@ -26,7 +27,7 @@ const stressDuration = 5 * time.Second
 // In normal mode, it yields testIterations values.
 // In stress mode, it yields values for stressDuration.
 func iterations() iter.Seq[int] {
-	if stressMode {
+	if *stressMode {
 		return func(yield func(int) bool) {
 			stopTime := time.Now().Add(stressDuration)
 			for i := 1; time.Now().Before(stopTime); i++ {
