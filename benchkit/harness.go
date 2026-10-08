@@ -325,13 +325,13 @@ func (o Options) OfferedOps() float64 {
 // is reported as having fallen behind its open-loop schedule.
 const paceTolerance = 0.95
 
-// PaceWarning returns a warning when a paced run attempted markedly fewer
-// sends than its offered-load schedule asked for, and "" otherwise. Falling
-// behind means the workers could not sustain the offered rate — sustaining
-// rate R at per-op latency L needs roughly R × L in-flight ops — so the run
-// degraded toward closed-loop saturation while the recorded rate markers
-// still claim the offered load. level, when not empty, names the offered-load
-// level that fell behind.
+// PaceWarning returns a warning if a paced run attempted fewer than 95% of the
+// sends that its offered-load schedule asked for, and "" otherwise. Such a run
+// could not sustain the offered rate: it degraded toward closed-loop
+// saturation, while its rate markers still record the offered load.
+// Sustaining rate R at per-operation latency L needs about R × L operations
+// in flight. level is a suffix that names the level that fell behind, such as
+// " at 100 ops/s"; pass "" for a run with a single level.
 func PaceWarning(level string, sent uint64, offered float64) string {
 	if offered <= 0 || float64(sent) >= paceTolerance*offered {
 		return ""
@@ -350,7 +350,7 @@ type paceLevel struct {
 }
 
 // paceWarnings returns one warning per level that fell behind its schedule,
-// with targets send targets sharing each level. A ramp is checked level by
+// where targets is the number of send targets that share each level. A ramp is checked level by
 // level, because its top levels are where the workers run out, and the lower
 // levels would hide that shortfall in a whole-run count. A single-level run
 // gets the [PaceWarning] message.
