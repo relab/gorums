@@ -2,7 +2,6 @@ package stream
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
@@ -11,56 +10,19 @@ import (
 )
 
 // fakeNodeStream is a minimal Gorums_NodeStreamServer for driving
-// Server.NodeStream directly: Send blocks until release is called (simulating
-// a backpressured or unresponsive link), signaling entered once a Send call
-// is in progress; Recv yields messages fed via feed, in the order fed,
-// blocking when none are queued.
+// Server.NodeStream directly. Its gated mock stream holds every Send until
+// Release, simulating a backpressured or unresponsive link, and its Recv
+// returns the messages queued with Deliver.
 type fakeNodeStream struct {
-	ctx       context.Context
-	inbound   chan *Message
-	entered   chan struct{}
-	released  chan struct{}
-	closed    chan struct{}
-	closeOnce sync.Once
+	*mock.BidiStream[*Message]
+	ctx context.Context
 }
 
 func newFakeNodeStream(ctx context.Context) *fakeNodeStream {
-	return &fakeNodeStream{
-		ctx:      ctx,
-		inbound:  make(chan *Message, 8),
-		entered:  make(chan struct{}, 1),
-		released: make(chan struct{}),
-		closed:   make(chan struct{}),
-	}
+	return &fakeNodeStream{BidiStream: mock.NewGatedBidiStream[*Message](), ctx: ctx}
 }
 
 func (f *fakeNodeStream) Context() context.Context { return f.ctx }
-
-func (f *fakeNodeStream) Recv() (*Message, error) {
-	select {
-	case m := <-f.inbound:
-		return m, nil
-	case <-f.closed:
-		return nil, context.Canceled
-	}
-}
-
-func (f *fakeNodeStream) Send(*Message) error {
-	select {
-	case f.entered <- struct{}{}:
-	default:
-	}
-	select {
-	case <-f.released:
-		return nil
-	case <-f.closed:
-		return context.Canceled
-	}
-}
-
-func (f *fakeNodeStream) feed(m *Message) { f.inbound <- m }
-func (f *fakeNodeStream) release()        { close(f.released) }
-func (f *fakeNodeStream) close()          { f.closeOnce.Do(func() { close(f.closed) }) }
 
 // The remaining methods satisfy grpc.ServerStream; NodeStream never calls them.
 func (*fakeNodeStream) SetHeader(metadata.MD) error  { return nil }
@@ -89,7 +51,7 @@ func TestServerNodeStreamReplyDoesNotWedgeReceiveLoop(t *testing.T) {
 	t.Cleanup(cancel)
 
 	fs := newFakeNodeStream(ctx)
-	t.Cleanup(fs.close)
+	t.Cleanup(fs.Close)
 
 	dispatched := make(chan uint64, 8)
 	echo := requestHandlerFunc(func(_ context.Context, msg *Message, release func(), send func(*Message)) {
@@ -114,16 +76,22 @@ func TestServerNodeStreamReplyDoesNotWedgeReceiveLoop(t *testing.T) {
 		Msg:    Message_builder{MessageSeqNo: 100, Method: mock.TestMethod}.Build(),
 	})
 	select {
-	case <-fs.entered:
+	case <-fs.Entered():
 	case <-time.After(2 * time.Second):
 		t.Fatal("sender never entered Send")
 	}
 
 	// Each request starts only after the previous handler returned, which it
 	// does only if its reply did not block.
-	fs.feed(Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build())
-	fs.feed(Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build())
-	fs.feed(Message_builder{MessageSeqNo: 3, Method: mock.TestMethod}.Build())
+	if err := fs.Deliver(Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build()); err != nil {
+		t.Fatalf("Deliver() error: %v", err)
+	}
+	if err := fs.Deliver(Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build()); err != nil {
+		t.Fatalf("Deliver() error: %v", err)
+	}
+	if err := fs.Deliver(Message_builder{MessageSeqNo: 3, Method: mock.TestMethod}.Build()); err != nil {
+		t.Fatalf("Deliver() error: %v", err)
+	}
 
 	got := make(map[uint64]bool)
 	for len(got) < 3 {
@@ -135,8 +103,8 @@ func TestServerNodeStreamReplyDoesNotWedgeReceiveLoop(t *testing.T) {
 		}
 	}
 
-	fs.release()
-	fs.close() // NodeStream's Recv now returns an error and it exits.
+	fs.Release()
+	fs.Close() // NodeStream's Recv now returns an error and it exits.
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):

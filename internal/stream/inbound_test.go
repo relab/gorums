@@ -98,8 +98,8 @@ func TestInboundChannelStreamDown(t *testing.T) {
 // TestInboundChannelCloseReturnsWhileSendBlocked verifies that inbound cleanup does
 // not wait for a transport send whose completion depends on the RPC returning.
 func TestInboundChannelCloseReturnsWhileSendBlocked(t *testing.T) {
-	stream := newBlockingSendStream()
-	t.Cleanup(stream.close)
+	stream := mock.NewGatedBidiStream[*Message]()
+	t.Cleanup(stream.Close)
 	c := NewInboundChannel(context.Background(), 1, stream, InboundOptions{})
 	t.Cleanup(func() { _ = c.Close() })
 
@@ -109,7 +109,7 @@ func TestInboundChannelCloseReturnsWhileSendBlocked(t *testing.T) {
 		Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
 	})
 	select {
-	case <-stream.entered:
+	case <-stream.Entered():
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("sender never entered Send")
 	}
@@ -124,5 +124,5 @@ func TestInboundChannelCloseReturnsWhileSendBlocked(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Close waited for the blocked transport send")
 	}
-	stream.release()
+	stream.Release()
 }

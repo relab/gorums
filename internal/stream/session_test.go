@@ -203,8 +203,8 @@ func TestLastErrReportsStalledSend(t *testing.T) {
 // TestSessionSendMarksSendInProgress verifies that a send records its start
 // while it is blocked and clears it once it completes.
 func TestSessionSendMarksSendInProgress(t *testing.T) {
-	stream := newBlockingSendStream()
-	t.Cleanup(stream.close)
+	stream := mock.NewGatedBidiStream[*Message]()
+	t.Cleanup(stream.Close)
 	e := newEndpoint(t.Context(), 1, 4, 0, nil, nil)
 	t.Cleanup(e.cancel)
 	ctx, cancel := context.WithCancel(e.ctx)
@@ -212,12 +212,12 @@ func TestSessionSendMarksSendInProgress(t *testing.T) {
 
 	e.Enqueue(Request{Ctx: t.Context(), Oneway: true, Msg: Message_builder{MessageSeqNo: 1}.Build()})
 	go s.sendLoop(nil)
-	<-stream.entered
+	<-stream.Entered()
 	if e.sendStart.Load() == 0 {
 		t.Fatal("blocked send did not record its start")
 	}
-	stream.release()
-	waitID(t, stream.sends, 1, "send completion")
+	stream.Release()
+	waitID(t, stream.Sent(), 1, "send completion")
 	deadline := time.Now().Add(defaultTestTimeout)
 	for e.sendStart.Load() != 0 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
@@ -246,13 +246,13 @@ func TestSessionDispatchNotWedgedByReentrantReply(t *testing.T) {
 
 		// Capacity 0: once the send loop is occupied in Send, the queue has
 		// no slack, so a reply would have to wait for space.
-		stream := newBlockingSendStream()
+		stream := mock.NewGatedBidiStream[*Message]()
 		e := newEndpoint(context.Background(), 1, 0, 0, handler, nil)
 		ctx, cancel := context.WithCancel(e.ctx)
 		s := newSession(ctx, cancel, &e, stream, true, true)
 		go s.sendLoop(nil)
 		defer func() {
-			stream.close()
+			stream.Close()
 			e.cancel()
 			synctest.Wait()
 		}()

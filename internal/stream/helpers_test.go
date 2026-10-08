@@ -23,8 +23,8 @@ func goroutineID() uint64 {
 }
 
 // drain returns the values buffered in ch without blocking.
-func drain(ch <-chan uint64) []uint64 {
-	var got []uint64
+func drain[T any](ch <-chan T) []T {
+	var got []T
 	for {
 		select {
 		case v := <-ch:
@@ -33,4 +33,13 @@ func drain(ch <-chan uint64) []uint64 {
 			return got
 		}
 	}
+}
+
+// messageIDs returns the message IDs of msgs in order.
+func messageIDs(msgs []*Message) []uint64 {
+	ids := make([]uint64, len(msgs))
+	for i, msg := range msgs {
+		ids[i] = msg.GetMessageSeqNo()
+	}
+	return ids
 }
