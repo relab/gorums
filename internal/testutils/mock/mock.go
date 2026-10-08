@@ -2,6 +2,10 @@
 // registry, so tests can call its methods through the Gorums runtime without
 // a generated service definition. It also provides test doubles and helpers
 // shared by the tests of several packages.
+//
+// Package mock must not import internal/stream, internal/conn, or gorums,
+// because package-internal tests of those packages import it. For the same
+// reason, those tests cannot use package gorumstest, which imports gorums.
 package mock
 
 import (

@@ -2,13 +2,8 @@ package mock
 
 import (
 	"io"
-	"slices"
 	"sync"
-	"testing"
 )
-
-// The test doubles in this file must not import internal/stream or
-// internal/conn: package-internal tests of both import this package.
 
 // BidiStream is a bidirectional stream double for message type M. Recv
 // returns the messages queued by [BidiStream.Deliver] in order, and io.EOF
@@ -128,19 +123,3 @@ func (s *BidiStream[M]) Release() {
 // Close closes s, which makes Recv return io.EOF and ends every wait in Send
 // and Deliver. It is safe to call Close more than once.
 func (s *BidiStream[M]) Close() { s.closeOnce.Do(func() { close(s.done) }) }
-
-// NodeAddr is a node network address that implements conn.NodeAddress,
-// so a map[uint32]NodeAddr can be passed to conn.WithNodes.
-type NodeAddr string
-
-// Addr returns a as a string.
-func (a NodeAddr) Addr() string { return string(a) }
-
-// CheckNodeIDs reports a test error if cfg.NodeIDs() is not equal to wantIDs.
-// The error message starts with label.
-func CheckNodeIDs(t testing.TB, cfg interface{ NodeIDs() []uint32 }, wantIDs []uint32, label string) {
-	t.Helper()
-	if got := cfg.NodeIDs(); !slices.Equal(got, wantIDs) {
-		t.Errorf("%s: config IDs = %v; want %v", label, got, wantIDs)
-	}
-}
