@@ -17,12 +17,12 @@ import (
 // so the sentinel is what lets [DecodeReport] reject a non-benchkit file
 // cleanly. Schema evolution is handled by protobuf rules (add fields with new
 // numbers), not by this version: bump "v2" only if the on-disk framing itself
-// changes. The full contract is in doc/benchkit.html, section 12.
+// changes.
 const binaryMagic = "BKRSv2\n\x00"
 
 // WriteReport serializes a labeled report to filename as binary proto: an
-// 8-byte magic header followed by the binary-encoded Report message (see
-// doc/benchkit.html, section 12). LoadReport reads the file back.
+// 8-byte magic header followed by the binary-encoded Report message.
+// LoadReport reads the file back.
 func WriteReport(report *Report, filename string) error {
 	reportBytes, err := proto.Marshal(report)
 	if err != nil {

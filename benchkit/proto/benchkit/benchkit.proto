@@ -9,7 +9,7 @@ option go_package = "github.com/relab/gorums/benchkit";
 // event-stream index map can cut the latency slice at read time. Client-measured
 // runs record one in-order sample per op, so the cut is exact; server-measured
 // samples arrive out of band and clock-corrected, so they cannot be cut by
-// client op counts (see doc/benchkit.html, section 11).
+// client op counts.
 enum MeasurementMode {
   CLIENT_MEASURED = 0; // latency from Stats.AddLatency, one per op (default)
   SERVER_MEASURED = 1; // latency from server replies, clock-corrected
@@ -115,7 +115,7 @@ message MemoryStat {
 // Result is one benchmark's complete output for one node: the run
 // configuration, the aggregate measured results, and the time-series event
 // stream. The startup transient is not removed here; consumers trim it at read
-// time using the event offsets (see doc/benchkit.html, section 11).
+// time using the event offsets.
 message Result {
   RunConfig config = 1; // how the run was configured
 

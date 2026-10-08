@@ -7,7 +7,7 @@ import (
 
 // These constants determine the current version of this module.
 //
-// Steps for cutting a new release is described in doc/release-guide.md.
+// The release guide describes how to change them when cutting a release.
 const (
 	Major      = 0
 	Minor      = 11

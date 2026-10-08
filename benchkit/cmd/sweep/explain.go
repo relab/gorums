@@ -82,9 +82,9 @@ var salientKeywords = []string{
 
 // explainSystemPrompt primes the model with the benchkit failure taxonomy and
 // one worked example, then states the required output. It mirrors the reasoning
-// in doc/benchkit-troubleshooting.html, distilled to plain text because the doc
-// is outside the sweep module and not shipped with the binary; keep the two in
-// sync when the taxonomy changes.
+// of the benchkit troubleshooting guide, distilled to plain text because the
+// guide is outside the sweep module and not shipped with the binary; keep the
+// two in sync when the taxonomy changes.
 const explainSystemPrompt = `You are a distributed-systems benchmark engineer triaging a failed run of the
 gorums "benchkit" toolkit. A sweep launches N peer nodes over SSH that form a
 full gRPC mesh, run a timed quorum-call benchmark, write per-node result files,

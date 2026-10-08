@@ -9,7 +9,7 @@ import (
 )
 
 // StandardFlags holds the CLI flag contract that every sweep-driven benchmark
-// binary must accept (doc/benchkit.html, sections 9 and 11).
+// binary must accept.
 // A binary built on benchkit registers exactly this set via RegisterFlags, so
 // it complies with the contract automatically; sweep launches it without knowing
 // what the workload does.
