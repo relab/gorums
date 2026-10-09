@@ -2087,10 +2087,12 @@ One-way client calls (`Unicast`, `Multicast`) wait for space instead, since back
 A reply sent from a receive or dispatch loop, whether a back-channel reply from a client or a server's reply to an inbound request, never waits either, so the connection keeps reading further messages.
 A reply that does not fit the queue is dropped, and the remote caller waits until its context ends.
 `Node.DroppedReplies` counts these drops for a given node, so a deployment can monitor for sustained backpressure.
+Sweeps from 64 to 4096 entries showed no throughput difference, so the default rests on failure behavior: it keeps a peer that stops draining for a while from making two-way requests fail, at a cost of about 256 KiB per channel.
 Choose an explicit positive capacity when a smaller backlog is required.
 
 On the receiving side, requests from a stream wait in a dispatch queue while the previous request's handler runs, so that handlers start in arrival order.
 The receive-size argument of `WithBufferSizes` sets that queue's capacity per stream, with a default of 4096 when zero.
+A queue of zero slots cost up to about 12% of quorum-call throughput at high concurrency in LAN sweeps, and 16 slots recovered nearly all of it, so the larger default is cheap at 8 bytes per slot.
 When the queue is full, the server stops reading from the stream until a handler releases or returns.
 Replies on that stream then wait too.
 A handler that calls the sending peer before `Release` waits for that reply until its context ends if the peer fills the queue in the meantime.
