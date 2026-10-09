@@ -117,6 +117,11 @@ The `Makefile` itself also serves as documentation; inspect it for details.
 | `lint`            | Runs `golangci-lint` with `.golangci.yml` on all workspace modules, as CI does.                       |
 | `deadcode`        | Lists functions unreachable from any main or test; advisory, and run by `lint`.                         |
 
+## Releasing
+
+Releases are made with the `gorums-release` program in `internal/cmd/gorums-release`.
+The [release guide](./release-guide.md) describes how to install and use it.
+
 ## Runtime Architecture
 
 The runtime is split into layers, each in its own package.

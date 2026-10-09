@@ -1,50 +1,111 @@
-# Preparing a new Release of Gorums
+# Releasing Gorums
 
-This repository includes a `Makefile` with helpers that automate the repetitive parts of preparing a release.
-The recommended flow below uses those targets.
+Releases are made with the `gorums-release` program, in three steps: `prepare`, `pr`, and `publish`.
+The root module and the `benchkit` module are released together with one version.
+A release `vX.Y.Z` creates two tags on one commit: `vX.Y.Z` and `benchkit/vX.Y.Z`.
+The `examples` module has no tag.
 
-## Makefile helper targets
+## Install
 
-Useful `make` targets provided in the repository:
-
-- `make release-tools` — install/check `gorelease` and `gh`.
-- `make prepare-release` — regenerates protos (via `genproto`), tidies modules, checks important tool versions and runs `gorelease` to suggest a version. After a suggested version is shown it prints instructions for editing version constants and re-running `make genproto` to update generated files.
-- `make genproto` — regenerate all proto-generated files (dev, benchmark, tests, examples).
-- `make release-pr VERSION=vX.Y.Z` — create a release branch, commit changes and open a PR (requires a clean working tree).
-- `make release-publish VERSION=vX.Y.Z` — create and push an annotated tag; then use `gh release create` to publish the release notes.
-
-## Quick flow
+You need a logged-in GitHub CLI (`gh auth login`) and `protoc` on your `PATH`.
+Install the program from a checkout of the repository:
 
 ```shell
-# Prepare everything and get a suggested version from gorelease
-make prepare-release
-
-# If the suggested version looks good, edit version constants as instructed
-# then update generated files and tidy modules:
-make genproto
-go mod tidy
-(cd examples && go mod tidy)
-
-# (Optional) Run tests
-make test
-make testrace
-
-# Create the release PR (when ready)
-make release-pr VERSION=v0.9.0
-
-# After merge, tag & push and publish the release notes with gh
-make release-publish VERSION=v0.9.0
-gh release create v0.9.0 --prerelease --title "Gorums v0.9.0" --notes-file release-notes.md
-
-# To check that the new version is available (after a bit of time):
-go list -m github.com/relab/gorums@v0.9.0
+go install ./internal/cmd/gorums-release
 ```
 
-## Version file edits
+Run it inside a checkout.
+Install it again after the program changes.
 
-After `make prepare-release` prints the suggested version, update the version constants in the following files before creating the PR:
+## Steps
 
-- `internal/version/version.go`
-- `runtime/gorumsimpl/version.go` (keep `MinVersion` unchanged unless you intentionally want to relax the minimum)
+1. Prepare the release.
 
-After editing those files, regenerate generated files and tidy modules as shown above, then create the PR with `make release-pr`.
+   ```shell
+   gorums-release prepare
+   ```
+
+   Run it on an up-to-date `master` with a clean tree.
+   Afterward the working tree holds everything the release needs: the new version, upgraded dependencies, and regenerated code.
+   The tests have passed.
+   Nothing is committed.
+
+2. Review the changes with `git diff`.
+
+   `GenVersion` and `MinVersion` in `runtime/gorumsimpl/version.go` are never changed by the program.
+   Check by hand whether the release needs new values.
+
+3. Open the release pull request.
+
+   ```shell
+   gorums-release pr
+   ```
+
+   This creates the branch `release/vX.Y.Z` with two commits, one for the version and dependencies and one for the generated code, and opens the pull request.
+
+4. Wait for CI to pass on the pull request.
+
+5. Publish the release.
+
+   ```shell
+   gorums-release publish
+   ```
+
+   This merges the pull request, pushes both tags, creates the GitHub release, and checks that the Go module proxy serves the new version.
+
+Each command lists what it does, step by step, under `gorums-release <command> -h`.
+
+## Choosing the Version
+
+By default, `prepare` uses the version that `gorelease` suggests.
+To see the suggestion before you change anything, add `-dry-run`:
+
+```shell
+gorums-release prepare -dry-run
+```
+
+It prints the suggested version and an example command for another version.
+Use `-version` to choose a version yourself:
+
+```shell
+gorums-release prepare -version v0.12.0-rc.1
+```
+
+A version with a suffix, such as `v0.12.0-rc.1` or `v1.0.0-rc.1`, is a pre-release, and the GitHub release is marked as one.
+A version without a suffix is a normal release, also for `v0.X.Y`.
+Gorums stays at `v0.X.Y` for now, so `prepare` stops if `gorelease` suggests `v1.0.0` or higher.
+Pass `-version` to confirm such a version on purpose.
+
+## Flags
+
+Every command accepts `-dry-run`.
+It prints each command and file change and makes none of them.
+`prepare -dry-run` still runs `gorelease`, which needs a clean checkout.
+
+These flags belong to one command:
+
+| Command   | Flag            | Default                          | Meaning                                                    |
+| --------- | --------------- | -------------------------------- | ---------------------------------------------------------- |
+| `prepare` | `-version`      | the version `gorelease` suggests | Use this version, such as `v0.12.0` or `v0.12.0-rc.1`.     |
+| `prepare` | `-skip-upgrade` | off                              | Do not upgrade dependencies. Use it when you run it again. |
+| `prepare` | `-skip-tests`   | off                              | Do not run `make test` and `make testrace`.                |
+| `pr`      | `-web`          | off                              | Open the pull request in the browser.                      |
+| `publish` | `-yes`          | off                              | Merge the pull request without asking.                     |
+| `publish` | `-draft`        | off                              | Create the GitHub release as a draft.                      |
+
+## If Something Goes Wrong
+
+- If `prepare` fails, fix the cause, run `git checkout -- .`, and run it again.
+- If `publish` stops after it pushed the tags, finish by hand with `gh release create vX.Y.Z --generate-notes`.
+  Never move or delete a tag that the Go module proxy has served.
+- If the proxy check times out, the release is still complete.
+  Check later with `go list -m github.com/relab/gorums@vX.Y.Z` and `go list -m github.com/relab/gorums/benchkit@vX.Y.Z`.
+
+## Version Constants
+
+`internal/version/version.go` holds `Major`, `Minor`, `Patch`, and `PreRelease`.
+`prepare` writes them.
+`runtime/gorumsimpl/version.go` holds `MaxVersion`, `GenVersion`, and `MinVersion`.
+`MaxVersion` follows the minor version.
+You edit the other two by hand.
+The compiler checks that `MinVersion ≤ GenVersion ≤ MaxVersion`.
