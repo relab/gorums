@@ -63,11 +63,17 @@ func (t *tool) pr(o prOptions) error {
 			return err
 		}
 	}
+	// The version was chosen before dependencies were upgraded, so check it
+	// again on the committed tree before anything is pushed.
+	report, err := t.report(tag)
+	if err := t.require(err); err != nil {
+		return fmt.Errorf("%w\nThe release branch %s has local commits and is not pushed", err, branch)
+	}
 	if err := t.exec("git", "push", "-u", "origin", "HEAD"); err != nil {
 		return err
 	}
 	if err := t.exec("gh", "pr", "create", "--base", "master", "--head", branch,
-		"--title", "gorums: release "+tag, "--body", prBody(tag, t.report(tag))); err != nil {
+		"--title", "gorums: release "+tag, "--body", prBody(tag, report)); err != nil {
 		return err
 	}
 	if !t.dryRun {

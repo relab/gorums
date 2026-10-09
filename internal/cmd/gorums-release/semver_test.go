@@ -33,7 +33,7 @@ func TestSemverParse(t *testing.T) {
 	}
 }
 
-func TestSemverCompareCore(t *testing.T) {
+func TestSemverCompare(t *testing.T) {
 	tests := []struct {
 		a, b string
 		want int
@@ -42,13 +42,31 @@ func TestSemverCompareCore(t *testing.T) {
 		{"v0.11.0", "v0.12.0", -1},
 		{"v0.11.1", "v0.11.0", 1},
 		{"v1.0.0", "v0.99.99", 1},
-		{"v0.12.0", "v0.12.0-rc.1", 0},
+		{"v0.12.0", "v0.12.0", 0},
+		{"v0.12.0-rc.1", "v0.12.0-rc.1", 0},
+		{"v0.12.0", "v0.12.0-rc.1", 1},
+		{"v0.12.0-rc.1", "v0.12.0", -1},
+		{"v0.12.0-rc.1", "v0.12.0-rc.2", -1},
+		{"v0.12.0-rc.10", "v0.12.0-rc.2", 1},
+		{"v0.12.0-rc.1", "v0.11.9", 1},
+		{"v0.11.0-devel", "v0.11.0-rc.1", -1},
+		{"v0.11.0-1", "v0.11.0-alpha", -1},
+		{"v0.11.0-alpha", "v0.11.0-alpha.1", -1},
 	}
 	for _, tt := range tests {
-		a, _ := parseSemver(tt.a)
-		b, _ := parseSemver(tt.b)
-		if got := a.compareCore(b); got != tt.want {
-			t.Errorf("%s.compareCore(%s) = %d, want %d", tt.a, tt.b, got, tt.want)
+		a, err := parseSemver(tt.a)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := parseSemver(tt.b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := a.compare(b); got != tt.want {
+			t.Errorf("%s.compare(%s) = %d, want %d", tt.a, tt.b, got, tt.want)
+		}
+		if got := b.compare(a); got != -tt.want {
+			t.Errorf("%s.compare(%s) = %d, want %d", tt.b, tt.a, got, -tt.want)
 		}
 	}
 }

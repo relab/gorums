@@ -101,6 +101,20 @@ func TestPRRefusals(t *testing.T) {
 	}
 }
 
+func TestPRGoreleaseRejects(t *testing.T) {
+	f := prRunner(releaseStatus)
+	f.fail["gorelease -version v0.12.0"] = errBoom
+	tl, _ := newTestTool(t, f)
+	setTestVersion(t, tl, "v0.12.0")
+	err := tl.pr(prOptions{})
+	if err == nil || !strings.Contains(err.Error(), "gorelease rejects v0.12.0") {
+		t.Fatalf("pr() error = %v, want a gorelease rejection", err)
+	}
+	assertOrder(t, f.calls, "exec git commit -m gorums: release v0.12.0")
+	assertAbsent(t, f.calls, "exec git push")
+	assertAbsent(t, f.calls, "exec gh pr create")
+}
+
 func TestPRDryRun(t *testing.T) {
 	f := prRunner(releaseStatus)
 	tl, out := newTestTool(t, f)

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -50,8 +52,9 @@ func TestPublishOpenPR(t *testing.T) {
 		"exec git push --atomic origin refs/tags/v0.12.0 refs/tags/benchkit/v0.12.0",
 		"exec gh release create v0.12.0 --title Gorums v0.12.0 --generate-notes --notes",
 	)
-	assertCalled(t, f.calls, "GOWORK=off go get github.com/relab/gorums@v0.12.0 github.com/relab/gorums/benchkit@v0.12.0")
-	assertCalled(t, f.calls, "GOWORK=off go build ./...")
+	assertCalled(t, f.calls, "GOWORK=off GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org GOPRIVATE= GONOPROXY= GONOSUMDB= GOFLAGS=-modcacherw GOMODCACHE=")
+	assertCalled(t, f.calls, "go get github.com/relab/gorums@v0.12.0 github.com/relab/gorums/benchkit@v0.12.0")
+	assertCalled(t, f.calls, "go build ./...")
 	if strings.Contains(strings.Join(f.calls, "\n"), "--prerelease") {
 		t.Error("final release marked as a pre-release")
 	}
@@ -69,7 +72,7 @@ func TestPublishMergedPR(t *testing.T) {
 
 func TestPublishNoPR(t *testing.T) {
 	f := publishRunner("")
-	f.fail["gh pr view"] = errBoom
+	f.fail["gh pr view"] = errors.New(`no pull requests found for branch "release/v0.12.0"`)
 	tl := publishTool(t, f, "v0.12.0")
 	if err := tl.publish(publishDefaults); err != nil {
 		t.Fatal(err)
@@ -120,6 +123,7 @@ func TestPublishRefusals(t *testing.T) {
 		{name: "failing check", pr: prJSON("OPEN", `{"__typename":"CheckRun","name":"test","status":"COMPLETED","conclusion":"FAILURE"}`), wantErr: "test"},
 		{name: "pending check", pr: prJSON("OPEN", `{"__typename":"CheckRun","name":"slow","status":"IN_PROGRESS","conclusion":""}`), wantErr: "slow"},
 		{name: "no checks", pr: prJSON("OPEN", ""), wantErr: "no CI checks"},
+		{name: "PR lookup fails", pr: "", prep: func(f *fakeRunner) { f.fail["gh pr view"] = errBoom }, wantErr: "cannot look up"},
 		{name: "closed PR", pr: prJSON("CLOSED", ""), wantErr: "closed"},
 		{name: "not confirmed", pr: prOpenGreen, opts: func(o *publishOptions) { o.yes = false }, wantErr: "--yes"},
 		{name: "local tag exists", pr: prJSON("MERGED", ""),
@@ -169,7 +173,7 @@ func TestPublishVersionMismatchAfterMerge(t *testing.T) {
 
 func TestPublishVerifyRetries(t *testing.T) {
 	f := publishRunner(prJSON("MERGED", ""))
-	f.failFirst["GOWORK=off go get"] = 2
+	f.failFirst["go get github.com/relab/gorums@"] = 2
 	tl := publishTool(t, f, "v0.12.0")
 	var slept []time.Duration
 	tl.sleep = func(d time.Duration) { slept = append(slept, d) }
@@ -183,7 +187,7 @@ func TestPublishVerifyRetries(t *testing.T) {
 
 func TestPublishVerifyTimesOut(t *testing.T) {
 	f := publishRunner(prJSON("MERGED", ""))
-	f.fail["GOWORK=off go get"] = errBoom
+	f.fail["go get github.com/relab/gorums@"] = errBoom
 	tl := publishTool(t, f, "v0.12.0")
 	slept := 0
 	tl.sleep = func(time.Duration) { slept++ }
@@ -196,6 +200,21 @@ func TestPublishVerifyTimesOut(t *testing.T) {
 		t.Errorf("slept %d times, want 2", slept)
 	}
 	assertCalled(t, f.calls, "exec gh release create")
+}
+
+func TestPublishWithoutGoreleaseReport(t *testing.T) {
+	f := publishRunner(prJSON("MERGED", ""))
+	f.fail["gorelease -version"] = errBoom
+	tl := publishTool(t, f, "v0.12.0")
+	var out strings.Builder
+	tl.out = &out
+	if err := tl.publish(publishDefaults); err != nil {
+		t.Fatal(err)
+	}
+	assertCalled(t, f.calls, "exec gh release create v0.12.0 --title Gorums v0.12.0 --generate-notes --verify-tag")
+	if !strings.Contains(out.String(), "no gorelease report") {
+		t.Errorf("no warning about the missing report:\n%s", out.String())
+	}
 }
 
 func TestPublishDryRun(t *testing.T) {
@@ -244,5 +263,33 @@ func TestChecksState(t *testing.T) {
 				t.Errorf("checksState() = %v, %v; want %v, %v", pending, failed, tt.wantPending, tt.wantFailed)
 			}
 		})
+	}
+}
+
+// The module cache of the verification must not lie inside the module, or
+// ./... would match packages in it.
+func TestPublishVerifyCacheOutsideModule(t *testing.T) {
+	f := publishRunner(prJSON("MERGED", ""))
+	tl := publishTool(t, f, "v0.12.0")
+	if err := tl.publish(publishDefaults); err != nil {
+		t.Fatal(err)
+	}
+	re := regexp.MustCompile(`\((\S+)\) .*GOMODCACHE=(\S+)`)
+	checked := false
+	for _, c := range f.calls {
+		if !strings.Contains(c, "go mod init") {
+			continue
+		}
+		m := re.FindStringSubmatch(c)
+		if m == nil {
+			t.Fatalf("cannot read module and cache directories from %q", c)
+		}
+		if strings.HasPrefix(m[2]+"/", m[1]+"/") {
+			t.Errorf("module cache %s is inside the module %s", m[2], m[1])
+		}
+		checked = true
+	}
+	if !checked {
+		t.Error("no verification command found")
 	}
 }

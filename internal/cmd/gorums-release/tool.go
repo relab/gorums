@@ -28,9 +28,14 @@ type tool struct {
 	verifyTimeout time.Duration
 }
 
-// query runs a read-only command.
+// query runs a read-only command. A dry run still runs it, to plan the later
+// steps, and prints it with a "?" so that it can be told from a skipped command.
 func (t *tool) query(name string, args ...string) (string, error) {
-	return t.run.Query(cmd{name: name, args: args})
+	c := cmd{name: name, args: args}
+	if t.dryRun {
+		fmt.Fprintf(t.out, "? %s\n", c)
+	}
+	return t.run.Query(c)
 }
 
 // exec runs a state-changing command in the repository root.
@@ -113,12 +118,12 @@ func (t *tool) confirm(question string, yes bool) error {
 	return nil
 }
 
-// report returns the gorelease report for version v, or "" with a warning.
-func (t *tool) report(v string) string {
+// report returns the gorelease report for version v. It fails if gorelease
+// rejects the version for the committed tree.
+func (t *tool) report(v string) (string, error) {
 	out, err := t.query("gorelease", "-version", v)
 	if err != nil {
-		t.logf("warning: no gorelease report: %v", err)
-		return ""
+		return "", fmt.Errorf("gorelease rejects %s: %w\n%s", v, err, strings.TrimSpace(out))
 	}
-	return strings.TrimSpace(out)
+	return strings.TrimSpace(out), nil
 }
