@@ -480,6 +480,19 @@ func TestConfigClose(t *testing.T) {
 		}
 	})
 
+	t.Run("EmptySubConfigKeepsPool", func(t *testing.T) {
+		cfg := gorumstest.Config(t, 2, nil)
+		node := gorumstest.PeerNode(t, cfg, 1)
+		empty := cfg.Remove(cfg.NodeIDs()...)
+		if err := empty.Close(); err != nil {
+			t.Fatalf("empty.Close() = %v, want nil", err)
+		}
+		ctx := gorumstest.Context(t, 5*time.Second)
+		if _, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(ctx), pb.String("x"), mock.TestMethod); err != nil {
+			t.Errorf("call after closing an empty sub-configuration: %v, want nil", err)
+		}
+	})
+
 	t.Run("ExtendAfterClose", func(t *testing.T) {
 		addrs := gorumstest.Servers(t, 2, nil)
 		tests := []struct {
