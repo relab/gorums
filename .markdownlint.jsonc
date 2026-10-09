@@ -1,0 +1,7 @@
+{
+  "default": true,
+  "MD024": false,
+  "no-hard-tabs": {
+    "code_blocks": false
+  }
+}

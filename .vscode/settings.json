@@ -1,6 +1,7 @@
 {
     "breadcrumbs.enabled": true,
     "cSpell.enabled": true,
+    "cSpell.useGitignore": true,
     "cSpell.languageSettings": [
         {
             // use with Markdown files
@@ -17,12 +18,15 @@
         ".git/{index,*refs,*HEAD}",
         ".vscode",
         ".vscode-insiders",
+        ".claude",
+        ".scratch",
         "go.mod",
         "go.sum",
         "go.work.sum",
         "compare-branches.sh",
         "report.md",
-        "**/**/*.pb.go"
+        "**/*.pb.go",
+        "benchkit/cmd/sweep/typst/*.typ"
     ],
     "editor.formatOnPaste": true,
     "editor.formatOnSave": true,
@@ -33,41 +37,33 @@
     "files.exclude": {
         "**/.git": true,
         "**/.jj": true,
-        "**/.DS_Store": true,
+        "**/.DS_Store": true
     },
     "files.insertFinalNewline": true,
     "files.trimFinalNewlines": true,
     "files.trimTrailingWhitespace": true,
     "git.inputValidation": true,
-    "git.inputValidationSubjectLength": 72,
+    "git.inputValidationSubjectLength": 75,
     "git.inputValidationLength": 72,
     "go.lintTool": "golangci-lint-v2",
     "go.lintOnSave": "package",
     "go.lintFlags": [
         "--fast-only"
     ],
-    "go.useLanguageServer": true,
     "gopls": {
         "formatting.gofumpt": true,
         "build.directoryFilters": [
             "-doc",
-            "-x",
+            "-x"
         ],
         // Add parameter placeholders when completing a function.
         "usePlaceholders": true,
         "staticcheck": true
     },
-    "markdownlint.config": {
-        "MD024": false,
-        "default": true,
-        "no-hard-tabs": {
-            "code_blocks": false
-        }
-    },
     "yaml.format.enable": true,
     "[yaml]": {
-        "editor.tabSize": 4,
-        "editor.formatOnSave": true,
+        "editor.tabSize": 2,
+        "editor.formatOnSave": true
     },
     "makefile.configureOnOpen": false
 }
