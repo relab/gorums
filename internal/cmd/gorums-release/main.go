@@ -1,0 +1,188 @@
+// Command gorums-release prepares and publishes a Gorums release.
+//
+// It has three subcommands, run in this order: prepare, pr, and publish.
+// Every subcommand works without flags and accepts -dry-run, which prints each
+// command and file change without making it.
+// Run "gorums-release help" for an overview and "gorums-release <command> -h"
+// for what a command does and which flags it takes.
+//
+// Install it from a checkout of the repository, and run it inside the checkout:
+//
+//	go install ./internal/cmd/gorums-release
+package main
+
+import (
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
+)
+
+// progName is the name of the installed program.
+const progName = "gorums-release"
+
+func main() {
+	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+}
+
+const usage = `Usage: gorums-release <command> [flags]
+
+Commands:
+  prepare   upgrade dependencies, pick the next version, update files and generated code
+  pr        commit the prepared files on a release branch and open the pull request
+  publish   merge the pull request, tag the root and benchkit modules, create the GitHub release
+
+Run the commands in this order, inside a checkout of the repository.
+Every command accepts -dry-run, which prints each command and file change without making it.
+Run "gorums-release <command> -h" for what a command does and its flags.
+`
+
+// descriptions are the texts printed by "gorums-release <command> -h".
+var descriptions = map[string]string{
+	"prepare": `Prepares the files of a release. It changes files and makes no commits.
+
+Run it on an up-to-date master branch with no uncommitted or untracked files.
+It does the following:
+
+  1. Runs gorelease and adopts the version it suggests, or checks the version
+     given with -version.
+  2. Upgrades and tidies the root, examples, and benchkit modules.
+  3. Writes the version to internal/version/version.go.
+  4. Requires the new gorums version in examples/go.mod and benchkit/go.mod.
+  5. Runs make genproto, so that the generated code carries the new version.
+  6. Runs make test and make testrace.
+
+A version with a suffix, such as v0.12.0-rc.1, is a pre-release.
+A version without one is a release, also for v0.X.Y.
+If gorelease suggests v1.0.0 or higher, prepare stops unless -version is given.
+
+GenVersion and MinVersion in runtime/gorumsimpl/version.go are never changed.
+Review them by hand before the release.
+`,
+	"pr": `Opens the release pull request from the files that prepare changed.
+
+Run it on master after prepare. It does the following:
+
+  1. Stops if a file changed that a release does not change.
+  2. Creates the branch release/<version>.
+  3. Makes two commits: "gorums: release <version>" for the version and
+     dependency files, and "all: regenerate code for <version>" for the
+     generated code. It stages only named files.
+  4. Pushes the branch and opens the pull request, with the gorelease report
+     in its description.
+
+The version is read from internal/version/version.go.
+`,
+	"publish": `Publishes the release after the pull request has passed CI.
+
+The version is read from internal/version/version.go. It does the following:
+
+  1. Squash-merges the release pull request, if it is still open. It stops if
+     CI has not passed, and asks for confirmation unless -yes is given.
+  2. Pulls master and checks that the tags do not exist yet.
+  3. Creates the tags <version> and benchkit/<version> on the merge commit and
+     pushes them together.
+  4. Creates the GitHub release, with notes generated from the merged pull
+     requests and the gorelease report in front. A version with a suffix is
+     marked as a pre-release.
+  5. Checks that the Go module proxy serves both tags, as a user of Gorums
+     would see them. It retries for up to 5 minutes, since the proxy can be
+     slow. If the check times out, the release is still complete.
+`,
+}
+
+// run executes one subcommand and returns the process exit code.
+func run(args []string, in io.Reader, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprint(stderr, usage)
+		return 2
+	}
+	name := args[0]
+	switch name {
+	case "-h", "-help", "--help", "help":
+		fmt.Fprint(stdout, usage)
+		return 0
+	case "prepare", "pr", "publish":
+	default:
+		fmt.Fprintf(stderr, "%s: unknown command %q\n\n%s", progName, name, usage)
+		return 2
+	}
+	fs := flag.NewFlagSet(progName+" "+name, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.Usage = func() {
+		fmt.Fprintf(stderr, "Usage: %s %s [flags]\n\n%s\nFlags:\n", progName, name, descriptions[name])
+		fs.PrintDefaults()
+	}
+	dryRun := fs.Bool("dry-run", false, "print every command and file change without making it")
+	var do func(*tool) error
+	switch name {
+	case "prepare":
+		var o prepareOptions
+		fs.StringVar(&o.version, "version", "", "release `version`, such as v0.12.0 or v0.12.0-rc.1 (default: the version gorelease suggests)")
+		fs.BoolVar(&o.skipUpgrade, "skip-upgrade", false, "do not upgrade dependencies")
+		fs.BoolVar(&o.skipTests, "skip-tests", false, "do not run make test and make testrace")
+		do = func(t *tool) error { return t.prepare(o) }
+	case "pr":
+		var o prOptions
+		fs.BoolVar(&o.web, "web", false, "open the pull request in the browser")
+		do = func(t *tool) error { return t.pr(o) }
+	case "publish":
+		var o publishOptions
+		fs.BoolVar(&o.yes, "yes", false, "merge the pull request without asking")
+		fs.BoolVar(&o.draft, "draft", false, "create the GitHub release as a draft")
+		do = func(t *tool) error { return t.publish(o) }
+	}
+	if err := fs.Parse(args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+	if fs.NArg() > 0 {
+		fmt.Fprintf(stderr, "%s %s: unexpected argument %q\n", progName, name, fs.Arg(0))
+		return 2
+	}
+	root, err := repoRoot()
+	if err != nil {
+		fmt.Fprintf(stderr, "%s: %v\n", progName, err)
+		return 1
+	}
+	t := &tool{
+		root:          root,
+		dryRun:        *dryRun,
+		run:           execRunner{root: root, stdout: stdout, stderr: stderr},
+		out:           stdout,
+		in:            in,
+		isTerminal:    isTerminal(in),
+		sleep:         time.Sleep,
+		verifyTimeout: defaultVerifyTimeout,
+	}
+	if err := do(t); err != nil {
+		fmt.Fprintf(stderr, "%s %s: %v\n", progName, name, err)
+		return 1
+	}
+	return 0
+}
+
+// repoRoot returns the top-level directory of the enclosing git repository.
+func repoRoot() (string, error) {
+	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", fmt.Errorf("not inside a git repository: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// isTerminal reports whether r is an interactive terminal.
+func isTerminal(r io.Reader) bool {
+	f, ok := r.(*os.File)
+	if !ok {
+		return false
+	}
+	st, err := f.Stat()
+	return err == nil && st.Mode()&os.ModeCharDevice != 0
+}
