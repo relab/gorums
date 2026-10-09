@@ -1,10 +1,13 @@
 name: Setup protoc
 description: >
-  Installs a pinned protoc release from github.com/protocolbuffers/protobuf.
+  Installs a pinned protoc release from github.com/protocolbuffers/protobuf
+  and verifies the archive against a pinned SHA-256 digest.
   Replaces arduino/setup-protoc, which still targets the deprecated Node.js 20.
 inputs:
   version:
-    description: protoc version without the leading "v", e.g. "32.1"
+    description: >
+      protoc version without the leading "v". Only versions with a digest
+      below are supported; add the digests when bumping the version.
     required: true
 runs:
   using: composite
@@ -14,17 +17,25 @@ runs:
       env:
         PROTOC_VERSION: ${{ inputs.version }}
       run: |
-        case "$RUNNER_OS-$RUNNER_ARCH" in
-          Linux-X64)   asset="linux-x86_64" ;;
-          Linux-ARM64) asset="linux-aarch_64" ;;
-          macOS-*)     asset="osx-universal_binary" ;;
-          *) echo "unsupported runner: $RUNNER_OS-$RUNNER_ARCH" >&2; exit 1 ;;
+        # SHA-256 digests published in the release metadata of each asset.
+        case "$PROTOC_VERSION/$RUNNER_OS-$RUNNER_ARCH" in
+          32.1/Linux-X64)
+            asset="linux-x86_64"
+            sha256="e9c129c176bb7df02546c4cd6185126ca53c89e7d2f09511e209319704b5dd7e" ;;
+          32.1/Linux-ARM64)
+            asset="linux-aarch_64"
+            sha256="4a802ed23d70f7bad7eb19e5a3e724b3aa967250d572cadfd537c1ba939aee6a" ;;
+          32.1/macOS-*)
+            asset="osx-universal_binary"
+            sha256="95a1e03847cf7057b2db1b68fb92685c3cd9d14e777a879475663adc13989cd7" ;;
+          *) echo "no pinned digest for protoc $PROTOC_VERSION on $RUNNER_OS-$RUNNER_ARCH" >&2; exit 1 ;;
         esac
         dest="$RUNNER_TEMP/protoc"
         mkdir -p "$dest"
         curl --fail --silent --show-error --location --retry 3 \
           --output "$dest/protoc.zip" \
           "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-${asset}.zip"
+        echo "$sha256  $dest/protoc.zip" | shasum -a 256 --check --strict -
         unzip -q "$dest/protoc.zip" -d "$dest"
         echo "$dest/bin" >> "$GITHUB_PATH"
         "$dest/bin/protoc" --version
