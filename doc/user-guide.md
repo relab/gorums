@@ -388,6 +388,7 @@ A configuration is a set of nodes on which RPC calls can be invoked.
 
 The `Config` type has several useful methods for combining and filtering configurations.
 Inspect the package documentation or source code for details.
+Configurations derived from `allNodesConfig` share its connection pool, and `Close` on any of them closes the whole pool; see [Closing Configurations](#closing-configurations).
 
 We can now invoke the WriteUnicast RPC on each `node` in the configuration:
 
@@ -1520,6 +1521,19 @@ func ExampleConfigClient() {
   }
 }
 ```
+
+### Closing Configurations
+
+All configurations derived from one `NewConfig` call share one connection pool.
+In the example above, `c1` through `c8` share the pool that `NewConfig` created.
+`Close` on any of them closes the whole pool, including nodes that are not in that configuration.
+For example, `c5.Close()` also closes the first node of `c1`.
+Thus, call `Close` once, on the configuration that `NewConfig` returned, when the application no longer needs any configuration in the pool.
+
+After `Close`, calls to the pool's nodes fail with an `Unavailable` "node closed" error.
+`Extend` also returns an error, because it cannot add nodes to a closed pool.
+`Close` is idempotent and safe for concurrent use; a second call returns `nil`.
+To stop using some nodes without closing the others, derive a smaller configuration with `Remove` or `Difference` and do not call `Close` on it.
 
 ## Latency-Based Node Selection
 

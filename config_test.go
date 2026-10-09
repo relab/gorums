@@ -6,10 +6,15 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 var (
@@ -443,9 +448,38 @@ func TestConfigExtendConcurrent(t *testing.T) {
 	}
 }
 
-// TestConfigClose verifies that Close leaves no live node behind when Extend
-// runs after or concurrently with Close.
+// TestConfigClose verifies that Close on any configuration derived from one
+// NewConfig call closes every node in that pool, is idempotent, and leaves no
+// live node behind when Extend runs after or concurrently with Close.
 func TestConfigClose(t *testing.T) {
+	t.Run("SubConfigClosesPool", func(t *testing.T) {
+		cfg := gorumstest.Config(t, 3, nil)
+		outside := gorumstest.PeerNode(t, cfg, 3)
+		call := func() error {
+			ctx := gorumstest.Context(t, 5*time.Second)
+			_, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](outside.Context(ctx), pb.String("x"), mock.TestMethod)
+			return err
+		}
+		if err := call(); err != nil {
+			t.Fatalf("call before Close: %v", err)
+		}
+
+		sub := cfg.Remove(outside.ID())
+		if err := sub.Close(); err != nil {
+			t.Fatalf("sub.Close() = %v, want nil", err)
+		}
+		err := call()
+		if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "node closed") {
+			t.Errorf("call on node %d outside the closed sub-configuration: err = %v, want Unavailable node closed", outside.ID(), err)
+		}
+		if err := sub.Close(); err != nil {
+			t.Errorf("second sub.Close() = %v, want nil", err)
+		}
+		if err := cfg.Close(); err != nil {
+			t.Errorf("cfg.Close() after sub.Close() = %v, want nil", err)
+		}
+	})
+
 	t.Run("ExtendAfterClose", func(t *testing.T) {
 		addrs := gorumstest.Servers(t, 2, nil)
 		cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs[:1]), gorumstest.DialOptions(t))
