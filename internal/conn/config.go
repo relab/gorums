@@ -116,7 +116,18 @@ func (c Config) Equal(b Config) bool {
 	return true
 }
 
-// Close closes all node connections managed by this configuration.
+// Close closes the connection pool that c belongs to.
+//
+// All configurations derived from one [NewConfig] call share one pool,
+// whether they come from [Config.Extend], [Config.Add], [Config.Remove], or
+// another method. Close on any of them closes the whole pool, including nodes
+// that are not in c. After Close, calls to the pool's nodes fail with an
+// Unavailable "node closed" error, and [Config.Extend] returns an error.
+// A node that runs in-process or reuses a server's inbound stream owns no
+// connection, so Close leaves it usable.
+//
+// Close is idempotent and safe for concurrent use. A second call returns nil.
+// Close on an empty configuration returns nil.
 func (c Config) Close() error {
 	if mgr := c.mgr(); mgr != nil {
 		return mgr.Close()
