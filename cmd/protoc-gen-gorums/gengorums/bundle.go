@@ -2,6 +2,7 @@ package gengorums
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -11,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -46,10 +48,13 @@ func GenerateBundleFile(dst string) {
 }
 
 // staticBundle returns the formatted bundle file content with static
-// definitions for Gorums. It loads the dev package from devPkgPath,
+// definitions for Gorums. It loads the static files in devPkgPath,
 // so the current directory must be the repository root.
 func staticBundle() ([]byte, error) {
-	pkg := loadPackage(devPkgPath)
+	pkg, err := loadPackage(devPkgPath, nil)
+	if err != nil {
+		return nil, err
+	}
 	code := printFiles(pkg)
 	pkgIdentMap, reservedIdents := findIdentifiers(pkg)
 
@@ -75,20 +80,76 @@ func staticBundle() ([]byte, error) {
 	return staticContent, nil
 }
 
-// loadPackage returns the parsed package.
-func loadPackage(pkgPath string) *packages.Package {
-	cfg := &packages.Config{
-		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax | packages.NeedImports | packages.NeedTypes | packages.NeedTypesInfo,
-	}
-	pkgs, err := packages.Load(cfg, pkgPath)
+// loadPackage returns the package built from the static Go files in dir.
+// Generated zorums files are never loaded, so errors in them cannot stop the
+// bundle. The package path is not the import path of dir, because go list
+// builds the package from a list of files.
+//
+// The overlay maps absolute file names to replacement contents. It is nil
+// except in tests.
+func loadPackage(dir string, overlay map[string][]byte) (*packages.Package, error) {
+	dir, err := filepath.Abs(dir)
 	if err != nil {
-		log.Fatalf("failed to load %s: %v", pkgPath, err)
+		return nil, err
 	}
-	if packages.PrintErrors(pkgs) > 0 {
-		os.Exit(1)
+	files, err := staticFiles(dir)
+	if err != nil {
+		return nil, err
 	}
-	// Since Load succeeded and pkgPath is a single package, the following is safe
-	return pkgs[0]
+	cfg := &packages.Config{
+		Mode:    packages.NeedName | packages.NeedFiles | packages.NeedSyntax | packages.NeedImports | packages.NeedTypes | packages.NeedTypesInfo,
+		Overlay: overlay,
+	}
+	pkgs, err := packages.Load(cfg, files...)
+	if err != nil {
+		return nil, fmt.Errorf("load %s: %w", dir, err)
+	}
+	if len(pkgs) != 1 {
+		return nil, fmt.Errorf("load %s: got %d packages, want 1", dir, len(pkgs))
+	}
+	var loadErrors []packages.Error
+	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
+		loadErrors = append(loadErrors, pkg.Errors...)
+	})
+	if len(loadErrors) > 0 {
+		return nil, formatLoadErrors(dir, loadErrors)
+	}
+	pkg := pkgs[0]
+	if pkg.Types == nil || pkg.TypesInfo == nil {
+		return nil, fmt.Errorf("load %s: missing type information", dir)
+	}
+	return pkg, nil
+}
+
+// staticFiles returns the absolute paths of the Go files in dir that make up
+// the bundle, in file name order. It excludes files that [ignore] reports.
+func staticFiles(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.Type().IsRegular() && strings.HasSuffix(name, ".go") && !ignore(name) {
+			files = append(files, filepath.Join(dir, name))
+		}
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no static Go files in %s", dir)
+	}
+	return files, nil
+}
+
+// formatLoadErrors returns one error that lists every load error for dir.
+func formatLoadErrors(dir string, errs []packages.Error) error {
+	var b strings.Builder
+	fmt.Fprintf(&b, "load %s:", dir)
+	for _, err := range errs {
+		b.WriteByte('\n')
+		b.WriteString(err.Error())
+	}
+	return errors.New(b.String())
 }
 
 // findIdentifiers returns the imported packages as a map from package name to one of its identifiers,
@@ -227,7 +288,8 @@ func printFiles(pkg *packages.Package) string {
 	return strings.ReplaceAll(out.String(), "`", "`+\"`\"+`")
 }
 
-// ignore files in dev folder with suffixes that shouldn't be bundled.
+// ignore reports whether file in the dev folder is left out of the bundle:
+// proto files, tests, and generated zorums files.
 func ignore(file string) bool {
 	for _, suffix := range []string{".proto", "_test.go"} {
 		if strings.HasSuffix(file, suffix) {

@@ -47,6 +47,12 @@ Any changes to templates or static code requires the invocation of `make` in ord
 * Rebuild the `protoc-gen-gorums` compiler.
 * Update the `zorums_*_gorums.pb.go` files.
 
+A compile error in a generated `zorums*` file does not stop the bundler.
+The bundler reads the static files only.
+`make dev` can regenerate the generated files after such an error.
+A compile error in a static file still stops the bundle.
+The bundle is the text of those files, so they have to compile.
+
 See the `Makefile` for more details.
 To force compile, e.g. following a `protoc` update, you can use:
 
