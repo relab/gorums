@@ -1531,7 +1531,7 @@ For example, `c5.Close()` also closes the first node of `c1`.
 Thus, call `Close` once, on the configuration that `NewConfig` returned, when the application no longer needs any configuration in the pool.
 
 After `Close`, calls to the pool's nodes fail with an `Unavailable` "node closed" error.
-`Extend` also returns an error, because it cannot add nodes to a closed pool.
+`Extend` returns an error on any configuration in a closed pool.
 `Close` is idempotent and safe for concurrent use; a second call returns `nil`.
 To stop using some nodes without closing the others, derive a smaller configuration with `Remove` or `Difference` and do not call `Close` on it.
 

@@ -482,22 +482,34 @@ func TestConfigClose(t *testing.T) {
 
 	t.Run("ExtendAfterClose", func(t *testing.T) {
 		addrs := gorumstest.Servers(t, 2, nil)
-		cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs[:1]), gorumstest.DialOptions(t))
-		if err != nil {
-			t.Fatal(err)
+		tests := []struct {
+			name  string
+			nodes gorums.NodeSource
+		}{
+			{name: "NewNode", nodes: gorums.WithNodeList(addrs[1:])},
+			{name: "ExistingNode", nodes: gorums.WithNodes(map[uint32]mock.NodeAddr{1: mock.NodeAddr(addrs[0])})},
+			{name: "NilNodeSource", nodes: nil},
 		}
-		t.Cleanup(gorumstest.Closer(t, cfg))
-		if err := cfg.Close(); err != nil {
-			t.Fatalf("cfg.Close() = %v, want nil", err)
-		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs[:1]), gorumstest.DialOptions(t))
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(gorumstest.Closer(t, cfg))
+				if err := cfg.Close(); err != nil {
+					t.Fatalf("cfg.Close() = %v, want nil", err)
+				}
 
-		ext, err := cfg.Extend(gorums.WithNodeList(addrs[1:]))
-		if err == nil {
-			t.Cleanup(gorumstest.Closer(t, ext))
-			t.Fatalf("cfg.Extend() after Close = %v, nil; want error", ext.NodeIDs())
-		}
-		if ext != nil {
-			t.Errorf("cfg.Extend() after Close = %v, want nil configuration", ext.NodeIDs())
+				ext, err := cfg.Extend(tt.nodes)
+				if err == nil {
+					t.Cleanup(gorumstest.Closer(t, ext))
+					t.Fatalf("cfg.Extend() after Close = %v, nil; want error", ext.NodeIDs())
+				}
+				if ext != nil {
+					t.Errorf("cfg.Extend() after Close = %v, want nil configuration", ext.NodeIDs())
+				}
+			})
 		}
 	})
 

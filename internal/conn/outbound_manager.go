@@ -48,6 +48,9 @@ func newOutboundManager(opts ...DialOption) *outboundManager {
 	return m
 }
 
+// errConfigClosed reports an attempt to extend a closed connection pool.
+var errConfigClosed = errors.New("gorums: configuration is closed")
+
 // Close closes all node connections and any client streams. Once Close
 // starts, the manager rejects new nodes. Close is idempotent and safe for
 // concurrent use; every call returns after the nodes are closed.
@@ -96,9 +99,16 @@ func (m *outboundManager) addNode(node *Node) error {
 	m.mu.Unlock()
 	if closed {
 		_ = node.close()
-		return errors.New("gorums: configuration is closed")
+		return errConfigClosed
 	}
 	return nil
+}
+
+// isClosed reports whether Close has started.
+func (m *outboundManager) isClosed() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.closed
 }
 
 func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
