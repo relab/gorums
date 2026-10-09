@@ -443,6 +443,54 @@ func TestConfigExtendConcurrent(t *testing.T) {
 	}
 }
 
+// TestConfigClose verifies that Close leaves no live node behind when Extend
+// runs after or concurrently with Close.
+func TestConfigClose(t *testing.T) {
+	t.Run("ExtendAfterClose", func(t *testing.T) {
+		addrs := gorumstest.Servers(t, 2, nil)
+		cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs[:1]), gorumstest.DialOptions(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(gorumstest.Closer(t, cfg))
+		if err := cfg.Close(); err != nil {
+			t.Fatalf("cfg.Close() = %v, want nil", err)
+		}
+
+		ext, err := cfg.Extend(gorums.WithNodeList(addrs[1:]))
+		if err == nil {
+			t.Cleanup(gorumstest.Closer(t, ext))
+			t.Fatalf("cfg.Extend() after Close = %v, nil; want error", ext.NodeIDs())
+		}
+		if ext != nil {
+			t.Errorf("cfg.Extend() after Close = %v, want nil configuration", ext.NodeIDs())
+		}
+	})
+
+	t.Run("ConcurrentExtend", func(t *testing.T) {
+		addrs := gorumstest.Servers(t, 2, nil)
+		for range 10 {
+			cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs[:1]), gorumstest.DialOptions(t))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var wg sync.WaitGroup
+			wg.Go(func() {
+				if err := cfg.Close(); err != nil {
+					t.Errorf("cfg.Close() = %v, want nil", err)
+				}
+			})
+			wg.Go(func() {
+				// Extend either joins the pool before Close takes its snapshot
+				// and is closed with it, or it fails. Neither outcome may leave
+				// a live node behind; goleak checks that at cleanup.
+				_, _ = cfg.Extend(gorums.WithNodeList(addrs[1:]))
+			})
+			wg.Wait()
+		}
+	})
+}
+
 func TestConfigAdd(t *testing.T) {
 	c1 := gorumstest.UnreachableConfig(t, nodeList...) // c1 = {1, 2, 3}
 	if c1.Size() != len(nodeList) {
