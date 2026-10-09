@@ -3,13 +3,23 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+
+# Cancel superseded runs of the same pull request or branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
         platform: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v7
@@ -17,11 +27,10 @@ jobs:
         with:
           go-version-file: "go.mod"
           cache: true
-      - uses: arduino/setup-protoc@v3.0.0
+          cache-dependency-path: "**/go.sum"
+      - uses: ./.github/actions/setup-protoc
         with:
           version: "32.1"
-          include-pre-releases: true
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install tools
         run: |

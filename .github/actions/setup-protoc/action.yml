@@ -1,0 +1,30 @@
+name: Setup protoc
+description: >
+  Installs a pinned protoc release from github.com/protocolbuffers/protobuf.
+  Replaces arduino/setup-protoc, which still targets the deprecated Node.js 20.
+inputs:
+  version:
+    description: protoc version without the leading "v", e.g. "32.1"
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Download and install protoc
+      shell: bash
+      env:
+        PROTOC_VERSION: ${{ inputs.version }}
+      run: |
+        case "$RUNNER_OS-$RUNNER_ARCH" in
+          Linux-X64)   asset="linux-x86_64" ;;
+          Linux-ARM64) asset="linux-aarch_64" ;;
+          macOS-*)     asset="osx-universal_binary" ;;
+          *) echo "unsupported runner: $RUNNER_OS-$RUNNER_ARCH" >&2; exit 1 ;;
+        esac
+        dest="$RUNNER_TEMP/protoc"
+        mkdir -p "$dest"
+        curl --fail --silent --show-error --location --retry 3 \
+          --output "$dest/protoc.zip" \
+          "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-${asset}.zip"
+        unzip -q "$dest/protoc.zip" -d "$dest"
+        echo "$dest/bin" >> "$GITHUB_PATH"
+        "$dest/bin/protoc" --version
