@@ -79,8 +79,10 @@ Pass `-version` to confirm such a version on purpose.
 ## Flags
 
 Every command accepts `-dry-run`.
-It prints each command and file change and makes none of them.
-`prepare -dry-run` still runs `gorelease`, which needs a clean checkout.
+It shows what would be done and changes nothing.
+A line that starts with `+` is a command or file change that is skipped.
+A line that starts with `?` is a read-only query, such as `gorelease` or `git status`, that runs to plan the later steps.
+`gorelease` needs a clean checkout, so `prepare -dry-run` works only on one.
 
 These flags belong to one command:
 
@@ -95,7 +97,12 @@ These flags belong to one command:
 
 ## If Something Goes Wrong
 
-- If `prepare` fails, fix the cause, run `git checkout -- .`, and run it again.
+- If `prepare` fails, fix the cause and undo its changes before you run it again.
+  Run `git restore .` for the changed files.
+  Run `git clean -nd` to list the new files that code generation added, and `git clean -fd` to delete them.
+  `prepare` refuses to start when untracked files exist.
+- If `pr` stops because `gorelease` rejects the version, the branch `release/vX.Y.Z` has local commits and nothing is pushed.
+  Switch back to `master`, delete the branch, undo the changes as above, and run `prepare` with another `-version`.
 - If `publish` stops after it pushed the tags, finish by hand with `gh release create vX.Y.Z --generate-notes`.
   Never move or delete a tag that the Go module proxy has served.
 - If the proxy check times out, the release is still complete.
