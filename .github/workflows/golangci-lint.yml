@@ -3,24 +3,30 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
+
+# Cancel superseded runs of the same pull request or branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   golangci:
     name: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: "go.mod"
           cache: true
-      - uses: arduino/setup-protoc@v3.0.0
+          cache-dependency-path: "**/go.sum"
+      - uses: ./.github/actions/setup-protoc
         with:
           version: "32.1"
-          include-pre-releases: true
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Make
         run: make
@@ -30,5 +36,5 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.13.2
+          version: v2.14.0
           args: ./... ./examples/... ./benchkit/...
