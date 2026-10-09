@@ -30,7 +30,7 @@ func TestPrepare(t *testing.T) {
 		t.Errorf("version = %+v, want %+v", got, want)
 	}
 	assertOrder(t, f.calls,
-		"query git fetch origin master",
+		"exec git fetch origin master",
 		"query gh auth status",
 		"exec go install golang.org/x/exp/cmd/gorelease@latest",
 		"query gorelease",
@@ -44,25 +44,17 @@ func TestPrepare(t *testing.T) {
 		"exec make genproto",
 		"exec go mod tidy",
 		"exec (examples) go mod tidy",
+		"exec (benchkit) go mod tidy",
 		"exec make test",
 		"exec make testrace",
 	)
-	// The benchkit module cannot be tidied once it requires the unreleased tag.
-	edit := -1
-	for i, c := range f.execs() {
-		if strings.HasPrefix(c, "(benchkit) go mod edit") {
-			edit = i
-		}
-		if edit >= 0 && c == "(benchkit) go mod tidy" {
-			t.Error("benchkit tidied after requiring the unreleased version")
-		}
-	}
 	assertAbsent(t, f.calls, "exec git commit")
 }
 
 func TestPrepareVersionChoice(t *testing.T) {
 	tests := []struct {
 		name       string
+		current    string // version in the repository; default v0.11.0-devel
 		opts       prepareOptions
 		suggested  string
 		want       semver
@@ -84,6 +76,16 @@ func TestPrepareVersionChoice(t *testing.T) {
 			want: semver{1, 0, 0, ""}},
 		{name: "downgrade refused", opts: prepareOptions{version: "v0.10.0"}, suggested: "v0.12.0",
 			wantErrSub: "older"},
+		{name: "older candidate refused", current: "v0.12.0", opts: prepareOptions{version: "v0.12.0-rc.1"},
+			suggested: "v0.12.1", wantErrSub: "older"},
+		{name: "older candidate number refused", current: "v0.12.0-rc.2", opts: prepareOptions{version: "v0.12.0-rc.1"},
+			suggested: "v0.12.1", wantErrSub: "older"},
+		{name: "final after candidate", current: "v0.12.0-rc.2", opts: prepareOptions{version: "v0.12.0"},
+			suggested: "v0.12.1", want: semver{0, 12, 0, ""}},
+		{name: "next candidate", current: "v0.12.0-rc.1", opts: prepareOptions{version: "v0.12.0-rc.2"},
+			suggested: "v0.12.1", want: semver{0, 12, 0, "rc.2"}},
+		{name: "same version again", current: "v0.12.0", opts: prepareOptions{version: "v0.12.0"},
+			suggested: "v0.12.1", want: semver{0, 12, 0, ""}},
 		{name: "invalid version", opts: prepareOptions{version: "0.12"}, suggested: "v0.12.0",
 			wantErrSub: "invalid version"},
 		{name: "empty suffix", opts: prepareOptions{version: "v0.12.0-"}, suggested: "v0.12.0",
@@ -94,13 +96,18 @@ func TestPrepareVersionChoice(t *testing.T) {
 			f := readyRunner()
 			f.answers["gorelease"] = "Suggested version: " + tt.suggested + "\n"
 			tl, _ := newTestTool(t, f)
+			before := semver{0, 11, 0, "devel"}
+			if tt.current != "" {
+				setTestVersion(t, tl, tt.current)
+				before, _ = parseSemver(tt.current)
+			}
 			tt.opts.skipTests = true
 			err := tl.prepare(tt.opts)
 			if tt.wantErrSub != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErrSub) {
 					t.Fatalf("prepare() error = %v, want it to contain %q", err, tt.wantErrSub)
 				}
-				if got := readVersion(t, tl); got != (semver{0, 11, 0, "devel"}) {
+				if got := readVersion(t, tl); got != before {
 					t.Errorf("version file changed to %+v on error", got)
 				}
 				return
@@ -166,7 +173,6 @@ func TestPrepareStaleMaster(t *testing.T) {
 
 func TestPrepareDryRun(t *testing.T) {
 	f := readyRunner()
-	f.answers["git branch --show-current"] = "feature/x\n"
 	tl, out := newTestTool(t, f)
 	tl.dryRun = true
 	if err := tl.prepare(prepareOptions{}); err != nil {
@@ -178,10 +184,29 @@ func TestPrepareDryRun(t *testing.T) {
 	if got := f.execs(); len(got) != 0 {
 		t.Errorf("dry run executed %v", got)
 	}
-	for _, want := range []string{"warning (dry run)", "+ make genproto", "+ write internal/version/version.go"} {
+	for _, want := range []string{
+		"? git status --porcelain",
+		"? gorelease",
+		"+ git fetch origin master",
+		"+ make genproto",
+		"+ write internal/version/version.go",
+	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}
+	}
+}
+
+func TestPrepareDryRunWarns(t *testing.T) {
+	f := readyRunner()
+	f.answers["git branch --show-current"] = "feature/x\n"
+	tl, out := newTestTool(t, f)
+	tl.dryRun = true
+	if err := tl.prepare(prepareOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `warning (dry run): on branch "feature/x"`) {
+		t.Errorf("no warning about the branch:\n%s", out.String())
 	}
 }
 

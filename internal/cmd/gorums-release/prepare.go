@@ -65,9 +65,9 @@ func (t *tool) prepare(o prepareOptions) error {
 	if err := t.exec("make", "genproto"); err != nil {
 		return err
 	}
-	// The benchkit module is not tidied again: it requires the new gorums
-	// version, which does not exist until the tag is pushed.
-	for _, m := range []string{"", "examples"} {
+	// Each module replaces gorums with the local checkout, so the unreleased
+	// version resolves.
+	for _, m := range modules {
 		if err := t.execIn(m, "go", "mod", "tidy"); err != nil {
 			return err
 		}
@@ -99,7 +99,7 @@ func (t *tool) checkWorkTree() error {
 	if strings.TrimSpace(out) != "" {
 		return errors.New("uncommitted or untracked files: commit or remove them first")
 	}
-	if _, err := t.query("git", "fetch", "origin", "master"); err != nil {
+	if err := t.exec("git", "fetch", "origin", "master"); err != nil {
 		return err
 	}
 	head, err := t.query("git", "rev-parse", "HEAD")
@@ -168,7 +168,7 @@ func (t *tool) chooseVersion(o prepareOptions) (semver, string, error) {
 	if err != nil {
 		return semver{}, "", err
 	}
-	if v.compareCore(cur) < 0 {
+	if v.compare(cur) < 0 {
 		return semver{}, "", fmt.Errorf("version %s is older than the current %s", v, cur)
 	}
 	return v, strings.TrimSpace(report), nil

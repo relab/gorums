@@ -1,8 +1,8 @@
 // Command gorums-release prepares and publishes a Gorums release.
 //
 // It has three subcommands, run in this order: prepare, pr, and publish.
-// Every subcommand works without flags and accepts -dry-run, which prints each
-// command and file change without making it.
+// Every subcommand works without flags and accepts -dry-run, which shows what
+// would be done and changes nothing.
 // Run "gorums-release help" for an overview and "gorums-release <command> -h"
 // for what a command does and which flags it takes.
 //
@@ -37,7 +37,7 @@ Commands:
   publish   merge the pull request, tag the root and benchkit modules, create the GitHub release
 
 Run the commands in this order, inside a checkout of the repository.
-Every command accepts -dry-run, which prints each command and file change without making it.
+Every command accepts -dry-run, which shows what would be done and changes nothing.
 Run "gorums-release <command> -h" for what a command does and its flags.
 `
 
@@ -72,7 +72,9 @@ Run it on master after prepare. It does the following:
   3. Makes two commits: "gorums: release <version>" for the version and
      dependency files, and "all: regenerate code for <version>" for the
      generated code. It stages only named files.
-  4. Pushes the branch and opens the pull request, with the gorelease report
+  4. Runs gorelease again on the committed tree and stops before the push if
+     it rejects the version.
+  5. Pushes the branch and opens the pull request, with the gorelease report
      in its description.
 
 The version is read from internal/version/version.go.
@@ -117,7 +119,7 @@ func run(args []string, in io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "Usage: %s %s [flags]\n\n%s\nFlags:\n", progName, name, descriptions[name])
 		fs.PrintDefaults()
 	}
-	dryRun := fs.Bool("dry-run", false, "print every command and file change without making it")
+	dryRun := fs.Bool("dry-run", false, "show what would be done and change nothing: lines that start with + are skipped, lines that start with ? are read-only and run")
 	var do func(*tool) error
 	switch name {
 	case "prepare":

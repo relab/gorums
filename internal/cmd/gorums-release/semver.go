@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 // semver is a semantic version without build metadata.
@@ -42,11 +43,49 @@ func (v semver) String() string {
 	return s
 }
 
-// compareCore compares major, minor, and patch, and ignores the pre-release.
-func (v semver) compareCore(o semver) int {
-	return cmp.Or(
+// compare orders versions by semantic version precedence: a version with a
+// pre-release sorts before the same version without one.
+func (v semver) compare(o semver) int {
+	if c := cmp.Or(
 		cmp.Compare(v.major, o.major),
 		cmp.Compare(v.minor, o.minor),
 		cmp.Compare(v.patch, o.patch),
-	)
+	); c != 0 {
+		return c
+	}
+	switch {
+	case v.pre == o.pre:
+		return 0
+	case v.pre == "":
+		return 1
+	case o.pre == "":
+		return -1
+	}
+	return comparePre(v.pre, o.pre)
+}
+
+// comparePre compares two non-empty pre-release strings identifier by
+// identifier. Numeric identifiers sort before alphanumeric ones, and a shorter
+// list sorts before a longer one with the same prefix.
+func comparePre(a, b string) int {
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < len(as) && i < len(bs); i++ {
+		an, aErr := strconv.Atoi(as[i])
+		bn, bErr := strconv.Atoi(bs[i])
+		var c int
+		switch {
+		case aErr == nil && bErr == nil:
+			c = cmp.Compare(an, bn)
+		case aErr == nil:
+			c = -1
+		case bErr == nil:
+			c = 1
+		default:
+			c = strings.Compare(as[i], bs[i])
+		}
+		if c != 0 {
+			return c
+		}
+	}
+	return cmp.Compare(len(as), len(bs))
 }

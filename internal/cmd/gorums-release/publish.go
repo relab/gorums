@@ -87,8 +87,11 @@ func (t *tool) publish(o publishOptions) error {
 func (t *tool) mergeRelease(branch string, yes bool) error {
 	out, err := t.query("gh", "pr", "view", branch, "--json", "number,url,state,statusCheckRollup")
 	if err != nil {
-		t.logf("No pull request found for %s; assuming it is merged.", branch)
-		return nil //nolint:nilerr // without a pull request, the release was merged by other means
+		if !strings.Contains(strings.ToLower(err.Error()), "no pull requests found") {
+			return fmt.Errorf("cannot look up the release pull request: %w", err)
+		}
+		t.logf("No pull request found for %s; assuming it was merged by other means.", branch)
+		return nil
 	}
 	var pr prInfo
 	if err := json.Unmarshal([]byte(out), &pr); err != nil {
@@ -165,7 +168,9 @@ func (t *tool) checkTagsFree(tag string) error {
 // the gorelease report is placed before it.
 func (t *tool) createRelease(tag string, v semver, o publishOptions) error {
 	args := []string{"release", "create", tag, "--title", "Gorums " + tag, "--generate-notes"}
-	if report := t.report(tag); report != "" {
+	if report, err := t.report(tag); err != nil {
+		t.logf("warning: the release notes have no gorelease report: %v", err)
+	} else if report != "" {
 		args = append(args, "--notes", "API changes reported by gorelease:\n\n```\n"+report+"\n```\n")
 	}
 	if v.pre != "" {
@@ -189,13 +194,29 @@ func (t *tool) verify(tag string) error {
 		return err
 	}
 	defer os.RemoveAll(dir)
-	src := "package main\n\nimport (\n\t_ \"github.com/relab/gorums\"\n\t_ \"github.com/relab/gorums/benchkit\"\n)\n\nfunc main() {}\n"
-	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(src), 0o644); err != nil {
+	// The module cache must not be inside the module: ./... would match it.
+	modDir := filepath.Join(dir, "module")
+	if err := os.Mkdir(modDir, 0o755); err != nil {
 		return err
 	}
-	env := []string{"GOWORK=off"}
+	src := "package main\n\nimport (\n\t_ \"github.com/relab/gorums\"\n\t_ \"github.com/relab/gorums/benchkit\"\n)\n\nfunc main() {}\n"
+	if err := os.WriteFile(filepath.Join(modDir, "main.go"), []byte(src), 0o644); err != nil {
+		return err
+	}
+	// Use the public proxy and a fresh module cache, so that neither the
+	// maintainer's settings nor a cached copy can hide a missing tag.
+	env := []string{
+		"GOWORK=off",
+		"GOPROXY=https://proxy.golang.org",
+		"GOSUMDB=sum.golang.org",
+		"GOPRIVATE=",
+		"GONOPROXY=",
+		"GONOSUMDB=",
+		"GOFLAGS=-modcacherw",
+		"GOMODCACHE=" + filepath.Join(dir, "modcache"),
+	}
 	step := func(args ...string) error {
-		return t.execCmd(cmd{dir: dir, env: env, name: "go", args: args})
+		return t.execCmd(cmd{dir: modDir, env: env, name: "go", args: args})
 	}
 	if err := step("mod", "init", "example.com/verify"); err != nil {
 		return err
