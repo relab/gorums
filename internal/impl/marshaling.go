@@ -29,7 +29,14 @@ func unmarshal(msg *stream.Message, msgDesc func(protoreflect.MethodDescriptor) 
 	method := protoreflect.FullName(msg.GetMethod())
 	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(method)
 	if err != nil {
-		return nil, fmt.Errorf("gorums: could not find method descriptor for %s: %w", method, err)
+		// The init function in the .pb.go file that protoc-gen-go generates
+		// for the proto file declaring the service registers the method
+		// descriptor in protoregistry.GlobalFiles. A proto file with only a
+		// service and no messages still needs that file. Nothing at compile
+		// time requires it, so when it is missing or not linked into the
+		// binary, the failure appears here, at run time.
+		// See https://github.com/relab/gorums/issues/212.
+		return nil, fmt.Errorf("gorums: could not find method descriptor for %s: %w; check that the .pb.go file declaring the service is linked into the binary", method, err)
 	}
 	methodDesc, ok := desc.(protoreflect.MethodDescriptor)
 	if !ok {

@@ -2,6 +2,7 @@ package impl
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/relab/gorums/internal/stream"
@@ -47,6 +48,11 @@ func TestMarshalingUnmarshalMethodName(t *testing.T) {
 				}
 				if got := errors.Is(err, protoregistry.NotFound); got != tt.wantNotFound {
 					t.Errorf("errors.Is(%v, protoregistry.NotFound) = %t, want %t", err, got, tt.wantNotFound)
+				}
+				// An unregistered method usually means the .pb.go file declaring
+				// the service is missing, so the error says so.
+				if hint := ".pb.go file declaring the service"; tt.wantNotFound && !strings.Contains(err.Error(), hint) {
+					t.Errorf("unmarshal(%q) error = %q, want it to mention %q", tt.method, err, hint)
 				}
 				if tt.wantErr {
 					return
