@@ -1526,11 +1526,13 @@ func ExampleConfigClient() {
 
 All configurations derived from one `NewConfig` call share one connection pool.
 In the example above, `c1` through `c8` share the pool that `NewConfig` created.
-`Close` on any of them closes the whole pool, including nodes that are not in that configuration.
+`Close` on any non-empty one of them closes the whole pool, including nodes that are not in that configuration.
+An empty configuration, such as `c1.Remove(c1.NodeIDs()...)`, belongs to no pool, so `Close` on it does nothing.
 For example, `c5.Close()` also closes the first node of `c1`.
 Thus, call `Close` once, on the configuration that `NewConfig` returned, when the application no longer needs any configuration in the pool.
 
 After `Close`, calls to the pool's nodes fail with an `Unavailable` "node closed" error.
+There is one exception: a node that runs in-process, or that reuses a server's inbound stream, owns no connection, so `Close` leaves it usable.
 `Extend` returns an error on any configuration in a closed pool.
 `Close` is idempotent and safe for concurrent use; a second call returns `nil`.
 To stop using some nodes without closing the others, derive a smaller configuration with `Remove` or `Difference` and do not call `Close` on it.
