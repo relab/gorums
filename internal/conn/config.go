@@ -69,14 +69,18 @@ func NewConfig(nodes NodeSource, opts ...DialOption) (Config, error) {
 }
 
 // Extend returns a new Config combining c with new nodes from the provided NodeSource.
+// Extend returns an error if c is empty or if c's connection pool is closed.
 func (c Config) Extend(nodes NodeSource) (Config, error) {
 	if len(c) == 0 {
 		return nil, fmt.Errorf("gorums: cannot extend empty configuration")
 	}
+	mgr := c.mgr()
+	if mgr != nil && mgr.isClosed() {
+		return nil, errConfigClosed
+	}
 	if nodes == nil {
 		return slices.Clone(c), nil
 	}
-	mgr := c.mgr()
 	newNodes, err := nodes.newConfig(mgr)
 	if err != nil {
 		return nil, err
