@@ -17,6 +17,7 @@ type outboundManager struct {
 	mu        sync.Mutex
 	nodes     []*Node
 	lookup    map[uint32]*Node
+	closed    bool // guarded by mu; set once by Close
 	closeOnce sync.Once
 	logger    *log.Logger
 	opts      DialOptions
@@ -47,11 +48,19 @@ func newOutboundManager(opts ...DialOption) *outboundManager {
 	return m
 }
 
-// Close closes all node connections and any client streams.
+// Close closes all node connections and any client streams. Once Close
+// starts, the manager rejects new nodes. Close is idempotent and safe for
+// concurrent use; every call returns after the nodes are closed.
 func (m *outboundManager) Close() error {
 	var err error
 	m.closeOnce.Do(func() {
-		for _, node := range m.nodes {
+		m.mu.Lock()
+		m.closed = true
+		nodes := m.nodes
+		m.mu.Unlock()
+		// Close the nodes outside mu: closing a node waits for its
+		// goroutines, and the closed flag stops addNode from adding more.
+		for _, node := range nodes {
 			err = errors.Join(err, node.close())
 		}
 	})
@@ -74,11 +83,22 @@ func (m *outboundManager) Nodes() []*Node {
 	return m.nodes
 }
 
-func (m *outboundManager) addNode(node *Node) {
+// addNode registers node with the manager. If the manager is closed, addNode
+// closes node instead and returns an error, so that no live node is left
+// outside the set that Close releases.
+func (m *outboundManager) addNode(node *Node) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.lookup[node.id] = node
-	m.nodes = append(m.nodes, node)
+	closed := m.closed
+	if !closed {
+		m.lookup[node.id] = node
+		m.nodes = append(m.nodes, node)
+	}
+	m.mu.Unlock()
+	if closed {
+		_ = node.close()
+		return errors.New("gorums: configuration is closed")
+	}
+	return nil
 }
 
 func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
@@ -89,7 +109,9 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 		// Use a local (in-process) node when this ID is our own node and a handler
 		// is configured, so this server calls itself without a network round-trip.
 		n := newLocalNode(id, addr, m.nextMsgID, m.opts.Handler, m)
-		m.addNode(n)
+		if err := m.addNode(n); err != nil {
+			return nil, err
+		}
 		return n, nil
 	}
 	if m.opts.StreamDedup && m.opts.InboundManager != nil && id < m.opts.LocalNodeID {
@@ -110,7 +132,9 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 			return nil, fmt.Errorf("gorums: stream dedup outbound node %d address %s does not match peer address %s", id, addr, peer.addr)
 		}
 		n := newSharedNode(peer, addr, m)
-		m.addNode(n)
+		if err := m.addNode(n); err != nil {
+			return nil, err
+		}
 		return n, nil
 	}
 	opts := nodeOptions{
@@ -136,7 +160,9 @@ func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	m.addNode(n)
+	if err := m.addNode(n); err != nil {
+		return nil, err
+	}
 	return n, nil
 }
 
