@@ -103,3 +103,12 @@ func parseRuntimeVersions(src []byte) (gen, minV int, err error) {
 	}
 	return gen, minV, nil
 }
+
+// rewriteRuntimeFile returns src with GenVersion and MinVersion set.
+func rewriteRuntimeFile(src []byte, gen, minV int) ([]byte, error) {
+	src, err := replaceOne(genVersionRE, src, strconv.Itoa(gen))
+	if err != nil {
+		return nil, err
+	}
+	return replaceOne(minVersionRE, src, strconv.Itoa(minV))
+}

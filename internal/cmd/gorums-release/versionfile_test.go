@@ -77,6 +77,23 @@ func TestRewriteVersionFileErrors(t *testing.T) {
 	}
 }
 
+func TestRewriteRuntimeFile(t *testing.T) {
+	out, err := rewriteRuntimeFile([]byte(implSrc), 12, 11)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gen, minV, err := parseRuntimeVersions(out)
+	if err != nil || gen != 12 || minV != 11 {
+		t.Errorf("round trip = %d, %d, %v; want 12, 11", gen, minV, err)
+	}
+	if !strings.Contains(string(out), "MaxVersion = version.Minor") {
+		t.Errorf("MaxVersion changed:\n%s", out)
+	}
+	if _, err := rewriteRuntimeFile([]byte("package p\n"), 1, 1); err == nil {
+		t.Error("expected an error for a file without the constants")
+	}
+}
+
 func TestParseRuntimeVersions(t *testing.T) {
 	gen, minV, err := parseRuntimeVersions([]byte(implSrc))
 	if err != nil {

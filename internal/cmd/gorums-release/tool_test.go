@@ -148,11 +148,13 @@ func newTestTool(t *testing.T, f *fakeRunner) (*tool, *bytes.Buffer) {
 	}
 	var out bytes.Buffer
 	return &tool{
-		root:  root,
-		run:   f,
-		out:   &out,
-		in:    strings.NewReader(""),
-		sleep: func(time.Duration) {},
+		root:     root,
+		run:      f,
+		out:      &out,
+		in:       strings.NewReader(""),
+		sleep:    func(time.Duration) {},
+		lookPath: func(name string) (string, error) { return "/usr/bin/" + name, nil },
+		path:     "/home/u/go/bin:/usr/bin",
 
 		verifyTimeout: time.Minute,
 	}, &out
