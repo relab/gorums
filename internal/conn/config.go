@@ -33,7 +33,8 @@ func (c ConfigContext) Config() Config {
 //
 // Example:
 //
-//	config, _ := gorums.NewConfig(gorums.WithNodeList(addrs), dialOpts...)
+//	config, closeFn, _ := gorums.NewConfig(gorums.WithNodeList(addrs), dialOpts...)
+//	defer closeFn()
 //	cfgCtx := config.Context(context.Background())
 //	resp, err := paxos.Prepare(cfgCtx, req).Majority()
 func (c Config) Context(parent context.Context) *ConfigContext {
@@ -43,35 +44,57 @@ func (c Config) Context(parent context.Context) *ConfigContext {
 	return &ConfigContext{Context: parent, cfg: c}
 }
 
-// NewConfig returns a new [Config] based on the provided nodes and dial options.
+// NewConfig returns a new [Config] based on the provided nodes and dial
+// options, and a function that closes the configuration's connection pool.
+//
+// The returned configuration and every configuration derived from it, for
+// example with [Config.Extend], [Config.Remove], or [Config.Sort], share one
+// connection pool. Only the returned close function closes that pool, and it
+// closes every node in it, including nodes that [Config.Extend] added later.
+// After the close function returns:
+//   - calls to the pool's nodes fail with an Unavailable "node closed" error;
+//   - [Config.Extend] on any configuration in the pool returns an error.
+//
+// One exception: a node that runs in-process, or that reuses a server's
+// inbound stream, owns no connection, so calls to it still work.
+//
+// The close function is idempotent and safe for concurrent use; every call
+// returns after the nodes are closed. It returns no error, because closing a
+// connection has no failure that a caller can act on.
+//
+// On error, NewConfig returns a nil configuration and a nil close function.
 //
 // Example:
 //
-//	cfg, err := NewConfig(
+//	cfg, closeFn, err := NewConfig(
 //	    gorums.WithNodeList([]string{"localhost:8080", "localhost:8081", "localhost:8082"}),
 //	    gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 //	)
-func NewConfig(nodes NodeSource, opts ...DialOption) (Config, error) {
+//	if err != nil {
+//	    return err
+//	}
+//	defer closeFn()
+func NewConfig(nodes NodeSource, opts ...DialOption) (Config, func(), error) {
 	if nodes == nil {
-		return nil, fmt.Errorf("gorums: missing required node list")
+		return nil, nil, fmt.Errorf("gorums: missing required node list")
 	}
 	mgr := newOutboundManager(opts...)
 	if err := mgr.opts.Err; err != nil {
-		_ = mgr.Close()
-		return nil, err
+		mgr.Close()
+		return nil, nil, err
 	}
 	cfg, err := nodes.newConfig(mgr)
 	if err != nil {
-		_ = mgr.Close()
-		return nil, err
+		mgr.Close()
+		return nil, nil, err
 	}
-	return cfg, nil
+	return cfg, mgr.Close, nil
 }
 
 // Extend returns a new Config combining c with new nodes from the provided NodeSource.
-// The new nodes join c's connection pool, so [Config.Close] on any
-// configuration in that pool also closes them. A node whose ID and address
-// are already in the pool is reused, not dialed again.
+// The new nodes join c's connection pool, so the close function that
+// [NewConfig] returned for that pool also closes them. A node whose ID and
+// address are already in the pool is reused, not dialed again.
 // Extend returns an error if c is empty or if c's connection pool is closed.
 func (c Config) Extend(nodes NodeSource) (Config, error) {
 	if len(c) == 0 {
@@ -121,26 +144,6 @@ func (c Config) Equal(b Config) bool {
 		}
 	}
 	return true
-}
-
-// Close closes the connection pool that c belongs to.
-//
-// All non-empty configurations derived from one [NewConfig] call share one
-// pool, whether they come from [Config.Extend], [Config.Add], [Config.Remove],
-// or another method. Close on any of them closes the whole pool, including
-// nodes that are not in c. After Close, calls to the pool's nodes fail with an
-// Unavailable "node closed" error, and [Config.Extend] returns an error.
-// A node that runs in-process or reuses a server's inbound stream owns no
-// connection, so Close leaves it usable.
-//
-// Close is idempotent and safe for concurrent use. A second call returns nil.
-// An empty configuration belongs to no pool, so Close on it does nothing and
-// returns nil.
-func (c Config) Close() error {
-	if mgr := c.mgr(); mgr != nil {
-		return mgr.Close()
-	}
-	return nil
 }
 
 // Contains reports whether c contains a node with the given ID.

@@ -13,14 +13,14 @@ func runClient(addresses []string) error {
 	if len(addresses) < 1 {
 		return fmt.Errorf("no server addresses provided")
 	}
-	cfg, err := gorums.NewConfig(
+	cfg, closeFn, err := gorums.NewConfig(
 		gorums.WithNodeList(addresses),
 		gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 	)
 	if err != nil {
 		return err
 	}
-	defer cfg.Close()
+	defer closeFn()
 	return runRepl(cfg)
 }
 

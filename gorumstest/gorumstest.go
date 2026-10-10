@@ -9,7 +9,6 @@ package gorumstest
 
 import (
 	"context"
-	"io"
 	"testing"
 	"time"
 
@@ -143,11 +142,11 @@ func Config(t testing.TB, numServers int, srvFn func(i int) ServerIface, opts ..
 
 	// Create configuration and register its cleanup LAST so it runs FIRST (LIFO)
 	dialOptions := append([]gorums.DialOption{DialOptions(t)}, testOpts.dialOpts...)
-	cfg, err := gorums.NewConfig(testOpts.nodeSource(addrs), dialOptions...)
+	cfg, closeFn, err := gorums.NewConfig(testOpts.nodeSource(addrs), dialOptions...)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(Closer(t, cfg))
+	t.Cleanup(closeFn)
 	return cfg
 }
 
@@ -163,11 +162,11 @@ func UnreachableConfig(t testing.TB, addrs ...string) gorums.Config {
 	if len(addrs) == 0 {
 		addrs = []string{unreachableSentinelAddr}
 	}
-	cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs), InsecureDialOptions(t))
+	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs), InsecureDialOptions(t))
 	if err != nil {
 		t.Fatalf("NewConfig: %v", err)
 	}
-	t.Cleanup(Closer(t, cfg))
+	t.Cleanup(closeFn)
 	return cfg
 }
 
@@ -196,14 +195,4 @@ func PeerNode(t testing.TB, cfg gorums.Config, id uint32) *gorums.Node {
 	}
 	t.Fatalf("node %d not in config %v", id, cfg.NodeIDs())
 	return nil
-}
-
-// Closer returns a cleanup function that closes c.
-func Closer(t testing.TB, c io.Closer) func() {
-	t.Helper()
-	return func() {
-		if err := c.Close(); err != nil {
-			t.Errorf("c.Close() = %q, expected no error", err.Error())
-		}
-	}
 }

@@ -222,26 +222,3 @@ func TestConfigSort(t *testing.T) {
 		}
 	})
 }
-
-// TestConfigCloseWithoutManager verifies that Close returns nil for a
-// configuration that has no outbound manager, such as an empty configuration
-// or one whose nodes a server's inbound manager created.
-func TestConfigCloseWithoutManager(t *testing.T) {
-	tests := []struct {
-		name string
-		cfg  Config
-	}{
-		{name: "Nil", cfg: nil},
-		{name: "Empty", cfg: Config{}},
-		{name: "NoManager", cfg: Config{newTestNode(1, nil), newTestNode(2, nil)}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			for range 2 {
-				if err := tt.cfg.Close(); err != nil {
-					t.Errorf("Close() = %v, want nil", err)
-				}
-			}
-		})
-	}
-}

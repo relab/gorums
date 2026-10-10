@@ -31,8 +31,8 @@ type ServerIface = servers.ServerIface
 // Example usage:
 //
 //	addrs := gorumstest.Servers(t, 3, serverFn)
-//	cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs), gorumstest.DialOptions(t))
-//	t.Cleanup(gorumstest.Closer(t, cfg))
+//	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs), gorumstest.DialOptions(t))
+//	t.Cleanup(closeFn)
 //	...
 //
 // This function can be used by other packages for testing purposes, as long as
