@@ -71,8 +71,8 @@ func (seq ResponseSeq[Resp]) Filter(keep func(NodeResponse[Resp]) bool) Response
 // It returns early if n entries are collected or the iterator is exhausted.
 // When a node response carries an error, the zero value of Resp is stored for
 // that node ID; use [ResponseSeq.IgnoreErrors] to skip errored nodes entirely.
-func (seq ResponseSeq[Resp]) CollectN(n int) map[uint32]Resp {
-	replies := make(map[uint32]Resp, n)
+func (seq ResponseSeq[Resp]) CollectN(n int) map[ID]Resp {
+	replies := make(map[ID]Resp, n)
 	for result := range seq {
 		replies[result.NodeID] = result.Value
 		if len(replies) >= n {
@@ -85,8 +85,8 @@ func (seq ResponseSeq[Resp]) CollectN(n int) map[uint32]Resp {
 // CollectAll collects all values from the iterator into a map by node ID.
 // When a node response carries an error, the zero value of Resp is stored for
 // that node ID; use [ResponseSeq.IgnoreErrors] to skip errored nodes entirely.
-func (seq ResponseSeq[Resp]) CollectAll() map[uint32]Resp {
-	replies := make(map[uint32]Resp)
+func (seq ResponseSeq[Resp]) CollectAll() map[ID]Resp {
+	replies := make(map[ID]Resp)
 	for result := range seq {
 		replies[result.NodeID] = result.Value
 	}

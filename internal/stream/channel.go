@@ -54,7 +54,7 @@ type RequestHandler interface {
 
 // endpoint holds the state that a stream channel shares across its streams.
 type endpoint struct {
-	id       uint32
+	id       ID
 	ctx      context.Context // the channel's lifetime
 	cancel   context.CancelFunc
 	queue    *sendQueue
@@ -74,7 +74,7 @@ type endpoint struct {
 
 // newEndpoint returns an endpoint that lives until parent ends or cancel is
 // called. A dispatchSize of 0 selects the default.
-func newEndpoint(parent context.Context, id uint32, sendBufferSize, dispatchSize uint, handler RequestHandler, latency *Latency) endpoint {
+func newEndpoint(parent context.Context, id ID, sendBufferSize, dispatchSize uint, handler RequestHandler, latency *Latency) endpoint {
 	ctx, cancel := context.WithCancel(parent)
 	return endpoint{
 		id:       id,

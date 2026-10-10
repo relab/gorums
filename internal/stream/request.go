@@ -46,15 +46,18 @@ func (r Request) deliver(resp response) bool {
 
 // sendErrorResponse sends a response with err on the request's response
 // channel, if it has one.
-func (r Request) sendErrorResponse(nodeID uint32, err error) {
+func (r Request) sendErrorResponse(nodeID ID, err error) {
 	if r.ResponseChan != nil {
 		r.deliver(response{NodeID: nodeID, Err: err})
 	}
 }
 
+// ID identifies a node. A channel with ID 0 belongs to a peer that has no ID.
+type ID = uint32
+
 // NodeResponse wraps a response value from node ID, and an error if any.
 type NodeResponse[T any] struct {
-	NodeID uint32
+	NodeID ID
 	Value  T
 	Err    error
 }

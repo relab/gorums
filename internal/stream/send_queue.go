@@ -8,7 +8,7 @@ import (
 // sendQueue is a bounded FIFO of requests awaiting a stream send.
 // Once closed, it fails every queued and later request with [ErrNodeClosed].
 type sendQueue struct {
-	id   uint32
+	id   ID
 	ch   chan Request
 	done <-chan struct{} // ends waits for queue space
 
@@ -20,7 +20,7 @@ type sendQueue struct {
 
 // newSendQueue returns a queue with the given capacity. Closing done ends
 // waits for queue space; [sendQueue.close] waits for those to end.
-func newSendQueue(id uint32, capacity uint, done <-chan struct{}) *sendQueue {
+func newSendQueue(id ID, capacity uint, done <-chan struct{}) *sendQueue {
 	return &sendQueue{id: id, ch: make(chan Request, capacity), done: done}
 }
 

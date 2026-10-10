@@ -32,7 +32,7 @@ func (r *channelRef) store(ch Channel) {
 // shared channel reference changes as streams come and go. A shared transport
 // borrows these resources from an inbound peer node's transport.
 type Transport struct {
-	id       uint32
+	id       ID
 	channel  *channelRef
 	latency  *Latency
 	msgIDGen func() uint64
@@ -41,7 +41,7 @@ type Transport struct {
 
 // NewTransport returns an owned transport with no channel; attach one with
 // [Transport.StoreChannel].
-func NewTransport(id uint32, msgIDGen func() uint64) *Transport {
+func NewTransport(id ID, msgIDGen func() uint64) *Transport {
 	return &Transport{
 		id:       id,
 		channel:  new(channelRef),
@@ -99,7 +99,7 @@ func (t *Transport) StoreChannel(ch Channel) {
 func (t *Transport) Enqueue(req Request) {
 	ch := t.LoadChannel()
 	if ch == nil {
-		var id uint32
+		var id ID
 		if t != nil {
 			id = t.id
 		}

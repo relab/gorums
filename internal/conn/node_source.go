@@ -18,7 +18,7 @@ type NodeSource interface {
 // Implemented by [outboundManager] and [InboundManager].
 type nodeRegistry interface {
 	Nodes() []*Node
-	newNode(id uint32, addr string) (*Node, error)
+	newNode(id ID, addr string) (*Node, error)
 }
 
 // NodeAddress must be implemented by types that can be used as node addresses.
@@ -29,11 +29,11 @@ type NodeAddress interface {
 // WithNodes returns a NodeSource containing the provided mapping from
 // application-specific IDs to types implementing NodeAddress.
 // Node IDs must be greater than 0.
-func WithNodes[T NodeAddress](nodes map[uint32]T) NodeSource {
+func WithNodes[T NodeAddress](nodes map[ID]T) NodeSource {
 	return nodeMap[T](nodes)
 }
 
-type nodeMap[T NodeAddress] map[uint32]T
+type nodeMap[T NodeAddress] map[ID]T
 
 func (nm nodeMap[T]) newConfig(registry nodeRegistry) (Config, error) {
 	if len(nm) == 0 {
@@ -67,7 +67,7 @@ func (nl nodeList) newConfig(registry nodeRegistry) (Config, error) {
 	builder := newNodeBuilder(registry, len(nl))
 	nextID := builder.nextID()
 	for i, addr := range nl {
-		id := nextID + uint32(i)
+		id := nextID + ID(i)
 		if err := builder.add(id, addr); err != nil {
 			return nil, err
 		}
@@ -79,17 +79,17 @@ func (nl nodeList) newConfig(registry nodeRegistry) (Config, error) {
 // It encapsulates the common logic shared between WithNodes and WithNodeList.
 type nodeBuilder struct {
 	registry nodeRegistry
-	addrToID map[string]uint32 // normalized address -> node ID
-	idToNode map[uint32]*Node  // existing node ID -> node
-	maxID    uint32            // maximum existing node ID
+	addrToID map[string]ID // normalized address -> node ID
+	idToNode map[ID]*Node  // existing node ID -> node
+	maxID    ID            // maximum existing node ID
 	nodes    Config
 }
 
 // newNodeBuilder creates a new nodeBuilder initialized with existing nodes from the registry.
 func newNodeBuilder(registry nodeRegistry, capacity int) *nodeBuilder {
-	addrToID := make(map[string]uint32, capacity)
-	idToNode := make(map[uint32]*Node, capacity)
-	maxID := uint32(0)
+	addrToID := make(map[string]ID, capacity)
+	idToNode := make(map[ID]*Node, capacity)
+	maxID := ID(0)
 	// Populate with existing nodes from the registry (already normalized)
 	for _, existingNode := range registry.Nodes() {
 		id := existingNode.ID()
@@ -107,7 +107,7 @@ func newNodeBuilder(registry nodeRegistry, capacity int) *nodeBuilder {
 }
 
 // add creates or reuses a node with the given ID and address.
-func (b *nodeBuilder) add(id uint32, addr string) error {
+func (b *nodeBuilder) add(id ID, addr string) error {
 	if id == 0 {
 		return fmt.Errorf("gorums: node 0 is reserved")
 	}
@@ -146,7 +146,7 @@ func (b *nodeBuilder) configuration() Config {
 }
 
 // nextID returns the next available node ID (max existing ID + 1).
-func (b *nodeBuilder) nextID() uint32 {
+func (b *nodeBuilder) nextID() ID {
 	return b.maxID + 1
 }
 

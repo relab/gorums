@@ -15,7 +15,7 @@ type serverOptions struct {
 	connectCallback func(context.Context)
 	interceptors    []ServerInterceptor
 	// Peer management options
-	myID             uint32
+	myID             ID
 	peerNodes        NodeSource   // Peers this server tracks and calls; set by WithPeers.
 	onConfigChange   func(Config) // Callback registered via [WithPeerChange]; invoked after each connected-peer config change.
 	listenAddr       string       // Listener address recorded by WithAddr; bound by ListenAndServe.
@@ -89,7 +89,7 @@ func WithServerInterceptors(i ...ServerInterceptor) ServerOption {
 // The returned option only records the peer set; the [NewServer] call that
 // receives it panics if the node source is invalid, for example if it
 // contains a duplicate or malformed address.
-func WithPeers(myID uint32, nodes NodeSource, opts ...DialOption) ServerOption {
+func WithPeers(myID ID, nodes NodeSource, opts ...DialOption) ServerOption {
 	return func(o *serverOptions) {
 		o.myID = myID
 		o.peerNodes = nodes

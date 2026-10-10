@@ -70,7 +70,7 @@ func NewLocalServers(n int, opts ...LocalServerOption) ([]*Server, func(), error
 	}
 	servers := make([]*Server, n)
 	for i := range n {
-		myID := uint32(i + 1)
+		myID := ID(i + 1)
 		serverOpts := append(
 			[]ServerOption{WithPeers(myID, nodeSource, localOpts.dialOpts...)},
 			localOpts.serverOpts...,

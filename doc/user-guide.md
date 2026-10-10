@@ -650,31 +650,31 @@ func majorityWrite(responses *gorums.Responses[*WriteResponse]) (*WriteResponse,
     return nil, gorums.ErrIncomplete
   }
 
-  // Process the map[uint32]*WriteResponse
+  // Process the map[gorums.ID]*WriteResponse
   return aggregateWrites(replies), nil
 }
 
 // allSuccessful collects all successful responses; errored nodes are skipped.
-func allSuccessful(responses *gorums.Responses[*Response]) map[uint32]*Response {
+func allSuccessful(responses *gorums.Responses[*Response]) map[gorums.ID]*Response {
   return responses.Results().IgnoreErrors().CollectAll()
 }
 
 // allResponses collects all responses; errored nodes are included with a zero value.
 // Only use this when you know all nodes will succeed or you handle zero values.
-func allResponses(responses *gorums.Responses[*Response]) map[uint32]*Response {
+func allResponses(responses *gorums.Responses[*Response]) map[gorums.ID]*Response {
   return responses.Results().CollectAll()
 }
 ```
 
 #### Per-Node Error Inspection
 
-`CollectN` and `CollectAll` return `map[uint32]Resp` and do not preserve errors.
+`CollectN` and `CollectAll` return `map[gorums.ID]Resp` and do not preserve errors.
 When you need the actual error from a specific node, range over the results sequence directly:
 
 ```go
 func inspectPerNodeErrors(responses *gorums.Responses[*Response]) {
   var errs []error
-  replies := make(map[uint32]*Response)
+  replies := make(map[gorums.ID]*Response)
 
   for result := range responses.Results() {
     if result.Err != nil {

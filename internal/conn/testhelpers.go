@@ -10,6 +10,6 @@ import "github.com/relab/gorums/internal/stream"
 // NewNodeForTest builds a node with the given transport and no owning manager,
 // for tests in other packages that assemble a [Config] by hand. This function
 // should only be used in tests.
-func NewNodeForTest(id uint32, transport *stream.Transport) *Node {
+func NewNodeForTest(id ID, transport *stream.Transport) *Node {
 	return newNode(id, "", nil, transport)
 }

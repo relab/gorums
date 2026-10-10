@@ -74,7 +74,7 @@ func runLocalCluster(srvOpts gorums.ServerOption) ([]string, func(), error) {
 	addrs := make([]string, len(servers))
 	for i, srv := range servers {
 		addrs[i] = srv.Addr()
-		registerAndServe(srv, uint32(i+1))
+		registerAndServe(srv, gorums.ID(i+1))
 	}
 
 	// Wait for all servers to see each other before opening the client REPL.
@@ -99,19 +99,19 @@ func runLocalCluster(srvOpts gorums.ServerOption) ([]string, func(), error) {
 // assignment regardless of the order of addresses in the input list.
 // The server's own address must be included in the peer list.
 // It returns an error if the server's address is not found in the peer list.
-func peerConfig(address string, peers []string) (uint32, gorums.NodeSource, error) {
+func peerConfig(address string, peers []string) (gorums.ID, gorums.NodeSource, error) {
 	sorted := slices.Clone(peers)
 	slices.Sort(sorted)
 	idx := slices.Index(sorted, address)
 	if idx < 0 {
 		return 0, nil, fmt.Errorf("server address %q not found in -addrs list", address)
 	}
-	return uint32(idx + 1), gorums.WithNodeList(sorted), nil
+	return gorums.ID(idx + 1), gorums.WithNodeList(sorted), nil
 }
 
 // registerAndServe registers the storage service on srv and starts serving in
 // a background goroutine. The server log output is labelled with the node ID.
-func registerAndServe(srv *gorums.Server, id uint32) {
+func registerAndServe(srv *gorums.Server, id gorums.ID) {
 	storage := newStorageServer(os.Stderr, fmt.Sprintf("node %d", id))
 	pb.RegisterStorageServer(srv, storage)
 	go func() {
