@@ -19,7 +19,7 @@ type seqNoRecorder struct {
 	seqNos []uint64
 }
 
-func (h *seqNoRecorder) HandleRequest(_ context.Context, msg *stream.Message, release func(), _ func(*stream.Message)) {
+func (h *seqNoRecorder) HandleRequest(_ context.Context, _ ID, msg *stream.Message, release func(), _ func(*stream.Message)) {
 	h.mu.Lock()
 	h.seqNos = append(h.seqNos, msg.GetMessageSeqNo())
 	h.mu.Unlock()

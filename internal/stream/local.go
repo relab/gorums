@@ -41,7 +41,7 @@ func (c *LocalChannel) Enqueue(req Request) {
 			req.deliver(response{NodeID: c.id, Value: msg, Err: msg.errorStatus()})
 		}
 	}
-	run := func(release func()) { c.handler.HandleRequest(ctx, req.Msg, release, send) }
+	run := func(release func()) { c.handler.HandleRequest(ctx, c.id, req.Msg, release, send) }
 	if req.wantServerResponse() {
 		if !c.requests.tryPush(run) {
 			req.sendErrorResponse(c.id, ErrSendQueueFull)

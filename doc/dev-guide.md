@@ -186,7 +186,7 @@ classDiagram
     }
     class RequestHandler {
         <<interface>>
-        HandleRequest(ctx, msg, release, send)
+        HandleRequest(ctx, senderID, msg, release, send)
     }
     class BidiStream {
         <<interface>>
@@ -445,7 +445,7 @@ sequenceDiagram
 
 The root `gorums.Server` ties the layers together on the server side.
 It registers a `stream.Server` with its gRPC server, uses its `conn.InboundManager` as the server's `stream.PeerAcceptor`, and serves as the `stream.RequestHandler` for inbound streams, for its local node, and for back-channel requests on its outbound peer configuration.
-`Server.HandleRequest` creates a `ServerContext` per request and runs the registered `Handler`, wrapped by any `ServerInterceptor`s.
+`Server.HandleRequest` creates a `ServerContext` per request, records the sender ID that the channel passes in, and runs the registered `Handler`, wrapped by any `ServerInterceptor`s.
 A `gorums.Message` wraps a `stream.Message` together with its decoded proto payload.
 
 ```mermaid
@@ -454,7 +454,7 @@ classDiagram
     class Server {
         handlers map[string]Handler
         RegisterHandler(method, Handler)
-        HandleRequest(ctx, msg, release, send)
+        HandleRequest(ctx, senderID, msg, release, send)
         ConnectedPeers() Config
         ConnectedClients() Config
     }
@@ -519,7 +519,7 @@ sequenceDiagram
     SS->>IC: Serve(): receive loop
     P->>IC: request Message
     IC->>D: push handler job
-    D->>H: HandleRequest(ctx, msg, release, send)
+    D->>H: HandleRequest(ctx, senderID, msg, release, send)
     H->>H: Handler(ServerContext, Message)
     H->>IC: send(reply): push on sendQueue
     IC->>P: Send(reply) on send loop

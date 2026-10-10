@@ -1162,7 +1162,7 @@ type signalingRequestHandler struct {
 	called chan *Message
 }
 
-func (h *signalingRequestHandler) HandleRequest(_ context.Context, msg *Message, release func(), _ func(*Message)) {
+func (h *signalingRequestHandler) HandleRequest(_ context.Context, _ ID, msg *Message, release func(), _ func(*Message)) {
 	defer release()
 	select {
 	case h.called <- msg:

@@ -314,7 +314,7 @@ func TestServerHandleRequestRelease(t *testing.T) {
 			}
 			req := stream.Message_builder{Method: tt.method, Payload: payload}.Build()
 			releases, sends := 0, 0
-			srv.HandleRequest(t.Context(), req, func() { releases++ }, func(*stream.Message) { sends++ })
+			srv.HandleRequest(t.Context(), 0, req, func() { releases++ }, func(*stream.Message) { sends++ })
 			if releases != tt.wantReleases {
 				t.Errorf("release called %d times, want %d", releases, tt.wantReleases)
 			}
@@ -1197,4 +1197,106 @@ func TestServerHandlerNestedCallBeforeRelease(t *testing.T) {
 	if _, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](cfg.Nodes()[0].Context(ctx), pb.String("trigger"), mock.TestMethod); err != nil {
 		t.Fatalf("server handler nested call: %v", err)
 	}
+}
+
+// senderRecord is the sender ID that a receiving server's handler observed.
+type senderRecord struct {
+	receiver gorums.ID
+	sender   gorums.ID
+}
+
+// senderRecorder returns a one-way handler that reports the request's
+// [gorums.ServerContext.SenderID] as observed by receiver.
+func senderRecorder(receiver gorums.ID, records chan<- senderRecord) gorums.Handler {
+	return func(ctx gorums.ServerContext, _ *gorums.Message) (*gorums.Message, error) {
+		records <- senderRecord{receiver: receiver, sender: ctx.SenderID()}
+		return nil, nil
+	}
+}
+
+// multicastString sends a one-way multicast to cfg and fails the test on error.
+func multicastString(t *testing.T, cfg gorums.Config, method string) {
+	t.Helper()
+	ctx := gorumstest.Context(t, 2*time.Second)
+	if err := gorumsimpl.Multicast(cfg.Context(ctx), pb.String("sender"), method).Send(); err != nil {
+		t.Fatalf("Multicast: %v", err)
+	}
+}
+
+// TestServerSenderID verifies that a handler observes the sender of a request
+// on every path a request can take to a server.
+func TestServerSenderID(t *testing.T) {
+	// peerSenderIDs multicasts from every server to its peer configuration,
+	// which includes the server itself, and checks that every receiver
+	// observes the multicasting server's ID.
+	peerSenderIDs := func(t *testing.T, opts ...gorums.ServerOption) {
+		servers := gorumstest.LocalServers(t, 3, opts...)
+		records := make(chan senderRecord, len(servers))
+		for _, srv := range servers {
+			srv.RegisterHandler(mock.StreamMethod, senderRecorder(srv.NodeID(), records))
+		}
+		gorumstest.WaitForPeers(t, servers)
+		for _, srv := range servers {
+			multicastString(t, srv.PeerConfig(), mock.StreamMethod)
+			for _, r := range gorumstest.Collect(t, 2*time.Second, len(servers), records) {
+				if r.sender != srv.NodeID() {
+					t.Errorf("server %d: SenderID() = %d, want %d", r.receiver, r.sender, srv.NodeID())
+				}
+			}
+		}
+	}
+
+	// clientSenderID multicasts from a client that dials with opts and
+	// returns the sender ID that the server observed.
+	clientSenderID := func(t *testing.T, opts ...gorumstest.Option) gorums.ID {
+		records := make(chan senderRecord, 1)
+		srvFn := func(int) gorumstest.ServerIface {
+			srv := gorums.NewServer()
+			srv.RegisterHandler(mock.StreamMethod, senderRecorder(0, records))
+			return srv
+		}
+		cfg := gorumstest.Config(t, 1, srvFn, opts...)
+		multicastString(t, cfg, mock.StreamMethod)
+		return gorumstest.Collect(t, 2*time.Second, 1, records)[0].sender
+	}
+
+	// Inbound streams from known peers, and the in-process self node.
+	t.Run("KnownPeersAndSelf", func(t *testing.T) { peerSenderIDs(t) })
+	// A higher-ID peer's requests arrive on the stream the receiver dialed.
+	t.Run("StreamDedup", func(t *testing.T) { peerSenderIDs(t, gorums.WithStreamDedup()) })
+
+	t.Run("RegularClient", func(t *testing.T) {
+		if got := clientSenderID(t); got != 0 {
+			t.Errorf("SenderID() = %d, want 0", got)
+		}
+	})
+	t.Run("UnknownPeerID", func(t *testing.T) {
+		forged := gorums.WithMetadata(metadata.Pairs("gorums-node-id", "99"))
+		if got := clientSenderID(t, forged); got != 0 {
+			t.Errorf("SenderID() = %d, want 0", got)
+		}
+	})
+
+	t.Run("BackChannelClient", func(t *testing.T) {
+		srv, _, cfg := createServerAndClient(t)
+		records := make(chan senderRecord, 1)
+		srv.RegisterHandler(mock.StreamMethod, senderRecorder(0, records))
+		awaitClientReady(t, srv, 1)
+		multicastString(t, cfg, mock.StreamMethod)
+		got := gorumstest.Collect(t, 2*time.Second, 1, records)[0].sender
+		if want := srv.ConnectedClients().NodeIDs()[0]; got != want {
+			t.Errorf("SenderID() = %d, want %d (the client's assigned ID)", got, want)
+		}
+	})
+	t.Run("BackChannelServer", func(t *testing.T) {
+		srv, clientSrv, cfg := createServerAndClient(t)
+		records := make(chan senderRecord, 1)
+		clientSrv.RegisterHandler(mock.StreamMethod, senderRecorder(0, records))
+		awaitClientReady(t, srv, 1)
+		multicastString(t, srv.ConnectedClients(), mock.StreamMethod)
+		got := gorumstest.Collect(t, 2*time.Second, 1, records)[0].sender
+		if want := cfg.NodeIDs()[0]; got != want {
+			t.Errorf("SenderID() = %d, want %d (the client's ID for the server)", got, want)
+		}
+	})
 }

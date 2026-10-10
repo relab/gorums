@@ -136,7 +136,7 @@ func (s *session) handle(msg *Message) {
 		if s.handler != nil {
 			ctx := msg.appendToIncomingContext(s.ctx)
 			s.requests.push(s.ctx, func(release func()) {
-				s.handler.HandleRequest(ctx, msg, release, s.reply)
+				s.handler.HandleRequest(ctx, s.id, msg, release, s.reply)
 			})
 		}
 		return

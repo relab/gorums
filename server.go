@@ -201,12 +201,13 @@ func chainInterceptors(final Handler, interceptors ...ServerInterceptor) Handler
 // [ServerContext.Release]. Otherwise the caller releases the request when
 // HandleRequest returns, as [stream.RequestHandler] specifies, so the stream's
 // next request can run on the same goroutine.
-func (s *Server) HandleRequest(ctx context.Context, reqMsg *stream.Message, release func(), send func(*stream.Message)) {
+func (s *Server) HandleRequest(ctx context.Context, senderID ID, reqMsg *stream.Message, release func(), send func(*stream.Message)) {
 	srvCtx := ServerContext{
-		Context: ctx,
-		release: release,
-		send:    send,
-		srv:     s,
+		Context:  ctx,
+		senderID: senderID,
+		release:  release,
+		send:     send,
+		srv:      s,
 	}
 
 	handler, ok := s.handlers[reqMsg.GetMethod()]
@@ -364,9 +365,28 @@ func (s *Server) Stop() {
 // [ServerContext.Release] or returns.
 type ServerContext struct {
 	context.Context
-	release func()
-	send    func(*stream.Message)
-	srv     *Server
+	senderID ID
+	release  func()
+	send     func(*stream.Message)
+	srv      *Server
+}
+
+// SenderID returns the ID of the node that sent the request, as this server
+// identifies that node:
+//   - a peer configured with [WithPeers] has its configured ID;
+//   - a back-channel client has the ID that this server assigned to it, as in
+//     [Server.ConnectedClients]; the ID changes when the client reconnects;
+//   - a request on a connection that this server dialed has the dialed
+//     node's ID;
+//   - a request that this server sends to itself has this server's own ID.
+//
+// SenderID returns 0 for a client that announces no ID, or an ID that this
+// server does not know. The sender is the last hop: when a message travels
+// through several nodes, SenderID identifies the node that forwarded it. The
+// sender asserts its ID when it connects, and the server does not
+// authenticate it.
+func (ctx *ServerContext) SenderID() ID {
+	return ctx.senderID
 }
 
 // Release lets the next request on this handler's stream start, concurrently
