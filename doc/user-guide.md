@@ -348,7 +348,7 @@ go gorumsSrv.ListenAndServe()
 Next, we write client code to call RPCs on our servers.
 The first thing we need to do is to create a `Config` using `gorums.NewConfig`.
 `NewConfig` establishes connections to the given nodes and returns a configuration
-ready for making RPC calls.
+ready for making RPC calls, and a function that closes those connections.
 
 We can forward gRPC dial options to `NewConfig` if needed.
 Below we use only a simple insecure connection option.
@@ -371,7 +371,7 @@ func ExampleStorageClient() {
     "127.0.0.1:8082",
   }
   // Create a configuration including all nodes
-  allNodesConfig, err := gorums.NewConfig(
+  allNodesConfig, closeFn, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
     gorums.WithGRPCDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -380,7 +380,7 @@ func ExampleStorageClient() {
   if err != nil {
     log.Fatalln("error creating read config:", err)
   }
-  defer allNodesConfig.Close()
+  defer closeFn()
 ```
 
 A configuration is a set of nodes on which RPC calls can be invoked.
@@ -388,7 +388,7 @@ A configuration is a set of nodes on which RPC calls can be invoked.
 
 The `Config` type has several useful methods for combining and filtering configurations.
 Inspect the package documentation or source code for details.
-Configurations derived from `allNodesConfig` share its connection pool, and `Close` on any of them closes the whole pool; see [Closing Configurations](#closing-configurations).
+Configurations derived from `allNodesConfig` share its connection pool, and only `closeFn` closes it; see [Closing Configurations](#closing-configurations).
 
 We can now invoke the WriteUnicast RPC on each `node` in the configuration:
 
@@ -702,7 +702,7 @@ func ExampleStorageClient() {
   }
 
   // Create a configuration with all nodes
-  config, err := gorums.NewConfig(
+  config, closeFn, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
     gorums.WithGRPCDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -711,7 +711,7 @@ func ExampleStorageClient() {
   if err != nil {
     log.Fatalln("error creating configuration:", err)
   }
-  defer config.Close()
+  defer closeFn()
 
   ctx := context.Background()
   cfgCtx := config.Context(ctx)
@@ -1216,11 +1216,15 @@ gorumsSrv := gorums.NewServer(
 The connecting client attaches the metadata with `WithMetadata`:
 
 ```go
-config, err := gorums.NewConfig(
+config, closeFn, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
     gorums.WithMetadata(metadata.New(map[string]string{"client-id": "replica-3"})),
     gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 )
+if err != nil {
+    return err
+}
+defer closeFn()
 ```
 
 ### WithPeerChange
@@ -1475,7 +1479,7 @@ func ExampleConfigClient() {
     "127.0.0.1:8082",
   }
   // Create base configuration c1 from addrs, giving |c1| = 3.
-  c1, err := gorums.NewConfig(
+  c1, closeFn, err := gorums.NewConfig(
     gorums.WithNodeList(addrs),
     gorums.WithGRPCDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -1484,7 +1488,7 @@ func ExampleConfigClient() {
   if err != nil {
     log.Fatalln("error creating configuration:", err)
   }
-  defer c1.Close()
+  defer closeFn()
 
   newAddrs := []string{
     "127.0.0.1:9080",
@@ -1525,17 +1529,19 @@ func ExampleConfigClient() {
 ### Closing Configurations
 
 All configurations derived from one `NewConfig` call share one connection pool.
-In the example above, `c1` through `c8` share the pool that `NewConfig` created.
-`Close` on any non-empty one of them closes the whole pool, including nodes that are not in that configuration.
-An empty configuration, such as `c1.Remove(c1.NodeIDs()...)`, belongs to no pool, so `Close` on it does nothing.
-For example, `c5.Close()` also closes the first node of `c1`.
-Thus, call `Close` once, on the configuration that `NewConfig` returned, when the application no longer needs any configuration in the pool.
+In the example above, `c1` through `c8` share the pool that `NewConfig` created, and `c2` added two nodes to it.
+Only the close function that `NewConfig` returned closes the pool.
+A derived configuration is a view of the pool and has no `Close` method, so closing one view cannot affect another.
+To stop using some nodes, derive a smaller configuration with `Remove` or `Difference`.
 
-After `Close`, calls to the pool's nodes fail with an `Unavailable` "node closed" error.
-There is one exception: a node that runs in-process, or that reuses a server's inbound stream, owns no connection, so `Close` leaves it usable.
-`Extend` returns an error on any configuration in a closed pool.
-`Close` is idempotent and safe for concurrent use; a second call returns `nil`.
-To stop using some nodes without closing the others, derive a smaller configuration with `Remove` or `Difference` and do not call `Close` on it.
+The close function closes every node in the pool, including the nodes that `Extend` added.
+After the close function returns, calls to the pool's nodes fail with an `Unavailable` "node closed" error.
+`Extend` on any configuration in the pool also returns an error.
+There is one exception: a node that runs in-process, or that reuses a server's inbound stream, owns no connection, so it stays usable.
+The close function is idempotent and safe for concurrent use.
+It returns no error, because closing a connection has no failure that a caller can act on.
+
+A `Server` configured with `WithPeers` owns its peer configuration, and `Stop` and `GracefulStop` close it.
 
 ## Latency-Based Node Selection
 
@@ -1982,11 +1988,15 @@ clientSrv.RegisterHandler(pb.MyMethod, myHandler)
 
 // The configuration is used to reach the server(s); WithBackChannel installs
 // clientSrv as the back-channel handler on its connections.
-config, err := gorums.NewConfig(
+config, closeFn, err := gorums.NewConfig(
     gorums.WithNodeList(serverAddrs),
     gorums.WithBackChannel(clientSrv),
     gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 )
+if err != nil {
+    return err
+}
+defer closeFn()
 ```
 
 When the remote server dispatches a back-channel call via `ctx.ConnectedClients()`, the call arrives on the same gRPC stream the client opened and is routed to `clientSrv` for dispatch.
