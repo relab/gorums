@@ -22,6 +22,8 @@ func TestRunUsage(t *testing.T) {
 		{"prepare help", []string{"prepare", "-h"}, 0, "", "runtime/gorumsimpl/version.go"},
 		{"publish help", []string{"publish", "-h"}, 0, "", "-draft"},
 		{"pr help", []string{"pr", "-h"}, 0, "", "-web"},
+		{"prepare bump flag", []string{"prepare", "-h"}, 0, "", "-bump-min"},
+		{"prepare major flag", []string{"prepare", "-h"}, 0, "", "-allow-major"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

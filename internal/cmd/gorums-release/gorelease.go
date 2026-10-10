@@ -26,3 +26,14 @@ func reportSummary(report string) string {
 	}
 	return strings.TrimSpace(report)
 }
+
+// parseBase extracts the base version from the "Inferred base version:" line
+// of a gorelease report, or returns "" if there is none.
+func parseBase(report string) string {
+	for line := range strings.Lines(report) {
+		if v, ok := strings.CutPrefix(line, "Inferred base version:"); ok {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}

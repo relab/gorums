@@ -20,6 +20,15 @@ Suggested version: v0.12.0
 	}
 }
 
+func TestParseBase(t *testing.T) {
+	if got := parseBase("# summary\nInferred base version: v0.11.0\nSuggested version: v0.12.0\n"); got != "v0.11.0" {
+		t.Errorf("parseBase() = %q, want v0.11.0", got)
+	}
+	if got := parseBase("no base here\n"); got != "" {
+		t.Errorf("parseBase() = %q, want empty", got)
+	}
+}
+
 func TestReportSummary(t *testing.T) {
 	tests := []struct{ name, in, want string }{
 		{"with summary", "# pkg\n## incompatible changes\nx: removed\n\n# summary\nInferred base version: v0.11.0\nSuggested version: v0.12.0\n",

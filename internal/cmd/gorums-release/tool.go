@@ -23,6 +23,8 @@ type tool struct {
 	in         io.Reader
 	isTerminal bool
 	sleep      func(time.Duration)
+	lookPath   func(string) (string, error) // finds a program on PATH
+	path       string                       // the value of PATH
 
 	// verifyTimeout bounds the wait for the Go module proxy after publishing.
 	verifyTimeout time.Duration
