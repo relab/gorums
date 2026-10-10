@@ -10,8 +10,10 @@ const releaseStatus = ` M benchkit/go.mod
  M examples/go.mod
  M go.mod
  M go.sum
+ M go.work
  M internal/tests/ordering/order_gorums.pb.go
  M internal/version/version.go
+ M runtime/gorumsimpl/version.go
 ?? benchkit/new.pb.go
 `
 
@@ -33,7 +35,7 @@ func TestPR(t *testing.T) {
 	}
 	assertOrder(t, f.calls,
 		"exec git switch -c release/v0.12.0",
-		"exec git add -- benchkit/go.mod examples/go.mod go.mod go.sum internal/version/version.go",
+		"exec git add -- benchkit/go.mod examples/go.mod go.mod go.sum go.work internal/version/version.go runtime/gorumsimpl/version.go",
 		"exec git commit -m gorums: release v0.12.0",
 		"exec git add -- benchkit/new.pb.go cmd/protoc-gen-gorums/gengorums/template_static.go internal/tests/ordering/order_gorums.pb.go",
 		"exec git commit -m all: regenerate code for v0.12.0",
@@ -136,5 +138,38 @@ func TestParseStatus(t *testing.T) {
 	want := []string{"a.go", "b.go", "c.go", "new.go", "sp ace.go"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("parseStatus() = %v, want %v", got, want)
+	}
+}
+
+// releaseGroup must accept every file that prepare, go get -u, and make
+// genproto can change, and nothing else.
+func TestReleaseGroup(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{"internal/version/version.go", groupVersion},
+		{"runtime/gorumsimpl/version.go", groupVersion}, // -bump-gen and -bump-min
+		{"go.work", groupVersion},                       // go get -u can raise its go directive
+		{"go.mod", groupVersion},
+		{"go.sum", groupVersion},
+		{"examples/go.mod", groupVersion},
+		{"examples/go.sum", groupVersion},
+		{"benchkit/go.mod", groupVersion},
+		{"benchkit/go.sum", groupVersion},
+		{"gorums.pb.go", groupGenerated},
+		{"internal/tests/ordering/order_gorums.pb.go", groupGenerated},
+		{"benchkit/control_gorums.pb.go", groupGenerated},
+		{"cmd/protoc-gen-gorums/gengorums/template_static.go", groupGenerated},
+		{"README.md", ""},
+		{"go.work.sum", ""},
+		{"other/go.mod", ""},
+		{"doc/release-guide.md", ""},
+		{"runtime/gorumsimpl/other.go", ""},
+	}
+	for _, tt := range tests {
+		if got := releaseGroup(tt.path); got != tt.want {
+			t.Errorf("releaseGroup(%q) = %q, want %q", tt.path, got, tt.want)
+		}
 	}
 }

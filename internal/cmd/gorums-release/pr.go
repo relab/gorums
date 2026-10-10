@@ -34,11 +34,11 @@ func (t *tool) pr(o prOptions) error {
 	var other, generated []string
 	var unexpected []string
 	for _, p := range changes {
-		switch {
-		case isGenerated(p):
-			generated = append(generated, p)
-		case p == versionFile || isModuleFile(p):
+		switch releaseGroup(p) {
+		case groupVersion:
 			other = append(other, p)
+		case groupGenerated:
+			generated = append(generated, p)
 		default:
 			unexpected = append(unexpected, p)
 		}
@@ -117,6 +117,24 @@ func prBody(tag, report string) string {
 		body += "\n\nReport from gorelease:\n\n```\n" + report + "\n```"
 	}
 	return body
+}
+
+// The groups of files that a release changes. Each group is one commit.
+const (
+	groupVersion   = "version"   // version constants and dependency files
+	groupGenerated = "generated" // output of make genproto
+)
+
+// releaseGroup returns the group of a file that prepare changes, or "" for a
+// file that a release does not change.
+func releaseGroup(p string) string {
+	switch {
+	case isGenerated(p):
+		return groupGenerated
+	case p == versionFile || p == runtimeFile || p == "go.work" || isModuleFile(p):
+		return groupVersion
+	}
+	return ""
 }
 
 // isGenerated reports whether p is produced by make genproto.
