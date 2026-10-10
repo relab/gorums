@@ -146,9 +146,17 @@ func (c Config) Equal(b Config) bool {
 	return true
 }
 
+// Node returns the node in c with the given ID, or nil if c has no such node.
+func (c Config) Node(id ID) *Node {
+	if i := slices.IndexFunc(c, func(n *Node) bool { return n.id == id }); i >= 0 {
+		return c[i]
+	}
+	return nil
+}
+
 // Contains reports whether c contains a node with the given ID.
 func (c Config) Contains(id ID) bool {
-	return slices.ContainsFunc(c, func(n *Node) bool { return n.id == id })
+	return c.Node(id) != nil
 }
 
 // Add returns a new Config containing nodes from c and nodes with the specified IDs.

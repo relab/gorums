@@ -106,6 +106,32 @@ func TestConfigWatch(t *testing.T) {
 	})
 }
 
+func TestConfigNode(t *testing.T) {
+	n1 := newTestNode(1, stream.NewChannelWithState(nil))
+	n3 := newTestNode(3, stream.NewChannelWithState(nil))
+	tests := []struct {
+		name string
+		cfg  Config
+		id   ID
+		want *Node
+	}{
+		{name: "First", cfg: Config{n1, n3}, id: 1, want: n1},
+		{name: "Last", cfg: Config{n1, n3}, id: 3, want: n3},
+		{name: "NotSortedByID", cfg: Config{n3, n1}, id: 1, want: n1},
+		{name: "Absent", cfg: Config{n1, n3}, id: 2, want: nil},
+		{name: "ReservedZero", cfg: Config{n1, n3}, id: 0, want: nil},
+		{name: "Empty", cfg: Config{}, id: 1, want: nil},
+		{name: "Nil", cfg: nil, id: 1, want: nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.cfg.Node(tt.id); got != tt.want {
+				t.Errorf("Node(%d) = node %d, want node %d", tt.id, got.ID(), tt.want.ID())
+			}
+		})
+	}
+}
+
 func TestConfigSort(t *testing.T) {
 	const unmeasured = -1 * time.Second
 	// makeNode returns a node with the given latency and last error.
