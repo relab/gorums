@@ -9,13 +9,13 @@ import (
 // bypassing the network. Handlers run one at a time, in request order, as on
 // a stream.
 type LocalChannel struct {
-	id       uint32
+	id       ID
 	handler  RequestHandler
 	requests *dispatcher
 }
 
 // NewLocalChannel returns a channel that serves requests with handler.
-func NewLocalChannel(id uint32, handler RequestHandler) *LocalChannel {
+func NewLocalChannel(id ID, handler RequestHandler) *LocalChannel {
 	return &LocalChannel{id: id, handler: handler, requests: newDispatcher(nil, 0)}
 }
 

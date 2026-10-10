@@ -11,7 +11,7 @@ import (
 // QuorumCallError returns a [gorums.QuorumCallError] with cause
 // [gorums.ErrIncomplete] and one node error for each entry in nodeErrors.
 // The node errors are in ascending node ID order.
-func QuorumCallError(nodeErrors map[uint32]error) gorums.QuorumCallError {
+func QuorumCallError(nodeErrors map[gorums.ID]error) gorums.QuorumCallError {
 	errs := make([]conn.NodeError, 0, len(nodeErrors))
 	for _, nodeID := range slices.Sorted(maps.Keys(nodeErrors)) {
 		errs = append(errs, conn.NewNodeError(nodeID, nodeErrors[nodeID]))

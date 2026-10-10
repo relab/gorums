@@ -35,7 +35,7 @@ type InboundChannel struct {
 // NewInboundChannel returns a channel over stream and starts its send loop.
 // ctx must be the stream's context; handlers receive contexts derived from it.
 // Call [InboundChannel.Serve] to receive from the stream.
-func NewInboundChannel(ctx context.Context, id uint32, stream BidiStream, opts InboundOptions) *InboundChannel {
+func NewInboundChannel(ctx context.Context, id ID, stream BidiStream, opts InboundOptions) *InboundChannel {
 	c := &InboundChannel{
 		endpoint: newEndpoint(ctx, id, opts.SendBufferSize, opts.DispatchSize, opts.Handler, opts.Latency),
 	}

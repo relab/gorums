@@ -26,8 +26,8 @@ const gorumsNodeIDKey = "gorums-node-id"
 var errSelfNodeIDStream = status.Error(codes.InvalidArgument, "gorums: inbound stream claims the server's own node ID")
 
 // nodeID extracts the NodeID from the gorums-node-id metadata key in ctx.
-// It returns 0 if the key is absent, empty, or not a valid uint32 greater than zero.
-func nodeID(ctx context.Context) uint32 {
+// It returns 0 if the key is absent, empty, or not a valid ID greater than zero.
+func nodeID(ctx context.Context) ID {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return 0
@@ -40,7 +40,7 @@ func nodeID(ctx context.Context) uint32 {
 	if err != nil || id == 0 {
 		return 0
 	}
-	return uint32(id)
+	return ID(id)
 }
 
 // hasPeerMetadata reports whether ctx contains the gorums-node-id metadata key,
@@ -56,7 +56,7 @@ func hasPeerMetadata(ctx context.Context) bool {
 }
 
 // MetadataWithNodeID returns a metadata.MD containing the gorums-node-id key with the given id value.
-func MetadataWithNodeID(id uint32) metadata.MD {
+func MetadataWithNodeID(id ID) metadata.MD {
 	return metadata.Pairs(gorumsNodeIDKey, strconv.FormatUint(uint64(id), 10))
 }
 
@@ -74,9 +74,9 @@ func MetadataWithNodeID(id uint32) metadata.MD {
 // InboundManager is safe for concurrent use.
 type InboundManager struct {
 	mu               sync.RWMutex
-	myID             uint32                // this server's own NodeID; always present in inboundPeers
-	knownNodes       map[uint32]*Node      // pre-created configured peers, including self when configured
-	clientNodes      map[uint32]*Node      // dynamically assigned peer-capable clients
+	myID             ID                    // this server's own NodeID; always present in inboundPeers
+	knownNodes       map[ID]*Node          // pre-created configured peers, including self when configured
+	clientNodes      map[ID]*Node          // dynamically assigned peer-capable clients
 	peerConfig       Config                // the server's peer Config; set once by SetPeerConfig after NewConfig builds it
 	connectedPeers   Config                // auto-updated connectivity-filtered subset of peerConfig, sorted by ID
 	inboundPeers     Config                // auto-updated slice of known peers with an inbound stream, sorted by ID
@@ -109,11 +109,11 @@ const ClientIDStart = 1 << 20
 // their send queue and request dispatch capacities; a dispatchSize of 0
 // selects the default. It returns an error if peerNodes is invalid, for
 // example because of an invalid address or a duplicate node.
-func NewInboundManager(myID uint32, peerNodes NodeSource, sendBufferSize, dispatchSize uint, onConfigChange func(Config), handler stream.RequestHandler) (*InboundManager, error) {
+func NewInboundManager(myID ID, peerNodes NodeSource, sendBufferSize, dispatchSize uint, onConfigChange func(Config), handler stream.RequestHandler) (*InboundManager, error) {
 	im := &InboundManager{
 		myID:           myID,
-		knownNodes:     make(map[uint32]*Node),
-		clientNodes:    make(map[uint32]*Node),
+		knownNodes:     make(map[ID]*Node),
+		clientNodes:    make(map[ID]*Node),
 		sendBufferSize: sendBufferSize,
 		dispatchSize:   dispatchSize,
 		handler:        handler,
@@ -188,7 +188,7 @@ func (im *InboundManager) ConnectedClients() Config {
 }
 
 // NodeID returns this server's own nodeID.
-func (im *InboundManager) NodeID() uint32 {
+func (im *InboundManager) NodeID() ID {
 	if im == nil {
 		return 0
 	}
@@ -208,7 +208,7 @@ func (im *InboundManager) nextMsgID() uint64 {
 // construction before any peers connect, so no locking is needed.
 // If id equals myID, a local (in-process) node is created instead of an
 // inbound node, enabling direct handler invocation without a network round-trip.
-func (im *InboundManager) newNode(id uint32, addr string) (*Node, error) {
+func (im *InboundManager) newNode(id ID, addr string) (*Node, error) {
 	var node *Node
 	if id == im.myID && im.handler != nil {
 		node = newLocalNode(id, addr, im.nextMsgID, im.handler, nil)
@@ -226,7 +226,7 @@ func (im *InboundManager) newNode(id uint32, addr string) (*Node, error) {
 // peer's channel slot before the peer first connects. The returned node's
 // channel reference is shared, so channel attachments and replacements remain
 // visible to holders.
-func (im *InboundManager) knownPeer(id uint32) *Node {
+func (im *InboundManager) knownPeer(id ID) *Node {
 	if im == nil {
 		return nil
 	}
@@ -237,7 +237,7 @@ func (im *InboundManager) knownPeer(id uint32) *Node {
 
 // isKnown returns true if the given NodeID is a known peer.
 // Returns false for id == 0 (external clients) or unknown IDs.
-func (im *InboundManager) isKnown(id uint32) bool {
+func (im *InboundManager) isKnown(id ID) bool {
 	if id == 0 {
 		return false
 	}
@@ -293,7 +293,7 @@ func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream st
 // as active while keeping the prior one live until its own stream ends, so the
 // node never goes dark mid-handover; see [Node.attachStream]. The returned
 // cleanup function detaches and closes this registration's channel.
-func (im *InboundManager) registerPeer(streamCtx context.Context, inboundStream stream.BidiStream, id uint32) (*stream.InboundChannel, func(), error) {
+func (im *InboundManager) registerPeer(streamCtx context.Context, inboundStream stream.BidiStream, id ID) (*stream.InboundChannel, func(), error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	node := im.knownNodes[id]
@@ -343,10 +343,10 @@ func (im *InboundManager) acceptClient(streamCtx context.Context, inboundStream 
 
 // nextAvailableClientID returns the next unoccupied dynamic client ID.
 // The caller must hold im.mu.
-func (im *InboundManager) nextAvailableClientID() (uint32, error) {
+func (im *InboundManager) nextAvailableClientID() (ID, error) {
 	const maxNodeID = uint64(1<<32 - 1)
 	for im.nextClientID <= maxNodeID {
-		id := uint32(im.nextClientID)
+		id := ID(im.nextClientID)
 		im.nextClientID++
 		if _, exists := im.knownNodes[id]; exists {
 			continue

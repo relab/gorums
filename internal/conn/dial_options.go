@@ -23,7 +23,7 @@ type DialOptions struct {
 	SendBufferSize  uint
 	Metadata        metadata.MD
 	Handler         stream.RequestHandler
-	LocalNodeID     uint32          // if non-zero, skip setting handler on this node ID
+	LocalNodeID     ID              // if non-zero, skip setting handler on this node ID
 	StreamDedup     bool            // reuse a lower-ID peer's dialed stream instead of dialing back
 	InboundManager  *InboundManager // set when the configuration carries a server (peer or back-channel client); enables eager reconnect and, with StreamDedup, borrowing
 	Err             error           // records misuse of a dial option; surfaced by NewConfig

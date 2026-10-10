@@ -13,7 +13,7 @@ type NodeAddress = conn.NodeAddress
 // WithNodes returns a NodeSource containing the provided mapping from
 // application-specific IDs to types implementing NodeAddress.
 // Node IDs must be greater than 0.
-func WithNodes[T NodeAddress](nodes map[uint32]T) NodeSource {
+func WithNodes[T NodeAddress](nodes map[ID]T) NodeSource {
 	return conn.WithNodes(nodes)
 }
 
@@ -24,6 +24,15 @@ func WithNodes[T NodeAddress](nodes map[uint32]T) NodeSource {
 func WithNodeList(addrsList []string) NodeSource {
 	return conn.WithNodeList(addrsList)
 }
+
+// ID identifies a node. The application chooses the IDs of configured nodes
+// with [WithNodes], or [WithNodeList] assigns them in list order. Servers
+// configured with [WithPeers] must agree on the ID of each peer, because a
+// server announces its own ID when it connects. ID 0 is reserved:
+// it marks a handler-only server and a client that announces no ID. A server
+// assigns IDs from 2^20 upward to back-channel clients, skipping configured
+// IDs. Under [WithStreamDedup], the peer with the lower ID dials the other.
+type ID = conn.ID
 
 // Node encapsulates the state of a node on which a remote procedure call can be
 // performed. Nodes are created as part of a [Config] built with [NewConfig].

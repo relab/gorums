@@ -42,11 +42,17 @@ func sharedNodeTransport(peer *Node) *stream.Transport {
 	return stream.NewSharedTransport(transport)
 }
 
+// ID identifies a node. ID 0 is reserved for a node that has no ID: a
+// handler-only server, or a client that announces no ID. Dynamic client IDs
+// start at [ClientIDStart] and skip configured IDs. Under stream
+// deduplication, the peer with the lower ID dials.
+type ID = stream.ID
+
 // Node encapsulates the state of a node on which a remote procedure call
 // can be performed.
 type Node struct {
 	// Only assigned at creation.
-	id   uint32
+	id   ID
 	addr string
 	mgr  *outboundManager // owning manager for this node
 
@@ -63,7 +69,7 @@ type Node struct {
 }
 
 // newNode creates a Node with stable identity fields and its transport.
-func newNode(id uint32, addr string, mgr *outboundManager, transport *stream.Transport) *Node {
+func newNode(id ID, addr string, mgr *outboundManager, transport *stream.Transport) *Node {
 	return &Node{id: id, addr: addr, mgr: mgr, transport: transport}
 }
 
@@ -95,7 +101,7 @@ func (n *Node) Context(parent context.Context) *NodeContext {
 
 // nodeOptions contains configuration options for creating a new Node.
 type nodeOptions struct {
-	ID              uint32
+	ID              ID
 	SendBufferSize  uint
 	MsgIDGen        func() uint64
 	Metadata        metadata.MD
@@ -140,7 +146,7 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 
 // newInboundNode creates a Node for a known peer or client without an active
 // channel; the channel is attached when the peer's stream arrives.
-func newInboundNode(id uint32, addr string, msgIDGen func() uint64) *Node {
+func newInboundNode(id ID, addr string, msgIDGen func() uint64) *Node {
 	return newNode(id, addr, nil, stream.NewTransport(id, msgIDGen))
 }
 
@@ -148,7 +154,7 @@ func newInboundNode(id uint32, addr string, msgIDGen func() uint64) *Node {
 // network. It is used for the self-node when a server calls its own peers,
 // which include itself. The provided handler serves requests directly without
 // a gRPC round-trip.
-func newLocalNode(id uint32, addr string, msgIDGen func() uint64, handler stream.RequestHandler, mgr *outboundManager) *Node {
+func newLocalNode(id ID, addr string, msgIDGen func() uint64, handler stream.RequestHandler, mgr *outboundManager) *Node {
 	transport := stream.NewTransport(id, msgIDGen)
 	n := newNode(id, addr, mgr, transport)
 	transport.StoreChannel(stream.NewLocalChannel(id, handler))
@@ -270,7 +276,7 @@ func (n *Node) close() error {
 }
 
 // ID returns the ID of n.
-func (n *Node) ID() uint32 {
+func (n *Node) ID() ID {
 	if n != nil {
 		return n.id
 	}

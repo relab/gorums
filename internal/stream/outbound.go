@@ -66,7 +66,7 @@ type OutboundChannel struct {
 // NewOutboundChannel returns a channel to the server behind conn and starts
 // its goroutine. The channel lives until ctx ends or it is closed; closing it
 // also closes conn.
-func NewOutboundChannel(ctx context.Context, id uint32, conn *grpc.ClientConn, opts OutboundOptions) *OutboundChannel {
+func NewOutboundChannel(ctx context.Context, id ID, conn *grpc.ClientConn, opts OutboundOptions) *OutboundChannel {
 	c := &OutboundChannel{
 		endpoint:       newEndpoint(ctx, id, opts.SendBufferSize, 0, opts.Handler, opts.Latency),
 		conn:           conn,

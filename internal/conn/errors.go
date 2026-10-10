@@ -70,12 +70,12 @@ func (e QuorumCallError) Error() string {
 // NodeError reports on a failed RPC call from a specific node.
 type NodeError struct {
 	cause  error
-	nodeID uint32
+	nodeID ID
 }
 
 // NewNodeError builds a [NodeError] for the given node ID and cause. It is used
 // by the call engine to record per-node failures in a [QuorumCallError].
-func NewNodeError(nodeID uint32, cause error) NodeError {
+func NewNodeError(nodeID ID, cause error) NodeError {
 	return NodeError{cause: cause, nodeID: nodeID}
 }
 

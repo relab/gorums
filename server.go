@@ -43,7 +43,7 @@ type Server struct {
 
 // NodeID returns this server's own [Config] node ID, as configured with
 // [WithPeers]. It returns 0 if [WithPeers] was not used.
-func (s *Server) NodeID() uint32 {
+func (s *Server) NodeID() ID {
 	return s.im.NodeID()
 }
 

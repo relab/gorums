@@ -126,7 +126,7 @@ func (c *CallContext[Req, Resp]) Nodes() []*Node {
 }
 
 // Node returns the node with the given ID.
-func (c *CallContext[Req, Resp]) Node(id uint32) *Node {
+func (c *CallContext[Req, Resp]) Node(id ID) *Node {
 	nodes := c.config.Nodes()
 	index := slices.IndexFunc(nodes, func(n *Node) bool {
 		return n.ID() == id
@@ -144,7 +144,7 @@ func (c *CallContext[Req, Resp]) Size() int {
 
 // reportNodeError sends an error response for the given node to responseChan.
 // It is a no-op for fire-and-forget calls where responseChan is nil.
-func (c *CallContext[Req, Resp]) reportNodeError(nodeID uint32, err error) {
+func (c *CallContext[Req, Resp]) reportNodeError(nodeID ID, err error) {
 	if c.responseChan != nil {
 		c.responseChan <- NodeResponse[*stream.Message]{NodeID: nodeID, Err: err}
 	}

@@ -16,7 +16,7 @@ import (
 type outboundManager struct {
 	mu        sync.Mutex
 	nodes     []*Node
-	lookup    map[uint32]*Node
+	lookup    map[ID]*Node
 	closed    bool // guarded by mu; set once by Close
 	closeOnce sync.Once
 	logger    *log.Logger
@@ -28,7 +28,7 @@ type outboundManager struct {
 // nodes added to the manager.
 func newOutboundManager(opts ...DialOption) *outboundManager {
 	m := &outboundManager{
-		lookup: make(map[uint32]*Node),
+		lookup: make(map[ID]*Node),
 		opts:   NewDialOptions(),
 	}
 	for _, opt := range opts {
@@ -75,7 +75,7 @@ func (m *outboundManager) Close() {
 }
 
 // Node returns the node with the given identifier if present.
-func (m *outboundManager) Node(id uint32) (node *Node, found bool) {
+func (m *outboundManager) Node(id ID) (node *Node, found bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	node, found = m.lookup[id]
@@ -115,7 +115,7 @@ func (m *outboundManager) isClosed() bool {
 	return m.closed
 }
 
-func (m *outboundManager) newNode(id uint32, addr string) (*Node, error) {
+func (m *outboundManager) newNode(id ID, addr string) (*Node, error) {
 	if _, found := m.Node(id); found {
 		return nil, fmt.Errorf("gorums: node %d already exists", id)
 	}

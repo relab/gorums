@@ -115,8 +115,8 @@ func (c Config) Extend(nodes NodeSource) (Config, error) {
 }
 
 // NodeIDs returns a slice of this configuration's Node IDs.
-func (c Config) NodeIDs() []uint32 {
-	ids := make([]uint32, len(c))
+func (c Config) NodeIDs() []ID {
+	ids := make([]ID, len(c))
 	for i, node := range c {
 		ids[i] = node.ID()
 	}
@@ -147,13 +147,13 @@ func (c Config) Equal(b Config) bool {
 }
 
 // Contains reports whether c contains a node with the given ID.
-func (c Config) Contains(id uint32) bool {
+func (c Config) Contains(id ID) bool {
 	return slices.ContainsFunc(c, func(n *Node) bool { return n.id == id })
 }
 
 // Add returns a new Config containing nodes from c and nodes with the specified IDs.
 // Duplicate IDs and IDs not found in the manager are ignored.
-func (c Config) Add(ids ...uint32) Config {
+func (c Config) Add(ids ...ID) Config {
 	if len(c) == 0 {
 		return nil
 	}
@@ -186,7 +186,7 @@ func (c Config) Union(other Config) Config {
 }
 
 // Remove returns a new Config excluding nodes with the specified IDs.
-func (c Config) Remove(ids ...uint32) Config {
+func (c Config) Remove(ids ...ID) Config {
 	if len(c) == 0 {
 		return nil
 	}
@@ -325,7 +325,7 @@ func (c Config) WithoutErrors(err QuorumCallError, errorTypes ...error) Config {
 		return false
 	}
 	// Build a set of node IDs to exclude.
-	excludeSet := newSet[uint32]()
+	excludeSet := newSet[ID]()
 	for _, ne := range err.errors {
 		if exclude(ne.cause) {
 			excludeSet.add(ne.nodeID)

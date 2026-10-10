@@ -186,7 +186,7 @@ func Node(t testing.TB, srvFn func(i int) ServerIface, opts ...Option) *gorums.N
 }
 
 // PeerNode returns the node with the given id in cfg, or fails the test.
-func PeerNode(t testing.TB, cfg gorums.Config, id uint32) *gorums.Node {
+func PeerNode(t testing.TB, cfg gorums.Config, id gorums.ID) *gorums.Node {
 	t.Helper()
 	for _, node := range cfg {
 		if node.ID() == id {

@@ -198,7 +198,7 @@ classDiagram
         AcceptPeer(ctx, stream) InboundChannel
     }
     class Transport {
-        id uint32
+        id ID
         shared bool
         Enqueue(Request)
         StoreChannel(Channel)
@@ -258,12 +258,12 @@ classDiagram
     direction LR
     class Config {
         <<slice>>
-        NodeIDs() []uint32
+        NodeIDs() []ID
         Size() int
         Context(parent) ConfigContext
     }
     class Node {
-        id uint32
+        id ID
         addr string
         Context(parent) NodeContext
         IsShared() bool
