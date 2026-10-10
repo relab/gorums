@@ -21,8 +21,8 @@ func writeFailedManifest(t *testing.T, dir, base, phase string) []nodeAssignment
 	t.Helper()
 	cfg := &config{sweepLabel: "nscale", duration: 10 * time.Second}
 	p := runSpec{
-		Dimensions: benchkit.Dimensions{Nodes: 2, Workers: 1, Benchmark: "Symmetric"},
-		Rep:        1,
+		Nodes: 2, Workers: 1, Benchmark: "Symmetric",
+		Rep: 1,
 	}
 	nodes := []nodeAssignment{
 		{host: "bb1", peerHost: "152.94.162.21", port: 9000},
@@ -74,8 +74,8 @@ func TestDiscoverFailedRuns(t *testing.T) {
 	cfg := &config{sweepLabel: "run", duration: time.Second}
 	okNodes := []nodeAssignment{{host: "bb1", peerHost: "10.0.0.1", port: 9000}}
 	writeManifest(dir, "run_Symmetric_N1_W1_r1", runSpec{
-		Dimensions: benchkit.Dimensions{Nodes: 1, Workers: 1, Benchmark: "Symmetric"},
-		Rep:        1,
+		Nodes: 1, Workers: 1, Benchmark: "Symmetric",
+		Rep: 1,
 	}, okNodes, cfg, "", "")
 	if err := updateManifestOutcome(dir, "run_Symmetric_N1_W1_r1", runOutcome{status: runStatusSucceeded}); err != nil {
 		t.Fatalf("update outcome: %v", err)

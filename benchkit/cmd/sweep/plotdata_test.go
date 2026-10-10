@@ -506,12 +506,12 @@ func writePlotManifestWithStreamMode(t *testing.T, dir, base, status string, rep
 func writePlotManifestDims(t *testing.T, dir, base, status string, rep int, trim string, dims benchkit.Dimensions, hosts, files []string) {
 	t.Helper()
 	m := runManifest{
-		runSpec: runSpec{Dimensions: dims, Rep: rep},
-		Label:   "e1",
-		Trim:    trim,
-		Status:  status,
-		Hosts:   hosts,
-		Files:   files,
+		Dimensions: dims, Rep: rep,
+		Label:  "e1",
+		Trim:   trim,
+		Status: status,
+		Hosts:  hosts,
+		Files:  files,
 	}
 	data, err := json.MarshalIndent(&m, "", "  ")
 	if err != nil {
@@ -590,19 +590,17 @@ func TestBuildPlotDataNormalizesIdentity(t *testing.T) {
 	meanUS, p50US, p95US, p99US := 100.0, 90.0, 150.0, 200.0
 	samples := uint64(42)
 	runs := []plotRunRecord{{
-		Dimensions: benchkit.Dimensions{
-			Benchmark: "Q", Nodes: 2, Workers: 4, Payload: 128, StreamMode: "dual",
-		},
+		Benchmark: "Q", Nodes: 2, Workers: 4, Payload: 128, StreamMode: "dual",
 		base: "run1", label: "e1", status: runStatusSucceeded, rep: 1,
 		throughput: 30, totalOps: 6, failedOps: 0, allocsPerOp: 2, memPerOp: 200, nodesSeen: 2,
 		meanUS: &meanUS, p50US: &p50US, p95US: &p95US, p99US: &p99US, samples: &samples,
 	}}
 	cdf := []plotNodeCDFRecord{
-		{Dimensions: benchkit.Dimensions{Benchmark: "Q", Nodes: 2, Workers: 4, Payload: 128, StreamMode: "dual"},
+		{Benchmark: "Q", Nodes: 2, Workers: 4, Payload: 128, StreamMode: "dual",
 			base: "run1", label: "e1", status: runStatusSucceeded, rep: 1,
 			node: "bb1:9000", throughput: 10, meanUS: 100, p50US: 90, p95US: 150, p99US: 200, samples: 2,
 			prob: 0, cdfUS: 1},
-		{Dimensions: benchkit.Dimensions{Benchmark: "Q", Nodes: 2, Workers: 4, Payload: 128, StreamMode: "dual"},
+		{Benchmark: "Q", Nodes: 2, Workers: 4, Payload: 128, StreamMode: "dual",
 			base: "run1", label: "e1", status: runStatusSucceeded, rep: 1,
 			node: "bb1:9000", throughput: 10, meanUS: 100, p50US: 90, p95US: 150, p99US: 200, samples: 2,
 			prob: 1, cdfUS: 2},
@@ -662,7 +660,7 @@ func TestBuildPlotDataNormalizesIdentity(t *testing.T) {
 // no latency data round-trips as a nil summary, not a spurious all-zero one,
 // preserving the flat record's nil-pointer distinction.
 func TestBuildPlotDataOmitsSummaryWithoutSamples(t *testing.T) {
-	runs := []plotRunRecord{{base: "run1", Dimensions: benchkit.Dimensions{Benchmark: "Q"}, throughput: 5}}
+	runs := []plotRunRecord{{base: "run1", Benchmark: "Q", throughput: 5}}
 	pd := buildPlotData(runs, nil)
 	if s := pd.GetRuns()[0].GetBenchmarks()[0].GetSummary(); s != nil {
 		t.Errorf("summary = %+v, want nil", s)
@@ -677,7 +675,7 @@ func TestBuildPlotDataOmitsSummaryWithoutSamples(t *testing.T) {
 // produces survives a protobuf marshal/unmarshal cycle unchanged.
 func TestPlotDataMarshalRoundTrip(t *testing.T) {
 	runs := []plotRunRecord{{
-		base: "run1", Dimensions: benchkit.Dimensions{Benchmark: "Q", StreamMode: "dual"}, throughput: 5,
+		base: "run1", Benchmark: "Q", StreamMode: "dual", throughput: 5,
 	}}
 	want := buildPlotData(runs, nil)
 	data, err := proto.Marshal(want)
@@ -751,13 +749,13 @@ func TestWritePlotNodesCSV(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nodes.csv")
 	rows := []plotNodeCDFRecord{
-		{base: "run1", Dimensions: benchkit.Dimensions{Benchmark: "Q"}, node: "bb1:9000", throughput: 10,
+		{base: "run1", Benchmark: "Q", node: "bb1:9000", throughput: 10,
 			meanUS: 100, p50US: 90, p95US: 150, p99US: 200, samples: 2, prob: 0, cdfUS: 1},
-		{base: "run1", Dimensions: benchkit.Dimensions{Benchmark: "Q"}, node: "bb1:9000", throughput: 10,
+		{base: "run1", Benchmark: "Q", node: "bb1:9000", throughput: 10,
 			meanUS: 100, p50US: 90, p95US: 150, p99US: 200, samples: 2, prob: 0.5, cdfUS: 1.5},
-		{base: "run1", Dimensions: benchkit.Dimensions{Benchmark: "Q"}, node: "bb1:9000", throughput: 10,
+		{base: "run1", Benchmark: "Q", node: "bb1:9000", throughput: 10,
 			meanUS: 100, p50US: 90, p95US: 150, p99US: 200, samples: 2, prob: 1, cdfUS: 2},
-		{base: "run1", Dimensions: benchkit.Dimensions{Benchmark: "Q"}, node: "bb2:9000", throughput: 20,
+		{base: "run1", Benchmark: "Q", node: "bb2:9000", throughput: 20,
 			meanUS: 110, p50US: 95, p95US: 160, p99US: 210, samples: 3, prob: 0, cdfUS: 3},
 	}
 	if err := writePlotNodesCSV(path, rows); err != nil {
@@ -858,9 +856,9 @@ func assertFloatPtr(t *testing.T, name string, got *float64, want float64) {
 // into one aggregate row without any error.
 func TestPlotDataRoundTripPreservesBufferSizes(t *testing.T) {
 	runs := []plotRunRecord{
-		{base: "s_Q_N3_W1_P0_RB0_Sdual_r1", Dimensions: benchkit.Dimensions{Benchmark: "Q", Nodes: 3, Workers: 1, StreamMode: "dual"}, throughput: 100},
-		{base: "s_Q_N3_W1_P0_RB16_Sdual_r1", Dimensions: benchkit.Dimensions{Benchmark: "Q", Nodes: 3, Workers: 1, StreamMode: "dual", RecvBuffer: 16}, throughput: 200},
-		{base: "s_Q_N3_W1_P0_SB64_Sdual_r1", Dimensions: benchkit.Dimensions{Benchmark: "Q", Nodes: 3, Workers: 1, StreamMode: "dual", SendBuffer: 64}, throughput: 300},
+		{base: "s_Q_N3_W1_P0_RB0_Sdual_r1", Benchmark: "Q", Nodes: 3, Workers: 1, StreamMode: "dual", throughput: 100},
+		{base: "s_Q_N3_W1_P0_RB16_Sdual_r1", Benchmark: "Q", Nodes: 3, Workers: 1, StreamMode: "dual", RecvBuffer: 16, throughput: 200},
+		{base: "s_Q_N3_W1_P0_SB64_Sdual_r1", Benchmark: "Q", Nodes: 3, Workers: 1, StreamMode: "dual", SendBuffer: 64, throughput: 300},
 	}
 	pd := buildPlotData(runs, nil)
 	got := map[[2]int]bool{}
@@ -914,12 +912,8 @@ func TestCollectPlotDataPreservesBufferSizes(t *testing.T) {
 			t.Fatalf("write result: %v", err)
 		}
 		m := runManifest{
-			runSpec: runSpec{
-				Dimensions: benchkit.Dimensions{
-					Benchmark: "QuorumCall", Nodes: 3, Workers: 1, StreamMode: "dual",
-				},
-				Rep: 1,
-			},
+			Benchmark: "QuorumCall", Nodes: 3, Workers: 1, StreamMode: "dual",
+			Rep:   1,
 			Label: "s", Status: runStatusSucceeded,
 			Files: []string{a.base + "_n1_9000" + resultExt},
 		}

@@ -9,8 +9,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/relab/gorums/benchkit"
 )
 
 func TestFacetFor(t *testing.T) {
@@ -73,10 +71,8 @@ func TestPlanFiguresBufferDimensions(t *testing.T) {
 			for _, sb := range tt.sendBuffers {
 				for _, rb := range tt.recvBuffers {
 					agg = append(agg, aggRunRecord{
-						Dimensions: benchkit.Dimensions{
-							Benchmark: "Q", Nodes: 3, Workers: 1,
-							SendBuffer: sb, RecvBuffer: rb, StreamMode: "dual",
-						},
+						Benchmark: "Q", Nodes: 3, Workers: 1,
+						SendBuffer: sb, RecvBuffer: rb, StreamMode: "dual",
 						reps: 3, throughput: aggStat{mean: 1000, n: 3},
 						p50US: aggStat{mean: 1000, n: 3},
 					})
@@ -108,8 +104,8 @@ func TestPlanFiguresOmitsLatencyWithoutData(t *testing.T) {
 	var agg []aggRunRecord
 	for _, w := range []int{2, 4, 8} {
 		agg = append(agg, aggRunRecord{
-			Dimensions: benchkit.Dimensions{Benchmark: "M", Nodes: 3, Workers: w, StreamMode: "dual"},
-			reps:       3, throughput: aggStat{mean: 1000, n: 3},
+			Benchmark: "M", Nodes: 3, Workers: w, StreamMode: "dual",
+			reps: 3, throughput: aggStat{mean: 1000, n: 3},
 			// No p50US/p95US/p99US set: a server-measured throughput-only run.
 		})
 	}
@@ -132,9 +128,7 @@ func TestPlanFigures(t *testing.T) {
 		for _, p := range []int{1024, 16384} {
 			for _, m := range []string{"dual", "dedup"} {
 				agg = append(agg, aggRunRecord{
-					Dimensions: benchkit.Dimensions{
-						Benchmark: "Q", Nodes: 3, Workers: w, Payload: p, StreamMode: m,
-					},
+					Benchmark: "Q", Nodes: 3, Workers: w, Payload: p, StreamMode: m,
 					reps: 3, throughput: aggStat{mean: 1000, n: 3},
 					p50US: aggStat{mean: 1000, n: 3},
 				})
@@ -185,9 +179,7 @@ func TestPlanFigures(t *testing.T) {
 func TestPlanFiguresRatioRequiresVaryingWorkers(t *testing.T) {
 	rec := func(nodes, workers int, mode string) aggRunRecord {
 		return aggRunRecord{
-			Dimensions: benchkit.Dimensions{
-				Benchmark: "Q", Nodes: nodes, Workers: workers, StreamMode: mode,
-			},
+			Benchmark: "Q", Nodes: nodes, Workers: workers, StreamMode: mode,
 			reps: 3, throughput: aggStat{mean: 1000, n: 3},
 			p50US: aggStat{mean: 1000, n: 3},
 		}
@@ -244,9 +236,7 @@ func TestPlanFiguresRatioRequiresVaryingWorkers(t *testing.T) {
 func TestPlanFiguresRatioMetricAware(t *testing.T) {
 	rec := func(nodes, workers int, mode string, latency bool) aggRunRecord {
 		r := aggRunRecord{
-			Dimensions: benchkit.Dimensions{
-				Benchmark: "Q", Nodes: nodes, Workers: workers, StreamMode: mode,
-			},
+			Benchmark: "Q", Nodes: nodes, Workers: workers, StreamMode: mode,
 			reps: 3, throughput: aggStat{mean: 1000, n: 3},
 		}
 		if latency {
@@ -335,9 +325,7 @@ func TestMetricVsCallUsesHumanFacetLabel(t *testing.T) {
 func TestPlanFiguresTLCurveLoadDimensions(t *testing.T) {
 	rec := func(workers, rate int) aggRunRecord {
 		return aggRunRecord{
-			Dimensions: benchkit.Dimensions{
-				Benchmark: "Q", Nodes: 3, Workers: workers, Rate: rate, StreamMode: "dual",
-			},
+			Benchmark: "Q", Nodes: 3, Workers: workers, Rate: rate, StreamMode: "dual",
 			reps:       3,
 			throughput: aggStat{mean: float64(rate), n: 3},
 			p50US:      aggStat{mean: float64(rate) / 10, n: 3},
@@ -389,7 +377,7 @@ func TestPlanFiguresTLCurveLoadDimensions(t *testing.T) {
 // not, since the legends distinguish series by it.
 func TestFigureSubject(t *testing.T) {
 	rec := func(bench, mode string) aggRunRecord {
-		return aggRunRecord{Dimensions: benchkit.Dimensions{Benchmark: bench, Nodes: 3, StreamMode: mode}}
+		return aggRunRecord{Benchmark: bench, Nodes: 3, StreamMode: mode}
 	}
 	tests := []struct {
 		name string
@@ -418,9 +406,9 @@ func TestExperimentSummary(t *testing.T) {
 	var agg []aggRunRecord
 	for _, n := range []int{15, 9} {
 		for _, mode := range []string{"dual", "dedup"} {
-			agg = append(agg, aggRunRecord{Dimensions: benchkit.Dimensions{
+			agg = append(agg, aggRunRecord{
 				Benchmark: "Q", Nodes: n, Workers: 32, StreamMode: mode,
-			}})
+			})
 		}
 	}
 	got := experimentSummary(agg, sweepSettings{
@@ -507,10 +495,8 @@ func TestGenerateReportCompiles(t *testing.T) {
 						// Two reps so spread columns are populated.
 						for _, jitter := range []float64{0.98, 1.02} {
 							runs = append(runs, plotRunRecord{
-								Dimensions: benchkit.Dimensions{
-									Benchmark: "Q", Nodes: n, Workers: w, Payload: p,
-									SendBuffer: sendBuffer, StreamMode: m,
-								},
+								Benchmark: "Q", Nodes: n, Workers: w, Payload: p,
+								SendBuffer: sendBuffer, StreamMode: m,
 								status:      runStatusSucceeded,
 								throughput:  thr * jitter,
 								allocsPerOp: 12, memPerOp: 2048,
@@ -538,9 +524,7 @@ func TestGenerateReportCompiles(t *testing.T) {
 		for i := 0; i <= 20; i++ {
 			prob := float64(i) / 20
 			cdfRows = append(cdfRows, plotNodeCDFRecord{
-				Dimensions: benchkit.Dimensions{
-					Benchmark: "Q", Nodes: 3, Workers: 8, Payload: 1024, StreamMode: "dual",
-				},
+				Benchmark: "Q", Nodes: 3, Workers: 8, Payload: 1024, StreamMode: "dual",
 				base: base, label: "run", status: runStatusSucceeded, rep: 1,
 				node: node, throughput: 70000, prob: prob, cdfUS: 200 + 800*prob,
 			})
@@ -633,10 +617,8 @@ func TestGenerateReportRateTLCurveCompiles(t *testing.T) {
 				thr := float64(rate) * float64(n)
 				for _, jitter := range []float64{0.98, 1.02} {
 					runs = append(runs, plotRunRecord{
-						Dimensions: benchkit.Dimensions{
-							Benchmark: "Q", Nodes: n, Workers: 32, Payload: 1024,
-							Rate: rate, StreamMode: mode,
-						},
+						Benchmark: "Q", Nodes: n, Workers: 32, Payload: 1024,
+						Rate: rate, StreamMode: mode,
 						status:      runStatusSucceeded,
 						throughput:  thr * jitter,
 						allocsPerOp: 12, memPerOp: 2048,
@@ -649,10 +631,8 @@ func TestGenerateReportRateTLCurveCompiles(t *testing.T) {
 					for i := 0; i <= 20; i++ {
 						prob := float64(i) / 20
 						cdfRows = append(cdfRows, plotNodeCDFRecord{
-							Dimensions: benchkit.Dimensions{
-								Benchmark: "Q", Nodes: n, Workers: 32, Payload: 1024,
-								Rate: rate, StreamMode: mode,
-							},
+							Benchmark: "Q", Nodes: n, Workers: 32, Payload: 1024,
+							Rate: rate, StreamMode: mode,
 							base: base, label: "run", status: runStatusSucceeded, rep: 1,
 							node: node, throughput: thr, prob: prob, cdfUS: lat + 800*prob,
 						})
@@ -724,9 +704,7 @@ func TestGenerateReportRatioVsNodesCompiles(t *testing.T) {
 			}
 			for _, jitter := range []float64{0.98, 1.02} {
 				runs = append(runs, plotRunRecord{
-					Dimensions: benchkit.Dimensions{
-						Benchmark: "Q", Nodes: n, Workers: 8, StreamMode: m,
-					},
+					Benchmark: "Q", Nodes: n, Workers: 8, StreamMode: m,
 					status:      runStatusSucceeded,
 					throughput:  thr * jitter,
 					allocsPerOp: 12, memPerOp: 2048,

@@ -499,6 +499,7 @@ func runEvents(base string, order []string, byBench map[string][]*benchkit.PlotN
 
 func aggregatePlotRun(base string, m runManifest, bench string, entries []plotNodeEntry) plotRunRecord {
 	dims := entries[0].Dimensions
+	dims.Benchmark = bench
 	row := plotRunRecord{
 		Dimensions: dims,
 		base:       base,
@@ -507,7 +508,6 @@ func aggregatePlotRun(base string, m runManifest, bench string, entries []plotNo
 		rep:        manifestRep(m),
 		nodesSeen:  len(entries),
 	}
-	row.Benchmark = bench
 	var allocs, mem float64
 	var latency benchkit.LatencyDist
 	// Performance signal: when any node is client-measured, sum only those

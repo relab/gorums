@@ -613,16 +613,14 @@ func readPlotRunsCSV(path string) ([]plotRunRecord, error) {
 	var out []plotRunRecord
 	err := forEachCSVRow(path, false, func(r []string, col map[string]int) error {
 		out = append(out, plotRunRecord{
-			Dimensions: benchkit.Dimensions{
-				Benchmark:  field(r, col, "benchmark"),
-				Nodes:      atoiOr(field(r, col, "nodes"), 0),
-				Workers:    atoiOr(field(r, col, "workers"), 0),
-				Payload:    atoiOr(field(r, col, "payload"), 0),
-				Rate:       atoiOr(field(r, col, "rate"), 0),
-				SendBuffer: atoiOr(field(r, col, "send_buffer"), 0),
-				RecvBuffer: atoiOr(field(r, col, "recv_buffer"), 0),
-				StreamMode: field(r, col, "stream_mode"),
-			},
+			Benchmark:   field(r, col, "benchmark"),
+			Nodes:       atoiOr(field(r, col, "nodes"), 0),
+			Workers:     atoiOr(field(r, col, "workers"), 0),
+			Payload:     atoiOr(field(r, col, "payload"), 0),
+			Rate:        atoiOr(field(r, col, "rate"), 0),
+			SendBuffer:  atoiOr(field(r, col, "send_buffer"), 0),
+			RecvBuffer:  atoiOr(field(r, col, "recv_buffer"), 0),
+			StreamMode:  field(r, col, "stream_mode"),
 			base:        field(r, col, "base"),
 			label:       field(r, col, "label"),
 			status:      field(r, col, "status"),

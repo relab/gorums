@@ -6,15 +6,11 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
-
-	"github.com/relab/gorums/benchkit"
 )
 
 func tlRec(payload, workers int, p50, p99 float64) aggRunRecord {
 	return aggRunRecord{
-		Dimensions: benchkit.Dimensions{
-			Benchmark: "Q", Nodes: 3, Workers: workers, Payload: payload, StreamMode: "dual",
-		},
+		Benchmark: "Q", Nodes: 3, Workers: workers, Payload: payload, StreamMode: "dual",
 		throughput: aggStat{mean: float64(workers) * 1000, n: 2},
 		p50US:      aggStat{mean: p50, sd: 1, n: 2},
 		p95US:      aggStat{mean: p50 * 1.5, n: 2},
@@ -59,20 +55,16 @@ func TestTLCurveGroups(t *testing.T) {
 		// and never split regardless of the gap between them.
 		agg := []aggRunRecord{
 			{
-				Dimensions: benchkit.Dimensions{
-					Benchmark: "Q", Nodes: 3, Workers: 4, Payload: 1024, Rate: 5000,
-					SendBuffer: 0, StreamMode: "dual",
-				},
+				Benchmark: "Q", Nodes: 3, Workers: 4, Payload: 1024, Rate: 5000,
+				SendBuffer: 0, StreamMode: "dual",
 				throughput: aggStat{mean: 4000, n: 2},
 				p50US:      aggStat{mean: 200, sd: 1, n: 2},
 				p95US:      aggStat{mean: 300, n: 2},
 				p99US:      aggStat{mean: 500, n: 2},
 			},
 			{
-				Dimensions: benchkit.Dimensions{
-					Benchmark: "Q", Nodes: 3, Workers: 4, Payload: 1024, Rate: 5000,
-					SendBuffer: 65536, StreamMode: "dual",
-				},
+				Benchmark: "Q", Nodes: 3, Workers: 4, Payload: 1024, Rate: 5000,
+				SendBuffer: 65536, StreamMode: "dual",
 				throughput: aggStat{mean: 4000, n: 2},
 				p50US:      aggStat{mean: 4000, sd: 1, n: 2},
 				p95US:      aggStat{mean: 6000, n: 2},
@@ -91,9 +83,8 @@ func TestTLCurveGroups(t *testing.T) {
 	t.Run("DropsLatencylessRows", func(t *testing.T) {
 		agg := []aggRunRecord{
 			tlRec(1024, 2, 200, 500),
-			{Dimensions: benchkit.Dimensions{
+			{
 				Benchmark: "Q", Nodes: 3, Workers: 4, Payload: 1024, StreamMode: "dual",
-			},
 				throughput: aggStat{mean: 4000, n: 2}}, // no latency
 		}
 		rows := tlCurveRows(agg, []string{"workers"})

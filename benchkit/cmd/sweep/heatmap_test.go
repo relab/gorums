@@ -8,8 +8,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/relab/gorums/benchkit"
 )
 
 // csvHeader reads the first line of a CSV written to path.
@@ -33,8 +31,8 @@ func TestNodeHealthRows(t *testing.T) {
 	}{{"bb2:9000", 100}, {"bb3:9000", 100}, {"bb10:9000", 50}} {
 		for range 2 {
 			cdf = append(cdf, plotNodeCDFRecord{
-				Dimensions: benchkit.Dimensions{Benchmark: "Q", StreamMode: "dual", Nodes: 3},
-				base:       "run_Q_N3", label: "run", node: n.node, throughput: n.thr,
+				Benchmark: "Q", StreamMode: "dual", Nodes: 3,
+				base: "run_Q_N3", label: "run", node: n.node, throughput: n.thr,
 			})
 		}
 	}
@@ -70,8 +68,8 @@ func TestNodeHealthRowsZeroMedianTreatedAsUniform(t *testing.T) {
 	var cdf []plotNodeCDFRecord
 	for _, node := range []string{"bb2:9000", "bb3:9000"} {
 		cdf = append(cdf, plotNodeCDFRecord{
-			Dimensions: benchkit.Dimensions{Benchmark: "Q", StreamMode: "dual", Nodes: 2},
-			base:       "run_Q_N2", label: "run", node: node, throughput: 0,
+			Benchmark: "Q", StreamMode: "dual", Nodes: 2,
+			base: "run_Q_N2", label: "run", node: node, throughput: 0,
 		})
 	}
 	rows := nodeHealthRows(cdf)
@@ -94,8 +92,8 @@ func TestNodeHealthRowsZeroMedianTreatedAsUniform(t *testing.T) {
 func TestNodeHealthRowsSkipsSingleNodeRuns(t *testing.T) {
 	cdf := []plotNodeCDFRecord{
 		{
-			Dimensions: benchkit.Dimensions{Benchmark: "Q", StreamMode: "dual", Nodes: 1},
-			base:       "run_Q_N1", label: "run", node: "bb2:9000", throughput: 100,
+			Benchmark: "Q", StreamMode: "dual", Nodes: 1,
+			base: "run_Q_N1", label: "run", node: "bb2:9000", throughput: 100,
 		},
 	}
 	if rows := nodeHealthRows(cdf); len(rows) != 0 {
@@ -105,10 +103,10 @@ func TestNodeHealthRowsSkipsSingleNodeRuns(t *testing.T) {
 
 func TestDegradedShareRows(t *testing.T) {
 	runs := []plotRunRecord{
-		{Dimensions: benchkit.Dimensions{Benchmark: "Q", Nodes: 3, Workers: 8, StreamMode: "dedup"}, status: runStatusSucceeded},
-		{Dimensions: benchkit.Dimensions{Benchmark: "Q", Nodes: 3, Workers: 8, StreamMode: "dedup"}, status: runStatusSucceeded},
-		{Dimensions: benchkit.Dimensions{Benchmark: "Q", Nodes: 3, Workers: 8, StreamMode: "dedup"}, status: runStatusDegraded},
-		{Dimensions: benchkit.Dimensions{Benchmark: "Q", Nodes: 3, Workers: 8, StreamMode: "dual"}, status: runStatusSucceeded},
+		{Benchmark: "Q", Nodes: 3, Workers: 8, StreamMode: "dedup", status: runStatusSucceeded},
+		{Benchmark: "Q", Nodes: 3, Workers: 8, StreamMode: "dedup", status: runStatusSucceeded},
+		{Benchmark: "Q", Nodes: 3, Workers: 8, StreamMode: "dedup", status: runStatusDegraded},
+		{Benchmark: "Q", Nodes: 3, Workers: 8, StreamMode: "dual", status: runStatusSucceeded},
 	}
 	rows := degradedShareRows(runs)
 	if len(rows) != 2 {
@@ -145,10 +143,8 @@ func TestWriteDegradedShareCSVAxisLabels(t *testing.T) {
 		for _, rate := range []int{1000, 2000} {
 			for _, mode := range []string{"dedup", "dual"} {
 				runs = append(runs, plotRunRecord{
-					Dimensions: benchkit.Dimensions{
-						Benchmark: "Q", Nodes: nodes, Workers: 32, Payload: 16384,
-						Rate: rate, SendBuffer: 4096, StreamMode: mode,
-					},
+					Benchmark: "Q", Nodes: nodes, Workers: 32, Payload: 16384,
+					Rate: rate, SendBuffer: 4096, StreamMode: mode,
 					status: runStatusSucceeded,
 				})
 			}
