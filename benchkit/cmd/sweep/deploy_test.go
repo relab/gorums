@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/relab/gorums/benchkit"
 )
 
 // TestBuildNodeCmd verifies the remote command line for one node: the required
@@ -20,9 +18,9 @@ func TestBuildNodeCmd(t *testing.T) {
 	node := nodeAssignment{host: "bb1", port: 9000}
 	const peers = "bb1:9000,bb2:9000"
 	const base = "run_Symmetric_N2_W1_P0"
-	params := runSpec{Dimensions: benchkit.Dimensions{
+	params := runSpec{
 		Nodes: 2, Workers: 1, Payload: 0, Benchmark: "Symmetric",
-	}}
+	}
 	const required = "'/tmp/sweep-benchmark' -self=bb1:9000 -remotes=bb1:9000,bb2:9000" +
 		" -benchmarks='^Symmetric$' -workers=1 -payload=0 -time=10s" +
 		" -output='/tmp/run_Symmetric_N2_W1_P0_bb1_9000.binpb'"
@@ -110,7 +108,7 @@ func TestBuildNodeCmdUsesConfiguredRemoteNamespace(t *testing.T) {
 		remoteDirs: map[string]string{"bb1": "/local/sweep meling"},
 	}
 	got := buildNodeCmd(node, "bb1:9000", runSpec{
-		Dimensions: benchkit.Dimensions{Benchmark: "Symmetric"},
+		Benchmark: "Symmetric",
 	}, "run", cfg)
 	for _, want := range []string{
 		"'/local/sweep meling/sweep-benchmark'",
@@ -132,7 +130,7 @@ func TestBuildNodeCmdQuotesResultPaths(t *testing.T) {
 	cfg := &config{duration: time.Second, prog: newRemoteProgram(""), collectProfiles: true}
 	const base = "exp 1" // a label with a space, as runBase would produce
 
-	got := buildNodeCmd(node, "bb1:9000", runSpec{Dimensions: benchkit.Dimensions{Benchmark: "Q"}}, base, cfg)
+	got := buildNodeCmd(node, "bb1:9000", runSpec{Benchmark: "Q"}, base, cfg)
 	for _, want := range []string{
 		"-output='/tmp/exp 1_bb1_9000.binpb'",
 		"-cpuprofile='/tmp/exp 1_bb1_9000.cpu.prof'",
@@ -147,9 +145,9 @@ func TestBuildNodeCmdQuotesResultPaths(t *testing.T) {
 func TestBuildNodeCmdBufferFlags(t *testing.T) {
 	node := nodeAssignment{host: "bb1", port: 9000}
 	cfg := &config{duration: time.Second, prog: newRemoteProgram("")}
-	base := runSpec{Dimensions: benchkit.Dimensions{
+	base := runSpec{
 		Benchmark: "Q", Nodes: 1, Workers: 1,
-	}}
+	}
 
 	if got := buildNodeCmd(node, "bb1:9000", base, "run", cfg); strings.Contains(got, "-send-buffer") || strings.Contains(got, "-recv-buffer") {
 		t.Fatalf("zero buffers emitted flags: %s", got)
@@ -179,9 +177,9 @@ func TestBuildNodeCmdFdLimit(t *testing.T) {
 	node := nodeAssignment{host: "bb1", port: 9000}
 	const peers = "bb1:9000,bb2:9000"
 	const base = "run_Symmetric_N2_W1_P0"
-	p := runSpec{Dimensions: benchkit.Dimensions{
+	p := runSpec{
 		Nodes: 2, Workers: 1, Payload: 0, Benchmark: "Symmetric",
-	}}
+	}
 
 	// With a limit set, the ulimit statement prefixes the node command so it runs
 	// under the raised soft limit; the benchmark's exit status still propagates.
@@ -205,9 +203,9 @@ func TestBuildNodeCmdUsesPeerAddressForGorumsAndAliasForArtifacts(t *testing.T) 
 		node,
 	})
 	const base = "run_Symmetric_N2_W1_P0"
-	params := runSpec{Dimensions: benchkit.Dimensions{
+	params := runSpec{
 		Nodes: 2, Workers: 1, Payload: 0, Benchmark: "Symmetric",
-	}}
+	}
 	cfg := &config{
 		prog:     newRemoteProgram(""),
 		duration: 10 * time.Second,

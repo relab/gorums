@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/relab/gorums/benchkit"
 )
 
 // TestWriteManifest verifies that writeManifest records the run configuration
@@ -18,10 +16,8 @@ func TestWriteManifest(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config{sweepLabel: "nscale", duration: 10 * time.Second, trim: time.Second}
 	p := runSpec{
-		Dimensions: benchkit.Dimensions{
-			Benchmark: "Symmetric", Nodes: 2, Workers: 4, Payload: 16,
-			Rate: 1000, StreamMode: "dedup",
-		},
+		Benchmark: "Symmetric", Nodes: 2, Workers: 4, Payload: 16,
+		Rate: 1000, StreamMode: "dedup",
 		Rep: 2,
 	}
 	nodes := []nodeAssignment{
@@ -42,13 +38,9 @@ func TestWriteManifest(t *testing.T) {
 	}
 
 	want := runManifest{
-		runSpec: runSpec{
-			Dimensions: benchkit.Dimensions{
-				Benchmark: "Symmetric", Nodes: 2, Workers: 4, Payload: 16,
-				Rate: 1000, StreamMode: "dedup",
-			},
-			Rep: 2,
-		},
+		Benchmark: "Symmetric", Nodes: 2, Workers: 4, Payload: 16,
+		Rate: 1000, StreamMode: "dedup",
+		Rep:       2,
 		Label:     "nscale",
 		Duration:  "10s",
 		Trim:      "1s",
@@ -158,9 +150,9 @@ func writeResultFile(t *testing.T, dir, base string, n nodeAssignment) {
 // failure phases and for a successful run.
 func TestUpdateManifestOutcome(t *testing.T) {
 	cfg := &config{sweepLabel: "nscale", duration: 10 * time.Second}
-	p := runSpec{Dimensions: benchkit.Dimensions{
+	p := runSpec{
 		Nodes: 3, Workers: 4, Benchmark: "Symmetric",
-	}}
+	}
 	nodes := []nodeAssignment{
 		{host: "bb1", peerHost: "152.94.162.11", port: 9000},
 		{host: "bb2", peerHost: "152.94.162.12", port: 9000},
@@ -311,8 +303,8 @@ func TestUpdateManifestOutcomeDegraded(t *testing.T) {
 	nodes := []nodeAssignment{{host: "bb2", port: 9000}, {host: "bb16", port: 9000}}
 	cfg := &config{sweepLabel: "e1", duration: time.Second}
 	writeManifest(dir, base, runSpec{
-		Dimensions: benchkit.Dimensions{Benchmark: "Q", Nodes: 5, Workers: 1},
-		Rep:        1,
+		Benchmark: "Q", Nodes: 5, Workers: 1,
+		Rep: 1,
 	}, nodes, cfg, "", "")
 
 	deg := []degradedNode{{Host: "bb16:9000", Throughput: 233, Relative: 0.045}}

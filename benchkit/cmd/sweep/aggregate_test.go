@@ -16,9 +16,7 @@ import (
 // same latency value stands in for every percentile.
 func qRun(workers int, mode, status string, thr, lat float64) plotRunRecord {
 	return plotRunRecord{
-		Dimensions: benchkit.Dimensions{
-			Benchmark: "Q", Nodes: 3, Workers: workers, StreamMode: mode,
-		},
+		Benchmark: "Q", Nodes: 3, Workers: workers, StreamMode: mode,
 		status: status, throughput: thr,
 		allocsPerOp: 1, memPerOp: 100,
 		p50US: new(lat), p95US: new(lat), p99US: new(lat), meanUS: new(lat),

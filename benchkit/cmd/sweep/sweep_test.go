@@ -3,8 +3,6 @@ package main
 import (
 	"slices"
 	"testing"
-
-	"github.com/relab/gorums/benchkit"
 )
 
 func TestSweepRunSpecsIncludeStreamModes(t *testing.T) {
@@ -36,9 +34,7 @@ func TestSweepRunSpecsIncludeStreamModes(t *testing.T) {
 
 func TestRunBaseIncludesStreamMode(t *testing.T) {
 	p := runSpec{
-		Dimensions: benchkit.Dimensions{
-			Benchmark: "Symmetric", Nodes: 9, Workers: 4, Payload: 64, Rate: 1000, StreamMode: "dedup",
-		},
+		Benchmark: "Symmetric", Nodes: 9, Workers: 4, Payload: 64, Rate: 1000, StreamMode: "dedup",
 		Rep: 3,
 	}
 	if got, want := runBase("e1", p), "e1_Symmetric_N9_W4_P64_R1000_Sdedup_r3"; got != want {
@@ -64,10 +60,8 @@ func TestRunBaseBufferSizes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := runSpec{
-				Dimensions: benchkit.Dimensions{
-					Benchmark: "Q", Nodes: 3, Workers: 1, StreamMode: "dual",
-					SendBuffer: tt.sendBuffer, RecvBuffer: tt.recvBuffer,
-				},
+				Benchmark: "Q", Nodes: 3, Workers: 1, StreamMode: "dual",
+				SendBuffer: tt.sendBuffer, RecvBuffer: tt.recvBuffer,
 				Rep: 1,
 			}
 			if got := runBase("e1", p); got != tt.want {

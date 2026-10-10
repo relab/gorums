@@ -30,9 +30,7 @@ func reportFixtureData() ([]plotRunRecord, []plotNodeCDFRecord) {
 					status = runStatusDegraded // one degraded rep to populate the share/status figures
 				}
 				runs = append(runs, plotRunRecord{
-					Dimensions: benchkit.Dimensions{
-						Benchmark: "Q", Nodes: 3, Workers: w, Payload: 1024, StreamMode: mode,
-					},
+					Benchmark: "Q", Nodes: 3, Workers: w, Payload: 1024, StreamMode: mode,
 					base: base, label: "run", status: status, rep: rep,
 					throughput: float64(w) * 5000, allocsPerOp: 12, memPerOp: 2048,
 					meanUS: new(lat), p50US: new(lat), p95US: new(lat * 1.5), p99US: new(lat * 2),
@@ -44,9 +42,7 @@ func reportFixtureData() ([]plotRunRecord, []plotNodeCDFRecord) {
 						for i := 0; i <= 10; i++ {
 							prob := float64(i) / 10
 							cdf = append(cdf, plotNodeCDFRecord{
-								Dimensions: benchkit.Dimensions{
-									Benchmark: "Q", Nodes: 3, Workers: w, Payload: 1024, StreamMode: mode,
-								},
+								Benchmark: "Q", Nodes: 3, Workers: w, Payload: 1024, StreamMode: mode,
 								base: base, label: "run", status: status, rep: rep,
 								node: node, throughput: float64(w) * 5000, prob: prob, cdfUS: lat + 800*prob,
 							})
@@ -207,8 +203,8 @@ func TestGenerateReportExcludeRun(t *testing.T) {
 
 func TestFilterRunsExcludeDim(t *testing.T) {
 	runs := []plotRunRecord{
-		{base: "a", Dimensions: benchkit.Dimensions{Benchmark: "Q", StreamMode: "dual", Nodes: 3, Workers: 8, Payload: 1024}},
-		{base: "b", Dimensions: benchkit.Dimensions{Benchmark: "Q", StreamMode: "dual", Nodes: 3, Workers: 2, Payload: 1024}},
+		{base: "a", Benchmark: "Q", StreamMode: "dual", Nodes: 3, Workers: 8, Payload: 1024},
+		{base: "b", Benchmark: "Q", StreamMode: "dual", Nodes: 3, Workers: 2, Payload: 1024},
 	}
 	opts := reportOptions{excludes: map[string]map[string]bool{"workers": {"8": true}}}
 	kept := filterRuns(runs, opts)
@@ -221,9 +217,7 @@ func TestReadPlotRunsCSVRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "runs.csv")
 	want := []plotRunRecord{{
-		Dimensions: benchkit.Dimensions{
-			Benchmark: "Q", Nodes: 3, Workers: 8, Payload: 1024, StreamMode: "dedup",
-		},
+		Benchmark: "Q", Nodes: 3, Workers: 8, Payload: 1024, StreamMode: "dedup",
 		base: "run_Q", label: "run", status: runStatusSucceeded, rep: 1,
 		throughput: 40000, allocsPerOp: 12, memPerOp: 2048, nodesSeen: 3,
 		meanUS: new(500.0), p50US: new(450.0), p95US: new(900.0), p99US: new(1200.0),
@@ -254,9 +248,7 @@ func TestReadReportNodeCDFCSVSelectsRunsAndReducesHealth(t *testing.T) {
 		for _, node := range []string{"bb1:9000", "bb2:9000"} {
 			for point := range 3 {
 				rows = append(rows, plotNodeCDFRecord{
-					Dimensions: benchkit.Dimensions{
-						Benchmark: "Q", Nodes: 2, Workers: base/2 + 1, StreamMode: "dual",
-					},
+					Benchmark: "Q", Nodes: 2, Workers: base/2 + 1, StreamMode: "dual",
 					base: "run-" + strconv.Itoa(base), label: "run",
 					status: runStatusSucceeded, rep: 1,
 					node: node, throughput: float64(100 + base),
@@ -296,9 +288,7 @@ func TestReduceReportCDFDistinguishesBufferArms(t *testing.T) {
 	for _, sendBuffer := range []int{64, 256} {
 		for point := range 3 {
 			rows = append(rows, plotNodeCDFRecord{
-				Dimensions: benchkit.Dimensions{
-					Benchmark: "Q", Nodes: 3, Workers: 8, SendBuffer: sendBuffer, StreamMode: "dual",
-				},
+				Benchmark: "Q", Nodes: 3, Workers: 8, SendBuffer: sendBuffer, StreamMode: "dual",
 				base: "run-S" + strconv.Itoa(sendBuffer), label: "run",
 				status: runStatusSucceeded, rep: 1,
 				node: "bb1:9000", throughput: 5000,
@@ -324,9 +314,7 @@ func TestReduceReportCDFSelectsPanelRuns(t *testing.T) {
 			base := fmt.Sprintf("run_N%d_P%d", nodes, payload)
 			for point := range 3 {
 				rows = append(rows, plotNodeCDFRecord{
-					Dimensions: benchkit.Dimensions{
-						Benchmark: "Q", Nodes: nodes, Workers: 8, Payload: payload, StreamMode: "dual",
-					},
+					Benchmark: "Q", Nodes: nodes, Workers: 8, Payload: payload, StreamMode: "dual",
 					base: base, label: "run", status: runStatusSucceeded, rep: 1,
 					node: "bb1:9000", throughput: 5000,
 					prob: float64(point) / 2, cdfUS: float64(100 + point),

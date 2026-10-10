@@ -56,17 +56,15 @@ func (sc sweepConfig) runSpecs() iter.Seq[runSpec] {
 									for _, benchmark := range sc.benchmarks {
 										for _, streamMode := range streamModes {
 											if !yield(runSpec{
-												Dimensions: benchkit.Dimensions{
-													Benchmark:  benchmark,
-													Nodes:      n,
-													Workers:    workers,
-													Payload:    payload,
-													Rate:       rate,
-													SendBuffer: sendBuffer,
-													RecvBuffer: recvBuffer,
-													StreamMode: streamMode,
-												},
-												Rep: rep,
+												Benchmark:  benchmark,
+												Nodes:      n,
+												Workers:    workers,
+												Payload:    payload,
+												Rate:       rate,
+												SendBuffer: sendBuffer,
+												RecvBuffer: recvBuffer,
+												StreamMode: streamMode,
+												Rep:        rep,
 											}) {
 												return
 											}
