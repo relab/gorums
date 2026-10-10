@@ -3,7 +3,6 @@ package impl
 import (
 	"context"
 	"math/rand/v2"
-	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -125,16 +124,10 @@ func (c *CallContext[Req, Resp]) Nodes() []*Node {
 	return c.config.Nodes()
 }
 
-// Node returns the node with the given ID.
+// Node returns the node with the given ID, or nil if the call's configuration
+// has no such node.
 func (c *CallContext[Req, Resp]) Node(id ID) *Node {
-	nodes := c.config.Nodes()
-	index := slices.IndexFunc(nodes, func(n *Node) bool {
-		return n.ID() == id
-	})
-	if index != -1 {
-		return nodes[index]
-	}
-	return nil
+	return c.config.Node(id)
 }
 
 // Size returns the number of nodes in this configuration.
