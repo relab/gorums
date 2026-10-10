@@ -38,6 +38,7 @@ type Server struct {
 	lis        net.Listener // active listener; set by Serve, ListenAndServe, or NewLocalServers
 	listenAddr string       // address recorded by WithAddr
 	outbound   Config       // outbound config; nil if WithPeers was not used
+	closePeers func()       // closes outbound's pool; nil if WithPeers was not used
 }
 
 // NodeID returns this server's own [Config] node ID, as configured with
@@ -140,21 +141,23 @@ func newServer(opts ...ServerOption) (*Server, error) {
 	s.srv = stream.NewServer(serverOpts.connectCallback, s.im)
 	stream.RegisterGorumsServer(s.grpcServer, s.srv)
 	if serverOpts.peerNodes != nil {
-		cfg, err := s.newPeerConfig(serverOpts.peerNodes, serverOpts.outboundDialOpts)
+		cfg, closePeers, err := s.newPeerConfig(serverOpts.peerNodes, serverOpts.outboundDialOpts)
 		if err != nil {
 			s.grpcServer.Stop()
 			return nil, err
 		}
 		s.outbound = cfg
+		s.closePeers = closePeers
 		s.im.SetPeerConfig(cfg)
 	}
 	return s, nil
 }
 
 // newPeerConfig builds the outbound [Config] this server uses to call other
-// servers. It installs the server as the back-channel request handler so the
-// remote can dispatch requests back over the same connection.
-func (s *Server) newPeerConfig(nodes NodeSource, dialOpts []DialOption) (Config, error) {
+// servers, and the function that closes its connection pool. It installs the
+// server as the back-channel request handler so the remote can dispatch
+// requests back over the same connection.
+func (s *Server) newPeerConfig(nodes NodeSource, dialOpts []DialOption) (Config, func(), error) {
 	opts := append([]DialOption{withServer(s)}, dialOpts...)
 	return NewConfig(nodes, opts...)
 }
@@ -329,8 +332,8 @@ func (s *Server) WaitForAll(ctx context.Context) (Config, error) {
 func (s *Server) GracefulStop() {
 	s.grpcServer.GracefulStop()
 	s.im.Close()
-	if s.outbound != nil {
-		_ = s.outbound.Close()
+	if s.closePeers != nil {
+		s.closePeers()
 	}
 }
 
@@ -351,8 +354,8 @@ func (s *Server) Stop() {
 	if lis != nil {
 		_ = lis.Close()
 	}
-	if s.outbound != nil {
-		_ = s.outbound.Close()
+	if s.closePeers != nil {
+		s.closePeers()
 	}
 }
 

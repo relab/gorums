@@ -97,9 +97,9 @@ func TestNewConfig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := gorums.NewConfig(tt.nodes, gorumstest.InsecureDialOptions(t))
+			cfg, closeFn, err := gorums.NewConfig(tt.nodes, gorumstest.InsecureDialOptions(t))
 			if err == nil {
-				t.Cleanup(gorumstest.Closer(t, cfg))
+				t.Cleanup(closeFn)
 			}
 			if tt.wantErr != "" {
 				if err == nil {
@@ -107,6 +107,9 @@ func TestNewConfig(t *testing.T) {
 				}
 				if err.Error() != tt.wantErr {
 					t.Errorf("Error = %q, want %q", err.Error(), tt.wantErr)
+				}
+				if cfg != nil || closeFn != nil {
+					t.Errorf("NewConfig() on error = %v, %p; want nil, nil", cfg.NodeIDs(), closeFn)
 				}
 				return
 			}
@@ -154,13 +157,13 @@ func TestNewConfigWithBackChannel(t *testing.T) {
 			if srv != nil {
 				t.Cleanup(srv.Stop)
 			}
-			cfg, err := gorums.NewConfig(
+			cfg, closeFn, err := gorums.NewConfig(
 				gorums.WithNodeList(nodeList),
 				gorums.WithBackChannel(srv),
 				gorumstest.InsecureDialOptions(t),
 			)
 			if err == nil {
-				t.Cleanup(gorumstest.Closer(t, cfg))
+				t.Cleanup(closeFn)
 			}
 			if tt.wantErr != "" {
 				if err == nil {
@@ -168,6 +171,9 @@ func TestNewConfigWithBackChannel(t *testing.T) {
 				}
 				if err.Error() != tt.wantErr {
 					t.Errorf("Error = %q, want %q", err.Error(), tt.wantErr)
+				}
+				if cfg != nil || closeFn != nil {
+					t.Errorf("NewConfig() on error = %v, %p; want nil, nil", cfg.NodeIDs(), closeFn)
 				}
 				return
 			}
@@ -234,12 +240,6 @@ func TestEmptyConfiguration(t *testing.T) {
 		}
 		if empty.Equal(populated) {
 			t.Fatal("empty.Equal(populated) = true, want false")
-		}
-	})
-
-	t.Run("CloseNil", func(t *testing.T) {
-		if err := empty.Close(); err != nil {
-			t.Fatalf("empty.Close() error = %v, want nil", err)
 		}
 	})
 
@@ -379,11 +379,11 @@ func TestConfigExtend(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, err := gorums.NewConfig(tt.initialNodes, gorumstest.InsecureDialOptions(t))
+			c, closeFn, err := gorums.NewConfig(tt.initialNodes, gorumstest.InsecureDialOptions(t))
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Cleanup(gorumstest.Closer(t, c))
+			t.Cleanup(closeFn)
 
 			c2, err := c.Extend(tt.extendNodes)
 			if tt.wantErr != "" {
@@ -409,11 +409,11 @@ func TestConfigExtendConcurrent(t *testing.T) {
 	addrs := gorumstest.Servers(t, 6, func(_ int) gorumstest.ServerIface { return gorums.NewServer() })
 
 	// Create base configuration so that concurrent Extend operations share the same node registry.
-	cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs[0:1]), gorumstest.DialOptions(t))
+	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs[0:1]), gorumstest.DialOptions(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(gorumstest.Closer(t, cfg))
+	t.Cleanup(closeFn)
 
 	// Create multiple node maps to extend with, each containing a unique new node.
 	// These maps will be used concurrently to verify that Extend can safely mutate
@@ -448,49 +448,64 @@ func TestConfigExtendConcurrent(t *testing.T) {
 	}
 }
 
-// TestConfigClose verifies that Close on any configuration derived from one
-// NewConfig call closes every node in that pool, is idempotent, and leaves no
-// live node behind when Extend runs after or concurrently with Close.
+// TestConfigClose verifies that the close function returned by NewConfig
+// closes every node in the pool, including nodes that Extend added, that it is
+// idempotent and safe for concurrent use, and that it leaves no live node
+// behind when Extend runs after or concurrently with it.
 func TestConfigClose(t *testing.T) {
-	t.Run("SubConfigClosesPool", func(t *testing.T) {
-		cfg := gorumstest.Config(t, 3, nil)
-		outside := gorumstest.PeerNode(t, cfg, 3)
-		call := func() error {
-			ctx := gorumstest.Context(t, 5*time.Second)
-			_, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](outside.Context(ctx), pb.String("x"), mock.TestMethod)
-			return err
-		}
-		if err := call(); err != nil {
-			t.Fatalf("call before Close: %v", err)
-		}
-
-		sub := cfg.Remove(outside.ID())
-		if err := sub.Close(); err != nil {
-			t.Fatalf("sub.Close() = %v, want nil", err)
-		}
-		err := call()
+	call := func(t *testing.T, node *gorums.Node) error {
+		t.Helper()
+		ctx := gorumstest.Context(t, 5*time.Second)
+		_, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(ctx), pb.String("x"), mock.TestMethod)
+		return err
+	}
+	wantClosed := func(t *testing.T, node *gorums.Node) {
+		t.Helper()
+		err := call(t, node)
 		if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "node closed") {
-			t.Errorf("call on node %d outside the closed sub-configuration: err = %v, want Unavailable node closed", outside.ID(), err)
+			t.Errorf("call on node %d after close: err = %v, want Unavailable node closed", node.ID(), err)
 		}
-		if err := sub.Close(); err != nil {
-			t.Errorf("second sub.Close() = %v, want nil", err)
+	}
+
+	t.Run("ClosesExtendedNodes", func(t *testing.T) {
+		addrs := gorumstest.Servers(t, 2, nil)
+		cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs[:1]), gorumstest.DialOptions(t))
+		if err != nil {
+			t.Fatal(err)
 		}
-		if err := cfg.Close(); err != nil {
-			t.Errorf("cfg.Close() after sub.Close() = %v, want nil", err)
+		t.Cleanup(closeFn)
+		ext, err := cfg.Extend(gorums.WithNodeList(addrs[1:]))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, node := range ext {
+			if err := call(t, node); err != nil {
+				t.Fatalf("call on node %d before close: %v", node.ID(), err)
+			}
+		}
+		closeFn()
+		for _, node := range ext {
+			wantClosed(t, node)
 		}
 	})
 
-	t.Run("EmptySubConfigKeepsPool", func(t *testing.T) {
-		cfg := gorumstest.Config(t, 2, nil)
-		node := gorumstest.PeerNode(t, cfg, 1)
-		empty := cfg.Remove(cfg.NodeIDs()...)
-		if err := empty.Close(); err != nil {
-			t.Fatalf("empty.Close() = %v, want nil", err)
+	t.Run("Idempotent", func(t *testing.T) {
+		addrs := gorumstest.Servers(t, 1, nil)
+		cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs), gorumstest.DialOptions(t))
+		if err != nil {
+			t.Fatal(err)
 		}
-		ctx := gorumstest.Context(t, 5*time.Second)
-		if _, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(ctx), pb.String("x"), mock.TestMethod); err != nil {
-			t.Errorf("call after closing an empty sub-configuration: %v, want nil", err)
+		t.Cleanup(closeFn)
+		node := cfg.Nodes()[0]
+		var wg sync.WaitGroup
+		for range 3 {
+			wg.Go(func() {
+				closeFn()
+				// Every call returns only after the nodes are closed.
+				wantClosed(t, node)
+			})
 		}
+		wg.Wait()
 	})
 
 	t.Run("ExtendAfterClose", func(t *testing.T) {
@@ -505,42 +520,48 @@ func TestConfigClose(t *testing.T) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs[:1]), gorumstest.DialOptions(t))
+				cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs[:1]), gorumstest.DialOptions(t))
 				if err != nil {
 					t.Fatal(err)
 				}
-				t.Cleanup(gorumstest.Closer(t, cfg))
-				if err := cfg.Close(); err != nil {
-					t.Fatalf("cfg.Close() = %v, want nil", err)
-				}
+				closeFn()
 
 				ext, err := cfg.Extend(tt.nodes)
 				if err == nil {
-					t.Cleanup(gorumstest.Closer(t, ext))
-					t.Fatalf("cfg.Extend() after Close = %v, nil; want error", ext.NodeIDs())
+					t.Fatalf("cfg.Extend() after close = %v, nil; want error", ext.NodeIDs())
 				}
 				if ext != nil {
-					t.Errorf("cfg.Extend() after Close = %v, want nil configuration", ext.NodeIDs())
+					t.Errorf("cfg.Extend() after close = %v, want nil configuration", ext.NodeIDs())
 				}
 			})
+		}
+	})
+
+	t.Run("NewConfigError", func(t *testing.T) {
+		addrs := gorumstest.Servers(t, 1, nil)
+		// NewConfig builds node 1 before it rejects the duplicate address, so
+		// it must close node 1 itself; goleak checks that at cleanup.
+		cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList([]string{addrs[0], addrs[0]}), gorumstest.DialOptions(t))
+		if err == nil {
+			closeFn()
+			t.Fatalf("NewConfig() with a duplicate address = %v, nil; want error", cfg.NodeIDs())
+		}
+		if cfg != nil || closeFn != nil {
+			t.Errorf("NewConfig() on error = %v, %p; want nil, nil", cfg.NodeIDs(), closeFn)
 		}
 	})
 
 	t.Run("ConcurrentExtend", func(t *testing.T) {
 		addrs := gorumstest.Servers(t, 2, nil)
 		for range 10 {
-			cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs[:1]), gorumstest.DialOptions(t))
+			cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs[:1]), gorumstest.DialOptions(t))
 			if err != nil {
 				t.Fatal(err)
 			}
 			var wg sync.WaitGroup
+			wg.Go(closeFn)
 			wg.Go(func() {
-				if err := cfg.Close(); err != nil {
-					t.Errorf("cfg.Close() = %v, want nil", err)
-				}
-			})
-			wg.Go(func() {
-				// Extend either joins the pool before Close takes its snapshot
+				// Extend either joins the pool before close takes its snapshot
 				// and is closed with it, or it fails. Neither outcome may leave
 				// a live node behind; goleak checks that at cleanup.
 				_, _ = cfg.Extend(gorums.WithNodeList(addrs[1:]))
@@ -713,11 +734,11 @@ func TestConfigImmutability(t *testing.T) {
 }
 
 func TestConfigWithoutErrors(t *testing.T) {
-	cfg, err := gorums.NewConfig(gorums.WithNodes(nodeMap), gorumstest.InsecureDialOptions(t))
+	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodes(nodeMap), gorumstest.InsecureDialOptions(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(gorumstest.Closer(t, cfg))
+	t.Cleanup(closeFn)
 
 	timeoutErr := errors.New("timeout")
 	connRefusedErr := errors.New("connection refused")

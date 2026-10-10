@@ -135,11 +135,11 @@ func setupCoordinator(opts *benchkit.Options, remotes []string, configSize int, 
 		opts.NumNodes = configSize
 	}
 
-	cfg, err := gorums.NewConfig(gorums.WithNodeList(remotes[:opts.NumNodes]), dialOpts...)
+	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(remotes[:opts.NumNodes]), dialOpts...)
 	if err != nil {
 		return target, nil, fmt.Errorf("configuration setup: %w", err)
 	}
 
 	target.Config = cfg
-	return target, func() { _ = cfg.Close() }, nil
+	return target, closeFn, nil
 }

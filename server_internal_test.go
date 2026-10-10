@@ -2,7 +2,6 @@ package gorums
 
 import (
 	"context"
-	"io"
 	"slices"
 	"strings"
 	"sync"
@@ -30,9 +29,8 @@ import (
 // (building package gorums's tests would require gorumstest, which requires
 // gorums). The helpers below build the server and dial-option setup this file
 // needs directly on top of the gorums-independent internal/testutils/servers
-// package instead of gorumstest.Servers, gorumstest.DialOptions,
-// gorumstest.Closer, and gorumstest.Context, so this file has no dependency on
-// gorumstest.
+// package instead of gorumstest.Servers, gorumstest.DialOptions, and
+// gorumstest.Context, so this file has no dependency on gorumstest.
 
 // testStartServers starts numServers servers via srvFn and stops them, and
 // verifies no goroutines were leaked, when the test finishes.
@@ -50,16 +48,6 @@ func testStartServers(t testing.TB, numServers int, srvFn func(i int) servers.Se
 // testStartServers.
 func testDialOptions(t testing.TB) DialOption {
 	return WithGRPCDialOptions(servers.DialOptions(t)...)
-}
-
-// testCloser returns a cleanup function that closes the given io.Closer.
-func testCloser(t testing.TB, c io.Closer) func() {
-	t.Helper()
-	return func() {
-		if err := c.Close(); err != nil {
-			t.Errorf("c.Close() = %q, expected no error", err.Error())
-		}
-	}
 }
 
 // testTimeoutContext creates a context with timeout, using t.Context() as the
@@ -132,18 +120,19 @@ func peerNodes() NodeSource {
 }
 
 // connectAsPeer creates a Config that identifies itself as peerID by sending
-// gorums-node-id metadata, connects to addrs, and returns the configuration.
-// Config cleanup is registered via t.Cleanup; callers may also close it
-// explicitly (e.g., to test disconnect) — Close is idempotent.
-func connectAsPeer(t *testing.T, peerID uint32, addrs []string) Config {
+// gorums-node-id metadata, connects to addrs, and returns the configuration
+// and its close function. The close function is registered via t.Cleanup;
+// callers may also call it explicitly (e.g., to test disconnect), since it is
+// idempotent.
+func connectAsPeer(t *testing.T, peerID uint32, addrs []string) (Config, func()) {
 	t.Helper()
 	peerMD := conn.MetadataWithNodeID(peerID)
-	cfg, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithMetadata(peerMD))
+	cfg, closeFn, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithMetadata(peerMD))
 	if err != nil {
 		t.Fatalf("NewConfig() error: %v", err)
 	}
-	t.Cleanup(testCloser(t, cfg))
-	return cfg
+	t.Cleanup(closeFn)
+	return cfg, closeFn
 }
 
 // TestConfigExtendUsesKnownDedupPeer verifies that extending a dedup
@@ -179,11 +168,11 @@ func TestConfigExtendUsesKnownDedupPeer(t *testing.T) {
 				t.Cleanup(cleanup)
 			}
 
-			initial, err := NewConfig(WithNodes(map[uint32]mock.NodeAddr{2: peers[2]}), insecureDialOpts, withServer(srv), conn.WithStreamDedup())
+			initial, closeFn, err := NewConfig(WithNodes(map[uint32]mock.NodeAddr{2: peers[2]}), insecureDialOpts, withServer(srv), conn.WithStreamDedup())
 			if err != nil {
 				t.Fatalf("initial configuration: %v", err)
 			}
-			t.Cleanup(testCloser(t, initial))
+			t.Cleanup(closeFn)
 
 			extended, err := initial.Extend(WithNodes(map[uint32]mock.NodeAddr{1: peers[1]}))
 			if err != nil {
@@ -244,9 +233,9 @@ func TestStreamDedupBorrowValidatesPeerAddress(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := NewConfig(WithNodes(tt.nodes), insecureDialOpts, withServer(srv), conn.WithStreamDedup())
+			_, closeFn, err := NewConfig(WithNodes(tt.nodes), insecureDialOpts, withServer(srv), conn.WithStreamDedup())
 			if err == nil {
-				t.Cleanup(testCloser(t, cfg))
+				t.Cleanup(closeFn)
 				t.Fatalf("newConfig succeeded; want error containing %q", tt.wantErr)
 			}
 			if !strings.Contains(err.Error(), tt.wantErr) {
@@ -276,7 +265,7 @@ func TestSelfNodeIDStreamRejectedEndToEnd(t *testing.T) {
 
 	// The client claims the server's own node ID (1). Its stream is rejected,
 	// so the call cannot complete.
-	cfg := connectAsPeer(t, 1, addrs)
+	cfg, _ := connectAsPeer(t, 1, addrs)
 	node := cfg.Nodes()[0]
 
 	// Bound the request itself so it fails fast; wait for that failure on a
@@ -343,14 +332,12 @@ func TestKnownPeerConnects(t *testing.T) {
 func TestKnownPeerDisconnects(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
-	cfg := connectAsPeer(t, 2, addrs)
+	_, closeFn := connectAsPeer(t, 2, addrs)
 	mustWaitForInbound(t, srv, equalNodeIDs([]uint32{1, 2}))
 
-	// Close the configuration to trigger disconnect; Close is idempotent so
-	// t.Cleanup (registered by connectAsPeer) is harmless.
-	if err := cfg.Close(); err != nil {
-		t.Fatalf("cfg.Close() error: %v", err)
-	}
+	// Close the configuration to trigger disconnect; the close function is
+	// idempotent, so t.Cleanup (registered by connectAsPeer) is harmless.
+	closeFn()
 	mustWaitForInbound(t, srv, equalNodeIDs([]uint32{1}))
 	mock.CheckNodeIDs(t, inboundPeers(srv), []uint32{1}, "after disconnect")
 }
@@ -361,11 +348,11 @@ func TestUnknownPeerIgnored(t *testing.T) {
 	srv, addrs := testPeerServer(t)
 
 	// Connect without metadata (external client) and with an unknown ID.
-	cfg, err := NewConfig(WithNodeList(addrs), testDialOptions(t))
+	_, closeFn, err := NewConfig(WithNodeList(addrs), testDialOptions(t))
 	if err != nil {
 		t.Fatalf("NewConfig() error: %v", err)
 	}
-	t.Cleanup(testCloser(t, cfg))
+	t.Cleanup(closeFn)
 
 	connectAsPeer(t, 99, addrs) // ID 99 not in known set
 
@@ -388,11 +375,11 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 		return NewResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
 	})
 	peerMD := conn.MetadataWithNodeID(2)
-	cfg, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithMetadata(peerMD), withServer(clientSrv))
+	_, closeFn, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithMetadata(peerMD), withServer(clientSrv))
 	if err != nil {
 		t.Fatalf("NewConfig() error: %v", err)
 	}
-	t.Cleanup(testCloser(t, cfg))
+	t.Cleanup(closeFn)
 
 	// Wait for the peer to appear in the inbound config.
 	mustWaitForInbound(t, srv, equalNodeIDs([]uint32{1, 2}))
@@ -454,16 +441,17 @@ func testClientServer(t *testing.T) (*Server, []string) {
 
 // connectAsPeerClient creates a Config that advertises back-channel
 // capability by sending the gorums-node-id key (via [withServer]),
-// connects to addrs, and returns the configuration. The server will include it in
-// ConnectedClients and may dispatch server-initiated calls to it.
-func connectAsPeerClient(t *testing.T, addrs []string) Config {
+// connects to addrs, and returns the configuration and its close function. The
+// server will include it in ConnectedClients and may dispatch server-initiated
+// calls to it.
+func connectAsPeerClient(t *testing.T, addrs []string) (Config, func()) {
 	t.Helper()
-	cfg, err := NewConfig(WithNodeList(addrs), testDialOptions(t), withServer(NewServer()))
+	cfg, closeFn, err := NewConfig(WithNodeList(addrs), testDialOptions(t), withServer(NewServer()))
 	if err != nil {
 		t.Fatalf("NewConfig() error: %v", err)
 	}
-	t.Cleanup(testCloser(t, cfg))
-	return cfg
+	t.Cleanup(closeFn)
+	return cfg, closeFn
 }
 
 // TestConnectedClientsConnects verifies that a server accepts a peer-capable
@@ -492,7 +480,7 @@ func TestConnectedClientsConnects(t *testing.T) {
 func TestConnectedClientsDisconnects(t *testing.T) {
 	srv, addrs := testClientServer(t)
 
-	cfg := connectAsPeerClient(t, addrs)
+	_, closeFn := connectAsPeerClient(t, addrs)
 
 	// Wait for the client peer to appear.
 	mustWaitForClients(t, srv, func(cfg Config) bool { return len(cfg) > 0 })
@@ -501,9 +489,7 @@ func TestConnectedClientsDisconnects(t *testing.T) {
 	}
 
 	// Disconnect the client peer.
-	if err := cfg.Close(); err != nil {
-		t.Fatalf("cfg.Close() error: %v", err)
-	}
+	closeFn()
 
 	// Wait for config to become empty.
 	mustWaitForClients(t, srv, func(cfg Config) bool { return len(cfg) == 0 })
@@ -573,11 +559,11 @@ func TestConnectedClientsServerCallsClient(t *testing.T) {
 		wg.Done()
 		return nil, nil
 	})
-	clientConfig, err := NewConfig(WithNodeList(addrs), testDialOptions(t), withServer(clientSrv))
+	clientConfig, closeFn, err := NewConfig(WithNodeList(addrs), testDialOptions(t), withServer(clientSrv))
 	if err != nil {
 		t.Fatalf("NewConfig() error: %v", err)
 	}
-	t.Cleanup(testCloser(t, clientConfig))
+	t.Cleanup(closeFn)
 
 	// Wait for the client to appear in the server's ConnectedClients.
 	mustWaitForClients(t, srv, func(cfg Config) bool { return len(cfg) > 0 })

@@ -394,7 +394,7 @@ func createServerAndClient(t *testing.T) (*gorums.Server, *gorums.Server, gorums
 	// stream. The client has no node ID, so the server tracks it as an
 	// anonymous client reachable via ConnectedClients.
 	clientSrv := gorums.NewServer()
-	cfg, err := gorums.NewConfig(
+	cfg, closeFn, err := gorums.NewConfig(
 		gorums.WithNodeList([]string{lis.Addr().String()}),
 		gorums.WithBackChannel(clientSrv),
 		gorumstest.InsecureDialOptions(t),
@@ -410,7 +410,7 @@ func createServerAndClient(t *testing.T) (*gorums.Server, *gorums.Server, gorums
 	// stops the server and closes lis).
 	t.Cleanup(srv.Stop)
 	t.Cleanup(clientSrv.Stop)
-	t.Cleanup(gorumstest.Closer(t, cfg))
+	t.Cleanup(closeFn)
 
 	return srv, clientSrv, cfg
 }
@@ -1115,11 +1115,11 @@ func TestServerBackChannelNestedCallBeforeRelease(t *testing.T) {
 		}
 		return gorums.NewResponseMessage(in, resp), nil
 	})
-	cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs), gorumstest.DialOptions(t), gorums.WithBackChannel(clientSrv))
+	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs), gorumstest.DialOptions(t), gorums.WithBackChannel(clientSrv))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(gorumstest.Closer(t, cfg))
+	t.Cleanup(closeFn)
 	clientCfg = cfg
 
 	if err := srv.WaitForClients(gorumstest.Context(t, 5*time.Second), func(c gorums.Config) bool { return c.Size() == 1 }); err != nil {
@@ -1183,11 +1183,11 @@ func TestServerHandlerNestedCallBeforeRelease(t *testing.T) {
 	clientSrv.RegisterHandler(mock.EchoMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		return gorums.NewResponseMessage(in, pb.String("echo")), nil
 	})
-	cfg, err := gorums.NewConfig(gorums.WithNodeList(addrs), gorumstest.DialOptions(t), gorums.WithBackChannel(clientSrv))
+	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs), gorumstest.DialOptions(t), gorums.WithBackChannel(clientSrv))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(gorumstest.Closer(t, cfg))
+	t.Cleanup(closeFn)
 	if err := srv.WaitForClients(gorumstest.Context(t, 5*time.Second), func(c gorums.Config) bool { return c.Size() == 1 }); err != nil {
 		t.Fatal(err)
 	}

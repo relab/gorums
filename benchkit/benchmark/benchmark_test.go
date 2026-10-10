@@ -257,11 +257,11 @@ func TestQuorumCallHonorsCallTimeout(t *testing.T) {
 	registerReplyDroppingPeer(servers[0], 1<<30) // drops every reply for the test's duration
 	go func() { _ = servers[0].ListenAndServe() }()
 
-	cfg, err := gorums.NewConfig(gorums.WithNodeList([]string{servers[0].Addr()}), gorumstest.InsecureDialOptions(t))
+	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList([]string{servers[0].Addr()}), gorumstest.InsecureDialOptions(t))
 	if err != nil {
 		t.Fatalf("NewConfig: %v", err)
 	}
-	t.Cleanup(gorumstest.Closer(t, cfg))
+	t.Cleanup(closeFn)
 
 	run := benchDescs[0].build(cfg, nil) // "QuorumCall"
 	opts := benchkit.Options{
@@ -292,11 +292,11 @@ func TestRunAsyncQCBenchmarkCountsErrorsWithoutAborting(t *testing.T) {
 	registerFailingQuorumCallPeer(servers[0], "quorum call failed")
 	go func() { _ = servers[0].ListenAndServe() }()
 
-	cfg, err := gorums.NewConfig(gorums.WithNodeList([]string{servers[0].Addr()}), gorumstest.InsecureDialOptions(t))
+	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList([]string{servers[0].Addr()}), gorumstest.InsecureDialOptions(t))
 	if err != nil {
 		t.Fatalf("NewConfig: %v", err)
 	}
-	t.Cleanup(gorumstest.Closer(t, cfg))
+	t.Cleanup(closeFn)
 
 	opts := benchkit.Options{Workers: 1, Duration: 30 * time.Millisecond, MaxAsync: 10, QuorumSize: 1}
 	result, err := runAsyncQCBenchmark(opts, cfg,

@@ -61,14 +61,36 @@ type Config = conn.Config
 // Use [Config.Context] to create a ConfigContext from an existing context.
 type ConfigContext = conn.ConfigContext
 
-// NewConfig returns a new [Config] based on the provided nodes and dial options.
+// NewConfig returns a new [Config] based on the provided nodes and dial
+// options, and a function that closes the configuration's connection pool.
+//
+// The returned configuration and every configuration derived from it, for
+// example with [Config.Extend], [Config.Remove], or [Config.Sort], share one
+// connection pool. Only the returned close function closes that pool, and it
+// closes every node in it, including nodes that [Config.Extend] added later.
+// After the close function returns:
+//   - calls to the pool's nodes fail with an Unavailable "node closed" error;
+//   - [Config.Extend] on any configuration in the pool returns an error.
+//
+// One exception: a node that runs in-process, or that reuses a server's
+// inbound stream, owns no connection, so calls to it still work.
+//
+// The close function is idempotent and safe for concurrent use; every call
+// returns after the nodes are closed. It returns no error, because closing a
+// connection has no failure that a caller can act on.
+//
+// On error, NewConfig returns a nil configuration and a nil close function.
 //
 // Example:
 //
-//	cfg, err := NewConfig(
+//	cfg, closeFn, err := NewConfig(
 //	    gorums.WithNodeList([]string{"localhost:8080", "localhost:8081", "localhost:8082"}),
 //	    gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 //	)
-func NewConfig(nodes NodeSource, opts ...DialOption) (Config, error) {
+//	if err != nil {
+//	    return err
+//	}
+//	defer closeFn()
+func NewConfig(nodes NodeSource, opts ...DialOption) (Config, func(), error) {
 	return conn.NewConfig(nodes, opts...)
 }

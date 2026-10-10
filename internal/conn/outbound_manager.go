@@ -53,9 +53,9 @@ var errConfigClosed = errors.New("gorums: configuration is closed")
 
 // Close closes all node connections and any client streams. Once Close
 // starts, the manager rejects new nodes. Close is idempotent and safe for
-// concurrent use; every call returns after the nodes are closed.
-func (m *outboundManager) Close() error {
-	var err error
+// concurrent use; every call returns after the nodes are closed. It logs a
+// node's close error with the manager's logger, if one is set.
+func (m *outboundManager) Close() {
 	m.closeOnce.Do(func() {
 		m.mu.Lock()
 		m.closed = true
@@ -64,10 +64,14 @@ func (m *outboundManager) Close() error {
 		// Close the nodes outside mu: closing a node waits for its
 		// goroutines, and the closed flag stops addNode from adding more.
 		for _, node := range nodes {
-			err = errors.Join(err, node.close())
+			// A close error is unlikely and needs no action: gRPC reports one
+			// only for a connection that is already closed, and each
+			// connection is closed once. The log is for diagnosis only.
+			if err := node.close(); err != nil && m.logger != nil {
+				m.logger.Printf("node %d: close: %v", node.id, err)
+			}
 		}
 	})
-	return err
 }
 
 // Node returns the node with the given identifier if present.
