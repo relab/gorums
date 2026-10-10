@@ -24,9 +24,12 @@ type publishOptions struct {
 
 // prInfo is the part of gh pr view --json output that publish uses.
 type prInfo struct {
-	Number            int        `json:"number"`
-	URL               string     `json:"url"`
-	State             string     `json:"state"`
+	Number      int    `json:"number"`
+	URL         string `json:"url"`
+	State       string `json:"state"`
+	MergeCommit struct {
+		OID string `json:"oid"`
+	} `json:"mergeCommit"`
 	StatusCheckRollup []checkRun `json:"statusCheckRollup"`
 }
 
@@ -49,28 +52,29 @@ func (t *tool) publish(o publishOptions) error {
 		return err
 	}
 	tag := v.String()
-	if err := t.mergeRelease("release/"+tag, o.yes); err != nil {
+	sha, err := t.mergeRelease("release/"+tag, o.yes)
+	if err != nil {
 		return err
 	}
-	if err := t.exec("git", "switch", "master"); err != nil {
+	if err := t.exec("git", "fetch", "origin", "master"); err != nil {
 		return err
 	}
-	if err := t.exec("git", "pull", "--ff-only", "origin", "master"); err != nil {
+	// The tags name the merge commit of the release pull request. HEAD is not
+	// proof of the release revision: the local master can hold other commits,
+	// and origin/master can have moved on.
+	if sha == "" {
+		sha = "<merge-commit>" // a dry run has not merged the pull request
+	} else if err := t.require(t.checkReleaseCommit(sha, v)); err != nil {
 		return err
-	}
-	if merged, err := t.currentVersion(); err != nil {
-		return err
-	} else if merged != v {
-		return fmt.Errorf("master has version %s, not %s: is the release PR merged?", merged, v)
 	}
 	if err := t.checkTagsFree(tag); err != nil {
 		return err
 	}
 	benchkitTag := "benchkit/" + tag
-	if err := t.exec("git", "tag", "-a", tag, "-m", "Gorums "+tag); err != nil {
+	if err := t.exec("git", "tag", "-a", tag, "-m", "Gorums "+tag, sha); err != nil {
 		return err
 	}
-	if err := t.exec("git", "tag", "-a", benchkitTag, "-m", "Gorums benchkit "+tag); err != nil {
+	if err := t.exec("git", "tag", "-a", benchkitTag, "-m", "Gorums benchkit "+tag, sha); err != nil {
 		return err
 	}
 	if err := t.exec("git", "push", "--atomic", "origin", "refs/tags/"+tag, "refs/tags/"+benchkitTag); err != nil {
@@ -82,43 +86,88 @@ func (t *tool) publish(o publishOptions) error {
 	return t.verify(tag)
 }
 
-// mergeRelease squash-merges the release PR when it is still open. A missing
-// PR is taken to mean that the release was merged by other means.
-func (t *tool) mergeRelease(branch string, yes bool) error {
-	out, err := t.query("gh", "pr", "view", branch, "--json", "number,url,state,statusCheckRollup")
+// lookupPR reads the release pull request for a branch.
+func (t *tool) lookupPR(branch string) (prInfo, error) {
+	out, err := t.query("gh", "pr", "view", branch, "--json", "number,url,state,mergeCommit,statusCheckRollup")
 	if err != nil {
-		if !strings.Contains(strings.ToLower(err.Error()), "no pull requests found") {
-			return fmt.Errorf("cannot look up the release pull request: %w", err)
+		if strings.Contains(strings.ToLower(err.Error()), "no pull requests found") {
+			return prInfo{}, fmt.Errorf("no pull request found for %s: run %s pr first", branch, progName)
 		}
-		t.logf("No pull request found for %s; assuming it was merged by other means.", branch)
-		return nil
+		return prInfo{}, fmt.Errorf("cannot look up the release pull request: %w", err)
 	}
 	var pr prInfo
 	if err := json.Unmarshal([]byte(out), &pr); err != nil {
-		return fmt.Errorf("cannot read pull request: %w", err)
+		return prInfo{}, fmt.Errorf("cannot read pull request: %w", err)
+	}
+	return pr, nil
+}
+
+// mergeRelease squash-merges the release PR when it is still open, and returns
+// the merge commit. A dry run returns "" for an open pull request.
+func (t *tool) mergeRelease(branch string, yes bool) (string, error) {
+	pr, err := t.lookupPR(branch)
+	if err != nil {
+		return "", err
 	}
 	switch pr.State {
 	case "MERGED":
 		t.logf("Pull request %s is already merged.", pr.URL)
-		return nil
 	case "OPEN":
+		if len(pr.StatusCheckRollup) == 0 {
+			return "", fmt.Errorf("no CI checks reported for %s", pr.URL)
+		}
+		pending, failed := checksState(pr.StatusCheckRollup)
+		if len(failed) > 0 {
+			return "", fmt.Errorf("CI checks failed for %s: %s", pr.URL, strings.Join(failed, ", "))
+		}
+		if len(pending) > 0 {
+			return "", fmt.Errorf("CI checks still running for %s: %s", pr.URL, strings.Join(pending, ", "))
+		}
+		if err := t.confirm(fmt.Sprintf("Squash-merge %s?", pr.URL), yes); err != nil {
+			return "", err
+		}
+		if err := t.exec("gh", "pr", "merge", branch, "--squash", "--delete-branch"); err != nil {
+			return "", err
+		}
+		if t.dryRun {
+			return "", nil
+		}
+		if pr, err = t.lookupPR(branch); err != nil {
+			return "", err
+		}
+		if pr.State != "MERGED" {
+			return "", fmt.Errorf("pull request %s is %s after the merge", pr.URL, strings.ToLower(pr.State))
+		}
 	default:
-		return fmt.Errorf("pull request %s is %s, not merged", pr.URL, strings.ToLower(pr.State))
+		return "", fmt.Errorf("pull request %s is %s, not merged", pr.URL, strings.ToLower(pr.State))
 	}
-	if len(pr.StatusCheckRollup) == 0 {
-		return fmt.Errorf("no CI checks reported for %s", pr.URL)
+	if pr.MergeCommit.OID == "" {
+		return "", fmt.Errorf("pull request %s has no merge commit", pr.URL)
 	}
-	pending, failed := checksState(pr.StatusCheckRollup)
-	if len(failed) > 0 {
-		return fmt.Errorf("CI checks failed for %s: %s", pr.URL, strings.Join(failed, ", "))
+	return pr.MergeCommit.OID, nil
+}
+
+// checkReleaseCommit requires that sha is in this repository, is on
+// origin/master, and carries the version v.
+func (t *tool) checkReleaseCommit(sha string, v semver) error {
+	if _, err := t.query("git", "cat-file", "-e", sha+"^{commit}"); err != nil {
+		return fmt.Errorf("the merge commit %s is not in this repository: %w", sha, err)
 	}
-	if len(pending) > 0 {
-		return fmt.Errorf("CI checks still running for %s: %s", pr.URL, strings.Join(pending, ", "))
+	if _, err := t.query("git", "merge-base", "--is-ancestor", sha, "origin/master"); err != nil {
+		return fmt.Errorf("the merge commit %s is not on origin/master: %w", sha, err)
 	}
-	if err := t.confirm(fmt.Sprintf("Squash-merge %s?", pr.URL), yes); err != nil {
+	src, err := t.query("git", "show", sha+":"+versionFile)
+	if err != nil {
 		return err
 	}
-	return t.exec("gh", "pr", "merge", branch, "--squash", "--delete-branch")
+	at, err := parseVersionFile([]byte(src))
+	if err != nil {
+		return err
+	}
+	if at != v {
+		return fmt.Errorf("the merge commit %s has version %s, not %s", sha, at, v)
+	}
+	return nil
 }
 
 // checksState lists the names of unfinished and unsuccessful checks.

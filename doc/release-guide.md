@@ -110,7 +110,8 @@ Install it again after the program changes.
    gorums-release publish
    ```
 
-   This merges the pull request, pushes both tags, creates the GitHub release, and checks that the Go module proxy serves the new version.
+   This merges the pull request, pushes both tags on its merge commit, creates the GitHub release, and checks that the Go module proxy serves the new version.
+   The tags always name the merge commit of the release pull request, never the current `HEAD`, so commits that are not part of the release cannot end up under a release version.
 
 Each command lists what it does, step by step, under `gorums-release <command> -h`.
 
