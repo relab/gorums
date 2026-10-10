@@ -1543,6 +1543,117 @@ It returns no error, because closing a connection has no failure that a caller c
 
 A `Server` configured with `WithPeers` owns its peer configuration, and `Stop` and `GracefulStop` close it.
 
+## Node IDs
+
+Gorums identifies each node with a `gorums.ID`.
+The type is an alias for `uint32`, so a value from a protobuf `uint32` field needs no conversion.
+
+### Rules for Node IDs
+
+* ID 0 is reserved.
+  It marks a handler-only server and a client that announces no ID.
+* With `WithNodes`, the application chooses the ID of each node.
+  With `WithNodeList`, Gorums assigns IDs in list order, starting after the highest ID in the configuration's connection pool, or from 1 for a new pool.
+* Servers configured with `WithPeers` must agree on the ID of each peer, because a server announces its own ID when it connects.
+* A server assigns IDs from 2^20 upward to back-channel clients, and it skips configured IDs.
+* Under `WithStreamDedup`, the peer with the lower ID dials the other.
+
+### Choosing Node IDs
+
+Many protocols number their replicas from 1 to n, and use the number for leader rotation, slice indexes, or signature bitfields.
+Use these numbers directly as Gorums IDs:
+
+```go
+type replica struct {
+  addr string
+}
+
+func (r replica) Addr() string { return r.addr }
+
+nodes := map[gorums.ID]replica{
+  1: {addr: "10.0.0.1:9000"},
+  2: {addr: "10.0.0.2:9000"},
+  3: {addr: "10.0.0.3:9000"},
+}
+srv := gorums.NewServer(
+  gorums.WithPeers(myID, gorums.WithNodes(nodes), dialOpts),
+)
+```
+
+Give each node an explicit ID in the cluster configuration, and let each node read its own ID from that configuration.
+An explicit ID stays the same when the address list changes.
+If you derive IDs from an address list instead, sort the list first, as the storage example does, so that all nodes compute the same IDs.
+
+### Mapping Application IDs to Node IDs
+
+An application may identify nodes by strings, such as host names or UUIDs.
+Then give each node a Gorums ID in the shared cluster configuration, and keep a map in each direction:
+
+```go
+type member struct {
+  Name    string    // application ID
+  ID      gorums.ID // Gorums ID
+  Address string
+}
+
+func (m member) Addr() string { return m.Address }
+
+byID := make(map[gorums.ID]member)
+idOf := make(map[string]gorums.ID)
+for _, m := range members {
+  byID[m.ID] = m
+  idOf[m.Name] = m.ID
+}
+cfg, closeFn, err := gorums.NewConfig(gorums.WithNodes(byID), dialOpts)
+```
+
+`cfg.Node(idOf[name])` returns the node for an application ID, or nil if the configuration has no such node.
+`byID[id].Name` returns the application ID for a Gorums ID.
+
+Nodes that join without a shared configuration can derive their IDs from their names with a hash, so that all nodes compute the same ID without coordination:
+
+```go
+func idOf(name string) gorums.ID {
+  h := fnv.New32a()
+  h.Write([]byte(name))
+  return max(h.Sum32(), 1) // ID 0 is reserved
+}
+```
+
+Two names can hash to the same 32-bit ID; the probability is about one in a million for 100 nodes.
+Check for duplicate IDs when you build the node map.
+Do not use hashed IDs in a protocol that needs IDs from 1 to n.
+
+### Finding the Sender of a Request
+
+A handler gets the ID of the node that sent a request from `ServerContext.SenderID`.
+With `Config.Node`, it can then find the sender's node:
+
+```go
+func (srv *storageSrv) WriteQC(ctx gorums.ServerContext, req *WriteRequest) (*WriteResponse, error) {
+  if sender := ctx.PeerConfig().Node(ctx.SenderID()); sender != nil {
+    log.Printf("write from peer %d at %s", sender.ID(), sender.Address())
+  }
+  // ...
+}
+```
+
+`SenderID` identifies the sender as this server knows it:
+
+* a peer configured with `WithPeers` has its configured ID;
+* a back-channel client has the ID that this server assigned to it, as in `ConnectedClients()`; the ID changes when the client reconnects;
+* a request on a connection that this server dialed has the dialed node's ID;
+* a request that this server sends to itself has this server's own ID.
+
+`SenderID` returns 0 for a client that announces no ID, or an ID that this server does not know.
+
+The sender is the last hop.
+When a message travels through several nodes, for example down a tree, `SenderID` identifies the node that forwarded it, not the node where the message started.
+Put the origin in the message if the handler needs it.
+
+The sender asserts its ID when it connects, and the server does not authenticate it.
+A Byzantine fault-tolerant protocol must still sign its messages and check the signer.
+
 ## Latency-Based Node Selection
 
 Gorums tracks the round-trip latency to each node as an exponentially weighted
