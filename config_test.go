@@ -799,3 +799,17 @@ func TestConfigWithoutErrors(t *testing.T) {
 		})
 	}
 }
+
+// TestConfigNodeAddress verifies that nodes keep the configured address
+// instead of the resolved IP.
+func TestConfigNodeAddress(t *testing.T) {
+	const addr = "localhost:9081"
+	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList([]string{addr}), gorumstest.InsecureDialOptions(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(closeFn)
+	if got := cfg[0].Address(); got != addr {
+		t.Errorf("Address() = %q, want %q", got, addr)
+	}
+}

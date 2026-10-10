@@ -115,13 +115,8 @@ type nodeOptions struct {
 // newOutboundNode creates a new node using the provided options. It establishes
 // the connection (lazy dial) and initializes the outbound channel.
 func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-
 	transport := stream.NewTransport(opts.ID, opts.MsgIDGen)
-	n := newNode(opts.ID, tcpAddr.String(), opts.Manager, transport)
+	n := newNode(opts.ID, addr, opts.Manager, transport)
 
 	// Create gRPC connection to the node without connecting (lazy dial).
 	conn, err := grpc.NewClient(n.addr, opts.GRPCDialOptions...)
@@ -283,7 +278,8 @@ func (n *Node) ID() ID {
 	return 0
 }
 
-// Address returns network address of n.
+// Address returns the network address of n as configured, for example
+// "replica1.example.com:9000". It is not resolved to an IP address.
 func (n *Node) Address() string {
 	if n != nil {
 		return n.addr
@@ -291,7 +287,7 @@ func (n *Node) Address() string {
 	return nilAngleString
 }
 
-// Host returns the network host of n.
+// Host returns the host part of the address of n as configured.
 func (n *Node) Host() string {
 	if n == nil {
 		return nilAngleString
@@ -300,7 +296,7 @@ func (n *Node) Host() string {
 	return host
 }
 
-// Port returns network port of n.
+// Port returns the port part of the address of n as configured.
 func (n *Node) Port() string {
 	if n != nil {
 		_, port, _ := net.SplitHostPort(n.addr)
