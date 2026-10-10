@@ -69,6 +69,9 @@ func NewConfig(nodes NodeSource, opts ...DialOption) (Config, error) {
 }
 
 // Extend returns a new Config combining c with new nodes from the provided NodeSource.
+// The new nodes join c's connection pool, so [Config.Close] on any
+// configuration in that pool also closes them. A node whose ID and address
+// are already in the pool is reused, not dialed again.
 // Extend returns an error if c is empty or if c's connection pool is closed.
 func (c Config) Extend(nodes NodeSource) (Config, error) {
 	if len(c) == 0 {
