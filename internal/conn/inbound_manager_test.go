@@ -19,7 +19,7 @@ import (
 // requestHandlerFunc adapts a function to [stream.RequestHandler].
 type requestHandlerFunc func(context.Context, *stream.Message, func(), func(*stream.Message))
 
-func (f requestHandlerFunc) HandleRequest(ctx context.Context, msg *stream.Message, release func(), send func(*stream.Message)) {
+func (f requestHandlerFunc) HandleRequest(ctx context.Context, _ ID, msg *stream.Message, release func(), send func(*stream.Message)) {
 	f(ctx, msg, release, send)
 }
 

@@ -38,6 +38,10 @@ type Channel interface {
 // dispatching it to the appropriate method handler, as encoded in the
 // message's method field. Each call runs in its own goroutine.
 //
+// The senderID is the ID of the channel that received the request: the
+// peer's ID on a stream, 0 if the peer has no ID, and the local node's own
+// ID on a [LocalChannel].
+//
 // The release function is idempotent. Calling it lets the next request from
 // the stream start before HandleRequest returns; otherwise the next request
 // starts when HandleRequest returns.
@@ -49,7 +53,7 @@ type Channel interface {
 // one-way call types, the peer has no pending call to receive a response, so
 // it is dropped.
 type RequestHandler interface {
-	HandleRequest(ctx context.Context, msg *Message, release func(), send func(*Message))
+	HandleRequest(ctx context.Context, senderID ID, msg *Message, release func(), send func(*Message))
 }
 
 // endpoint holds the state that a stream channel shares across its streams.

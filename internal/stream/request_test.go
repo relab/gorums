@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func (f requestHandlerFunc) HandleRequest(ctx context.Context, msg *Message, release func(), send func(*Message)) {
+func (f requestHandlerFunc) HandleRequest(ctx context.Context, _ ID, msg *Message, release func(), send func(*Message)) {
 	f(ctx, msg, release, send)
 }
 
