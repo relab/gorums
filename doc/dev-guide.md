@@ -240,7 +240,8 @@ classDiagram
 
 A `Config` is a slice of `*Node`, and each `Node` has a fixed `stream.Transport`.
 An `outboundManager` creates and owns the nodes of the configurations built by `NewConfig` and `Config.Extend`.
-`Config.Close` on any of these configurations closes the manager and all its nodes.
+`NewConfig` returns the manager's `Close` method as the close function; `Config` has no `Close` method, so only the creator of a pool can close it.
+The manager's `Close` closes all its nodes and logs any node's close error, since a caller cannot act on it.
 `Config.Extend` fails on a closed manager before it builds any node.
 A closed manager also rejects new nodes under the same lock that guards its node list, so a node that races with `Close` cannot outlive it.
 A server's `InboundManager` owns the nodes for its known peers and for the peer-capable clients that connect to it, and maintains the connected-peer and connected-client configurations.
