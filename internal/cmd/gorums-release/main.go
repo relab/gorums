@@ -103,9 +103,10 @@ The version is read from internal/version/version.go. It does the following:
 
   1. Squash-merges the release pull request, if it is still open. It stops if
      CI has not passed, and asks for confirmation unless -yes is given.
-  2. Pulls master and checks that the tags do not exist yet.
-  3. Creates the tags <version> and benchkit/<version> on the merge commit and
-     pushes them together.
+  2. Fetches master. It checks that the merge commit of the pull request is on
+     origin/master and carries the version, and that the tags do not exist yet.
+  3. Creates the tags <version> and benchkit/<version> on that merge commit, not
+     on whatever HEAD is, and pushes them together.
   4. Creates the GitHub release, with notes generated from the merged pull
      requests and the gorelease report in front. A version with a suffix is
      marked as a pre-release.
