@@ -115,13 +115,8 @@ type nodeOptions struct {
 // newOutboundNode creates a new node using the provided options. It establishes
 // the connection (lazy dial) and initializes the outbound channel.
 func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-
 	transport := stream.NewTransport(opts.ID, opts.MsgIDGen)
-	n := newNode(opts.ID, tcpAddr.String(), opts.Manager, transport)
+	n := newNode(opts.ID, addr, opts.Manager, transport)
 
 	// Create gRPC connection to the node without connecting (lazy dial).
 	conn, err := grpc.NewClient(n.addr, opts.GRPCDialOptions...)

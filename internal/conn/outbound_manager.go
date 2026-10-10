@@ -135,14 +135,14 @@ func (m *outboundManager) newNode(id ID, addr string) (*Node, error) {
 		// WaitForAll waits for the peer.
 		//
 		// The borrowed peer must be the process this node addresses, so the
-		// borrow requires a known peer with the same address. [Config.Extend]
-		// can add outbound nodes from a source other than the peer set. Both
-		// addresses are already normalized by the node builder.
+		// borrow requires a known peer with the same address, compared in
+		// normalized form. [Config.Extend] can add outbound nodes from a
+		// source other than the peer set.
 		peer := m.opts.InboundManager.knownPeer(id)
 		if peer == nil {
 			return nil, fmt.Errorf("gorums: stream dedup outbound node %d (%s) is not a configured peer", id, addr)
 		}
-		if peer.addr != addr {
+		if addrKey(peer.addr) != addrKey(addr) {
 			return nil, fmt.Errorf("gorums: stream dedup outbound node %d address %s does not match peer address %s", id, addr, peer.addr)
 		}
 		n := newSharedNode(peer, addr, m)

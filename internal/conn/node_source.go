@@ -79,7 +79,7 @@ func (nl nodeList) newConfig(registry nodeRegistry) (Config, error) {
 // It encapsulates the common logic shared between WithNodes and WithNodeList.
 type nodeBuilder struct {
 	registry nodeRegistry
-	addrToID map[string]ID // normalized address -> node ID
+	addrToID map[string]ID // duplicate-check key (see [normalizeAddr]) -> node ID
 	idToNode map[ID]*Node  // existing node ID -> node
 	maxID    ID            // maximum existing node ID
 	nodes    Config
@@ -90,10 +90,10 @@ func newNodeBuilder(registry nodeRegistry, capacity int) *nodeBuilder {
 	addrToID := make(map[string]ID, capacity)
 	idToNode := make(map[ID]*Node, capacity)
 	maxID := ID(0)
-	// Populate with existing nodes from the registry (already normalized)
+	// Populate with existing nodes from the registry
 	for _, existingNode := range registry.Nodes() {
 		id := existingNode.ID()
-		addrToID[existingNode.Address()] = id
+		addrToID[addrKey(existingNode.Address())] = id
 		idToNode[id] = existingNode
 		maxID = max(maxID, id)
 	}
@@ -111,14 +111,14 @@ func (b *nodeBuilder) add(id ID, addr string) error {
 	if id == 0 {
 		return fmt.Errorf("gorums: node 0 is reserved")
 	}
-	normalizedAddr, err := normalizeAddr(addr)
+	key, err := normalizeAddr(addr)
 	if err != nil {
 		return fmt.Errorf("gorums: invalid address %q: %w", addr, err)
 	}
 
 	// If ID already exists, verify address matches
 	if existingNode, found := b.idToNode[id]; found {
-		if existingNode.Address() != normalizedAddr {
+		if addrKey(existingNode.Address()) != key {
 			return fmt.Errorf("gorums: node %d already in use by %q", id, existingNode.Address())
 		}
 		b.nodes = append(b.nodes, existingNode)
@@ -126,12 +126,12 @@ func (b *nodeBuilder) add(id ID, addr string) error {
 	}
 
 	// Check for duplicate address
-	if existingID, exists := b.addrToID[normalizedAddr]; exists {
-		return fmt.Errorf("gorums: address %q already in use by node %d", normalizedAddr, existingID)
+	if existingID, exists := b.addrToID[key]; exists {
+		return fmt.Errorf("gorums: address %q already in use by node %d", key, existingID)
 	}
 
-	b.addrToID[normalizedAddr] = id
-	node, err := b.registry.newNode(id, normalizedAddr)
+	b.addrToID[key] = id
+	node, err := b.registry.newNode(id, addr)
 	if err != nil {
 		return err
 	}
@@ -150,14 +150,22 @@ func (b *nodeBuilder) nextID() ID {
 	return b.maxID + 1
 }
 
-// normalizeAddr normalizes an address string to a canonical form using
-// net.ResolveTCPAddr. This ensures consistent address comparison for
-// duplicate detection. For example, "localhost:8080" and "127.0.0.1:8080"
-// may resolve to the same normalized address.
+// normalizeAddr resolves addr with net.ResolveTCPAddr to a canonical form that
+// serves only as a duplicate-detection key; nodes keep the configured address.
+// For example, "localhost:8080" and "127.0.0.1:8080" may resolve to the same key.
 func normalizeAddr(addr string) (string, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return "", err
 	}
 	return tcpAddr.String(), nil
+}
+
+// addrKey returns the duplicate-detection key for addr, or addr itself if it
+// does not resolve.
+func addrKey(addr string) string {
+	if key, err := normalizeAddr(addr); err == nil {
+		return key
+	}
+	return addr
 }
