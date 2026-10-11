@@ -1534,6 +1534,57 @@ func TestChannelRefusalKeepsLastErr(t *testing.T) {
 	}
 }
 
+// TestChannelStreamUpAfterRefusal verifies that, after a refusal, a new
+// stream counts as up only once it proves viable: streams that the server
+// refuses later never call OnStreamChange, and a stream that the server
+// accepts comes up at its first frame.
+func TestChannelStreamUpAfterRefusal(t *testing.T) {
+	for _, mode := range refusalModes {
+		t.Run(mode.name, func(t *testing.T) {
+			srv := refuseStreamServer(codes.Unauthenticated)
+			srv.read, srv.hold = true, 5*time.Millisecond
+			var changes atomic.Int32
+			opts := OutboundOptions{EagerReconnect: mode.eager, OnStreamChange: func() { changes.Add(1) }}
+			tc := setupChannelOptions(t, opts, srv.serve)
+
+			// The first stream comes up at once and goes down at its refusal.
+			if resp := sendRequest(t, tc.OutboundChannel, Request{}, 1); status.Code(resp.Err) != codes.Unauthenticated {
+				t.Fatalf("call failed with %v, want code %v", resp.Err, codes.Unauthenticated)
+			}
+			if !waitUntil(defaultTestTimeout, func() bool { return changes.Load() == 2 }) {
+				t.Fatalf("OnStreamChange called %d times for the first stream, want 2", changes.Load())
+			}
+
+			// Later attempts, each with a call, are refused without coming up.
+			for deadline, msgID := time.Now().Add(400*time.Millisecond), uint64(2); time.Now().Before(deadline); msgID++ {
+				if resp := sendRequest(t, tc.OutboundChannel, Request{}, msgID); status.Code(resp.Err) != codes.Unauthenticated {
+					t.Fatalf("call failed with %v, want code %v", resp.Err, codes.Unauthenticated)
+				}
+			}
+			if got := srv.streams.Load(); got < 3 {
+				t.Fatalf("server saw %d streams, want at least 3", got)
+			}
+			if got := changes.Load(); got != 2 {
+				t.Errorf("OnStreamChange called %d times, want 2: a refused stream came up", got)
+			}
+
+			// A stream that the server accepts comes up at its first frame,
+			// well before the probation of an idle stream ends.
+			srv.accept.Store(true)
+			msgID := uint64(1 << 20)
+			if !waitUntil(defaultTestTimeout, func() bool {
+				msgID++
+				return sendRequest(t, tc.OutboundChannel, Request{}, msgID).Err == nil
+			}) {
+				t.Fatal("no call succeeded after the server accepts")
+			}
+			if !waitUntil(eagerReconnectMaxDelay/4, tc.StreamUp) {
+				t.Error("StreamUp = false after a round trip on an accepted stream, want true")
+			}
+		})
+	}
+}
+
 // TestChannelRefusalRacesSends verifies that every call fails with the
 // refusal when many calls race with the refusal of a stream: the calls
 // pending on the stream, a call whose send fails as the stream ends, and the

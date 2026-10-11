@@ -72,7 +72,10 @@ type OutboundOptions struct {
 // it opens a new stream: 50 ms after the first refusal, doubling after each
 // further refusal up to 2 s, and starting over once a stream delivers a
 // frame or lives 2 s. Until the backoff ends, each request fails at once
-// with the refusal.
+// with the refusal. After a refusal, a new stream counts as up (see
+// [OutboundChannel.StreamUp]) only once it delivers a frame or lives 2 s, so
+// a stream that the server refuses again never counts as up. The first
+// refused stream counts as up until its refusal arrives.
 //
 // With [OutboundOptions.Verify], a stream whose remote end fails the check is
 // closed before any request is sent on it, the waiting request fails with
@@ -264,7 +267,14 @@ func (c *OutboundChannel) open(suspect bool) (*session, error) {
 	c.mu.Lock()
 	c.sessions[s] = struct{}{}
 	c.mu.Unlock()
-	c.setStreamUp(true)
+	if suspect {
+		// The stream counts as up only once it proves viable, so that a
+		// stream the server refuses again never counts as up.
+		s.onViable = func() { c.setStreamUp(true) }
+		s.probation = time.After(eagerReconnectMaxDelay)
+	} else {
+		c.setStreamUp(true)
+	}
 	c.wg.Go(func() {
 		_ = s.receive()
 		c.mu.Lock()

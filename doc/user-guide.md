@@ -2412,8 +2412,12 @@ Its calls on the refused stream fail with the refusal's status; they are not res
 A node treats a stream as refused when the stream ends with `codes.Unauthenticated`, `codes.PermissionDenied`, `codes.InvalidArgument`, or `codes.Unimplemented` before it delivered any message.
 After a refusal, the refused peer backs off before it opens a new stream to this server: 50 ms after the first refusal, doubling after each further refusal up to 2 s.
 Until the backoff ends, its calls to this server fail at once with the refusal.
-Each new stream counts as connected until the refusal arrives, about one round trip later.
-So, once per backoff period, the refused peer's `ConnectedPeers` view can briefly include this server, and under `WithStreamDedup` its `WaitForAll` can return before this server has accepted any of its streams.
+The refused peer's first stream counts as connected until the refusal arrives, about one round trip later.
+After a refusal, a new stream counts as connected only once it delivers a message or has lived 2 s.
+After the refusal of its first stream arrives, its `ConnectedPeers` view no longer includes this server while this server keeps refusing it, and under `WithStreamDedup` its `WaitForAll` does not return.
+A `WaitForAll` that is already waiting when the first stream opens can still return during that round trip.
+Once this server accepts the peer, an idle stream counts as connected 2 s after it opened, or earlier if a message arrives on it.
+When a stream that this server opened fails this server's own check, the peer at the other end counts this server as connected until the stream is closed, about one round trip, once per backoff period.
 
 With `WithPeerVerifier`, `ServerContext.SenderID` is authenticated for every configured peer, with and without stream deduplication:
 

@@ -56,6 +56,11 @@ type session struct {
 	// was created.
 	suspect bool
 	opened  time.Time
+	// onViable, if non-nil, reports a suspect session's stream as up. The
+	// send loop calls it once the stream proves viable: the stream delivers
+	// a frame, or probation fires after [eagerReconnectMaxDelay].
+	onViable  func()
+	probation <-chan time.Time
 }
 
 // Values of [session.handoff].
@@ -85,9 +90,17 @@ func newSession(ctx context.Context, cancel context.CancelFunc, e *endpoint, str
 // sendLoop sends req, if non-nil, and then requests from the send queue,
 // until the session ends or starts draining. It returns the request it took
 // from the queue but did not send, or nil.
+//
+// On a suspect session with onViable, the send loop also reports the stream
+// as up once it proves viable; see [session.checkViable].
 func (s *session) sendLoop(req *Request) *Request {
 	defer s.stopSending()
+	var verdict <-chan struct{}
+	if s.onViable != nil {
+		verdict = s.verdict
+	}
 	for {
+		s.checkViable()
 		if req == nil {
 			select {
 			case <-s.done:
@@ -96,6 +109,12 @@ func (s *session) sendLoop(req *Request) *Request {
 				return nil
 			case r := <-s.queue.ch:
 				req = &r
+			case <-verdict:
+				verdict = nil
+				continue
+			case <-s.probation:
+				s.markViable()
+				continue
 			}
 		}
 		if s.ended() || s.draining.Load() {
@@ -146,6 +165,31 @@ func (s *session) send(req Request) bool {
 // [eagerReconnectMaxDelay] proves viable.
 func (s *session) viable() bool {
 	return !s.suspect || s.received.Load() || time.Since(s.opened) >= eagerReconnectMaxDelay
+}
+
+// checkViable calls onViable, once, when the stream has delivered a frame or
+// its probation has ended.
+func (s *session) checkViable() {
+	if s.onViable == nil {
+		return
+	}
+	if s.received.Load() {
+		s.markViable()
+		return
+	}
+	select {
+	case <-s.probation:
+		s.markViable()
+	default:
+	}
+}
+
+// markViable calls onViable unless the session has ended, and clears it.
+func (s *session) markViable() {
+	if !s.ended() {
+		s.onViable()
+	}
+	s.onViable, s.probation = nil, nil
 }
 
 // sendFailed ends the session after a send failed with err.

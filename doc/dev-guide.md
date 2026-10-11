@@ -167,6 +167,7 @@ There are three channel kinds:
 * `OutboundChannel` runs over streams this node dials; it opens a new `session` for each stream and requeues pending calls when a stream is lost, as far as the send queue has space.
   A stream that the server refuses is not lost: it ends with a refusal code (`Unauthenticated`, `PermissionDenied`, `InvalidArgument`, or `Unimplemented`) before it delivered a frame.
   Its pending calls fail with the refusal, and the channel backs off before it opens the next stream, failing requests at once with the refusal until then.
+  A stream opened after a refusal is suspect: it counts as up only once it delivers a frame or lives 2 s, and until then its sends do not clear `LastErr`.
 * `InboundChannel` runs over one stream that the server accepted; its single `session` ends with the stream.
 * `LocalChannel` serves requests in-process through the handler, with no stream.
 
