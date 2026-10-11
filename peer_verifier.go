@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/relab/gorums/internal/conn"
@@ -30,6 +32,18 @@ type peerIdentity struct {
 	uri  bool
 }
 
+// same reports whether p and q name the same SAN, so that one certificate
+// matches both.
+func (p peerIdentity) same(q peerIdentity) bool {
+	if p.uri != q.uri {
+		return false
+	}
+	if p.uri {
+		return p.name == q.name
+	}
+	return strings.EqualFold(p.name, q.name)
+}
+
 // kind returns the type of SAN that the identity names.
 func (p peerIdentity) kind() string {
 	if p.uri {
@@ -51,7 +65,8 @@ func (p peerIdentity) kind() string {
 // ClientAuth set to tls.VerifyClientCertIfGiven or
 // tls.RequireAndVerifyClientCert, and each replica's certificate must be
 // valid for both client and server authentication. TLSPeerVerifier copies
-// identities.
+// identities. TLSPeerVerifier panics if two node IDs have the same identity,
+// since either replica could then claim the other's ID.
 func TLSPeerVerifier(identities map[ID]string) PeerVerifier {
 	want := make(map[ID]peerIdentity, len(identities))
 	for id, name := range identities {
@@ -63,6 +78,16 @@ func TLSPeerVerifier(identities map[ID]string) PeerVerifier {
 			continue
 		}
 		want[id] = peerIdentity{name: name}
+	}
+	// IDs are compared in increasing order, so the panic names the same pair
+	// on every run.
+	ids := slices.Sorted(maps.Keys(want))
+	for i, id := range ids {
+		for _, lower := range ids[:i] {
+			if want[lower].same(want[id]) {
+				panic(fmt.Sprintf("gorums: TLSPeerVerifier: nodes %d and %d have the same identity %q", lower, id, want[lower].name))
+			}
+		}
 	}
 	return func(ctx context.Context, id ID) error {
 		p, ok := peer.FromContext(ctx)

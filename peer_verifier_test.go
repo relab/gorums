@@ -107,3 +107,55 @@ func TestPeerVerifierTLS(t *testing.T) {
 		}
 	})
 }
+
+// TestPeerVerifierTLSDuplicateIdentity verifies that TLSPeerVerifier panics
+// when one SAN would match two node IDs, naming the lowest such pair, and
+// accepts identities that no single SAN matches together.
+func TestPeerVerifierTLSDuplicateIdentity(t *testing.T) {
+	tests := []struct {
+		name       string
+		identities map[gorums.ID]string
+		wantPanic  string // empty means no panic
+	}{
+		{
+			name:       "DuplicateURI",
+			identities: map[gorums.ID]string{1: "spiffe://relab/node/1", 2: "spiffe://relab/node/2", 3: "spiffe://relab/node/1"},
+			wantPanic:  `gorums: TLSPeerVerifier: nodes 1 and 3 have the same identity "spiffe://relab/node/1"`,
+		},
+		{
+			name:       "DuplicateURICanonicalForm",
+			identities: map[gorums.ID]string{4: "SPIFFE://relab/node/4", 5: "spiffe://relab/node/4"},
+			wantPanic:  `gorums: TLSPeerVerifier: nodes 4 and 5 have the same identity "spiffe://relab/node/4"`,
+		},
+		{
+			name:       "DuplicateDNSIgnoringCase",
+			identities: map[gorums.ID]string{2: "node2.relab.example", 7: "Node2.Relab.Example"},
+			wantPanic:  `gorums: TLSPeerVerifier: nodes 2 and 7 have the same identity "node2.relab.example"`,
+		},
+		{
+			// A URI SAN matches only URI identities and a DNS SAN only DNS
+			// identities, so no SAN matches both nodes.
+			name:       "URIAndDNSIdentity",
+			identities: map[gorums.ID]string{1: "spiffe://node1.relab.example", 2: "node1.relab.example"},
+		},
+		{
+			// URI SANs match exactly, so a SAN matches at most one of them.
+			name:       "URIsDifferingInCase",
+			identities: map[gorums.ID]string{1: "spiffe://relab/node/a", 2: "SPIFFE://RELAB/NODE/A"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.wantPanic != "" {
+				assertPanic(t, tt.wantPanic, func() { gorums.TLSPeerVerifier(tt.identities) })
+				return
+			}
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("TLSPeerVerifier(%v) panicked: %v; want no panic", tt.identities, r)
+				}
+			}()
+			gorums.TLSPeerVerifier(tt.identities)
+		})
+	}
+}
