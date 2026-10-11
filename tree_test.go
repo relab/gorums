@@ -488,3 +488,22 @@ func TestTreeDuplicateNode(t *testing.T) {
 		t.Errorf("NewTree error = %v, want duplicate-node error", err)
 	}
 }
+
+// TestTreeSubtreeAllocation verifies that a subtree is allocated at its exact
+// size, so that the subtree of a leaf in a large star does not reserve room
+// for the rest of the configuration.
+func TestTreeSubtreeAllocation(t *testing.T) {
+	star, err := NewStar(makeTreeConfig(1000))
+	if err != nil {
+		t.Fatalf("NewStar: %v", err)
+	}
+	if got := cap(star.Subtree(2)); got != 1 {
+		t.Errorf("cap(Subtree(leaf)) = %d, want 1", got)
+	}
+	tree := mustNewTree(t, 13, TreeOptions{BranchingFactor: 3, Depth: 2})
+	for _, id := range []ID{1, 2, 3, 4, 5, 13} {
+		if sub := tree.Subtree(id); cap(sub) != len(sub) {
+			t.Errorf("Subtree(%d): cap = %d, len = %d, want equal", id, cap(sub), len(sub))
+		}
+	}
+}
