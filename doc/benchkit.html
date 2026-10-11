@@ -2321,11 +2321,12 @@ ANTHROPIC_API_KEY=... ./cmd/sweep/sweep -explain-check -explain-provider claude 
               bed.</li>
           <li><strong>Expose sender node ID via <code>ServerCtx</code></strong> instead of the benchmark-specific
               <code>TimedMsg.sender_id</code> field; if adopted, that wire field can be removed.</li>
-          <li><strong>DNS-free <code>WithNodeList</code></strong> &mdash; configuration construction currently
-              resolves hostnames (<code>normalizeAddr</code> uses <code>net.ResolveTCPAddr</code>) and the
-              server-side path panics on a transient resolver failure; sweep works around it with numeric peer
-              addresses (<a href="#sweep">&sect;13</a>). Preferred direction: make normalization syntactic
-              (literal hostnames, canonical numeric IPs), accepting weaker duplicate detection across aliases; an
+          <li><strong>DNS-free <code>WithNodeList</code></strong> &mdash; configuration construction still resolves
+              hostnames (<code>resolveAddr</code> uses <code>net.ResolveTCPAddr</code>) to detect duplicate
+              addresses, although nodes now dial and report the configured address. The server-side path panics
+              on a transient resolver failure; sweep works around it with numeric peer addresses
+              (<a href="#sweep">&sect;13</a>). Preferred direction: make the comparison syntactic (literal
+              hostnames, canonical numeric IPs), accepting weaker duplicate detection across aliases; an
               explicit pre-resolved node-list option is the compatible fallback. A core API change to evaluate
               separately.</li>
           <li><strong>Exported-API review</strong> &mdash; unexport what need not be public; ensure naming, docs,

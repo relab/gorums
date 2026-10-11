@@ -203,7 +203,7 @@ func (im *InboundManager) nextMsgID() uint64 {
 	return stream.ServerSequenceNumber(im.msgIDs.Add(1))
 }
 
-// newNode creates a peer node for the given id and normalized addr and
+// newNode creates a peer node for the given id and addr and
 // registers it in the manager's node map. This must be called during
 // construction before any peers connect, so no locking is needed.
 // If id equals myID, a local (in-process) node is created instead of an
