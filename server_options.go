@@ -150,8 +150,9 @@ func WithStreamDedup() ServerOption {
 //
 // When the server refuses a stream that a peer opened, the refusal's status
 // carries the text of verify's error, and the refused peer sees it in
-// [Node.LastErr]. The refused peer resends its pending calls on new streams
-// until their contexts end, so calls between peers need deadlines. When a
+// [Node.LastErr]. The refused peer resends its pending two-way calls on new
+// streams until their contexts end, so calls between peers need deadlines; its
+// streaming calls fail instead. When a
 // stream that the server opened fails the check, the waiting call fails with
 // the check's error. The server runs verify once per stream, outside its
 // internal locks. With WithPeerVerifier, [ServerContext.SenderID] is

@@ -2408,7 +2408,7 @@ Use `TLSPeerVerifier` to bind node IDs to mTLS certificates; see [Binding Node I
 | Claims no peer node ID (a client) | None | Served as without the option |
 
 A peer that this server refuses sees the refusal, with the verifier's text, in `Node.LastErr` of its node for this server.
-Its pending calls to this server are resent on new streams until their contexts end, so they fail with the context's error, not with `codes.Unauthenticated`; give calls between peers a deadline.
+Its pending two-way calls to this server are resent on new streams until their contexts end, so they fail with the context's error, not with `codes.Unauthenticated`; give calls between peers a deadline.
 While the refused peer keeps retrying, its `ConnectedPeers` view can briefly include this server, and under `WithStreamDedup` its `WaitForAll` can return before this server has accepted any of its streams.
 
 With `WithPeerVerifier`, `ServerContext.SenderID` is authenticated for every configured peer, with and without stream deduplication:
@@ -2422,6 +2422,7 @@ With `WithPeerVerifier`, `ServerContext.SenderID` is authenticated for every con
 | A call this server sends to itself | This server's own ID | No network involved |
 
 `SenderID` names only the last hop.
+
 `NewServer` panics if the verifier is nil or the server has no `WithPeers`.
 
 ### Binding Node IDs to TLS Certificates
@@ -2440,6 +2441,7 @@ It accepts a stream for a node ID only if the TLS handshake verified the remote 
 An identity with a URI scheme, such as `spiffe://relab/node/2`, matches only a URI SAN with the same canonical form.
 Any other identity matches only a DNS SAN, without regard to case.
 A wildcard DNS SAN never matches, IP SANs and the certificate's Common Name are never used, and a node ID with an empty or missing identity is refused.
+`TLSPeerVerifier` panics if two node IDs have the same identity, since either replica could then claim the other's ID.
 
 Each replica needs its own certificate with:
 
@@ -2470,7 +2472,7 @@ With `ClientAuth: tls.RequireAndVerifyClientCert`, clients without a certificate
 The check is only as strong as the CA pools.
 Set `ClientCAs` on the server and `RootCAs` on the dialer to a pool that holds only the cluster's CA; a nil pool means the system roots.
 That CA must issue each identity only to its replica.
-With `InsecureSkipVerify` on the dialer, or `ClientAuth` set to `tls.RequestClientCert` or `tls.RequireAnyClientCert` on the server, no chain is verified and every stream is refused.
+With `InsecureSkipVerify` on the dialer, or `ClientAuth` set to `tls.RequestClientCert` or `tls.RequireAnyClientCert` on the server, no chain is verified and every peer stream is refused.
 
 For a local cluster, `NewLocalServers` takes options that differ per server: `WithLocalServerOptionsFunc` and `WithLocalDialOptionsFunc` take a function that returns the options for a given node ID, such as that server's certificate.
 

@@ -73,7 +73,7 @@ func (p peerIdentity) kind() string {
 // a nil pool means the system roots, and that CA must issue each identity
 // only to its replica. With InsecureSkipVerify on the dialer, or ClientAuth
 // set to [crypto/tls.RequestClientCert] or [crypto/tls.RequireAnyClientCert]
-// on the server, no chain is verified and every stream is refused.
+// on the server, no chain is verified and every peer stream is refused.
 func TLSPeerVerifier(identities map[ID]string) PeerVerifier {
 	want := make(map[ID]peerIdentity, len(identities))
 	for id, name := range identities {

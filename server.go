@@ -394,9 +394,10 @@ type ServerContext struct {
 // [WithPeerVerifier], for an ID that this server does not know; with it, a
 // stream that claims an unknown ID is refused. The sender is the last hop:
 // when a message travels through several nodes, SenderID identifies the node
-// that forwarded it. The sender asserts its ID when it connects. A server configured with
-// [WithPeerVerifier] checks the ID of every configured peer, on the streams in
-// both directions; otherwise the server does not authenticate it.
+// that forwarded it. The sender asserts its ID when it connects. A server
+// configured with [WithPeerVerifier] checks the ID of every configured peer,
+// on the streams in both directions; otherwise the server does not
+// authenticate it.
 func (ctx *ServerContext) SenderID() ID {
 	return ctx.senderID
 }

@@ -134,9 +134,12 @@ func TestPeerVerifierTLSDuplicateIdentity(t *testing.T) {
 		},
 		{
 			// A URI SAN matches only URI identities and a DNS SAN only DNS
-			// identities, so no SAN matches both nodes.
-			name:       "URIAndDNSIdentity",
-			identities: map[gorums.ID]string{1: "spiffe://node1.relab.example", 2: "node1.relab.example"},
+			// identities, so no SAN matches both nodes. The first string
+			// starts with U+017F (LATIN SMALL LETTER LONG S), so url.Parse
+			// rejects it and it is a DNS identity, yet strings.EqualFold
+			// treats it as equal to the URI identity.
+			name:       "URIAndDNSIdentityEqualFold",
+			identities: map[gorums.ID]string{1: "ſpiffe://relab/node/1", 2: "spiffe://relab/node/1"},
 		},
 		{
 			// URI SANs match exactly, so a SAN matches at most one of them.
