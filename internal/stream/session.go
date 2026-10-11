@@ -50,6 +50,12 @@ type session struct {
 	// handoff decides which goroutine disposes of the pending calls when a
 	// stream ends before it delivered a frame; see [session.sendFailed].
 	handoff atomic.Int32
+
+	// suspect is set on a session opened after a refused stream, before any
+	// stream proved viable; see [session.viable]. opened is when the session
+	// was created.
+	suspect bool
+	opened  time.Time
 }
 
 // Values of [session.handoff].
@@ -72,6 +78,7 @@ func newSession(ctx context.Context, cancel context.CancelFunc, e *endpoint, str
 		requeue:        requeue,
 		drain:          make(chan struct{}),
 		verdict:        make(chan struct{}),
+		opened:         time.Now(),
 	}
 }
 
@@ -123,11 +130,22 @@ func (s *session) send(req Request) bool {
 		}
 		return false
 	}
-	s.recordHealth(nil)
+	if s.viable() {
+		s.recordHealth(nil)
+	}
 	if req.wantSendConfirmation() {
 		req.deliver(response{NodeID: s.id})
 	}
 	return true
+}
+
+// viable reports whether a completed send shows that the session's stream
+// works, so that it clears the channel's last error. A send on a stream that
+// the server will refuse completes locally, before the refusal arrives. So,
+// on a suspect session, only a stream that delivered a frame or has lived
+// [eagerReconnectMaxDelay] proves viable.
+func (s *session) viable() bool {
+	return !s.suspect || s.received.Load() || time.Since(s.opened) >= eagerReconnectMaxDelay
 }
 
 // sendFailed ends the session after a send failed with err.

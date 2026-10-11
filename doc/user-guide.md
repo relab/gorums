@@ -2407,7 +2407,7 @@ Use `TLSPeerVerifier` to bind node IDs to mTLS certificates; see [Binding Node I
 | Opened by this server to a configured peer | `verify(ctx, dialed ID)` before any request is sent | The waiting call fails with `codes.Unauthenticated`; the server backs off before it opens a new stream to the peer, as a refused peer does |
 | Claims no peer node ID (a client) | None | Served as without the option |
 
-A peer that this server refuses sees the refusal, with the verifier's text, in `Node.LastErr` of its node for this server.
+A peer that this server refuses sees the refusal, with the verifier's text, in `Node.LastErr` of its node for this server, until one of its streams to this server succeeds.
 Its calls on the refused stream fail with the refusal's status; they are not resent.
 A node treats a stream as refused when the stream ends with `codes.Unauthenticated`, `codes.PermissionDenied`, `codes.InvalidArgument`, or `codes.Unimplemented` before it delivered any message.
 After a refusal, the refused peer backs off before it opens a new stream to this server: 50 ms after the first refusal, doubling after each further refusal up to 2 s.

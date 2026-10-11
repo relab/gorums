@@ -132,6 +132,7 @@ func (c *OutboundChannel) run() {
 	var req *Request
 	var refusal error          // the latest refusal; requests fail with it until refusedUntil
 	var refusedUntil time.Time // when the backoff after the latest refusal ends
+	suspect := false           // no stream has proven viable since the latest refusal
 	connect := true
 	for {
 		if !connect {
@@ -154,7 +155,7 @@ func (c *OutboundChannel) run() {
 			return
 		}
 		refusal = nil
-		s, err := c.open()
+		s, err := c.open(suspect)
 		if err != nil {
 			if c.ctx.Err() != nil {
 				err = ErrNodeClosed
@@ -168,7 +169,7 @@ func (c *OutboundChannel) run() {
 			connect = false
 			if c.ctx.Err() == nil && isRefusal(err) {
 				// A failed check of the server, or a refusal of the stream.
-				refusal = err
+				refusal, suspect = err, true
 				retry, refusedUntil = c.backoff(&delay)
 				continue
 			}
@@ -188,6 +189,7 @@ func (c *OutboundChannel) run() {
 		// proven viable, so the backoff starts over.
 		if s.received.Load() || time.Since(start) >= eagerReconnectMaxDelay {
 			delay = eagerReconnectBaseDelay
+			suspect = false
 		}
 		if refusal != nil {
 			// The calls pending on the refused stream have failed with the
@@ -198,7 +200,7 @@ func (c *OutboundChannel) run() {
 				c.queue.fail(*req, refusal)
 				req = nil
 			}
-			connect = false
+			suspect, connect = true, false
 			retry, refusedUntil = c.backoff(&delay)
 			continue
 		}
@@ -236,8 +238,9 @@ func (c *OutboundChannel) backoff(delay *time.Duration) (<-chan time.Time, time.
 }
 
 // open opens a stream, checks its remote end if the channel has a verifier,
-// and starts the session's receive loop and GOAWAY watcher.
-func (c *OutboundChannel) open() (*session, error) {
+// and starts the session's receive loop and GOAWAY watcher. A suspect session
+// follows a refused stream; see [session.viable].
+func (c *OutboundChannel) open(suspect bool) (*session, error) {
 	ctx, cancel := context.WithCancel(c.ctx)
 	st, err := NewGorumsClient(c.conn).NodeStream(ctx)
 	if err != nil {
@@ -257,6 +260,7 @@ func (c *OutboundChannel) open() (*session, error) {
 		}
 	}
 	s := newSession(ctx, cancel, &c.endpoint, st, true, true)
+	s.suspect = suspect
 	c.mu.Lock()
 	c.sessions[s] = struct{}{}
 	c.mu.Unlock()

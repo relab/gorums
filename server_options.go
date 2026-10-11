@@ -151,17 +151,17 @@ func WithStreamDedup() ServerOption {
 //
 // When the server refuses a stream that a peer opened, the refusal's status
 // carries the text of verify's error, and the refused peer sees it in
-// [Node.LastErr]. The refused peer's calls on that stream fail with this
-// status; they are not resent. The refused peer then backs off before it
-// opens a new stream to the server: 50 ms after the first refusal, doubling
-// after each further refusal up to 2 s. Until the backoff ends, its calls to
-// the server fail at once with the refusal. When a stream that the server
-// opened fails the check, the waiting call fails with the check's error. The
-// server runs verify once per stream, outside its internal locks. With
-// WithPeerVerifier, [ServerContext.SenderID] is authenticated for every
-// configured peer. [NewServer] panics if verify is nil or if the server has
-// no [WithPeers]. Use [TLSPeerVerifier] to bind node IDs to mTLS
-// certificates.
+// [Node.LastErr] until one of its streams to the server succeeds. The refused
+// peer's calls on that stream fail with this status; they are not resent. The
+// refused peer then backs off before it opens a new stream to the server:
+// 50 ms after the first refusal, doubling after each further refusal up to
+// 2 s. Until the backoff ends, its calls to the server fail at once with the
+// refusal. When a stream that the server opened fails the check, the waiting
+// call fails with the check's error. The server runs verify once per stream,
+// outside its internal locks. With WithPeerVerifier, [ServerContext.SenderID]
+// is authenticated for every configured peer. [NewServer] panics if verify is
+// nil or if the server has no [WithPeers]. Use [TLSPeerVerifier] to bind node
+// IDs to mTLS certificates.
 func WithPeerVerifier(verify PeerVerifier) ServerOption {
 	return func(o *serverOptions) {
 		o.peerVerifier = verify
