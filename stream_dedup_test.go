@@ -84,7 +84,7 @@ func waitForDedupConcurrent(t *testing.T, servers []*gorums.Server) {
 // is true.
 func newServerPair(t *testing.T, dedup bool) []*gorums.Server {
 	t.Helper()
-	var opts []gorums.ServerOption
+	var opts []gorumstest.Option
 	if dedup {
 		opts = append(opts, gorums.WithStreamDedup())
 	}

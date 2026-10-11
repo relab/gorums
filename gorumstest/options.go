@@ -19,6 +19,7 @@ import (
 //		gorums.WithNodeList(...),       // NodeSource
 //	)
 //
+// [LocalServers] also accepts a [gorums.LocalServerOption].
 // [Config] and [Node] panic on an Option value of any other type.
 type Option any
 

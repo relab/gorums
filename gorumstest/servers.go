@@ -59,10 +59,20 @@ func Servers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []stri
 // build and over localhost TCP under the integration build tag. Each
 // server auto-creates a peer [gorums.Config] over the group, accessible
 // via [gorums.Server.PeerConfig]. The servers are automatically stopped
-// when the test finishes via t.Cleanup. Any [gorums.ServerOption]s (for
-// example [gorums.WithStreamDedup]) are applied to every server.
-func LocalServers(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.Server {
+// when the test finishes via t.Cleanup.
+//
+// Each Option is one of:
+//   - a [gorums.ServerOption], applied to every server (for example
+//     [gorums.WithStreamDedup]);
+//   - a [gorums.DialOption], applied to every server's outbound
+//     configuration after [DialOptions];
+//   - a [gorums.LocalServerOption], such as
+//     [gorums.WithLocalServerOptionsFunc] for options that differ per server.
+//
+// LocalServers panics on an Option of any other type.
+func LocalServers(t testing.TB, n int, opts ...Option) []*gorums.Server {
 	t.Helper()
+	localOpts := localServerOptions(t, opts)
 
 	// Skip goleak check for benchmarks
 	if _, ok := t.(*testing.B); !ok {
@@ -70,11 +80,7 @@ func LocalServers(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.Se
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
 
-	srvs, stop, err := gorums.NewLocalServers(n,
-		gorums.WithLocalServerOptions(opts...),
-		gorums.WithLocalDialOptions(DialOptions(t)),
-		gorums.WithLocalListeners(servers.ListenFunc(t)),
-	)
+	srvs, stop, err := gorums.NewLocalServers(n, localOpts...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +93,30 @@ func LocalServers(t testing.TB, n int, opts ...gorums.ServerOption) []*gorums.Se
 	}
 
 	return srvs
+}
+
+// localServerOptions returns the [gorums.LocalServerOption]s that
+// [LocalServers] passes to [gorums.NewLocalServers]: the test's dial options
+// and listeners, followed by opts in order. It panics on an Option of any
+// other type.
+func localServerOptions(t testing.TB, opts []Option) []gorums.LocalServerOption {
+	localOpts := []gorums.LocalServerOption{
+		gorums.WithLocalDialOptions(DialOptions(t)),
+		gorums.WithLocalListeners(servers.ListenFunc(t)),
+	}
+	for _, opt := range opts {
+		switch o := opt.(type) {
+		case gorums.ServerOption:
+			localOpts = append(localOpts, gorums.WithLocalServerOptions(o))
+		case gorums.DialOption:
+			localOpts = append(localOpts, gorums.WithLocalDialOptions(o))
+		case gorums.LocalServerOption:
+			localOpts = append(localOpts, o)
+		default:
+			panic(fmt.Sprintf("gorumstest: unsupported LocalServers Option type %T", opt))
+		}
+	}
+	return localOpts
 }
 
 // WaitForPeers blocks until every server in srvs is connected to all the

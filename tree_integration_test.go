@@ -34,7 +34,7 @@ import (
 // configuration, which is in node-ID order.
 func setupTreeServers(t *testing.T, n int, dedup bool, opts gorums.TreeOptions) ([]*gorums.Server, []*gorums.TreeConfig) {
 	t.Helper()
-	var srvOpts []gorums.ServerOption
+	var srvOpts []gorumstest.Option
 	if dedup {
 		srvOpts = append(srvOpts, gorums.WithStreamDedup())
 	}
