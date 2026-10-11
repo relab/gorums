@@ -33,3 +33,16 @@ const stallReportDelay = time.Second
 func VerificationError(id ID, err error) error {
 	return status.Errorf(codes.Unauthenticated, "gorums: node %d failed verification: %v", id, err)
 }
+
+// isRefusal reports whether err has a status code with which the remote end
+// refuses a stream, so that a new stream to the same server fails the same
+// way: the server does not accept this node's identity (Unauthenticated,
+// PermissionDenied), rejects its stream (InvalidArgument), or does not serve
+// Gorums streams (Unimplemented).
+func isRefusal(err error) bool {
+	switch status.Code(err) {
+	case codes.Unauthenticated, codes.PermissionDenied, codes.InvalidArgument, codes.Unimplemented:
+		return true
+	}
+	return false
+}

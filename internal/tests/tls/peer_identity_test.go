@@ -1,6 +1,7 @@
 package tls
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"strings"
@@ -142,11 +143,52 @@ func TestPeerIdentityWrongCertificate(t *testing.T) {
 			if want := "gorums: node 2 failed verification"; !strings.Contains(err.Error(), want) {
 				t.Errorf("call from server 1 to node 2: err = %q; want it to contain %q", err, want)
 			}
-			// Inbound check: server 2 dials server 3 and claims ID 2 with node 3's certificate.
+			// Inbound check: server 2 dials server 3 and claims ID 2 with
+			// node 3's certificate; its calls fail with server 3's refusal.
+			awaitCode(t, servers[1].PeerConfig().Node(3), codes.Unauthenticated)
 			awaitLastErrCode(t, servers[1].PeerConfig().Node(3), codes.Unauthenticated)
 			// The other pair is unaffected.
 			if got, err := remoteCall(t, servers[0].PeerConfig().Node(3), 3*time.Second); err != nil || got != "server 3 from 1: hello" {
 				t.Errorf("call from server 1 to node 3 = %q, %v; want \"server 3 from 1: hello\", nil", got, err)
+			}
+		})
+	}
+}
+
+// TestPeerIdentityRefusalIsPaced verifies that a refused peer's calls fail
+// with the refusal at once, and that the refused peer paces its new streams,
+// so the refusing server runs its verifier only a few times.
+func TestPeerIdentityRefusalIsPaced(t *testing.T) {
+	for _, mode := range peerIdentityModes {
+		t.Run(mode.name, func(t *testing.T) {
+			var checks atomic.Int32
+			verify := peerVerifier(3)
+			countOnServer3 := gorums.WithLocalServerOptionsFunc(func(id gorums.ID) []gorums.ServerOption {
+				if id != 3 {
+					return nil
+				}
+				return []gorums.ServerOption{gorums.WithPeerVerifier(func(ctx context.Context, id gorums.ID) error {
+					checks.Add(1)
+					return verify(ctx, id)
+				})}
+			})
+			// Server 2 presents node 3's certificate, so server 3 refuses
+			// server 2's claim.
+			servers, _ := peerGroup(t, newTestCA(t), 3, []gorums.ID{1, 3, 3}, append(mode.opts, countOnServer3)...)
+			node3 := servers[1].PeerConfig().Node(3)
+			awaitCode(t, node3, codes.Unauthenticated)
+
+			before := checks.Load()
+			const window = time.Second
+			calls := 0
+			for deadline := time.Now().Add(window); time.Now().Before(deadline); calls++ {
+				if _, err := remoteCall(t, node3, 3*time.Second); status.Code(err) != codes.Unauthenticated {
+					t.Fatalf("call %d from server 2 to node 3: err = %v; want code %v", calls+1, err, codes.Unauthenticated)
+				}
+			}
+			t.Logf("%d refused calls, %d verifier runs on server 3", calls, checks.Load()-before)
+			if got := checks.Load() - before; got > 20 {
+				t.Errorf("server 3 ran its verifier %d times during %d refused calls in %v; want at most 20", got, calls, window)
 			}
 		})
 	}
@@ -200,11 +242,10 @@ func TestPeerIdentityClients(t *testing.T) {
 				}
 				return
 			}
-			// The client channel resends the call on each new stream until
-			// the call's context ends, so the call fails by its deadline; the
-			// refusal's status is the node's last error.
-			if _, err := remoteCall(t, node, time.Second); err == nil {
-				t.Fatal("call from a refused client succeeded; want failure")
+			// The call fails with the server's refusal, which is also the
+			// node's last error.
+			if _, err := remoteCall(t, node, 3*time.Second); status.Code(err) != codes.Unauthenticated {
+				t.Fatalf("call from a refused client: err = %v; want code %v", err, codes.Unauthenticated)
 			}
 			awaitLastErrCode(t, node, codes.Unauthenticated)
 			if n := calls[1].Load() - before; n != 0 {
