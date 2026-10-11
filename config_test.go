@@ -79,7 +79,7 @@ func TestNewConfig(t *testing.T) {
 			wantErr: `gorums: address "127.0.0.1:9081" already in use by node 1`,
 		},
 		{
-			name: "WithNodes/Reject/NormalizedDuplicateAddress",
+			name: "WithNodes/Reject/ResolvedDuplicateAddress",
 			nodes: gorums.WithNodes(map[uint32]mock.NodeAddr{
 				1: "localhost:9081",
 				2: "127.0.0.1:9081", // Same resolved address
@@ -87,7 +87,7 @@ func TestNewConfig(t *testing.T) {
 			wantErr: `gorums: address "127.0.0.1:9081" already in use by node 1`,
 		},
 		{
-			name: "WithNodeList/Reject/NormalizedDuplicateAddress",
+			name: "WithNodeList/Reject/ResolvedDuplicateAddress",
 			nodes: gorums.WithNodeList([]string{
 				"localhost:9081",
 				"127.0.0.1:9081", // Same resolved address
@@ -369,7 +369,7 @@ func TestConfigExtend(t *testing.T) {
 			wantErr: `gorums: address "127.0.0.1:9081" already in use by node 1`,
 		},
 		{
-			name:         "WithNodes/Reject/NormalizedAddressConflict",
+			name:         "WithNodes/Reject/ResolvedAddressConflict",
 			initialNodes: initialNodes,
 			extendNodes: gorums.WithNodes(map[uint32]mock.NodeAddr{
 				3: "localhost:9081", // Resolves to same as existing node 1
