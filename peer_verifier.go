@@ -17,7 +17,10 @@ import (
 // the refusal otherwise. Its context is the stream's context, which carries
 // the connection's [google.golang.org/grpc/peer.Peer] and, on a server, the
 // stream's incoming metadata. A PeerVerifier must be safe for concurrent use.
-// See [WithPeerVerifier].
+// It should return promptly, and return when its context ends: on a server
+// that dials a peer, it runs on the goroutine that sends to that peer, so a
+// verifier that blocks delays the sends to that peer and [Server.Stop]. See
+// [WithPeerVerifier].
 type PeerVerifier = conn.PeerVerifier
 
 // peerIdentity is the name that a node's certificate must carry: a URI SAN

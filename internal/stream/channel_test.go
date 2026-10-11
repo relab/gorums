@@ -549,6 +549,54 @@ func TestChannelVerify(t *testing.T) {
 	}
 }
 
+// TestChannelVerifyChecksEveryStream verifies that a channel with a verifier
+// checks the remote end of every stream it opens, not only the first: after
+// the server kills the first stream, the eager reconnect's replacement stream
+// is checked against the channel's ID before it carries a request.
+func TestChannelVerifyChecksEveryStream(t *testing.T) {
+	var mu sync.Mutex
+	var checkedIDs []ID
+	opts := OutboundOptions{
+		EagerReconnect: true,
+		Verify: func(_ context.Context, id ID) error {
+			mu.Lock()
+			defer mu.Unlock()
+			checkedIDs = append(checkedIDs, id)
+			return nil
+		},
+	}
+	serverFn, conns := killFirstStreamServer()
+	tc := setupChannelOptions(t, opts, serverFn)
+
+	// The server kills the first stream; the channel redials on its own.
+	for want := int32(1); want <= 2; want++ {
+		select {
+		case n := <-conns:
+			if n != want {
+				t.Fatalf("accepted stream ordinal = %d; want %d", n, want)
+			}
+		case <-time.After(defaultTestTimeout):
+			t.Fatalf("stream %d never reached the server", want)
+		}
+	}
+
+	// A request is sent only after the second stream's check returns.
+	if resp := sendRequest(t, tc.OutboundChannel, Request{}, 1); resp.Err != nil {
+		t.Fatalf("request on the second stream: %v", resp.Err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(checkedIDs) < 2 {
+		t.Fatalf("verifier called %d times; want at least 2, once per stream", len(checkedIDs))
+	}
+	for _, id := range checkedIDs {
+		if id != 1 {
+			t.Errorf("verifier checked node %d; want 1, the channel's ID", id)
+		}
+	}
+}
+
 // TestChannelStreamFailureRecordsLastErr verifies that a request the channel
 // cannot deliver because no stream could be established leaves the reason in
 // LastErr, even when the request has no response channel to report it on.

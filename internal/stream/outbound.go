@@ -23,7 +23,9 @@ const (
 // that explains the refusal otherwise. ctx is the stream's context, which
 // carries the connection's [google.golang.org/grpc/peer.Peer] and, on a
 // server, the stream's incoming metadata. A PeerVerifier must be safe for
-// concurrent use.
+// concurrent use. It should return promptly, and return when ctx ends: on a
+// dialing node it runs on the channel's goroutine, so a verifier that blocks
+// delays the channel's sends and its Close.
 type PeerVerifier func(ctx context.Context, id ID) error
 
 // OutboundOptions configures an [OutboundChannel].
@@ -180,7 +182,11 @@ func (c *OutboundChannel) open() (*session, error) {
 	}
 	if c.verify != nil {
 		// The stream's context carries the server's peer information,
-		// including its TLS state, once NodeStream returns.
+		// including its TLS state, once NodeStream returns. Calling Context
+		// commits the stream to its transport, so the requests sent on this
+		// stream reach the peer that was checked. It also turns off gRPC's
+		// transparent retry for this stream; the run loop's reconnect
+		// replaces it.
 		if err := c.verify(st.Context(), c.id); err != nil {
 			cancel()
 			return nil, VerificationError(c.id, err)
