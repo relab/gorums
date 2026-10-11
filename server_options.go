@@ -154,7 +154,8 @@ func WithStreamDedup() ServerOption {
 // waiting call. The server runs verify once per stream, outside its internal
 // locks. With WithPeerVerifier, [ServerContext.SenderID] is authenticated for
 // every configured peer. [NewServer] panics if verify is nil or if the server
-// has no [WithPeers].
+// has no [WithPeers]. Use [TLSPeerVerifier] to bind node IDs to mTLS
+// certificates.
 func WithPeerVerifier(verify PeerVerifier) ServerOption {
 	return func(o *serverOptions) {
 		o.peerVerifier = verify

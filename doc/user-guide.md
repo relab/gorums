@@ -2397,7 +2397,8 @@ It receives the stream's context, which carries the connection's `peer.Peer`, an
 It returns nil to accept the stream, and an error that explains the refusal otherwise.
 When the server refuses a stream that claims a peer's node ID, the refusal sent to the remote end includes the error's text.
 When a stream that the server opened fails the check, the text is in the error of the waiting call.
-The server calls it once per stream, outside its internal locks, so it must be safe for concurrent use.
+The server calls the verifier once per stream, outside its internal locks, so it must be safe for concurrent use.
+Use `TLSPeerVerifier` to bind node IDs to mTLS certificates; see [Binding Node IDs to TLS Certificates](#binding-node-ids-to-tls-certificates).
 
 | Stream | Check | When the check fails |
 | --- | --- | --- |
@@ -2408,6 +2409,52 @@ The server calls it once per stream, outside its internal locks, so it must be s
 
 With `WithPeerVerifier`, `ServerContext.SenderID` is authenticated for every configured peer, with and without stream deduplication.
 `NewServer` panics if the verifier is nil or the server has no `WithPeers`.
+
+### Binding Node IDs to TLS Certificates
+
+`TLSPeerVerifier` binds each node ID to a name in the peer's mTLS certificate:
+
+```go
+verify := gorums.TLSPeerVerifier(map[gorums.ID]string{
+    1: "spiffe://relab/node/1",
+    2: "spiffe://relab/node/2",
+    3: "spiffe://relab/node/3",
+})
+```
+
+It accepts a stream for a node ID only if the TLS handshake verified the remote end's certificate against a trusted CA, and the certificate has a SAN that matches the map's entry for that ID.
+An identity with a URI scheme, such as `spiffe://relab/node/2`, matches only a URI SAN with the same canonical form.
+Any other identity matches only a DNS SAN, without regard to case.
+A wildcard DNS SAN never matches, IP SANs and the certificate's Common Name are never used, and a node ID with an empty or missing identity is refused.
+
+Each replica needs its own certificate with:
+
+* a URI SAN or DNS SAN that names the replica, such as `spiffe://relab/node/2`;
+* an IP SAN or DNS SAN for the address its peers dial, which standard TLS checks;
+* extended key usage for both server and client authentication, because the same certificate serves both directions.
+
+The server must verify client certificates, and its peer connections must present its certificate:
+
+```go
+srv := gorums.NewServer(
+    gorums.WithGRPCServerOptions(grpc.Creds(credentials.NewTLS(&tls.Config{
+        Certificates: []tls.Certificate{cert},
+        ClientCAs:    caPool,
+        ClientAuth:   tls.VerifyClientCertIfGiven, // clients without a certificate are still served
+    }))),
+    gorums.WithPeers(2, gorums.WithNodeList(addrs),
+        gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+            Certificates: []tls.Certificate{cert}, // presented to the peers this server dials
+            RootCAs:      caPool,
+        }))),
+    ),
+    gorums.WithPeerVerifier(verify),
+)
+```
+
+With `ClientAuth: tls.RequireAndVerifyClientCert`, clients without a certificate are refused as well.
+
+For a local cluster, `NewLocalServers` takes options that differ per server: `WithLocalServerOptionsFunc` and `WithLocalDialOptionsFunc` return the options for a given node ID, such as that server's certificate.
 
 ### Authenticating Clients
 
