@@ -2226,17 +2226,20 @@ A `TreeConfig` is an immutable value and is safe for concurrent use.
 To change the tree, build a new one; the old and the new tree can be in use at the same time.
 This is how a protocol can use a new tree for each view, or fall back to a star after a timeout.
 
-### The root can be a participating replica
+### The root
 
-The root is simply the first node of the configuration.
-When the process that starts a call is itself that node, it handles the message locally and sends to `tree.ChildrenOf(id)` with its own ID, exactly as every other internal node does.
-A caller that is not in the configuration can also address `tree.ChildrenOf(tree.Root().ID())` and act as an external root.
+The root is simply the first node of the configuration, and it is a node like any other: it holds the data and runs the same handlers.
+A caller that is not in the configuration starts a tree call by sending to the root, with a one-node configuration, for example `gorums.Config{tree.Root()}`.
+The root's handler then relays to `tree.ChildrenOf(root.ID())` like every other internal node, so the root's own work is done too.
+Do not start at `tree.ChildrenOf(tree.Root().ID())` from outside: that skips the root, and `Config.Context` panics on an empty configuration, which is what `ChildrenOf` returns for a one-node tree.
+When the process that starts the call is itself the root, it does its local work and then sends to `tree.ChildrenOf(id)` with its own ID.
 
 ### Relaying in a Server
 
 A server finds its position with its own node ID, and relays to its children from inside the handler.
 The server implementation holds the `TreeConfig`; every server must build it from the same configuration order.
-This example relays a write down the tree, and aggregates a read up the tree:
+The relay uses the same RPC that the handler serves, so that every hop runs the same handler.
+This example relays `WriteMulticast` down the tree, and aggregates `ReadQC` up the tree:
 
 ```go
 type storageServer struct {
@@ -2245,36 +2248,36 @@ type storageServer struct {
     // ...
 }
 
-// WriteTreeMulticast stores the value locally and relays it to the children.
-func (s *storageServer) WriteTreeMulticast(ctx gorums.ServerContext, req *pb.WriteRequest) (*pb.WriteResponse, error) {
+// WriteMulticast stores the value locally and relays it to the children,
+// which run this same handler.
+func (s *storageServer) WriteMulticast(ctx gorums.ServerContext, req *pb.WriteRequest) {
     // Let the next request start while the relay is in progress.
     ctx.Release()
     if children := s.tree.ChildrenOf(s.id); len(children) > 0 {
         if err := pb.WriteMulticast(children.Context(ctx), req).Send(); err != nil {
-            return nil, fmt.Errorf("write_tree_multicast: %w", err)
+            // handle the error; a one-way call has no reply to carry it
         }
     }
     s.store(req)
-    return pb.WriteResponse_builder{New: true}.Build(), nil
 }
 
-// ReadTreeQC returns the newest value among this server and its subtree.
-func (s *storageServer) ReadTreeQC(ctx gorums.ServerContext, req *pb.ReadRequest) (*pb.ReadResponse, error) {
+// ReadQC returns the newest value among this server and its subtree.
+func (s *storageServer) ReadQC(ctx gorums.ServerContext, req *pb.ReadRequest) (*pb.ReadResponse, error) {
     local := s.load(req)
     children := s.tree.ChildrenOf(s.id)
     if len(children) == 0 {
         return local, nil
     }
     ctx.Release()
-    remote, err := newestValue(pb.ReadTreeQC(children.Context(ctx), req).Responses)
+    remote, err := newestValue(pb.ReadQC(children.Context(ctx), req).Responses)
     if err != nil {
-        return nil, fmt.Errorf("read_tree_qc: %w", err)
+        return nil, fmt.Errorf("read_qc: %w", err)
     }
     return newer(local, remote), nil
 }
 ```
 
-The root, when it is a server of the system, runs the same code as every other node; it starts the call by invoking its own handler logic or by calling `tree.ChildrenOf(root.ID())` directly.
+A server that is also used without a tree needs a separate RPC for the tree variant, because the handler of an RPC cannot know which kind of call it serves.
 This is one pattern, and it is a nested call, so it has the properties described in [Nested Quorum Calls with ServerContext.PeerConfig](#nested-quorum-calls-with-servercontextpeerconfig) and [Send Queue Capacity and Backpressure](#send-queue-capacity-and-backpressure): call `Release` first, and note that a full dispatch queue can stall a nested call.
 The blocking pattern does not fit a protocol that sends a one-way message to its parent when a timer fires or when its subtree is complete; such a protocol can use `tree.ParentOf(id)` as the destination of a unicast.
 

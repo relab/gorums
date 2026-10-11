@@ -37,10 +37,12 @@ type TreeOptions struct {
 // because it addresses the children of its own position instead of all the
 // nodes, but all connections stay open.
 //
-// The root may be a replica that takes part in the protocol: the root is
-// simply the first node of the configuration, and the process at the root
-// sends to [TreeConfig.ChildrenOf] its own ID. A caller that is not part of
-// the configuration can address the root's children in the same way.
+// The root is a node like any other and may be a replica that takes part in
+// the protocol. A caller outside the configuration starts a tree call by
+// sending to the root, so that the root does its own work and relays to its
+// children; sending to the root's children instead would skip the root. The
+// process at the root itself sends to [TreeConfig.ChildrenOf] its own ID after
+// its local work.
 type TreeConfig struct {
 	nodes      Config // breadth-first order; nodes[0] is the root
 	opts       TreeOptions
@@ -189,16 +191,25 @@ func (t *TreeConfig) Subtree(id ID) Config {
 		return nil
 	}
 	bf := t.opts.BranchingFactor
-	result := make(Config, 0, len(t.nodes)-pos)
-	result = append(result, t.nodes[pos])
+	// Find the descendant ranges first, so that the result is allocated at
+	// its exact size and a leaf does not reserve the rest of the tree.
+	type span struct{ start, end int }
+	var spans []span
+	size := 1
 	for lvl := d + 1; lvl <= t.opts.Depth; lvl++ {
-		span := treePow(bf, lvl-d)
-		subtreeStart := treeLevelStart(lvl, bf) + idx*span
-		if subtreeStart >= len(t.nodes) {
+		width := treePow(bf, lvl-d)
+		start := treeLevelStart(lvl, bf) + idx*width
+		if start >= len(t.nodes) {
 			break
 		}
-		subtreeEnd := min(subtreeStart+span, len(t.nodes))
-		result = append(result, t.nodes[subtreeStart:subtreeEnd]...)
+		end := min(start+width, len(t.nodes))
+		spans = append(spans, span{start, end})
+		size += end - start
+	}
+	result := make(Config, 0, size)
+	result = append(result, t.nodes[pos])
+	for _, s := range spans {
+		result = append(result, t.nodes[s.start:s.end]...)
 	}
 	return result
 }

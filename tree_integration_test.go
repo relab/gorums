@@ -165,3 +165,39 @@ func TestTreeQuorumCall(t *testing.T) {
 		})
 	}
 }
+
+// TestTreeExternalCaller verifies that a caller outside the root starts a tree
+// call by sending to the root: the root does its own work and relays, so the
+// result covers all seven nodes, and the root's work is not skipped.
+func TestTreeExternalCaller(t *testing.T) {
+	const n = 7
+	servers, trees := setupTreeServers(t, n, false, gorums.TreeOptions{BranchingFactor: 2, Depth: 2})
+
+	for i, srv := range servers {
+		tree := trees[i]
+		srv.RegisterHandler(mock.GetValueMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+			ctx.Release()
+			total := int32(srv.NodeID())
+			if children := tree.ChildrenOf(srv.NodeID()); len(children) > 0 {
+				for r := range gorumsimpl.QuorumCall[*pb.Int32Value, *pb.Int32Value](children.Context(ctx), pb.Int32(0), mock.GetValueMethod).Results() {
+					if r.Err != nil {
+						return nil, fmt.Errorf("child %d: %w", r.NodeID, r.Err)
+					}
+					total += r.Value.GetValue()
+				}
+			}
+			return gorums.NewResponseMessage(in, pb.Int32(total)), nil
+		})
+	}
+
+	// The caller is server 4, which uses its own view of the tree to find the root.
+	ctx := gorumstest.Context(t, 5*time.Second)
+	rootOnly := gorums.Config{trees[3].Root()}
+	resp, err := gorumsimpl.QuorumCall[*pb.Int32Value, *pb.Int32Value](rootOnly.Context(ctx), pb.Int32(0), mock.GetValueMethod).First()
+	if err != nil {
+		t.Fatalf("quorum call to the root: %v", err)
+	}
+	if want := int32(28); resp.GetValue() != want { // 1+2+...+7, including the root
+		t.Errorf("tree aggregate = %d, want %d", resp.GetValue(), want)
+	}
+}
