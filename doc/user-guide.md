@@ -2186,6 +2186,113 @@ sequenceDiagram
 
 The back-channel calls reuse the existing inbound gRPC streams established by the clients, so no additional network connections or firewall rules are needed.
 
+## Tree-Structured Configurations
+
+A `TreeConfig` gives the nodes of a `Config` the positions of a tree, so that a node can disseminate a message to its children, which relay it further, instead of sending it to every node itself.
+It is a topology only: it tells you the parent, children, and subtree of each node, and you decide how to use them.
+
+```go
+tree, err := gorums.NewTree(cfg, gorums.TreeOptions{BranchingFactor: 2, Depth: 2})
+if err != nil {
+    return err
+}
+tree.Root()             // the first node of cfg
+tree.ChildrenOf(id)     // Config of the direct children; nil for a leaf
+tree.ParentOf(id)       // *Node; nil for the root
+tree.Subtree(id)        // Config of the node and all its descendants
+tree.Level(id)          // edges from the root; the root is at level 0
+tree.Height(id)         // edges to the deepest leaf below; a leaf has height 0
+tree.IsLeaf(id)
+```
+
+`NewStar(cfg)` builds the tree in which every node other than the root is a child of the root, which is useful as a fallback when a deeper tree cannot be used.
+
+### Shape and positions
+
+The tree is a complete b-ary tree in breadth-first order.
+The first node of `cfg` is the root, the next `BranchingFactor` nodes are its children, the next `BranchingFactor`² nodes are the grandchildren, and so on.
+If `cfg` has fewer nodes than a full tree of the given shape, the last level is filled from the left, so a node near the end may have fewer children than the branching factor.
+`NewTree` returns an error if `cfg` has more nodes than the tree can hold, which is (b^(depth+1) − 1) / (b − 1) for branching factor b.
+
+The order of `cfg` alone defines the positions; node IDs do not.
+To choose the root, or which nodes share a parent, order the configuration first, for example with `Config.Sort`, and then build the tree.
+Every process that builds a tree for the same system must use the same order, or the processes will disagree about who the parents are.
+
+```go
+tree, err := gorums.NewTree(cfg.Sort(gorums.ByLatency), gorums.TreeOptions{BranchingFactor: 3, Depth: 3})
+```
+
+A `TreeConfig` is an immutable value and is safe for concurrent use.
+To change the tree, build a new one; the old and the new tree can be in use at the same time.
+This is how a protocol can use a new tree for each view, or fall back to a star after a timeout.
+
+### The root can be a participating replica
+
+The root is simply the first node of the configuration.
+When the process that starts a call is itself that node, it handles the message locally and sends to `tree.ChildrenOf(id)` with its own ID, exactly as every other internal node does.
+A caller that is not in the configuration can also address `tree.ChildrenOf(tree.Root().ID())` and act as an external root.
+
+### Relaying in a Server
+
+A server finds its position with its own node ID, and relays to its children from inside the handler.
+The server implementation holds the `TreeConfig`; every server must build it from the same configuration order.
+This example relays a write down the tree, and aggregates a read up the tree:
+
+```go
+type storageServer struct {
+    id   gorums.ID          // this server's node ID
+    tree *gorums.TreeConfig // the same tree on every server
+    // ...
+}
+
+// WriteTreeMulticast stores the value locally and relays it to the children.
+func (s *storageServer) WriteTreeMulticast(ctx gorums.ServerContext, req *pb.WriteRequest) (*pb.WriteResponse, error) {
+    // Let the next request start while the relay is in progress.
+    ctx.Release()
+    if children := s.tree.ChildrenOf(s.id); len(children) > 0 {
+        if err := pb.WriteMulticast(children.Context(ctx), req).Send(); err != nil {
+            return nil, fmt.Errorf("write_tree_multicast: %w", err)
+        }
+    }
+    s.store(req)
+    return pb.WriteResponse_builder{New: true}.Build(), nil
+}
+
+// ReadTreeQC returns the newest value among this server and its subtree.
+func (s *storageServer) ReadTreeQC(ctx gorums.ServerContext, req *pb.ReadRequest) (*pb.ReadResponse, error) {
+    local := s.load(req)
+    children := s.tree.ChildrenOf(s.id)
+    if len(children) == 0 {
+        return local, nil
+    }
+    ctx.Release()
+    remote, err := newestValue(pb.ReadTreeQC(children.Context(ctx), req).Responses)
+    if err != nil {
+        return nil, fmt.Errorf("read_tree_qc: %w", err)
+    }
+    return newer(local, remote), nil
+}
+```
+
+The root, when it is a server of the system, runs the same code as every other node; it starts the call by invoking its own handler logic or by calling `tree.ChildrenOf(root.ID())` directly.
+This is one pattern, and it is a nested call, so it has the properties described in [Nested Quorum Calls with ServerContext.PeerConfig](#nested-quorum-calls-with-servercontextpeerconfig) and [Send Queue Capacity and Backpressure](#send-queue-capacity-and-backpressure): call `Release` first, and note that a full dispatch queue can stall a nested call.
+The blocking pattern does not fit a protocol that sends a one-way message to its parent when a timer fires or when its subtree is complete; such a protocol can use `tree.ParentOf(id)` as the destination of a unicast.
+
+### Limits
+
+A tree does not reduce the number of connections.
+Gorums opens a stream to every node of a `Config` when the configuration is created, and the tree is built over that full configuration, so every connection stays open, also those that no tree edge uses.
+The tree reduces the load on the sender, because a sender addresses only its children and not every node.
+
+A tree has a place in the call path for every node of the configuration; it does not describe failures.
+If an internal node is unreachable, the nodes below it receive nothing, and the application decides whether to build a new tree.
+
+The shape is always a complete b-ary tree.
+A tree of any other shape, or one that changes as nodes join, is not supported.
+
+The server does not know about the tree.
+The server implementation must hold the `TreeConfig` itself.
+
 ## Stream Deduplication for Symmetric Peers
 
 Stream deduplication lets symmetric Gorums peers reuse one bidirectional stream for both call directions.
