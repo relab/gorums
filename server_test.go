@@ -1229,7 +1229,7 @@ func TestServerSenderID(t *testing.T) {
 	// peerSenderIDs multicasts from every server to its peer configuration,
 	// which includes the server itself, and checks that every receiver
 	// observes the multicasting server's ID.
-	peerSenderIDs := func(t *testing.T, opts ...gorums.ServerOption) {
+	peerSenderIDs := func(t *testing.T, opts ...gorumstest.Option) {
 		servers := gorumstest.LocalServers(t, 3, opts...)
 		records := make(chan senderRecord, len(servers))
 		for _, srv := range servers {
