@@ -1694,8 +1694,10 @@ The sender is the last hop.
 When a message travels through several nodes, for example down a tree, `SenderID` identifies the node that forwarded it, not the node where the message started.
 Put the origin in the message if the handler needs it.
 
-The sender asserts its ID when it connects, and the server does not authenticate it.
-A Byzantine fault-tolerant protocol must still sign its messages and check the signer.
+The sender asserts its ID when it connects.
+A server configured with `WithPeerVerifier` checks the ID of every configured peer; see [Authenticating Peers](#authenticating-peers).
+Otherwise, the server does not authenticate it.
+Even with `WithPeerVerifier`, `SenderID` names only the last hop, so a Byzantine fault-tolerant protocol that forwards messages must still sign them and check the signer.
 
 ## Latency-Based Node Selection
 
@@ -2372,6 +2374,49 @@ Calls already in flight while a stream is being replaced may still fail because 
 
 Each `*Node` reports its stream topology: `Node.IsOutbound` is true for a node reached over a stream this process opened, `Node.IsInbound` is true for a node reached over a stream the peer opened, and `Node.IsShared` is true for a node that borrows the stream its lower-ID peer dialed, which holds on the higher-ID side of each deduplicated pair.
 These let a symmetric deployment inspect the shared-stream topology.
+
+## Authenticating Peers
+
+Servers configured with `WithPeers` learn each other's node IDs from claims that nobody checks by default.
+A server attaches an inbound stream to peer X when the stream announces node ID X.
+A server that dials peer X trusts whoever answers at X's address.
+So any client that can reach a server can claim to be one of its peers.
+Under `WithStreamDedup`, a forged claim for a lower ID also redirects the server's own calls to that peer, because the server sends them over the peer's inbound stream.
+
+`WithPeerVerifier` makes a server check the identity of every configured peer, on every stream between them, in both directions:
+
+```go
+srv := gorums.NewServer(
+    gorums.WithPeers(myID, gorums.WithNodeList(addrs), dialOpts...),
+    gorums.WithPeerVerifier(verify),
+)
+```
+
+A `gorums.PeerVerifier` is a function `func(ctx context.Context, id gorums.ID) error`.
+It receives the stream's context, which carries the connection's `peer.Peer`, and the node ID to check.
+It returns nil to accept the stream, and an error that explains the refusal otherwise.
+When the server refuses a stream that claims a peer's node ID, the refusal sent to the remote end includes the error's text.
+When a stream that the server opened fails the check, the text is in the error of the waiting call.
+The server calls it once per stream, outside its internal locks, so it must be safe for concurrent use.
+
+| Stream | Check | When the check fails |
+| --- | --- | --- |
+| Claims the node ID of a configured peer | `verify(ctx, claimed ID)` before the stream is attached to the peer | The stream ends with `codes.Unauthenticated`; no connect callback or handler runs |
+| Claims a node ID outside the peer configuration | None; there is no identity to check | The stream ends with `codes.Unauthenticated` |
+| Opened by this server to a configured peer | `verify(ctx, dialed ID)` before any request is sent | The waiting call fails with `codes.Unauthenticated`; the server tries again later |
+| Claims no peer node ID (a client) | None | Served as without the option |
+
+With `WithPeerVerifier`, `ServerContext.SenderID` is authenticated for every configured peer, with and without stream deduplication.
+`NewServer` panics if the verifier is nil or the server has no `WithPeers`.
+
+### Authenticating Clients
+
+`WithPeerVerifier` does not check clients; the transport and interceptors do:
+
+* To require a certificate from every client, set `ClientAuth: tls.RequireAndVerifyClientCert` in the server's `tls.Config`.
+  The handshake then fails before Gorums sees a stream.
+* To decide which certificates may connect, use `tls.Config.VerifyConnection`, which runs on every handshake.
+* To decide per request, for example to let only peers call a method, use a server interceptor that checks `ctx.SenderID()` or `peer.FromContext(ctx)`.
 
 ## Send Queue Capacity and Backpressure
 

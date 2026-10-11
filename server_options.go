@@ -20,6 +20,8 @@ type serverOptions struct {
 	onConfigChange   func(Config) // Callback registered via [WithPeerChange]; invoked after each connected-peer config change.
 	listenAddr       string       // Listener address recorded by WithAddr; bound by ListenAndServe.
 	outboundDialOpts []DialOption
+	peerVerifier     PeerVerifier // Checks peer identities on peer streams; set by WithPeerVerifier.
+	hasPeerVerifier  bool         // Records that WithPeerVerifier was applied, so a nil verifier is reported.
 }
 
 // ServerOption configures a [Server].
@@ -130,5 +132,32 @@ func WithAddr(addr string) ServerOption {
 func WithStreamDedup() ServerOption {
 	return func(o *serverOptions) {
 		o.outboundDialOpts = append(o.outboundDialOpts, conn.WithStreamDedup())
+	}
+}
+
+// WithPeerVerifier makes the server check, with verify, the identity of the
+// peers configured by [WithPeers] on every stream between them, in both
+// directions:
+//   - An inbound stream that claims a peer's node ID is checked against that
+//     ID. A stream that fails the check, or that claims a node ID outside the
+//     peer configuration, ends with codes.Unauthenticated before any connect
+//     callback or handler runs. Streams that claim no peer node ID are not
+//     checked.
+//   - A stream that the server opens to a peer is checked against the dialed
+//     node's ID before any request is sent on it. If the check fails, the
+//     stream is closed, the waiting call fails with codes.Unauthenticated,
+//     and the server tries again later, as for a failed connection.
+//
+// When the server refuses a stream that a peer opened, the refusal's message
+// includes the text of verify's error, so the peer learns why. When a stream
+// that the server opened fails the check, the text is in the error of the
+// waiting call. The server runs verify once per stream, outside its internal
+// locks. With WithPeerVerifier, [ServerContext.SenderID] is authenticated for
+// every configured peer. [NewServer] panics if verify is nil or if the server
+// has no [WithPeers].
+func WithPeerVerifier(verify PeerVerifier) ServerOption {
+	return func(o *serverOptions) {
+		o.peerVerifier = verify
+		o.hasPeerVerifier = true
 	}
 }

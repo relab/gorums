@@ -173,6 +173,7 @@ A `session` sends queued requests on its `BidiStream`, records two-way calls in 
 The dispatcher runs handlers one at a time, in arrival order.
 A handler that returns without calling `Release` hands its goroutine to the next queued handler, so a busy stream keeps one goroutine and the stack it has grown; an early `Release` starts the next handler on a new goroutine.
 On the server side, `Server.NodeStream` asks a `PeerAcceptor` for the `InboundChannel` of each accepted stream.
+An `OutboundChannel` with a `PeerVerifier` checks the remote end of each new stream against the channel's node ID, with the stream's context, before it sends requests on the stream; a stream that fails the check is closed, and the waiting request fails with `codes.Unauthenticated`.
 
 ```mermaid
 classDiagram
@@ -251,6 +252,7 @@ The manager's `Close` closes all its nodes and logs any node's close error, sinc
 A closed manager also rejects new nodes under the same lock that guards its node list, so a node that races with `Close` cannot outlive it.
 A server's `InboundManager` owns the nodes for its known peers and for the peer-capable clients that connect to it, and maintains the connected-peer and connected-client configurations.
 It implements `stream.PeerAcceptor`, attaching each accepted stream to the matching node.
+With a `PeerVerifier`, it attaches a stream that claims a peer's node ID only after the verifier accepts the claim, and refuses a claim for an unknown node ID; the outbound manager hands the same verifier to the channels of the configured peers the server dials.
 Both managers implement `nodeRegistry`, which a `NodeSource` uses to build a configuration.
 
 ```mermaid
@@ -513,6 +515,7 @@ sequenceDiagram
 
     P->>SS: open NodeStream
     SS->>IM: AcceptPeer(ctx, stream)
+    IM->>IM: verify(ctx, claimed ID) if a PeerVerifier is set
     IM->>N: attachStream: NewInboundChannel
     N->>N: Transport.StoreChannel(ch)
     IM-->>SS: InboundChannel, cleanup

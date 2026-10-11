@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"runtime"
 	"strings"
@@ -18,7 +19,9 @@ import (
 	"github.com/relab/gorums/internal/testutils/mock"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	"go.uber.org/goleak"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -1299,4 +1302,170 @@ func TestServerSenderID(t *testing.T) {
 			t.Errorf("SenderID() = %d, want %d (the client's ID for the server)", got, want)
 		}
 	})
+}
+
+// TestServerPeerVerifier verifies that WithPeerVerifier checks every
+// configured peer on the streams the peer opens to the server and on the
+// streams the server opens to the peer, with and without stream
+// deduplication.
+func TestServerPeerVerifier(t *testing.T) {
+	const n = 3
+	all := func(_, _ gorums.ID) bool { return true }
+	tests := []struct {
+		name        string
+		opts        []gorumstest.Option
+		wantInbound func(self, peer gorums.ID) bool // peer opens a stream to self
+		wantDialed  func(self, peer gorums.ID) bool // self opens a stream to peer
+	}{
+		{name: "Dual", wantInbound: all, wantDialed: all},
+		{
+			name:        "Dedup",
+			opts:        []gorumstest.Option{gorums.WithStreamDedup()},
+			wantInbound: func(self, peer gorums.ID) bool { return peer < self },
+			wantDialed:  func(self, peer gorums.ID) bool { return peer > self },
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mu sync.Mutex
+			// checked[self] holds "inbound N" or "dialed N" for each peer N
+			// that self's verifier checked. A server's stream context carries
+			// incoming metadata; the context of a stream it dialed does not.
+			checked := make(map[gorums.ID]map[string]bool)
+			verifierFor := func(self gorums.ID) []gorums.ServerOption {
+				mu.Lock()
+				checked[self] = make(map[string]bool)
+				mu.Unlock()
+				return []gorums.ServerOption{gorums.WithPeerVerifier(func(ctx context.Context, peer gorums.ID) error {
+					direction := "dialed"
+					if _, ok := metadata.FromIncomingContext(ctx); ok {
+						direction = "inbound"
+					}
+					mu.Lock()
+					defer mu.Unlock()
+					checked[self][fmt.Sprintf("%s %d", direction, peer)] = true
+					return nil
+				})}
+			}
+			opts := append([]gorumstest.Option{gorums.WithLocalServerOptionsFunc(verifierFor)}, tt.opts...)
+			servers := gorumstest.LocalServers(t, n, opts...)
+			gorumstest.WaitForPeers(t, servers)
+
+			want := make(map[gorums.ID]map[string]bool)
+			for self := gorums.ID(1); self <= n; self++ {
+				want[self] = make(map[string]bool)
+				for peer := gorums.ID(1); peer <= n; peer++ {
+					if peer == self {
+						continue
+					}
+					if tt.wantInbound(self, peer) {
+						want[self][fmt.Sprintf("inbound %d", peer)] = true
+					}
+					if tt.wantDialed(self, peer) {
+						want[self][fmt.Sprintf("dialed %d", peer)] = true
+					}
+				}
+			}
+			match := func() bool {
+				mu.Lock()
+				defer mu.Unlock()
+				return maps.EqualFunc(checked, want, func(a, b map[string]bool) bool { return maps.Equal(a, b) })
+			}
+			if !gorumstest.WaitUntil(t, 5*time.Second, match) {
+				mu.Lock()
+				defer mu.Unlock()
+				t.Errorf("verifier checks = %v; want %v", checked, want)
+			}
+		})
+	}
+}
+
+// TestServerPeerVerifierRefusals verifies that a server with a peer verifier
+// fails its calls to a peer that does not pass the check, refuses a client
+// that claims a node ID outside the peer configuration, and serves a client
+// that claims no node ID.
+func TestServerPeerVerifierRefusals(t *testing.T) {
+	refuseAll := gorums.WithPeerVerifier(func(context.Context, gorums.ID) error { return errors.New("not trusted") })
+	acceptAll := gorums.WithPeerVerifier(func(context.Context, gorums.ID) error { return nil })
+	start := func(t *testing.T, opt gorums.ServerOption) []*gorums.Server {
+		t.Helper()
+		servers := gorumstest.LocalServers(t, 2, opt)
+		for _, srv := range servers {
+			srv.RegisterHandler(mock.TestMethod, gorumstest.EchoHandler("echo"))
+		}
+		return servers
+	}
+	call := func(t *testing.T, node *gorums.Node, timeout time.Duration) error {
+		t.Helper()
+		ctx := gorumstest.Context(t, timeout)
+		_, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(ctx), pb.String("hello"), mock.TestMethod)
+		return err
+	}
+	client := func(t *testing.T, srv *gorums.Server, opts ...gorums.DialOption) *gorums.Node {
+		t.Helper()
+		cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList([]string{srv.Addr()}),
+			append([]gorums.DialOption{gorumstest.DialOptions(t)}, opts...)...)
+		if err != nil {
+			t.Fatalf("NewConfig: %v", err)
+		}
+		t.Cleanup(closeFn)
+		return cfg[0]
+	}
+
+	t.Run("PeerRefused", func(t *testing.T) {
+		servers := start(t, refuseAll)
+		node := servers[0].PeerConfig().Node(2)
+		var err error
+		// Until the connection is ready, a call can fail for that reason
+		// instead; the verifier's refusal follows once it is ready.
+		if !gorumstest.WaitUntil(t, 5*time.Second, func() bool {
+			err = call(t, node, time.Second)
+			return status.Code(err) == codes.Unauthenticated
+		}) {
+			t.Fatalf("call to a refused peer: err = %v; want code %v", err, codes.Unauthenticated)
+		}
+		if want := "gorums: node 2 failed verification: not trusted"; !strings.Contains(err.Error(), want) {
+			t.Errorf("call to a refused peer: err = %q; want it to contain %q", err, want)
+		}
+	})
+	t.Run("UnknownPeerIDRefused", func(t *testing.T) {
+		servers := start(t, acceptAll)
+		node := client(t, servers[0], gorums.WithMetadata(metadata.Pairs("gorums-node-id", "99")))
+		if err := call(t, node, 500*time.Millisecond); err == nil {
+			t.Fatal("call that claims an unknown node ID succeeded; want failure")
+		}
+		// The server refuses the stream, which ends with its status; the
+		// client's node records it as its last error.
+		if !gorumstest.WaitUntil(t, 3*time.Second, func() bool {
+			return status.Code(node.LastErr()) == codes.Unauthenticated
+		}) {
+			t.Errorf("client node LastErr = %v; want code %v", node.LastErr(), codes.Unauthenticated)
+		}
+	})
+	t.Run("ClientServed", func(t *testing.T) {
+		servers := start(t, acceptAll)
+		if err := call(t, client(t, servers[0]), 3*time.Second); err != nil {
+			t.Errorf("call from a client that claims no node ID: %v", err)
+		}
+	})
+}
+
+// TestServerPeerVerifierPanics verifies that NewServer panics for a nil peer
+// verifier and for a peer verifier without WithPeers.
+func TestServerPeerVerifierPanics(t *testing.T) {
+	peers := gorums.WithPeers(1, gorums.WithNodeList([]string{"127.0.0.1:1", "127.0.0.1:2"}), gorumstest.InsecureDialOptions(t))
+	acceptAll := gorums.WithPeerVerifier(func(context.Context, gorums.ID) error { return nil })
+	tests := []struct {
+		name string
+		opts []gorums.ServerOption
+		want string
+	}{
+		{name: "NilVerifier", opts: []gorums.ServerOption{peers, gorums.WithPeerVerifier(nil)}, want: "gorums: invalid peer configuration: gorums: WithPeerVerifier requires a non-nil verifier"},
+		{name: "NoPeers", opts: []gorums.ServerOption{acceptAll}, want: "gorums: invalid peer configuration: gorums: WithPeerVerifier requires WithPeers"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertPanic(t, tt.want, func() { gorums.NewServer(tt.opts...) })
+		})
+	}
 }
