@@ -148,14 +148,16 @@ func WithStreamDedup() ServerOption {
 //     stream is closed, the waiting call fails with codes.Unauthenticated,
 //     and the server tries again later, as for a failed connection.
 //
-// When the server refuses a stream that a peer opened, the refusal's message
-// includes the text of verify's error, so the peer learns why. When a stream
-// that the server opened fails the check, the text is in the error of the
-// waiting call. The server runs verify once per stream, outside its internal
-// locks. With WithPeerVerifier, [ServerContext.SenderID] is authenticated for
-// every configured peer. [NewServer] panics if verify is nil or if the server
-// has no [WithPeers]. Use [TLSPeerVerifier] to bind node IDs to mTLS
-// certificates.
+// When the server refuses a stream that a peer opened, the refusal's status
+// carries the text of verify's error, and the refused peer sees it in
+// [Node.LastErr]. The refused peer resends its pending calls on new streams
+// until their contexts end, so calls between peers need deadlines. When a
+// stream that the server opened fails the check, the waiting call fails with
+// the check's error. The server runs verify once per stream, outside its
+// internal locks. With WithPeerVerifier, [ServerContext.SenderID] is
+// authenticated for every configured peer. [NewServer] panics if verify is nil
+// or if the server has no [WithPeers]. Use [TLSPeerVerifier] to bind node IDs
+// to mTLS certificates.
 func WithPeerVerifier(verify PeerVerifier) ServerOption {
 	return func(o *serverOptions) {
 		o.peerVerifier = verify

@@ -1688,7 +1688,7 @@ func (srv *storageSrv) WriteQC(ctx gorums.ServerContext, req *WriteRequest) (*Wr
 * a request on a connection that this server dialed has the dialed node's ID;
 * a request that this server sends to itself has this server's own ID.
 
-`SenderID` returns 0 for a client that announces no ID, or an ID that this server does not know.
+`SenderID` returns 0 for a client that announces no ID, or, without `WithPeerVerifier`, for an ID that this server does not know; with it, a stream that claims an unknown ID is refused.
 
 The sender is the last hop.
 When a message travels through several nodes, for example down a tree, `SenderID` identifies the node that forwarded it, not the node where the message started.
@@ -2407,7 +2407,21 @@ Use `TLSPeerVerifier` to bind node IDs to mTLS certificates; see [Binding Node I
 | Opened by this server to a configured peer | `verify(ctx, dialed ID)` before any request is sent | The waiting call fails with `codes.Unauthenticated`; the server tries again later |
 | Claims no peer node ID (a client) | None | Served as without the option |
 
-With `WithPeerVerifier`, `ServerContext.SenderID` is authenticated for every configured peer, with and without stream deduplication.
+A peer that this server refuses sees the refusal, with the verifier's text, in `Node.LastErr` of its node for this server.
+Its pending calls to this server are resent on new streams until their contexts end, so they fail with the context's error, not with `codes.Unauthenticated`; give calls between peers a deadline.
+While the refused peer keeps retrying, its `ConnectedPeers` view can briefly include this server, and under `WithStreamDedup` its `WaitForAll` can return before this server has accepted any of its streams.
+
+With `WithPeerVerifier`, `ServerContext.SenderID` is authenticated for every configured peer, with and without stream deduplication:
+
+| Request arrives on | `SenderID` | Checked by |
+| --- | --- | --- |
+| A stream that a configured peer opened to this server | The peer's ID | The inbound check |
+| A stream that this server opened to a configured peer | The dialed peer's ID | The dial-side check |
+| A back-channel client's stream | The ID this server assigned | Not authenticated |
+| A regular client's stream | 0 | Not authenticated |
+| A call this server sends to itself | This server's own ID | No network involved |
+
+`SenderID` names only the last hop.
 `NewServer` panics if the verifier is nil or the server has no `WithPeers`.
 
 ### Binding Node IDs to TLS Certificates
@@ -2453,8 +2467,12 @@ srv := gorums.NewServer(
 ```
 
 With `ClientAuth: tls.RequireAndVerifyClientCert`, clients without a certificate are refused as well.
+The check is only as strong as the CA pools.
+Set `ClientCAs` on the server and `RootCAs` on the dialer to a pool that holds only the cluster's CA; a nil pool means the system roots.
+That CA must issue each identity only to its replica.
+With `InsecureSkipVerify` on the dialer, or `ClientAuth` set to `tls.RequestClientCert` or `tls.RequireAnyClientCert` on the server, no chain is verified and every stream is refused.
 
-For a local cluster, `NewLocalServers` takes options that differ per server: `WithLocalServerOptionsFunc` and `WithLocalDialOptionsFunc` return the options for a given node ID, such as that server's certificate.
+For a local cluster, `NewLocalServers` takes options that differ per server: `WithLocalServerOptionsFunc` and `WithLocalDialOptionsFunc` take a function that returns the options for a given node ID, such as that server's certificate.
 
 ### Authenticating Clients
 
@@ -2463,7 +2481,8 @@ For a local cluster, `NewLocalServers` takes options that differ per server: `Wi
 * To require a certificate from every client, set `ClientAuth: tls.RequireAndVerifyClientCert` in the server's `tls.Config`.
   The handshake then fails before Gorums sees a stream.
 * To decide which certificates may connect, use `tls.Config.VerifyConnection`, which runs on every handshake.
-* To decide per request, for example to let only peers call a method, use a server interceptor that checks `ctx.SenderID()` or `peer.FromContext(ctx)`.
+* To decide per request, for example to let only peers call a method, use a server interceptor that checks `ctx.PeerConfig().Contains(ctx.SenderID())`.
+  A nonzero `SenderID` alone is not enough, because back-channel clients have nonzero IDs that are not authenticated.
 
 ## Send Queue Capacity and Backpressure
 

@@ -61,12 +61,19 @@ func (p peerIdentity) kind() string {
 // and the Common Name are never used, and a node ID with an empty or missing
 // identity is refused.
 //
-// The server's TLS configuration must verify client certificates, with
-// ClientAuth set to tls.VerifyClientCertIfGiven or
-// tls.RequireAndVerifyClientCert, and each replica's certificate must be
-// valid for both client and server authentication. TLSPeerVerifier copies
-// identities. TLSPeerVerifier panics if two node IDs have the same identity,
-// since either replica could then claim the other's ID.
+// The server's [crypto/tls.Config] must verify client certificates, with
+// ClientAuth set to [crypto/tls.VerifyClientCertIfGiven] or
+// [crypto/tls.RequireAndVerifyClientCert], and each replica's certificate
+// must be valid for both client and server authentication. TLSPeerVerifier
+// copies identities. TLSPeerVerifier panics if two node IDs have the same
+// identity, since either replica could then claim the other's ID.
+//
+// The check is only as strong as the CA pools: set ClientCAs on the server
+// and RootCAs on the dialer to a pool that holds only the cluster's CA, since
+// a nil pool means the system roots, and that CA must issue each identity
+// only to its replica. With InsecureSkipVerify on the dialer, or ClientAuth
+// set to [crypto/tls.RequestClientCert] or [crypto/tls.RequireAnyClientCert]
+// on the server, no chain is verified and every stream is refused.
 func TLSPeerVerifier(identities map[ID]string) PeerVerifier {
 	want := make(map[ID]peerIdentity, len(identities))
 	for id, name := range identities {

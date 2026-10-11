@@ -1381,9 +1381,10 @@ func TestServerPeerVerifier(t *testing.T) {
 }
 
 // TestServerPeerVerifierRefusals verifies that a server with a peer verifier
-// fails its calls to a peer that does not pass the check, refuses a client
-// that claims a node ID outside the peer configuration, and serves a client
-// that claims no node ID.
+// fails its calls to a peer that does not pass the check, that a peer it
+// refuses sees the verifier's text in its node's last error, that it refuses
+// a client that claims a node ID outside the peer configuration, and that it
+// serves a client that claims no node ID.
 func TestServerPeerVerifierRefusals(t *testing.T) {
 	refuseAll := gorums.WithPeerVerifier(func(context.Context, gorums.ID) error { return errors.New("not trusted") })
 	acceptAll := gorums.WithPeerVerifier(func(context.Context, gorums.ID) error { return nil })
@@ -1426,6 +1427,29 @@ func TestServerPeerVerifierRefusals(t *testing.T) {
 		}
 		if want := "gorums: node 2 failed verification: not trusted"; !strings.Contains(err.Error(), want) {
 			t.Errorf("call to a refused peer: err = %q; want it to contain %q", err, want)
+		}
+	})
+	t.Run("RefusedPeerSeesReason", func(t *testing.T) {
+		// Server 1's dial-side check of server 2 passes, and server 2
+		// refuses server 1's claim; server 1's node for server 2 records
+		// the refusal, with server 2's verifier text, as its last error.
+		verifierFor := func(self gorums.ID) []gorums.ServerOption {
+			if self == 2 {
+				return []gorums.ServerOption{gorums.WithPeerVerifier(func(context.Context, gorums.ID) error {
+					return errors.New("certificate names another node")
+				})}
+			}
+			return []gorums.ServerOption{acceptAll}
+		}
+		servers := gorumstest.LocalServers(t, 2, gorums.WithLocalServerOptionsFunc(verifierFor))
+		node := servers[0].PeerConfig().Node(2)
+		const want = "gorums: node 1 failed verification: certificate names another node"
+		var err error
+		if !gorumstest.WaitUntil(t, 3*time.Second, func() bool {
+			err = node.LastErr()
+			return status.Code(err) == codes.Unauthenticated && strings.Contains(err.Error(), want)
+		}) {
+			t.Errorf("server 1's node 2 LastErr = %v; want code %v containing %q", err, codes.Unauthenticated, want)
 		}
 	})
 	t.Run("UnknownPeerIDRefused", func(t *testing.T) {
