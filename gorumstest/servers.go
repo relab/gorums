@@ -72,13 +72,12 @@ func Servers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []stri
 // LocalServers panics on an Option of any other type.
 func LocalServers(t testing.TB, n int, opts ...Option) []*gorums.Server {
 	t.Helper()
-	localOpts := localServerOptions(t, opts)
-
 	// Skip goleak check for benchmarks
 	if _, ok := t.(*testing.B); !ok {
 		// Register goleak check FIRST so it runs LAST (after all other cleanup)
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
+	localOpts := localServerOptions(t, opts)
 
 	srvs, stop, err := gorums.NewLocalServers(n, localOpts...)
 	if err != nil {
