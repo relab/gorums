@@ -48,6 +48,10 @@ func sharedNodeTransport(peer *Node) *stream.Transport {
 // deduplication, the peer with the lower ID dials.
 type ID = stream.ID
 
+// PeerVerifier reports whether the remote end of a stream is the node with a
+// given ID; see [stream.PeerVerifier].
+type PeerVerifier = stream.PeerVerifier
+
 // Node encapsulates the state of a node on which a remote procedure call
 // can be performed.
 type Node struct {
@@ -109,6 +113,7 @@ type nodeOptions struct {
 	Handler         stream.RequestHandler
 	EagerReconnect  bool             // re-establish a lost stream proactively; see [stream.OutboundOptions]
 	OnStreamChange  func()           // optional; invoked on outbound stream transitions
+	Verify          PeerVerifier     // optional; checks the remote end of each dialed stream
 	Manager         *outboundManager // owning manager
 }
 
@@ -135,6 +140,7 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 		Latency:        transport.Latency(),
 		EagerReconnect: opts.EagerReconnect,
 		OnStreamChange: opts.OnStreamChange,
+		Verify:         opts.Verify,
 	}))
 	return n, nil
 }
