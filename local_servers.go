@@ -3,14 +3,17 @@ package gorums
 import (
 	"fmt"
 	"net"
+	"slices"
 )
 
 // localServerOptions accumulates the options [NewLocalServers] applies to
 // every server it creates.
 type localServerOptions struct {
-	serverOpts []ServerOption
-	dialOpts   []DialOption
-	listen     func() (net.Listener, error)
+	serverOpts    []ServerOption
+	dialOpts      []DialOption
+	serverOptsFns []func(id ID) []ServerOption
+	dialOptsFns   []func(id ID) []DialOption
+	listen        func() (net.Listener, error)
 }
 
 // LocalServerOption configures [NewLocalServers]. Use [WithLocalServerOptions]
@@ -32,6 +35,26 @@ func WithLocalDialOptions(opts ...DialOption) LocalServerOption {
 	}
 }
 
+// WithLocalServerOptionsFunc applies the options that fn returns for a
+// server's node ID to that server, after the options from
+// [WithLocalServerOptions]. Use it for options that differ per server, such
+// as the TLS certificate each server presents.
+func WithLocalServerOptionsFunc(fn func(id ID) []ServerOption) LocalServerOption {
+	return func(o *localServerOptions) {
+		o.serverOptsFns = append(o.serverOptsFns, fn)
+	}
+}
+
+// WithLocalDialOptionsFunc applies the options that fn returns for a server's
+// node ID to that server's outbound configuration, after the options from
+// [WithLocalDialOptions]. Use it for options that differ per server, such as
+// the client certificate each server presents to its peers.
+func WithLocalDialOptionsFunc(fn func(id ID) []DialOption) LocalServerOption {
+	return func(o *localServerOptions) {
+		o.dialOptsFns = append(o.dialOptsFns, fn)
+	}
+}
+
 // WithLocalListeners makes [NewLocalServers] create each server's listener with
 // listen instead of a TCP listener on a random localhost port. Each listener's
 // address must be a unique host:port that the servers' dial options reach.
@@ -46,7 +69,8 @@ func WithLocalListeners(listen func() (net.Listener, error)) LocalServerOption {
 // Each server is assigned a node ID from 1 to n. Every server tracks and calls
 // all the other servers. Use [WithLocalServerOptions] to add [ServerOption]s
 // to every server, and [WithLocalDialOptions] to add [DialOption]s to each
-// server's outbound connections.
+// server's outbound connections. Use [WithLocalServerOptionsFunc] and
+// [WithLocalDialOptionsFunc] for options that differ per server.
 //
 // The returned servers are not started; call [Server.ListenAndServe] after
 // registering any services. The returned stop function stops all servers and
@@ -71,10 +95,17 @@ func NewLocalServers(n int, opts ...LocalServerOption) ([]*Server, func(), error
 	servers := make([]*Server, n)
 	for i := range n {
 		myID := ID(i + 1)
+		dialOpts := slices.Clone(localOpts.dialOpts)
+		for _, fn := range localOpts.dialOptsFns {
+			dialOpts = append(dialOpts, fn(myID)...)
+		}
 		serverOpts := append(
-			[]ServerOption{WithPeers(myID, nodeSource, localOpts.dialOpts...)},
+			[]ServerOption{WithPeers(myID, nodeSource, dialOpts...)},
 			localOpts.serverOpts...,
 		)
+		for _, fn := range localOpts.serverOptsFns {
+			serverOpts = append(serverOpts, fn(myID)...)
+		}
 		srv, err := newServer(serverOpts...)
 		if err != nil {
 			closeServers(servers[:i], listeners)

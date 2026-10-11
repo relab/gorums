@@ -3,9 +3,11 @@ package gorums_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -177,6 +179,60 @@ func TestLocalServersAppliesDialOptions(t *testing.T) {
 
 	if got := strings.Count(buf.String(), "ready"); got != n {
 		t.Errorf("logger recorded %d \"ready\" lines, want %d (one per server); DialOption was not applied to every server", got, n)
+	}
+}
+
+// TestLocalServersAppliesPerServerOptions verifies that
+// WithLocalServerOptionsFunc and WithLocalDialOptionsFunc give each server the
+// options for its own node ID, after the shared options.
+func TestLocalServersAppliesPerServerOptions(t *testing.T) {
+	const n = 3
+	var mu sync.Mutex
+	sharedChanges := 0
+	sawOwnNode := make(map[gorums.ID]bool)
+	var sharedLog, perServerLog bytes.Buffer
+	_, stop, err := gorums.NewLocalServers(n,
+		gorums.WithLocalServerOptions(gorums.WithPeerChange(func(gorums.Config) {
+			mu.Lock()
+			defer mu.Unlock()
+			sharedChanges++
+		})),
+		gorums.WithLocalServerOptionsFunc(func(id gorums.ID) []gorums.ServerOption {
+			return []gorums.ServerOption{gorums.WithPeerChange(func(cfg gorums.Config) {
+				mu.Lock()
+				defer mu.Unlock()
+				if cfg.Node(id) != nil {
+					sawOwnNode[id] = true
+				}
+			})}
+		}),
+		gorums.WithLocalDialOptions(gorumstest.InsecureDialOptions(t), gorums.WithLogger(log.New(&sharedLog, "", 0))),
+		gorums.WithLocalDialOptionsFunc(func(id gorums.ID) []gorums.DialOption {
+			return []gorums.DialOption{gorums.WithLogger(log.New(&perServerLog, fmt.Sprintf("server %d: ", id), 0))}
+		}),
+	)
+	if err != nil {
+		t.Fatalf("NewLocalServers: %v", err)
+	}
+	t.Cleanup(stop)
+
+	mu.Lock()
+	defer mu.Unlock()
+	// The per-server options come after the shared ones, so their
+	// WithPeerChange callback and WithLogger replace the shared ones.
+	if sharedChanges != 0 {
+		t.Errorf("shared WithPeerChange callback ran %d times; want 0", sharedChanges)
+	}
+	if sharedLog.Len() != 0 {
+		t.Errorf("shared logger recorded %q; want nothing", sharedLog.String())
+	}
+	for id := gorums.ID(1); id <= n; id++ {
+		if !sawOwnNode[id] {
+			t.Errorf("server %d: per-server WithPeerChange callback did not see its own node", id)
+		}
+		if want := fmt.Sprintf("server %d: ready", id); !strings.Contains(perServerLog.String(), want) {
+			t.Errorf("per-server log = %q; want a line %q", perServerLog.String(), want)
+		}
 	}
 }
 
