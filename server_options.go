@@ -29,8 +29,9 @@ type ServerOption func(*serverOptions)
 // The receiveSize is the number of requests received on each inbound stream
 // that can wait for the running handler; receiving from the stream waits while
 // that many are queued. Replies on that stream wait as well, so a handler that
-// calls the sending peer before [ServerContext.Release] waits for the reply
-// until its context ends if the peer fills the queue first. A receiveSize of 0
+// waits for a reply from the sending peer before [ServerContext.Release] waits
+// until its context ends if the peer fills the queue first. Dispatching the
+// call before Release and waiting after it avoids this. A receiveSize of 0
 // selects the default of 4096.
 //
 // The sendSize controls the capacity of the server's per-node send queue for

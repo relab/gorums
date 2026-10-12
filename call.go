@@ -13,8 +13,10 @@ type Call[Req, Resp proto.Message] = impl.Call[Req, Resp]
 
 // OnewayCall represents a lazily dispatched multicast or unicast call.
 // [OnewayCall.Send] and [OnewayCall.Async] each consume the call; invoking
-// either after the call has been consumed panics. A handler that dispatches a
-// one-way call back to its callers should call [ServerContext.Release] first.
+// either after the call has been consumed panics. A server handler that must
+// keep its one-way calls in FIFO order dispatches them with [OnewayCall.Async]
+// before [ServerContext.Release] and waits with [OnewayAsync.Wait] after it.
+// A call dispatched after Release may overtake the next request's call.
 type OnewayCall[Req proto.Message] = impl.OnewayCall[Req]
 
 // OnewayAsync is the send-completion handle of a one-way call dispatched with
