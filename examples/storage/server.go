@@ -219,7 +219,8 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadReque
 	if len(cfg) == 0 {
 		return nil, fmt.Errorf("read_nested_qc: requires server peer configuration")
 	}
-	// Release before nested outbound calls to avoid blocking inbound recv processing.
+	// Release first: the nested reads of different requests may run in any
+	// order, and the next request starts while they are in flight.
 	ctx.Release()
 	return newestValue(pb.ReadQC(cfg.Context(ctx), req))
 }
@@ -231,9 +232,11 @@ func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerContext, req *pb.W
 	if len(cfg) == 0 {
 		return nil, fmt.Errorf("write_nested_multicast: requires server peer configuration")
 	}
-	// Release before nested outbound calls to avoid blocking inbound recv processing.
+	// Dispatch before Release, so the peers receive the writes in arrival
+	// order, and wait after Release, so the next request need not wait.
+	relay := pb.WriteMulticast(cfg.Context(ctx), req).Async()
 	ctx.Release()
-	if err := pb.WriteMulticast(cfg.Context(ctx), req).Send(); err != nil {
+	if err := relay.Wait(); err != nil {
 		return nil, fmt.Errorf("write_nested_multicast: %w", err)
 	}
 	return pb.WriteResponse_builder{New: true}.Build(), nil
