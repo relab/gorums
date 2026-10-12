@@ -99,10 +99,11 @@ func (c *OnewayCall[Req]) Intercept(ics ...ClientInterceptor[Req, *emptypb.Empty
 // [ErrSendFailure] and per-node errors. For unicast, Send returns the single
 // send error, or the context error if the context is cancelled first.
 //
-// A server handler dispatching a back-channel call should release its hold on
-// the server first, so that inbound processing is not blocked while the send
-// completes. Use [OnewayCall.Async] to keep several sends in flight from a
-// single goroutine.
+// A server handler that relays a request in FIFO order dispatches the relay
+// with [OnewayCall.Async] before it calls ServerContext.Release, and waits for
+// it with [OnewayAsync.Wait] after Release, so that the next request does not
+// wait for the send. Use [OnewayCall.Async] also to keep several sends in
+// flight from a single goroutine.
 //
 // Send consumes the call; calling it again on the same handle panics.
 func (c *OnewayCall[Req]) Send() error {

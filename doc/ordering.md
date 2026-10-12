@@ -97,3 +97,8 @@ Hence, to preserve message ordering, the following rules must be adhered to:
 * (Client-side) To process replies from different quorum calls concurrently, use the `Async*` terminal methods.
 
 * (Server-side) If the server must return replies in the same order as the client sent them, the server-side handler must also preserve ordering.
+
+* (Server-side) Only the code before `Release()` runs in FIFO order.
+  A handler that relays a request to other nodes must dispatch the relay before `Release()`, for example with `Async()`, and wait for it after `Release()`.
+  A relay dispatched after `Release()` may overtake the relay of the next request.
+  See [Request Ordering and ServerContext.Release](./user-guide.md#request-ordering-and-servercontextrelease).
