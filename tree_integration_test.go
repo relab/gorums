@@ -2,6 +2,7 @@ package gorums_test
 
 import (
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -101,6 +102,87 @@ func TestTreeMulticast(t *testing.T) {
 				t.Errorf("root received %d messages, want 0", received[root])
 			}
 		})
+	}
+}
+
+// TestTreeMulticastRelayOrder verifies where a relay must dispatch to keep
+// per-sender FIFO order across hops. The root multicasts message "0" and then
+// message "1". Each internal node holds its handler for "0" after Release
+// until its handler for "1" has relayed, which is an interleaving that
+// Release allows. A relay dispatched before Release reaches the leaves in
+// send order; a relay dispatched after Release reaches them in reverse order.
+func TestTreeMulticastRelayOrder(t *testing.T) {
+	tests := []struct {
+		name               string
+		relayBeforeRelease bool
+		wantLeafOrder      []string
+	}{
+		{name: "RelayBeforeRelease", relayBeforeRelease: true, wantLeafOrder: []string{"0", "1"}},
+		{name: "RelayAfterRelease", relayBeforeRelease: false, wantLeafOrder: []string{"1", "0"}},
+	}
+	for _, tt := range tests {
+		for _, dedup := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/Dedup=%t", tt.name, dedup), func(t *testing.T) {
+				const n = 7
+				servers, trees := setupTreeServers(t, n, dedup, gorums.TreeOptions{BranchingFactor: 2, Depth: 2})
+
+				var mu sync.Mutex
+				leafOrder := make(map[gorums.ID][]string)
+				var wg sync.WaitGroup
+				wg.Add(2 * (n - 1)) // every non-root node handles both messages
+
+				for i, srv := range servers {
+					tree := trees[i]
+					children := tree.ChildrenOf(srv.NodeID())
+					relayedOne := make(chan struct{}) // closed when this node has relayed "1"
+					srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+						defer wg.Done()
+						req := gorums.AsProto[*pb.StringValue](in)
+						if len(children) == 0 {
+							mu.Lock()
+							leafOrder[srv.NodeID()] = append(leafOrder[srv.NodeID()], req.GetValue())
+							mu.Unlock()
+							return nil, nil
+						}
+						var relay *gorums.OnewayAsync
+						if tt.relayBeforeRelease {
+							relay = gorumsimpl.Multicast(children.Context(ctx), req, mock.TestMethod).Async()
+						}
+						ctx.Release()
+						if req.GetValue() == "0" {
+							<-relayedOne
+						}
+						if !tt.relayBeforeRelease {
+							relay = gorumsimpl.Multicast(children.Context(ctx), req, mock.TestMethod).Async()
+						}
+						if req.GetValue() == "1" {
+							close(relayedOne)
+						}
+						if err := relay.Wait(); err != nil {
+							t.Errorf("node %d: relay %q: %v", srv.NodeID(), req.GetValue(), err)
+						}
+						return nil, nil
+					})
+				}
+
+				ctx := gorumstest.Context(t, 5*time.Second)
+				rootChildren := trees[0].ChildrenOf(trees[0].Root().ID())
+				for _, v := range []string{"0", "1"} {
+					if err := gorumsimpl.Multicast(rootChildren.Context(ctx), pb.String(v), mock.TestMethod).Send(); err != nil {
+						t.Fatalf("multicast %q: %v", v, err)
+					}
+				}
+				waitWithTimeout(t, &wg)
+
+				mu.Lock()
+				defer mu.Unlock()
+				for id := gorums.ID(4); id <= n; id++ {
+					if !slices.Equal(leafOrder[id], tt.wantLeafOrder) {
+						t.Errorf("leaf %d received %v, want %v", id, leafOrder[id], tt.wantLeafOrder)
+					}
+				}
+			})
+		}
 	}
 }
 

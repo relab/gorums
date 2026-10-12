@@ -389,14 +389,21 @@ func (ctx *ServerContext) SenderID() ID {
 	return ctx.senderID
 }
 
-// Release lets the next request on this handler's stream start, concurrently
-// with this handler. Replies to calls the handler makes arrive before and after
-// Release, so the handler may call the peer that sent the request. Before
-// Release, such a reply arrives only while the stream's dispatch queue has room
-// (see [WithBufferSizes]); call Release first if the peer may fill that queue
-// while the call is in flight. Call Release once the handler is done with state
-// that requests must access one at a time. It is safe to call Release multiple
-// times.
+// Release ends the ordered part of the handler and lets the next request on
+// this handler's stream start. Code before Release runs in per-sender FIFO
+// order: the requests of one stream pass it one at a time, in arrival order.
+// Code after Release runs concurrently with the handlers of later requests, so
+// it must protect shared state, for example with a mutex. A mutex gives mutual
+// exclusion but not arrival order. A handler that does not call Release
+// releases when it returns.
+//
+// To keep a nested call in FIFO order, dispatch it before Release and wait for
+// it after Release, for example with [OnewayCall.Async] or
+// [Responses.AsyncMajority]; both send before they return. A call dispatched
+// after Release may overtake the same call from the next request's handler. A
+// reply that the handler waits for before Release arrives only while the
+// stream's dispatch queue has room (see [WithBufferSizes]). It is safe to call
+// Release multiple times.
 func (ctx *ServerContext) Release() {
 	if ctx.release != nil {
 		ctx.release()
@@ -427,8 +434,9 @@ func (ctx *ServerContext) SendMessage(out *Message) {
 // PeerConfig returns the [Config] of the peers configured with [WithPeers],
 // or nil if [WithPeers] was not used. It is the same configuration as
 // [Server.PeerConfig], so a handler can fan out calls to the server's peers.
-// Call [ServerContext.Release] before invoking calls on it, so that the next
-// request on this stream can start while the handler waits for responses.
+// Calls on it follow the ordering rule of [ServerContext.Release]: dispatch a
+// call before Release to keep it in FIFO order, and wait for its responses
+// after Release, so that the next request on this stream can start meanwhile.
 func (ctx *ServerContext) PeerConfig() Config {
 	if ctx.srv == nil {
 		return nil

@@ -287,17 +287,15 @@ func (srv *storageSrv) ReadCorrectable(_ gorums.ServerContext, req *ReadRequest,
 There are some important things to note about implementing the server interfaces:
 
 * The handlers run in the order messages are received.
-* Messages from the same sender are executed in FIFO order at all servers.
+* Messages from the same sender are executed in FIFO order at all servers, up to the point where the handler calls `ServerContext.Release`.
   See the auxiliary documentation for more information about [message ordering](./ordering.md) in Gorums.
 * Messages from different senders may be received in a different order at the different servers.
   To guarantee messages from different senders are executed in-order at the different servers, you must use a total ordering protocol.
 * Errors should be returned using the [`status` package](https://pkg.go.dev/google.golang.org/grpc/status?tab=doc).
-* Handlers for requests from the same stream start one at a time.
-  `ServerContext.Release` lets the next request start, and the handler calls it automatically when it returns.
-  The server keeps reading the stream while the stream's dispatch queue has room, so a reply arrives while the handler has not called `Release`.
-  A handler may call the peer that sent the request before `Release`, and that call completes unless the peer fills the queue first; see [Send Queue Capacity and Backpressure](#send-queue-capacity-and-backpressure).
-  Omitting `Release` delays the next request until the handler returns.
+* Handlers for requests from the same stream start one at a time, in arrival order.
+  `ServerContext.Release` lets the next request start before the handler returns, and the handler releases automatically when it returns.
   After `ctx.Release()` has been called, the handler may run concurrently with the handlers for the next requests.
+  See [Request Ordering and ServerContext.Release](#request-ordering-and-servercontextrelease).
 
   ```go
   func (srv *storageSrv) ReadRPC(ctx gorums.ServerContext, req *ReadRequest) (resp *ReadResponse, err error) {
@@ -342,6 +340,51 @@ go gorumsSrv.ListenAndServe()
 `Server.Addr` reports the bound address (useful when the configured port is `0`).
 `Server.Stop` stops the server immediately, closing the listener it owns and any outbound configuration.
 `Server.Stop` is safe to call before serving starts.
+
+### Request Ordering and ServerContext.Release
+
+`ServerContext.Release` divides a handler into an ordered part and a concurrent part:
+
+```text
+handler(req):
+    ┌─ ordered part ───────┐   requests from one stream pass one at a time, in arrival order
+    │ assign seq, enqueue, │
+    │ dispatch a relay     │
+    └──────────────────────┘
+    ctx.Release()
+    ┌─ concurrent part ────┐   overlaps the handlers of later requests
+    │ wait for replies,    │
+    │ slow work, I/O       │
+    └──────────────────────┘
+    return reply
+```
+
+Code before `Release` runs in per-sender FIFO order.
+Code after `Release` runs concurrently with the handlers of later requests from the same stream, so it must protect shared state, for example with a mutex.
+A mutex gives mutual exclusion, but not arrival order, so it cannot restore an order that `Release` gave up.
+A handler that does not call `Release` releases when it returns; the whole handler is then ordered, and the next request waits until the handler returns.
+It is safe to call `Release` more than once.
+
+A nested call follows the same rule: dispatching a call is ordered work, and waiting for its replies is not.
+To keep a nested call in FIFO order, dispatch it before `Release` and wait for it after `Release`:
+
+```go
+func (s *storageServer) WriteMulticast(ctx gorums.ServerContext, req *pb.WriteRequest) {
+    s.store(req)
+    // s.next is the configuration of the next hops.
+    relay := pb.WriteMulticast(s.next.Context(ctx), req).Async()
+    ctx.Release()
+    if err := relay.Wait(); err != nil {
+        // handle the error; a one-way call has no reply to carry it
+    }
+}
+```
+
+`OnewayCall.Async` and the `Async*` terminals of a quorum call (see [Async and Correctable Variants](#async-and-correctable-variants)) send the requests before they return, so the dispatches leave in the order the handlers reach them.
+A call dispatched after `Release` may overtake the same call from the handler of the next request.
+That is correct only when the nested calls of different requests may run in any order, as for the nested reads in [Nested Quorum Calls with ServerContext.PeerConfig](#nested-quorum-calls-with-servercontextpeerconfig).
+A handler that waits for a reply before `Release` keeps the next request waiting.
+If the sender fills the stream's dispatch queue in the meantime, the wait lasts until the context ends; see [Send Queue Capacity and Backpressure](#send-queue-capacity-and-backpressure).
 
 ## Implementing the StorageClient
 
@@ -529,7 +572,7 @@ A handle that is dropped without consuming it never dispatches.
 
 Both terminals report every send failure, so a one-way call cannot fail silently.
 They return once the message has reached each node's stream; since a one-way call carries no reply, there is nothing further to wait for.
-A server handler that multicasts back to its callers should call `ServerContext.Release()` first, so that inbound processing is not blocked while the sends complete.
+A server handler that multicasts dispatches with `.Async()` before `ServerContext.Release()` and calls `.Wait()` after it, so that the sends keep the order of the requests and the next request does not wait for them; see [Request Ordering and ServerContext.Release](#request-ordering-and-servercontextrelease).
 
 `.Send()` blocks until the sends complete, so one goroutine holds a single outstanding message per node — the same depth a quorum call has.
 `.Async()` dispatches and returns a `*OnewayAsync` whose `.Wait()` collects the errors later, letting one goroutine keep several calls in flight:
@@ -550,10 +593,10 @@ for _, h := range handles {
 
 Summary:
 
-| Call type           | When messages are sent           |
-| ------------------- | -------------------------------- |
-| Quorum call (sync)  | On first consumption (lazy)      |
-| Quorum call (async) | Immediately, before goroutine    |
+| Call type           | When messages are sent            |
+| ------------------- | --------------------------------- |
+| Quorum call (sync)  | On first consumption (lazy)       |
+| Quorum call (async) | Immediately, before goroutine     |
 | Multicast / unicast | On `.Send()` or `.Async()` (lazy) |
 
 **A cancelled call leaves the node's stream intact.**
@@ -1978,10 +2021,9 @@ See [Server Configuration Callbacks](#server-configuration-callbacks) for detail
 
 ### Writing the Handler
 
-Call `ctx.Release()` before nested outbound calls when the next request should start while those calls are in flight.
-The server keeps reading replies while the stream's dispatch queue has room.
-A handler may call the peer that sent the request before `Release`, and that call completes unless the peer fills the queue first; see [Send Queue Capacity and Backpressure](#send-queue-capacity-and-backpressure).
-Omitting `Release` delays the next request until the handler returns.
+Nested calls follow the rule in [Request Ordering and ServerContext.Release](#request-ordering-and-servercontextrelease): dispatch before `Release` the calls that must stay in FIFO order, and wait for replies after `Release`.
+`ReadNestedQC` below calls `Release` first, because the nested reads of different requests may run in any order; the next request starts while the nested calls are in flight.
+`WriteNestedMulticast` dispatches its multicast before `Release`, so the peers receive the writes in the order the requests arrived.
 
 Check that a configuration is non-empty before calling `Context` on it: `Config.Context` panics on an empty configuration.
 The `len(config) == 0` checks below exist for this reason, not just as a general safety habit.
@@ -2000,7 +2042,7 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadReque
 }
 ```
 
-The same pattern applies to nested multicast:
+A nested multicast that must keep the order of the writes dispatches before `Release`:
 
 ```go
 func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerContext, req *pb.WriteRequest) (*pb.WriteResponse, error) {
@@ -2008,8 +2050,9 @@ func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerContext, req *pb.W
     if len(config) == 0 {
         return nil, fmt.Errorf("write_nested_multicast: requires server peer configuration")
     }
+    relay := pb.WriteMulticast(config.Context(ctx), req).Async()
     ctx.Release()
-    if err := pb.WriteMulticast(config.Context(ctx), req).Send(); err != nil {
+    if err := relay.Wait(); err != nil {
         return nil, fmt.Errorf("write_nested_multicast: %w", err)
     }
     return pb.WriteResponse_builder{New: true}.Build(), nil
@@ -2132,10 +2175,9 @@ A server configured with `WithPeers` announces its static node ID instead, and s
 ### Writing the Handler
 
 The handler reads `ctx.ConnectedClients()` to reach all currently connected client peers.
-`Release` lets the next request start.
-The server keeps reading the stream while its dispatch queue has room, so a handler may call a connected client before `Release` and the reply arrives on that same stream.
+The nested calls follow the rule in [Request Ordering and ServerContext.Release](#request-ordering-and-servercontextrelease); this read calls `Release` first, because its nested calls may run in any order.
+A handler may also wait for a connected client before `Release`: the server keeps reading the stream while its dispatch queue has room, so the reply arrives on that same stream.
 If that client fills the queue first, the call waits until its context ends; see [Send Queue Capacity and Backpressure](#send-queue-capacity-and-backpressure).
-Omitting `Release` delays the next request until the handler returns.
 
 ```go
 // ReadNestedQC fans out a ReadQC to all clients that have connected.
@@ -2151,9 +2193,9 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadReque
 
 The key difference from `ServerContext.PeerConfig()` is the direction of each per-node connection:
 
-| Method               | Connection direction                            | Typical use case                                   |
-| -------------------- | ----------------------------------------------- | -------------------------------------------------- |
-| `ctx.PeerConfig()`   | Outbound (this server dials its peers)          | Static cluster with known membership               |
+| Method                   | Connection direction                            | Typical use case                                   |
+| ------------------------ | ----------------------------------------------- | -------------------------------------------------- |
+| `ctx.PeerConfig()`       | Outbound (this server dials its peers)          | Static cluster with known membership               |
 | `ctx.ConnectedClients()` | Inbound reversed (server calls back to clients) | Clients behind a firewall that connect to a server |
 
 ### Sequence Diagram
@@ -2249,16 +2291,20 @@ type storageServer struct {
 }
 
 // WriteMulticast stores the value locally and relays it to the children,
-// which run this same handler.
+// which run this same handler. The store and the relay dispatch happen before
+// Release, so every hop keeps the writes in the order the root sent them.
 func (s *storageServer) WriteMulticast(ctx gorums.ServerContext, req *pb.WriteRequest) {
+    s.store(req)
+    children := s.tree.ChildrenOf(s.id)
+    if len(children) == 0 {
+        return
+    }
+    relay := pb.WriteMulticast(children.Context(ctx), req).Async()
     // Let the next request start while the relay is in progress.
     ctx.Release()
-    if children := s.tree.ChildrenOf(s.id); len(children) > 0 {
-        if err := pb.WriteMulticast(children.Context(ctx), req).Send(); err != nil {
-            // handle the error; a one-way call has no reply to carry it
-        }
+    if err := relay.Wait(); err != nil {
+        // handle the error; a one-way call has no reply to carry it
     }
-    s.store(req)
 }
 
 // ReadQC returns the newest value among this server and its subtree.
@@ -2278,7 +2324,9 @@ func (s *storageServer) ReadQC(ctx gorums.ServerContext, req *pb.ReadRequest) (*
 ```
 
 A server that is also used without a tree needs a separate RPC for the tree variant, because the handler of an RPC cannot know which kind of call it serves.
-This is one pattern, and it is a nested call, so it has the properties described in [Nested Quorum Calls with ServerContext.PeerConfig](#nested-quorum-calls-with-servercontextpeerconfig) and [Send Queue Capacity and Backpressure](#send-queue-capacity-and-backpressure): call `Release` first, and note that a full dispatch queue can stall a nested call.
+This is one pattern, and it is a nested call, so it has the properties described in [Nested Quorum Calls with ServerContext.PeerConfig](#nested-quorum-calls-with-servercontextpeerconfig) and [Send Queue Capacity and Backpressure](#send-queue-capacity-and-backpressure):
+dispatch a relay that must stay in order before `Release`.
+Note that a full dispatch queue can stall a call that waits for a reply before `Release`.
 The blocking pattern does not fit a protocol that sends a one-way message to its parent when a timer fires or when its subtree is complete; such a protocol can use `tree.ParentOf(id)` as the destination of a unicast.
 
 ### Limits
@@ -2342,6 +2390,6 @@ The receive-size argument of `WithBufferSizes` sets that queue's capacity per st
 A queue of zero slots cost up to about 12% of quorum-call throughput at high concurrency in LAN sweeps, and 16 slots recovered nearly all of it, so the larger default is cheap at 8 bytes per slot.
 When the queue is full, the server stops reading from the stream until a handler releases or returns.
 Replies on that stream then wait too.
-A handler that calls the sending peer before `Release` waits for that reply until its context ends if the peer fills the queue in the meantime.
-Call `Release` before such a call, or choose a receive size larger than the number of requests the peer can send while the call is in flight.
+A handler that waits for a reply from the sending peer before `Release` waits until its context ends if the peer fills the queue in the meantime.
+Dispatch such a call before `Release` and wait for the reply after `Release`, or choose a receive size larger than the number of requests the peer can send while the call is in flight.
 A client's back channel queues server-initiated requests the same way, with the default capacity of 4096.
