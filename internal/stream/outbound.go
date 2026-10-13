@@ -180,7 +180,16 @@ func (c *OutboundChannel) open() (*session, error) {
 // watchGoAway drains s once the connection leaves Ready, which is how the
 // client observes a server GOAWAY. Pending calls then complete on s while new
 // requests go to a new stream. It returns when ctx ends.
+//
+// The connection may still report Connecting just after the stream opens.
+// That is not a GOAWAY, so the watcher waits for Ready first; draining then
+// would end a healthy session and lose the one-way messages it had accepted.
 func (c *OutboundChannel) watchGoAway(ctx context.Context, s *session) {
+	for c.conn.GetState() == connectivity.Connecting {
+		if !c.conn.WaitForStateChange(ctx, connectivity.Connecting) {
+			return
+		}
+	}
 	for c.conn.GetState() == connectivity.Ready {
 		if !c.conn.WaitForStateChange(ctx, connectivity.Ready) {
 			return
