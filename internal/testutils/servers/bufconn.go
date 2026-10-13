@@ -34,9 +34,11 @@ var globalBufconnRegistry = &bufconnRegistry{
 	dialers: make(map[testing.TB]bufconnDialer),
 }
 
-// nextAddress generates a unique fake address for a bufconn listener.
+// nextAddress generates a fake address for a bufconn listener. The port wraps
+// around within the valid range, so a long -count run does not overflow it;
+// addresses only need to be distinct among the listeners alive at once.
 func (r *bufconnRegistry) nextAddress() string {
-	port := r.portCounter.Add(1)
+	port := r.portCounter.Add(1) % (65536 - 10000)
 	return fmt.Sprintf("127.0.0.1:%d", 10000+port)
 }
 
