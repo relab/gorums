@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"slices"
@@ -116,6 +117,14 @@ func newServer(opts ...ServerOption) (*Server, error) {
 	if serverOpts.sendBufferSize == 0 {
 		serverOpts.sendBufferSize = conn.DefaultSendBufferSize
 	}
+	if serverOpts.hasPeerVerifier {
+		if serverOpts.peerVerifier == nil {
+			return nil, errors.New("gorums: WithPeerVerifier requires a non-nil verifier")
+		}
+		if serverOpts.peerNodes == nil {
+			return nil, errors.New("gorums: WithPeerVerifier requires WithPeers")
+		}
+	}
 	// Allocate s first so it can serve as the self-node handler for the [conn.InboundManager].
 	// HandleRequest only accesses s.handlers and s.interceptors, both of which are
 	// set below before NewInboundManager is called, so the reference is safe to pass.
@@ -132,6 +141,7 @@ func newServer(opts ...ServerOption) (*Server, error) {
 		serverOpts.recvBufferSize,
 		serverOpts.onConfigChange,
 		s,
+		serverOpts.peerVerifier,
 	)
 	if err != nil {
 		s.grpcServer.Stop()
@@ -380,10 +390,13 @@ type ServerContext struct {
 //     node's ID;
 //   - a request that this server sends to itself has this server's own ID.
 //
-// SenderID returns 0 for a client that announces no ID, or an ID that this
-// server does not know. The sender is the last hop: when a message travels
-// through several nodes, SenderID identifies the node that forwarded it. The
-// sender asserts its ID when it connects, and the server does not
+// SenderID returns 0 for a client that announces no ID, or, without
+// [WithPeerVerifier], for an ID that this server does not know; with it, a
+// stream that claims an unknown ID is refused. The sender is the last hop:
+// when a message travels through several nodes, SenderID identifies the node
+// that forwarded it. The sender asserts its ID when it connects. A server
+// configured with [WithPeerVerifier] checks the ID of every configured peer,
+// on the streams in both directions; otherwise the server does not
 // authenticate it.
 func (ctx *ServerContext) SenderID() ID {
 	return ctx.senderID

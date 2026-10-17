@@ -3,7 +3,6 @@ package conn
 import (
 	"context"
 	"errors"
-	"net"
 	"testing"
 	"time"
 
@@ -187,16 +186,9 @@ func BenchmarkNodeEnqueue(b *testing.B) {
 //
 //	go test -run=^$ -bench='BenchmarkChannelSend$|BenchmarkNodeEnqueueSend' -benchmem -count=10 ./internal/stream .
 func BenchmarkNodeEnqueueSend(b *testing.B) {
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		b.Fatalf("failed to listen: %v", err)
-	}
-	grpcSrv := grpc.NewServer() // skipcq: GO-S0902
-	stream.RegisterGorumsServer(grpcSrv, benchEchoServer{})
-	go func() { _ = grpcSrv.Serve(lis) }()
-	b.Cleanup(grpcSrv.Stop)
+	addr := startEchoServer(b)
 
-	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		b.Fatalf("failed to dial: %v", err)
 	}
@@ -204,7 +196,7 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 
 	// Wrap the outbound channel in a Node, adding the transport lookup that
 	// Node.Enqueue performs on every dispatch.
-	n := newInboundNode(1, lis.Addr().String(), func() uint64 { return 0 })
+	n := newInboundNode(1, addr, func() uint64 { return 0 })
 	ch := stream.NewOutboundChannel(context.Background(), 1, conn, stream.OutboundOptions{SendBufferSize: 10, Latency: NodeTransport(n).Latency()})
 	b.Cleanup(func() { _ = ch.Close() })
 	NodeTransport(n).StoreChannel(ch)

@@ -26,3 +26,10 @@ var (
 // stallReportDelay is how long a send must be blocked before [Channel.LastErr]
 // reports [ErrSendStalled].
 const stallReportDelay = time.Second
+
+// VerificationError returns the error for a stream whose remote end failed a
+// [PeerVerifier] check as node id. Its code is codes.Unauthenticated, and its
+// message includes the verifier's error.
+func VerificationError(id ID, err error) error {
+	return status.Errorf(codes.Unauthenticated, "gorums: node %d failed verification: %v", id, err)
+}

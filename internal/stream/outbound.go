@@ -18,6 +18,16 @@ const (
 	eagerReconnectMaxDelay  = 2 * time.Second
 )
 
+// PeerVerifier reports whether the remote end of the stream with context ctx
+// is the node with ID id. It returns nil to accept the stream, and an error
+// that explains the refusal otherwise. ctx is the stream's context, which
+// carries the connection's [google.golang.org/grpc/peer.Peer] and, on a
+// server, the stream's incoming metadata. A PeerVerifier must be safe for
+// concurrent use. It should return promptly, and return when ctx ends: on a
+// dialing node it runs on the channel's goroutine, so a verifier that blocks
+// delays the channel's sends and its Close.
+type PeerVerifier func(ctx context.Context, id ID) error
+
 // OutboundOptions configures an [OutboundChannel].
 type OutboundOptions struct {
 	// SendBufferSize is the send queue capacity.
@@ -33,6 +43,9 @@ type OutboundOptions struct {
 	// time the stream comes up or goes down; [OutboundChannel.StreamUp]
 	// reports the new state.
 	OnStreamChange func()
+	// Verify, if non-nil, checks the remote end of each new stream against
+	// the channel's ID before the stream carries requests.
+	Verify PeerVerifier
 }
 
 // OutboundChannel is a [Channel] over a stream that this node opens to a
@@ -49,11 +62,16 @@ type OutboundOptions struct {
 // the connection (a GOAWAY). The channel then sends new calls on a new
 // stream. Calls already sent on the old stream complete there, and the old
 // stream ends once it has no calls left.
+//
+// With [OutboundOptions.Verify], a stream whose remote end fails the check is
+// closed before any request is sent on it, and the waiting request fails with
+// the error from [VerificationError].
 type OutboundChannel struct {
 	endpoint
 	conn           *grpc.ClientConn
 	eagerReconnect bool
 	onStreamChange func()
+	verify         PeerVerifier
 	streamUp       atomic.Bool
 
 	mu       sync.Mutex
@@ -72,6 +90,7 @@ func NewOutboundChannel(ctx context.Context, id ID, conn *grpc.ClientConn, opts 
 		conn:           conn,
 		eagerReconnect: opts.EagerReconnect,
 		onStreamChange: opts.OnStreamChange,
+		verify:         opts.Verify,
 		sessions:       make(map[*session]struct{}),
 	}
 	c.closeOnce = sync.OnceValue(func() error {
@@ -152,13 +171,26 @@ func (c *OutboundChannel) pace(delay *time.Duration) <-chan time.Time {
 	return timer
 }
 
-// open opens a stream and starts the session's receive loop and GOAWAY watcher.
+// open opens a stream, checks its remote end if the channel has a verifier,
+// and starts the session's receive loop and GOAWAY watcher.
 func (c *OutboundChannel) open() (*session, error) {
 	ctx, cancel := context.WithCancel(c.ctx)
 	st, err := NewGorumsClient(c.conn).NodeStream(ctx)
 	if err != nil {
 		cancel()
 		return nil, err
+	}
+	if c.verify != nil {
+		// The stream's context carries the server's peer information,
+		// including its TLS state, once NodeStream returns. Calling Context
+		// commits the stream to its transport, so the requests sent on this
+		// stream reach the peer that was checked. It also turns off gRPC's
+		// transparent retry for this stream; the run loop's reconnect
+		// replaces it.
+		if err := c.verify(st.Context(), c.id); err != nil {
+			cancel()
+			return nil, VerificationError(c.id, err)
+		}
 	}
 	s := newSession(ctx, cancel, &c.endpoint, st, true, true)
 	c.mu.Lock()

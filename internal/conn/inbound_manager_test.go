@@ -2,6 +2,7 @@ package conn
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -27,7 +28,7 @@ func (f requestHandlerFunc) HandleRequest(ctx context.Context, _ ID, msg *stream
 // [NewInboundManager] rejects peerNodes.
 func newInboundManager(t *testing.T, myID uint32, peerNodes NodeSource, onConfigChange func(Config), handler stream.RequestHandler) *InboundManager {
 	t.Helper()
-	im, err := NewInboundManager(myID, peerNodes, 0, 0, onConfigChange, handler)
+	im, err := NewInboundManager(myID, peerNodes, 0, 0, onConfigChange, handler, nil)
 	if err != nil {
 		t.Fatalf("NewInboundManager: %v", err)
 	}
@@ -109,7 +110,7 @@ func TestNewInboundManager(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			im, err := NewInboundManager(1, tc.opt, 0, 0, nil, nil)
+			im, err := NewInboundManager(1, tc.opt, 0, 0, nil, nil, nil)
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("NewInboundManager() error = %v; want it to contain %q", err, tc.wantErr)
@@ -339,22 +340,22 @@ func TestInboundManagerAcceptPeerUpdatesConfig(t *testing.T) {
 	}
 }
 
-func TestInboundManagerAcceptPeer(t *testing.T) {
-	im := newTestInboundManager(t, 1)
-
-	// tracked reports whether ch is the active channel of a node in im.
-	tracked := func(ch *stream.InboundChannel) bool {
-		im.mu.RLock()
-		defer im.mu.RUnlock()
-		for _, nodes := range []map[uint32]*Node{im.knownNodes, im.clientNodes} {
-			for _, n := range nodes {
-				if n.activeChannel() == stream.Channel(ch) {
-					return true
-				}
+// isTracked reports whether ch is the active channel of a node in im.
+func isTracked(im *InboundManager, ch *stream.InboundChannel) bool {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+	for _, nodes := range []map[ID]*Node{im.knownNodes, im.clientNodes} {
+		for _, n := range nodes {
+			if n.activeChannel() == stream.Channel(ch) {
+				return true
 			}
 		}
-		return false
 	}
+	return false
+}
+
+func TestInboundManagerAcceptPeer(t *testing.T) {
+	im := newTestInboundManager(t, 1)
 
 	tests := []struct {
 		name        string
@@ -403,11 +404,162 @@ func TestInboundManagerAcceptPeer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("AcceptPeer() unexpected error: %v", err)
 			}
-			if got := tracked(ch); got != tc.wantTracked {
+			if got := isTracked(im, ch); got != tc.wantTracked {
 				t.Errorf("AcceptPeer() channel tracked = %t; want %t", got, tc.wantTracked)
 			}
 			cleanup()
 		})
+	}
+}
+
+// newVerifyingInboundManager returns an InboundManager with node ID 1, known
+// peers 1, 2, and 3, and the given peer verifier.
+func newVerifyingInboundManager(t *testing.T, verify PeerVerifier) *InboundManager {
+	t.Helper()
+	im, err := NewInboundManager(1, WithNodes(map[ID]mock.NodeAddr{
+		1: "127.0.0.1:9081",
+		2: "127.0.0.1:9082",
+		3: "127.0.0.1:9083",
+	}), 0, 0, nil, nil, verify)
+	if err != nil {
+		t.Fatalf("NewInboundManager: %v", err)
+	}
+	return im
+}
+
+// TestInboundManagerAcceptPeerVerifier verifies that, with a peer verifier,
+// AcceptPeer attaches a stream that claims a peer's node ID only after the
+// verifier accepts the claim, refuses claims for unknown node IDs without
+// calling the verifier, and leaves streams that claim no peer node ID
+// unchecked. TestInboundManagerAcceptPeer pins the behavior without a
+// verifier.
+func TestInboundManagerAcceptPeerVerifier(t *testing.T) {
+	errRefused := errors.New("certificate names another node")
+	tests := []struct {
+		name        string
+		ctx         context.Context
+		verifyErr   error
+		wantCode    codes.Code
+		wantTracked bool
+		wantChecked []ID
+	}{
+		{name: "RegularClient", ctx: t.Context(), wantCode: codes.OK},
+		{name: "BackChannelClient", ctx: inboundCtx(t.Context(), 0), wantCode: codes.OK, wantTracked: true},
+		{name: "SelfNodeID", ctx: inboundCtx(t.Context(), 1), wantCode: codes.InvalidArgument},
+		{name: "UnknownPeerID", ctx: inboundCtx(t.Context(), 99), wantCode: codes.Unauthenticated},
+		{name: "KnownPeerRefused", ctx: inboundCtx(t.Context(), 2), verifyErr: errRefused, wantCode: codes.Unauthenticated, wantChecked: []ID{2}},
+		{name: "KnownPeerAccepted", ctx: inboundCtx(t.Context(), 2), wantCode: codes.OK, wantTracked: true, wantChecked: []ID{2}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var checked []ID
+			im := newVerifyingInboundManager(t, func(_ context.Context, id ID) error {
+				checked = append(checked, id)
+				return tc.verifyErr
+			})
+			inStream := mock.NewBidiStream[*stream.Message]()
+			defer inStream.Close()
+
+			ch, cleanup, err := im.AcceptPeer(tc.ctx, inStream)
+			if got := status.Code(err); got != tc.wantCode {
+				t.Fatalf("AcceptPeer() error = %v; want code %v", err, tc.wantCode)
+			}
+			if tc.verifyErr != nil && !strings.Contains(err.Error(), "gorums: node 2 failed verification: "+tc.verifyErr.Error()) {
+				t.Errorf("AcceptPeer() error = %q; want it to name node 2 and the verifier's error", err)
+			}
+			if err == nil {
+				if got := isTracked(im, ch); got != tc.wantTracked {
+					t.Errorf("AcceptPeer() channel tracked = %t; want %t", got, tc.wantTracked)
+				}
+				cleanup()
+			} else if im.knownPeer(2).activeChannel() != nil {
+				t.Errorf("peer 2 has an active channel after a refused stream")
+			}
+			if !slices.Equal(checked, tc.wantChecked) {
+				t.Errorf("verifier checked %v; want %v", checked, tc.wantChecked)
+			}
+		})
+	}
+}
+
+// TestInboundManagerAcceptPeerVerifierChecksEveryStream verifies that every
+// stream claiming a peer's node ID is checked, including a reconnect of a
+// peer whose earlier stream was accepted, so a revoked certificate takes
+// effect on the peer's next stream.
+func TestInboundManagerAcceptPeerVerifierChecksEveryStream(t *testing.T) {
+	refuse := false
+	im := newVerifyingInboundManager(t, func(context.Context, ID) error {
+		if refuse {
+			return errors.New("certificate revoked")
+		}
+		return nil
+	})
+	first := mock.NewBidiStream[*stream.Message]()
+	defer first.Close()
+	_, cleanup, err := im.AcceptPeer(inboundCtx(t.Context(), 2), first)
+	if err != nil {
+		t.Fatalf("AcceptPeer(first stream) error = %v; want nil", err)
+	}
+	defer cleanup()
+
+	refuse = true
+	second := mock.NewBidiStream[*stream.Message]()
+	defer second.Close()
+	if _, _, err := im.AcceptPeer(inboundCtx(t.Context(), 2), second); status.Code(err) != codes.Unauthenticated {
+		t.Errorf("AcceptPeer(reconnect after revocation) error = %v; want code %v", err, codes.Unauthenticated)
+	}
+}
+
+// TestInboundManagerAcceptPeerVerifierRunsWithoutLock verifies that a slow
+// verifier for one peer does not stall the admission of another peer or
+// reads of the manager's configurations.
+func TestInboundManagerAcceptPeerVerifierRunsWithoutLock(t *testing.T) {
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	im := newVerifyingInboundManager(t, func(_ context.Context, id ID) error {
+		if id == 2 {
+			close(entered)
+			<-release
+		}
+		return nil
+	})
+
+	slowDone := make(chan error, 1)
+	go func() {
+		slow := mock.NewBidiStream[*stream.Message]()
+		defer slow.Close()
+		_, cleanup, err := im.AcceptPeer(inboundCtx(t.Context(), 2), slow)
+		if err == nil {
+			cleanup()
+		}
+		slowDone <- err
+	}()
+	<-entered
+
+	fastTracked := make(chan bool, 1)
+	go func() {
+		fast := mock.NewBidiStream[*stream.Message]()
+		defer fast.Close()
+		ch, cleanup, err := im.AcceptPeer(inboundCtx(t.Context(), 3), fast)
+		if err != nil {
+			fastTracked <- false
+			return
+		}
+		fastTracked <- isTracked(im, ch) && slices.Contains(im.InboundPeers().NodeIDs(), 3)
+		cleanup()
+	}()
+	select {
+	case ok := <-fastTracked:
+		if !ok {
+			t.Error("peer 3 was not attached while peer 2's check was in progress")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("peer 3's admission waited for peer 2's verifier")
+	}
+
+	close(release)
+	if err := <-slowDone; err != nil {
+		t.Fatalf("AcceptPeer(peer 2) error = %v; want nil", err)
 	}
 }
 
@@ -541,7 +693,7 @@ func TestInboundManagerAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 	im, err := NewInboundManager(1, WithNodes(map[uint32]mock.NodeAddr{
 		1: "127.0.0.1:9081",
 		2: "127.0.0.1:9082",
-	}), 4, 0, nil, echo)
+	}), 4, 0, nil, echo, nil)
 	if err != nil {
 		t.Fatalf("NewInboundManager: %v", err)
 	}
