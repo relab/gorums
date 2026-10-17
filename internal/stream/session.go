@@ -208,7 +208,7 @@ func (s *session) sendFailed(err error) {
 				s.cancel()
 				return
 			}
-			if state != streamFresh || !errors.Is(err, io.EOF) || s.ended() {
+			if state != streamFresh || !errors.Is(err, io.EOF) {
 				break
 			}
 			if s.handoff.CompareAndSwap(streamFresh, streamSendFailed) {

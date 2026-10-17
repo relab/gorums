@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -582,6 +583,58 @@ func TestSessionFailedSendLeavesCallsToReceive(t *testing.T) {
 			} else if got := len(responseChan); got != 0 {
 				t.Errorf("call got %d responses, want it retried", got)
 			}
+		})
+	}
+}
+
+// beforeEOFMatch pauses sendFailed after it loaded the handoff state.
+type beforeEOFMatch func()
+
+func (beforeEOFMatch) Error() string { return io.EOF.Error() }
+
+func (f beforeEOFMatch) Is(target error) bool {
+	f()
+	return target == io.EOF
+}
+
+// TestSessionRefusalOwnsPendingAfterCancellation forces the receiver to cancel
+// between the sender's handoff load and CAS, before the receiver drains calls.
+func TestSessionRefusalOwnsPendingAfterCancellation(t *testing.T) {
+	for _, streaming := range []bool{false, true} {
+		name := "TwoWay"
+		if streaming {
+			name = "Streaming"
+		}
+		t.Run(name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				s, _ := newScriptedSession(t, nil, true)
+				responseChan := make(chan response, 1)
+				s.pending.add(1, Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), Streaming: streaming, ResponseChan: responseChan})
+				refusal := status.Error(codes.Unauthenticated, "refused")
+				canceled, resume := make(chan struct{}), make(chan struct{})
+				cancel := s.cancel
+				var cancels atomic.Int32
+				s.cancel = func() {
+					cancel()
+					if cancels.Add(1) == 1 {
+						close(canceled)
+						<-resume
+					}
+				}
+				s.sendFailed(beforeEOFMatch(func() {
+					go s.receiveFailed(refusal)
+					<-canceled
+				}))
+				close(resume)
+				synctest.Wait()
+
+				if got := len(s.queue.ch); got != 0 {
+					t.Errorf("requeued %d calls, want 0", got)
+				}
+				if err := responseErr(t, responseChan, "refused call"); !errors.Is(err, refusal) {
+					t.Errorf("call failed with %v, want %v", err, refusal)
+				}
+			})
 		})
 	}
 }
