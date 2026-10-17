@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -17,6 +16,7 @@ import (
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
@@ -196,39 +196,50 @@ func TestPeerIdentityRefusalIsPaced(t *testing.T) {
 	}
 }
 
-// TestPeerIdentityRefusedPeerNotConnected verifies that, under stream
-// deduplication, a server whose stream to one peer is refused does not count
-// that peer as connected, so its WaitForAll does not return.
-func TestPeerIdentityRefusedPeerNotConnected(t *testing.T) {
-	verify := peerVerifier(3)
-	// Server 3 refuses server 2's claim only. Its check takes a while, as a
-	// real check may, so each refused stream would count as up meanwhile.
-	refuse2On3 := gorums.WithLocalServerOptionsFunc(func(id gorums.ID) []gorums.ServerOption {
-		if id != 3 {
+// TestPeerIdentityReadyAfterRefusal verifies optimistic readiness for idle
+// accepted streams, even when GOAWAY keeps their lifetimes below two seconds.
+func TestPeerIdentityReadyAfterRefusal(t *testing.T) {
+	var allow atomic.Bool
+	var accepted atomic.Int32
+	verify := peerVerifier(2)
+	refuseOn2 := gorums.WithLocalServerOptionsFunc(func(id gorums.ID) []gorums.ServerOption {
+		if id != 2 {
 			return nil
 		}
-		return []gorums.ServerOption{gorums.WithPeerVerifier(func(ctx context.Context, id gorums.ID) error {
-			if id == 2 {
-				time.Sleep(20 * time.Millisecond)
-				return errors.New("server 2 is not trusted")
-			}
-			return verify(ctx, id)
-		})}
+		return []gorums.ServerOption{
+			gorums.WithGRPCServerOptions(grpc.KeepaliveParams(keepalive.ServerParameters{
+				MaxConnectionAge:      300 * time.Millisecond,
+				MaxConnectionAgeGrace: 50 * time.Millisecond,
+			})),
+			gorums.WithPeerVerifier(func(ctx context.Context, id gorums.ID) error {
+				if err := verify(ctx, id); err != nil {
+					return err
+				}
+				if !allow.Load() {
+					return errors.New("peer is not trusted")
+				}
+				accepted.Add(1)
+				return nil
+			}),
+		}
 	})
-	servers, _ := peerGroup(t, newTestCA(t), 3, nil, gorums.WithStreamDedup(), refuse2On3)
-	server2 := servers[1]
-	awaitCode(t, server2.PeerConfig().Node(3), codes.Unauthenticated)
-	// The first stream counted as up until its refusal arrived.
-	if !gorumstest.WaitUntil(t, 3*time.Second, func() bool {
-		return !slices.Contains(server2.ConnectedPeers().NodeIDs(), 3)
-	}) {
-		t.Fatalf("server 2 ConnectedPeers = %v; want it without node 3", server2.ConnectedPeers().NodeIDs())
-	}
+	servers, calls := peerGroup(t, newTestCA(t), 2, nil, gorums.WithStreamDedup(), refuseOn2)
+	observer := servers[0]
+	awaitLastErrCode(t, observer.PeerConfig().Node(2), codes.Unauthenticated)
+	allow.Store(true)
 
-	// Later streams, which server 3 refuses too, never count as up.
-	ctx := gorumstest.Context(t, 500*time.Millisecond)
-	if _, err := server2.WaitForAll(ctx); !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("server 2 WaitForAll = %v; want %v, since server 3 refuses server 2", err, context.DeadlineExceeded)
+	// No application frames arrive to establish readiness. Each new
+	// accepted stream must count as connected without a probation timer.
+	for cycle := int32(1); cycle <= 3; cycle++ {
+		if !gorumstest.WaitUntil(t, 3*time.Second, func() bool { return accepted.Load() >= cycle }) {
+			t.Fatalf("accepted %d streams; want at least %d", accepted.Load(), cycle)
+		}
+		if _, err := observer.WaitForAll(gorumstest.Context(t, time.Second)); err != nil {
+			t.Fatalf("idle stream %d: WaitForAll = %v (accepted %d streams)", cycle, err, accepted.Load())
+		}
+	}
+	if got := calls[0].Load() + calls[1].Load(); got != 0 {
+		t.Errorf("handled %d requests; want idle streams", got)
 	}
 }
 

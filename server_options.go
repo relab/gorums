@@ -151,8 +151,9 @@ func WithStreamDedup() ServerOption {
 //
 // When the server refuses a stream that a peer opened, the refusal's status
 // carries the text of verify's error, and the refused peer sees it in
-// [Node.LastErr] until one of its streams to the server succeeds. The refused
-// peer's calls on that stream fail with this status; they are not resent. The
+// [Node.LastErr]. A newer error may replace it, but LastErr reverts to nil
+// only once a stream proves viable; see [Node.LastErr]. The refused peer's
+// calls on that stream fail with the refusal's status; they are not resent. The
 // refused peer then backs off before it opens a new stream to the server:
 // 50 ms after the first refusal, doubling after each further refusal up to
 // 2 s. Until the backoff ends, its calls to the server fail at once with the
