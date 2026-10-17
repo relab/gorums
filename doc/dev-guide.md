@@ -165,6 +165,10 @@ It holds a `channelRef`, an atomically replaceable reference to the node's curre
 There are three channel kinds:
 
 * `OutboundChannel` runs over streams this node dials; it opens a new `session` for each stream and requeues pending calls when a stream is lost, as far as the send queue has space.
+  A stream that the server refuses is not lost: it ends with a refusal code (`Unauthenticated`, `PermissionDenied`, `InvalidArgument`, or `Unimplemented`) before it delivered a frame.
+  Its pending calls fail with the refusal, and the channel backs off before it opens the next stream, failing requests at once with the refusal until then.
+  A stream opened after a refusal is suspect for health reporting: its sends do not clear `LastErr` until it delivers a frame or lives 2 s.
+  Connection reporting is optimistic: each stream counts as up when opened, before the server accepts or refuses it.
 * `InboundChannel` runs over one stream that the server accepted; its single `session` ends with the stream.
 * `LocalChannel` serves requests in-process through the handler, with no stream.
 
@@ -173,7 +177,7 @@ A `session` sends queued requests on its `BidiStream`, records two-way calls in 
 The dispatcher runs handlers one at a time, in arrival order.
 A handler that returns without calling `Release` hands its goroutine to the next queued handler, so a busy stream keeps one goroutine and the stack it has grown; an early `Release` starts the next handler on a new goroutine.
 On the server side, `Server.NodeStream` asks a `PeerAcceptor` for the `InboundChannel` of each accepted stream.
-An `OutboundChannel` with a `PeerVerifier` checks the remote end of each new stream against the channel's node ID, with the stream's context, before it sends requests on the stream; a stream that fails the check is closed, and the waiting request fails with `codes.Unauthenticated`.
+An `OutboundChannel` with a `PeerVerifier` checks the remote end of each new stream against the channel's node ID, with the stream's context, before it sends requests on the stream; a stream that fails the check is closed, the waiting request fails with `codes.Unauthenticated`, and the channel backs off as for a refused stream.
 
 ```mermaid
 classDiagram
@@ -240,6 +244,28 @@ classDiagram
     Request --> Message
     Server --> PeerAcceptor
     PeerAcceptor ..> InboundChannel : returns
+```
+
+Only the receive loop of an outbound session learns whether the server refused its stream: when the server ends a stream, a concurrent `Send` returns `io.EOF`, and only `Recv` returns the server's status.
+So a send that fails with `io.EOF` before the stream delivered a frame only cancels the stream, and the receive loop disposes of the pending calls.
+The session's `handoff` state ensures that exactly one goroutine disposes of them.
+The session's `verdict` channel closes when the stream delivers its first frame or receiving ends; the run loop waits for it after a session ends, and then reads whether the server refused the stream.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Fresh: stream opened
+    Fresh --> Accepted: first frame arrives
+    Fresh --> SendFailed: a send fails with io.EOF
+    Fresh --> Closed: Recv fails
+    SendFailed --> Accepted: a buffered frame arrives, so retry the pending calls
+    SendFailed --> Closed: Recv fails
+    Accepted --> Closed: Recv fails
+    Closed --> [*]
+    note right of Closed
+        From Fresh or SendFailed with a refusal code:
+        fail the pending calls with the refusal.
+        Otherwise: retry them.
+    end note
 ```
 
 ### Connectivity Layer (`internal/conn`)

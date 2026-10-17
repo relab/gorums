@@ -296,12 +296,23 @@ func waitForDisconnection(c *OutboundChannel, timeout time.Duration) bool {
 
 func sendRequest(t testing.TB, c Channel, req Request, msgID uint64) response {
 	t.Helper()
+	resp, err := trySendRequest(c, req, msgID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+// trySendRequest is [sendRequest] without the test: it returns an error
+// instead of failing the test, so that goroutines other than the test's can
+// call it.
+func trySendRequest(c Channel, req Request, msgID uint64) (response, error) {
 	if req.Ctx == nil {
 		req.Ctx = context.Background()
 	}
 	reqMsg, err := NewMessage(req.Ctx, msgID, mock.TestMethod, nil)
 	if err != nil {
-		t.Fatalf("NewMessage failed: %v", err)
+		return response{}, fmt.Errorf("NewMessage failed: %w", err)
 	}
 	req.Msg = reqMsg
 	responseChan := make(chan response, 1)
@@ -310,10 +321,9 @@ func sendRequest(t testing.TB, c Channel, req Request, msgID uint64) response {
 
 	select {
 	case resp := <-responseChan:
-		return resp
+		return resp, nil
 	case <-time.After(defaultTestTimeout):
-		t.Fatalf("timeout waiting for response to message %d", msgID)
-		return response{}
+		return response{}, fmt.Errorf("timeout waiting for response to message %d", msgID)
 	}
 }
 
@@ -1268,12 +1278,13 @@ func TestChannelEagerReconnectRedialsWithoutSends(t *testing.T) {
 }
 
 // rejectEveryStreamServer returns a NodeStream server function that rejects
-// every accepted stream immediately and counts how many streams it accepted.
-func rejectEveryStreamServer() (serverFn func(Gorums_NodeStreamServer) error, count *atomic.Int32) {
+// every accepted stream immediately with err and counts how many streams it
+// accepted.
+func rejectEveryStreamServer(err error) (serverFn func(Gorums_NodeStreamServer) error, count *atomic.Int32) {
 	count = new(atomic.Int32)
 	serverFn = func(Gorums_NodeStreamServer) error {
 		count.Add(1)
-		return errors.New("stream rejected by test server")
+		return err
 	}
 	return serverFn, count
 }
@@ -1281,21 +1292,428 @@ func rejectEveryStreamServer() (serverFn func(Gorums_NodeStreamServer) error, co
 // TestChannelEagerReconnectBacksOffRejectedStreams verifies that a channel with
 // eager reconnection paces its redials with capped backoff when the server
 // rejects every stream, instead of spinning and creating a new stream per
-// iteration. Without backoff the loop produced thousands of accepted streams
-// (5,127 in 250 ms during review); with backoff (50 ms base, doubling to a 2 s
-// cap) only a handful of attempts fit in the window below.
+// iteration, whether the rejection is a refusal or not. Without backoff the
+// loop produced thousands of accepted streams (5,127 in 250 ms during
+// review); with backoff (50 ms base, doubling to a 2 s cap) only a handful of
+// attempts fit in the window below.
 func TestChannelEagerReconnectBacksOffRejectedStreams(t *testing.T) {
-	serverFn, count := rejectEveryStreamServer()
-	setupChannelEager(t, true, serverFn)
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{name: "Unknown", err: errors.New("stream rejected by test server")},
+		{name: "Unauthenticated", err: status.Error(codes.Unauthenticated, "stream refused by test server")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			serverFn, count := rejectEveryStreamServer(tt.err)
+			setupChannelEager(t, true, serverFn)
+
+			const window = 500 * time.Millisecond
+			time.Sleep(window)
+			// Attempts within the window land at roughly 0, 50, 150, 350 ms
+			// plus the sender's initial eager connect: about five. The
+			// generous bound tolerates scheduler jitter while still catching
+			// an unpaced spin.
+			if got := count.Load(); got > 20 {
+				t.Fatalf("server accepted %d streams in %v; eager reconnect is not backing off (want <= 20)", got, window)
+			}
+		})
+	}
+}
+
+// refusingServer is a NodeStream server that refuses streams with code. If
+// read is set, it first reads one request from a stream and then waits hold,
+// so that the requests sent meanwhile are pending on the stream when it is
+// refused. Once accept is set, it echoes on new streams instead.
+type refusingServer struct {
+	code    codes.Code
+	read    bool
+	hold    time.Duration
+	accept  atomic.Bool
+	streams atomic.Int32 // the number of streams opened to the server
+}
+
+// refuseStreamServer returns a server that refuses every stream with code
+// at once.
+func refuseStreamServer(code codes.Code) *refusingServer {
+	return &refusingServer{code: code}
+}
+
+func (r *refusingServer) serve(stream Gorums_NodeStreamServer) error {
+	r.streams.Add(1)
+	if r.accept.Load() {
+		return echoServer(stream)
+	}
+	if r.read {
+		if _, err := stream.Recv(); err != nil {
+			return err
+		}
+		time.Sleep(r.hold)
+	}
+	return status.Error(r.code, "stream refused by test server")
+}
+
+// refusalModes are the channel configurations under which a refused stream
+// must behave the same.
+var refusalModes = []struct {
+	name  string
+	eager bool
+}{
+	{name: "Lazy", eager: false},
+	{name: "Eager", eager: true},
+}
+
+// TestChannelRefusedStreamFailsCalls verifies that a call on a channel whose
+// server refuses its streams fails promptly with the refusal's code, for
+// two-way and streaming calls, with and without eager reconnect.
+func TestChannelRefusedStreamFailsCalls(t *testing.T) {
+	codesUnderTest := []codes.Code{codes.Unauthenticated, codes.PermissionDenied, codes.InvalidArgument, codes.Unimplemented}
+	for _, code := range codesUnderTest {
+		for _, mode := range refusalModes {
+			for _, streaming := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%v/%s/Streaming=%t", code, mode.name, streaming), func(t *testing.T) {
+					srv := refuseStreamServer(code)
+					// The server reads the call, so the call is pending on the
+					// refused stream unless it is made during a backoff.
+					srv.read = true
+					tc := setupChannelEager(t, mode.eager, srv.serve)
+					resp := sendRequest(t, tc.OutboundChannel, Request{Streaming: streaming}, 1)
+					if got := status.Code(resp.Err); got != code {
+						t.Fatalf("call failed with %v, want code %v", resp.Err, code)
+					}
+					if got := srv.streams.Load(); got > 2 {
+						t.Errorf("server saw %d streams, want at most 2", got)
+					}
+				})
+			}
+		}
+	}
+}
+
+// TestChannelRefusalBacksOff verifies that a channel paces the streams it
+// opens to a server that refuses them, while calls keep failing with the
+// refusal, with and without eager reconnect.
+func TestChannelRefusalBacksOff(t *testing.T) {
+	for _, mode := range refusalModes {
+		t.Run(mode.name, func(t *testing.T) {
+			srv := refuseStreamServer(codes.Unauthenticated)
+			tc := setupChannelEager(t, mode.eager, srv.serve)
+
+			const window = 500 * time.Millisecond
+			calls := 0
+			for deadline := time.Now().Add(window); time.Now().Before(deadline); calls++ {
+				resp := sendRequest(t, tc.OutboundChannel, Request{}, uint64(calls+1))
+				if got := status.Code(resp.Err); got != codes.Unauthenticated {
+					t.Fatalf("call %d failed with %v, want code %v", calls+1, resp.Err, codes.Unauthenticated)
+				}
+			}
+			// Attempts land at roughly 0, 50, 150, and 350 ms, since the
+			// delay doubles after each refusal. A delay that stays at 50 ms
+			// gives about 10 attempts, and an unpaced loop thousands.
+			// Scheduler jitter only delays attempts.
+			if got := srv.streams.Load(); got > 7 {
+				t.Errorf("server saw %d streams during %d calls in %v, want at most 7", got, calls, window)
+			}
+		})
+	}
+}
+
+// TestChannelRefusalFailsCallsDuringBackoff verifies that calls made right
+// after a refusal fail at once with the refusal, without a new stream each.
+func TestChannelRefusalFailsCallsDuringBackoff(t *testing.T) {
+	srv := refuseStreamServer(codes.PermissionDenied)
+	tc := setupChannel(t, srv.serve)
+	// The channel's first stream, opened at once, is refused.
+	if !waitUntil(defaultTestTimeout, func() bool { return status.Code(tc.LastErr()) == codes.PermissionDenied }) {
+		t.Fatalf("LastErr = %v, want code %v", tc.LastErr(), codes.PermissionDenied)
+	}
+	for i := range 10 {
+		resp := sendRequest(t, tc.OutboundChannel, Request{}, uint64(i+1))
+		if got := status.Code(resp.Err); got != codes.PermissionDenied {
+			t.Fatalf("call %d failed with %v, want code %v", i+1, resp.Err, codes.PermissionDenied)
+		}
+	}
+	if got := srv.streams.Load(); got > 2 {
+		t.Errorf("server saw %d streams, want at most 2", got)
+	}
+}
+
+// TestChannelRefusalCountsDroppedReplies verifies that a handler reply that
+// fails during a refusal backoff, which has no caller to report to, counts in
+// DroppedReplies.
+func TestChannelRefusalCountsDroppedReplies(t *testing.T) {
+	srv := refuseStreamServer(codes.Unauthenticated)
+	tc := setupChannel(t, srv.serve)
+	if !waitUntil(defaultTestTimeout, func() bool { return status.Code(tc.LastErr()) == codes.Unauthenticated }) {
+		t.Fatalf("LastErr = %v, want code %v", tc.LastErr(), codes.Unauthenticated)
+	}
+	for i := range 10 {
+		tc.reply(Message_builder{MessageSeqNo: ServerSequenceNumber(uint64(i + 1)), Method: mock.TestMethod}.Build())
+	}
+	if !waitUntil(defaultTestTimeout, func() bool { return tc.DroppedReplies() > 0 }) {
+		t.Error("DroppedReplies() = 0 after replies failed during a refusal backoff, want > 0")
+	}
+}
+
+// TestChannelRefusalRecovers verifies that a channel whose server refused its
+// streams carries calls again once the server accepts them, with and without
+// eager reconnect.
+func TestChannelRefusalRecovers(t *testing.T) {
+	for _, mode := range refusalModes {
+		t.Run(mode.name, func(t *testing.T) {
+			srv := refuseStreamServer(codes.Unauthenticated)
+			srv.read = true
+			tc := setupChannelEager(t, mode.eager, srv.serve)
+			if resp := sendRequest(t, tc.OutboundChannel, Request{}, 1); status.Code(resp.Err) != codes.Unauthenticated {
+				t.Fatalf("call failed with %v, want code %v", resp.Err, codes.Unauthenticated)
+			}
+			srv.accept.Store(true)
+			var err error
+			msgID := uint64(1)
+			if !waitUntil(defaultTestTimeout, func() bool {
+				msgID++
+				err = sendRequest(t, tc.OutboundChannel, Request{}, msgID).Err
+				return err == nil
+			}) {
+				t.Fatalf("call after the server accepts failed with %v, want success", err)
+			}
+		})
+	}
+}
+
+// TestChannelRefusalKeepsLastErr verifies that LastErr keeps reporting a
+// refusal while the server refuses the channel's streams, even while a
+// request is sent on a new stream that the server will refuse, and that it
+// clears once a round trip completes after the server accepts.
+func TestChannelRefusalKeepsLastErr(t *testing.T) {
+	for _, mode := range refusalModes {
+		t.Run(mode.name, func(t *testing.T) {
+			srv := refuseStreamServer(codes.Unauthenticated)
+			// The server holds each stream for a while after the request
+			// that it reads, before it refuses the stream.
+			srv.read, srv.hold = true, 20*time.Millisecond
+			tc := setupChannelEager(t, mode.eager, srv.serve)
+			if resp := sendRequest(t, tc.OutboundChannel, Request{}, 1); status.Code(resp.Err) != codes.Unauthenticated {
+				t.Fatalf("call failed with %v, want code %v", resp.Err, codes.Unauthenticated)
+			}
+
+			const window = 600 * time.Millisecond
+			ctx, stop := context.WithTimeout(t.Context(), window)
+			defer stop()
+			var wg sync.WaitGroup
+			wg.Go(func() {
+				for msgID := uint64(2); ctx.Err() == nil; msgID++ {
+					if _, err := trySendRequest(tc.OutboundChannel, Request{}, msgID); err != nil {
+						t.Error(err)
+						return
+					}
+				}
+			})
+			for ctx.Err() == nil {
+				if err := tc.LastErr(); status.Code(err) != codes.Unauthenticated {
+					t.Errorf("LastErr = %v while the server refuses every stream, want code %v", err, codes.Unauthenticated)
+					break
+				}
+				time.Sleep(100 * time.Microsecond)
+			}
+			wg.Wait()
+
+			srv.accept.Store(true)
+			msgID := uint64(1 << 20)
+			if !waitUntil(defaultTestTimeout, func() bool {
+				msgID++
+				return sendRequest(t, tc.OutboundChannel, Request{}, msgID).Err == nil
+			}) {
+				t.Fatal("no call succeeded after the server accepts")
+			}
+			if err := tc.LastErr(); err != nil {
+				t.Errorf("LastErr = %v after a round trip on an accepted stream, want nil", err)
+			}
+		})
+	}
+}
+
+// TestChannelStreamUpAfterRefusal verifies that connection reporting remains
+// optimistic: each new stream counts as up until its refusal arrives.
+func TestChannelStreamUpAfterRefusal(t *testing.T) {
+	for _, mode := range refusalModes {
+		t.Run(mode.name, func(t *testing.T) {
+			srv := refuseStreamServer(codes.Unauthenticated)
+			srv.read, srv.hold = true, 5*time.Millisecond
+			var changes atomic.Int32
+			opts := OutboundOptions{EagerReconnect: mode.eager, OnStreamChange: func() { changes.Add(1) }}
+			tc := setupChannelOptions(t, opts, srv.serve)
+
+			// The first stream comes up at once and goes down at its refusal.
+			if resp := sendRequest(t, tc.OutboundChannel, Request{}, 1); status.Code(resp.Err) != codes.Unauthenticated {
+				t.Fatalf("call failed with %v, want code %v", resp.Err, codes.Unauthenticated)
+			}
+			if !waitUntil(defaultTestTimeout, func() bool { return changes.Load() == 2 }) {
+				t.Fatalf("OnStreamChange called %d times for the first stream, want 2", changes.Load())
+			}
+
+			// Later attempts also count as up before their refusals arrive.
+			for deadline, msgID := time.Now().Add(400*time.Millisecond), uint64(2); time.Now().Before(deadline); msgID++ {
+				if resp := sendRequest(t, tc.OutboundChannel, Request{}, msgID); status.Code(resp.Err) != codes.Unauthenticated {
+					t.Fatalf("call failed with %v, want code %v", resp.Err, codes.Unauthenticated)
+				}
+			}
+			if got := srv.streams.Load(); got < 3 {
+				t.Fatalf("server saw %d streams, want at least 3", got)
+			}
+			if got := changes.Load(); got <= 2 {
+				t.Errorf("OnStreamChange called %d times, want later streams to count as up too", got)
+			}
+		})
+	}
+}
+
+// TestChannelRefusalRacesSends verifies that every call fails with the
+// refusal when many calls race with the refusal of a stream: the calls
+// pending on the stream, a call whose send fails as the stream ends, and the
+// calls queued behind them. Two-way and streaming calls alternate. It is the
+// regression test for the handoff of pending calls from a failed send to the
+// receive loop, and is most useful under the race detector.
+func TestChannelRefusalRacesSends(t *testing.T) {
+	for _, mode := range refusalModes {
+		t.Run(mode.name, func(t *testing.T) {
+			srv := refuseStreamServer(codes.Unauthenticated)
+			srv.read = true
+			tc := setupChannelOptions(t, OutboundOptions{SendBufferSize: 64, EagerReconnect: mode.eager}, srv.serve)
+
+			const window = 500 * time.Millisecond
+			ctx, stop := context.WithTimeout(t.Context(), window)
+			defer stop()
+			var msgIDs atomic.Uint64
+			var wg sync.WaitGroup
+			// One-way calls keep the send loop busy, so that sends race with
+			// each refusal; their outcomes vary with that race.
+			for range 8 {
+				wg.Go(func() {
+					for ctx.Err() == nil {
+						if _, err := trySendRequest(tc.OutboundChannel, Request{Oneway: true}, msgIDs.Add(1)); err != nil {
+							t.Error(err)
+							return
+						}
+					}
+				})
+			}
+			// Two-way and streaming calls must fail with the refusal.
+			for range 16 {
+				wg.Go(func() {
+					for i := 0; ctx.Err() == nil; i++ {
+						msgID := msgIDs.Add(1)
+						resp, err := trySendRequest(tc.OutboundChannel, Request{Streaming: i%2 == 1}, msgID)
+						if err != nil {
+							t.Error(err)
+							return
+						}
+						if got := status.Code(resp.Err); got != codes.Unauthenticated {
+							t.Errorf("call %d (streaming %t) failed with %v, want code %v", msgID, i%2 == 1, resp.Err, codes.Unauthenticated)
+							return
+						}
+					}
+				})
+			}
+			wg.Wait()
+			if got := srv.streams.Load(); got > 20 {
+				t.Errorf("server saw %d streams in %v, want at most 20", got, window)
+			}
+		})
+	}
+}
+
+// TestChannelVerifyFailureBacksOff verifies that a channel whose own check of
+// the server fails paces the streams it opens, while calls keep failing with
+// codes.Unauthenticated.
+func TestChannelVerifyFailureBacksOff(t *testing.T) {
+	var streams atomic.Int32
+	countingEcho := func(stream Gorums_NodeStreamServer) error {
+		streams.Add(1)
+		return echoServer(stream)
+	}
+	opts := OutboundOptions{Verify: func(context.Context, ID) error { return errors.New("certificate names another node") }}
+	tc := setupChannelOptions(t, opts, countingEcho)
 
 	const window = 500 * time.Millisecond
-	time.Sleep(window)
-	// Attempts within the window land at roughly 0, 50, 150, 350 ms plus the
-	// sender's initial eager connect: about five. The generous bound tolerates
-	// scheduler jitter while still catching an unpaced spin.
-	if got := count.Load(); got > 20 {
-		t.Fatalf("server accepted %d streams in %v; eager reconnect is not backing off (want <= 20)", got, window)
+	calls := 0
+	for deadline := time.Now().Add(window); time.Now().Before(deadline); calls++ {
+		resp := sendRequest(t, tc.OutboundChannel, Request{}, uint64(calls+1))
+		if got := status.Code(resp.Err); got != codes.Unauthenticated {
+			t.Fatalf("call %d failed with %v, want code %v", calls+1, resp.Err, codes.Unauthenticated)
+		}
 	}
+	// As in TestChannelRefusalBacksOff, the doubling delay allows about five
+	// attempts in the window.
+	if got := streams.Load(); got > 7 {
+		t.Errorf("server saw %d streams during %d calls in %v, want at most 7", got, calls, window)
+	}
+}
+
+// TestChannelLostStreamBeforeFrameRetries verifies that a call pending on a
+// stream that ends with a status other than a refusal, before the stream
+// delivered a frame, is sent again on a new stream.
+func TestChannelLostStreamBeforeFrameRetries(t *testing.T) {
+	for _, code := range []codes.Code{codes.Unavailable, codes.Unknown, codes.Internal} {
+		t.Run(code.String(), func(t *testing.T) {
+			var streams atomic.Int32
+			serverFn := func(stream Gorums_NodeStreamServer) error {
+				if streams.Add(1) == 1 {
+					if _, err := stream.Recv(); err != nil {
+						return err
+					}
+					return status.Error(code, "stream lost by test server")
+				}
+				return echoServer(stream)
+			}
+			tc := setupChannel(t, serverFn)
+			if resp := sendRequest(t, tc.OutboundChannel, Request{}, 1); resp.Err != nil {
+				t.Fatalf("call failed with %v, want it resent and answered", resp.Err)
+			}
+		})
+	}
+}
+
+// TestChannelRefusalAfterFrameRetries verifies that a stream that delivered a
+// frame and then ends with a refusal code counts as lost, not refused: its
+// pending call is sent again on a new stream.
+func TestChannelRefusalAfterFrameRetries(t *testing.T) {
+	var streams atomic.Int32
+	serverFn := func(stream Gorums_NodeStreamServer) error {
+		if streams.Add(1) > 1 {
+			return echoServer(stream)
+		}
+		in, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if err := stream.Send(in); err != nil {
+			return err
+		}
+		if _, err := stream.Recv(); err != nil {
+			return err
+		}
+		return status.Error(codes.Unauthenticated, "stream ended by test server")
+	}
+	tc := setupChannel(t, serverFn)
+	if resp := sendRequest(t, tc.OutboundChannel, Request{}, 1); resp.Err != nil {
+		t.Fatalf("first call failed with %v", resp.Err)
+	}
+	if resp := sendRequest(t, tc.OutboundChannel, Request{}, 2); resp.Err != nil {
+		t.Fatalf("call pending on the ended stream failed with %v, want it resent and answered", resp.Err)
+	}
+}
+
+// waitUntil polls cond every millisecond until it holds or timeout expires,
+// and reports whether it held.
+func waitUntil(timeout time.Duration, cond func() bool) bool {
+	for deadline := time.Now().Add(timeout); time.Now().Before(deadline); time.Sleep(time.Millisecond) {
+		if cond() {
+			return true
+		}
+	}
+	return cond()
 }
 
 type signalingRequestHandler struct {

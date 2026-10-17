@@ -2404,12 +2404,25 @@ Use `TLSPeerVerifier` to bind node IDs to mTLS certificates; see [Binding Node I
 | --- | --- | --- |
 | Claims the node ID of a configured peer | `verify(ctx, claimed ID)` before the stream is attached to the peer | The stream ends with `codes.Unauthenticated`; no connect callback or handler runs |
 | Claims a node ID outside the peer configuration | None; there is no identity to check | The stream ends with `codes.Unauthenticated` |
-| Opened by this server to a configured peer | `verify(ctx, dialed ID)` before any request is sent | The waiting call fails with `codes.Unauthenticated`; the server tries again later |
+| Opened by this server to a configured peer | `verify(ctx, dialed ID)` before any request is sent | The waiting call fails with `codes.Unauthenticated`; the server backs off before it opens a new stream to the peer, as a refused peer does |
 | Claims no peer node ID (a client) | None | Served as without the option |
 
 A peer that this server refuses sees the refusal, with the verifier's text, in `Node.LastErr` of its node for this server.
-Its pending two-way calls to this server are resent on new streams until their contexts end, so they fail with the context's error, not with `codes.Unauthenticated`; give calls between peers a deadline.
-While the refused peer keeps retrying, its `ConnectedPeers` view can briefly include this server, and under `WithStreamDedup` its `WaitForAll` can return before this server has accepted any of its streams.
+A newer error, such as `Unavailable`, may replace the refusal.
+After a refusal, `LastErr` reverts to nil only once a stream delivers a message or a send succeeds on a stream that has lived 2 s.
+With one-way-only traffic and GOAWAY rotation that keeps every stream shorter than 2 s, `LastErr` can remain stale after recovery even while messages reach the server.
+Each replacement stream remains suspect for health reporting until one of those conditions holds.
+Its calls on the refused stream fail with the refusal's status; they are not resent.
+A node treats a stream as refused when the stream ends with `codes.Unauthenticated`, `codes.PermissionDenied`, `codes.InvalidArgument`, or `codes.Unimplemented` before it delivered any message.
+After a refusal, the refused peer backs off before it opens a new stream to this server: 50 ms after the first refusal, doubling after each further refusal up to 2 s.
+Until the backoff ends, its calls to this server fail at once with the refusal.
+Connection reporting is optimistic: each new stream counts as connected as soon as it opens and passes the dial-side check, without waiting for the server to accept it.
+A refused stream remains connected until its refusal arrives; a slow verifier or network can extend this interval.
+Once per backoff period, the refused peer's `ConnectedPeers` view can therefore include this server, and `WithPeerChange` can report an up/down pair.
+Under `WithStreamDedup`, `WaitForAll` can return even if this server refuses every stream.
+It is not confirmation of remote acceptance.
+Once this server accepts the peer, an idle replacement stream counts as connected without a probation delay, including during GOAWAY rotation.
+When a stream that this server opened fails this server's own check, the peer at the other end can count this server as connected until the stream is closed.
 
 With `WithPeerVerifier`, `ServerContext.SenderID` is authenticated for every configured peer, with and without stream deduplication:
 

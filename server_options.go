@@ -146,19 +146,23 @@ func WithStreamDedup() ServerOption {
 //   - A stream that the server opens to a peer is checked against the dialed
 //     node's ID before any request is sent on it. If the check fails, the
 //     stream is closed, the waiting call fails with codes.Unauthenticated,
-//     and the server tries again later, as for a failed connection.
+//     and the server backs off before it opens a new stream to that peer, as
+//     a refused peer does.
 //
 // When the server refuses a stream that a peer opened, the refusal's status
 // carries the text of verify's error, and the refused peer sees it in
-// [Node.LastErr]. The refused peer resends its pending two-way calls on new
-// streams until their contexts end, so calls between peers need deadlines; its
-// streaming calls fail instead. When a
-// stream that the server opened fails the check, the waiting call fails with
-// the check's error. The server runs verify once per stream, outside its
-// internal locks. With WithPeerVerifier, [ServerContext.SenderID] is
-// authenticated for every configured peer. [NewServer] panics if verify is nil
-// or if the server has no [WithPeers]. Use [TLSPeerVerifier] to bind node IDs
-// to mTLS certificates.
+// [Node.LastErr]. A newer error may replace it, but LastErr reverts to nil
+// only once a stream proves viable; see [Node.LastErr]. The refused peer's
+// calls on that stream fail with the refusal's status; they are not resent. The
+// refused peer then backs off before it opens a new stream to the server:
+// 50 ms after the first refusal, doubling after each further refusal up to
+// 2 s. Until the backoff ends, its calls to the server fail at once with the
+// refusal. When a stream that the server opened fails the check, the waiting
+// call fails with the check's error. The server runs verify once per stream,
+// outside its internal locks. With WithPeerVerifier, [ServerContext.SenderID]
+// is authenticated for every configured peer. [NewServer] panics if verify is
+// nil or if the server has no [WithPeers]. Use [TLSPeerVerifier] to bind node
+// IDs to mTLS certificates.
 func WithPeerVerifier(verify PeerVerifier) ServerOption {
 	return func(o *serverOptions) {
 		o.peerVerifier = verify

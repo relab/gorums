@@ -16,8 +16,10 @@ import (
 	"github.com/relab/gorums/internal/testutils/servers"
 	"go.uber.org/goleak"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -263,14 +265,14 @@ func TestSelfNodeIDStreamRejectedEndToEnd(t *testing.T) {
 		return srv
 	})
 
-	// The client claims the server's own node ID (1). Its stream is rejected,
-	// so the call cannot complete.
+	// The client claims the server's own node ID (1). Its stream is rejected
+	// with codes.InvalidArgument, and the call fails with that refusal.
 	cfg, _ := connectAsPeer(t, 1, addrs)
 	node := cfg.Nodes()[0]
 
-	// Bound the request itself so it fails fast; wait for that failure on a
-	// separate, longer deadline so the two do not race in the select.
-	reqCtx := testTimeoutContext(t, 500*time.Millisecond)
+	// Bound the request by more than the wait below, so that the call fails
+	// with the refusal, not with its deadline.
+	reqCtx := testTimeoutContext(t, 5*time.Second)
 	reqMsg, err := stream.NewMessage(reqCtx, conn.NodeTransport(node).NextMsgID(), mock.TestMethod, pb.String("hello"))
 	if err != nil {
 		t.Fatalf("NewMessage() error: %v", err)
@@ -280,8 +282,8 @@ func TestSelfNodeIDStreamRejectedEndToEnd(t *testing.T) {
 
 	select {
 	case resp := <-responseChan:
-		if resp.Err == nil {
-			t.Fatal("call over a self-ID stream succeeded; want failure")
+		if got := status.Code(resp.Err); got != codes.InvalidArgument {
+			t.Fatalf("call over a self-ID stream: err = %v; want code %v", resp.Err, codes.InvalidArgument)
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("call over a self-ID stream neither failed nor completed")
