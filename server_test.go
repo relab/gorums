@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,7 +19,9 @@ import (
 	"github.com/relab/gorums/internal/testutils/mock"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	"go.uber.org/goleak"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -1299,4 +1302,148 @@ func TestServerSenderID(t *testing.T) {
 			t.Errorf("SenderID() = %d, want %d (the client's ID for the server)", got, want)
 		}
 	})
+}
+
+type tlsNode struct {
+	addr     string
+	identity string
+}
+
+func (n tlsNode) Addr() string        { return n.addr }
+func (n tlsNode) TLSIdentity() string { return n.identity }
+
+var (
+	_ gorums.NodeAddress = tlsNode{}
+	_ gorums.TLSIdentity = tlsNode{}
+)
+
+// TestServerIdentityConfiguration verifies that declaring a TLS identity on
+// any peer requires a nonempty, unique identity on every peer.
+func TestServerIdentityConfiguration(t *testing.T) {
+	tests := []struct {
+		name  string
+		nodes map[gorums.ID]gorums.NodeAddress
+		want  string
+	}{
+		{
+			name: "EmptyIdentity",
+			nodes: map[gorums.ID]gorums.NodeAddress{
+				1: tlsNode{"127.0.0.1:9001", ""},
+			},
+			want: "gorums: node 1 has an empty TLS identity",
+		},
+		{
+			name: "MixedCapabilities",
+			nodes: map[gorums.ID]gorums.NodeAddress{
+				1: mock.NodeAddr("127.0.0.1:9001"),
+				2: tlsNode{"127.0.0.1:9002", "spiffe://relab/node/2"},
+			},
+			want: "gorums: node 1 does not implement TLSIdentity",
+		},
+		{
+			name: "MissingLaterIdentity",
+			nodes: map[gorums.ID]gorums.NodeAddress{
+				1: tlsNode{"127.0.0.1:9001", "spiffe://relab/node/1"},
+				2: mock.NodeAddr("127.0.0.1:9002"),
+			},
+			want: "gorums: node 2 does not implement TLSIdentity",
+		},
+		{
+			name: "DuplicateURI",
+			nodes: map[gorums.ID]gorums.NodeAddress{
+				1: tlsNode{"127.0.0.1:9001", "spiffe://relab/node/1"},
+				2: tlsNode{"127.0.0.1:9002", "SPIFFE://relab/node/1"},
+			},
+			want: `gorums: nodes 1 and 2 have the same TLS identity "spiffe://relab/node/1"`,
+		},
+		{
+			name: "DuplicateDNS",
+			nodes: map[gorums.ID]gorums.NodeAddress{
+				1: tlsNode{"127.0.0.1:9001", "Node1.Relab.Example"},
+				2: tlsNode{"127.0.0.1:9002", "node1.relab.example"},
+			},
+			want: `gorums: nodes 1 and 2 have the same TLS identity "Node1.Relab.Example"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertPanic(t, "gorums: invalid peer configuration: "+tt.want, func() {
+				srv := gorums.NewServer(gorums.WithPeers(1, gorums.WithNodes(tt.nodes), gorumstest.InsecureDialOptions(t)))
+				t.Cleanup(srv.Stop)
+			})
+		})
+	}
+}
+
+// TestServerIdentityRequiresTLS verifies that node identities activate the
+// inbound check without a separate option, before callbacks and handlers run.
+func TestServerIdentityRequiresTLS(t *testing.T) {
+	var callbacks, calls atomic.Int32
+	node := gorumstest.Node(t, func(int) gorumstest.ServerIface {
+		srv := gorums.NewServer(
+			gorums.WithPeers(1, gorums.WithNodes(map[gorums.ID]tlsNode{
+				1: {"127.0.0.1:9001", "spiffe://relab/node/1"},
+				2: {"127.0.0.1:9002", "spiffe://relab/node/2"},
+			}), gorumstest.DialOptions(t)),
+			gorums.WithConnectCallback(func(_ context.Context) { callbacks.Add(1) }),
+		)
+		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+			calls.Add(1)
+			return gorums.NewResponseMessage(in, pb.String("accepted")), nil
+		})
+		return srv
+	}, gorums.WithMetadata(metadata.Pairs("gorums-node-id", "2")))
+	ctx := gorumstest.Context(t, 500*time.Millisecond)
+	if _, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(ctx), pb.String("hello"), mock.TestMethod); err == nil {
+		t.Fatal("call claiming a TLS peer ID over an insecure stream succeeded")
+	}
+	if !gorumstest.WaitUntil(t, 3*time.Second, func() bool {
+		return status.Code(node.LastErr()) == codes.Unauthenticated
+	}) {
+		t.Fatalf("LastErr = %v; want Unauthenticated", node.LastErr())
+	}
+	if err := node.LastErr(); !strings.Contains(err.Error(), "connection does not use TLS") {
+		t.Errorf("LastErr = %v; want the TLS refusal reason", err)
+	}
+	if callbacks.Load() != 0 || calls.Load() != 0 {
+		t.Errorf("refused stream ran %d callbacks and %d calls", callbacks.Load(), calls.Load())
+	}
+}
+
+// TestServerIdentitySnapshot verifies that addresses, identities, and node
+// membership are captured together when WithNodes is called.
+func TestServerIdentitySnapshot(t *testing.T) {
+	first := &tlsNode{"127.0.0.1:9001", "spiffe://relab/node/1"}
+	nodes := map[gorums.ID]*tlsNode{
+		1: first,
+		2: {"127.0.0.1:9002", "spiffe://relab/node/2"},
+	}
+	source := struct{ gorums.NodeSource }{gorums.WithNodes(nodes)}
+	first.addr, first.identity = "not-an-address", ""
+	delete(nodes, 2)
+	nodes[3] = &tlsNode{"127.0.0.1:9003", ""}
+	srv := gorums.NewServer(gorums.WithPeers(1, source, gorumstest.InsecureDialOptions(t)))
+	t.Cleanup(srv.Stop)
+	if got := srv.PeerConfig().NodeIDs(); !slices.Equal(got, []gorums.ID{1, 2}) {
+		t.Errorf("peer IDs = %v; want [1 2]", got)
+	}
+	if got := srv.PeerConfig().Node(1).Address(); got != "127.0.0.1:9001" {
+		t.Errorf("node 1 address = %q; want the captured address", got)
+	}
+}
+
+// TestServerIdentityStandaloneConfig verifies that TLS identity checks are
+// enabled by WithPeers, not by constructing a standalone client configuration.
+func TestServerIdentityStandaloneConfig(t *testing.T) {
+	nodes := gorums.WithNodes(map[gorums.ID]tlsNode{
+		1: {"127.0.0.1:9001", ""},
+	})
+	cfg, closeFn, err := gorums.NewConfig(nodes, gorumstest.InsecureDialOptions(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(closeFn)
+	if cfg.Size() != 1 {
+		t.Errorf("configuration size = %d; want 1", cfg.Size())
+	}
 }

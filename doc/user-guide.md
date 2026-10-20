@@ -1688,14 +1688,21 @@ func (srv *storageSrv) WriteQC(ctx gorums.ServerContext, req *WriteRequest) (*Wr
 * a request on a connection that this server dialed has the dialed node's ID;
 * a request that this server sends to itself has this server's own ID.
 
-`SenderID` returns 0 for a client that announces no ID, or an ID that this server does not know.
+`SenderID` returns 0 for a regular client that announces no ID.
+A nonzero ID outside the server's peer configuration is an unknown peer ID.
+The server handles a stream that claims an unknown peer ID as follows:
+
+* With TLS peer identities configured through `WithPeers`, the server refuses the stream before any handler runs.
+* Without TLS peer identities, the server serves the stream as an untracked client, and handlers see `SenderID` 0.
 
 The sender is the last hop.
 When a message travels through several nodes, for example down a tree, `SenderID` identifies the node that forwarded it, not the node where the message started.
 Put the origin in the message if the handler needs it.
 
-The sender asserts its ID when it connects, and the server does not authenticate it.
-A Byzantine fault-tolerant protocol must still sign its messages and check the signer.
+The sender asserts its ID when it connects.
+A server whose peer nodes implement `TLSIdentity` checks the ID of every configured peer; see [Authenticating Peers](#authenticating-peers).
+Peer IDs are unauthenticated when the peer nodes do not declare TLS identities.
+Even with TLS peer authentication, `SenderID` names only the last hop, so a Byzantine fault-tolerant protocol that forwards messages must still sign them and check the signer.
 
 ## Latency-Based Node Selection
 
@@ -2372,6 +2379,138 @@ Calls already in flight while a stream is being replaced may still fail because 
 
 Each `*Node` reports its stream topology: `Node.IsOutbound` is true for a node reached over a stream this process opened, `Node.IsInbound` is true for a node reached over a stream the peer opened, and `Node.IsShared` is true for a node that borrows the stream its lower-ID peer dialed, which holds on the higher-ID side of each deduplicated pair.
 These let a symmetric deployment inspect the shared-stream topology.
+
+## Authenticating Peers
+
+Servers configured with `WithPeers` learn each other's node IDs from claims that nobody checks by default.
+A server attaches an inbound stream to peer X when the stream announces node ID X.
+A server that dials peer X trusts whoever answers at X's address.
+So any client that can reach a server can claim to be one of its peers.
+Under `WithStreamDedup`, a forged claim for a lower ID also redirects the server's own calls to that peer, because the server sends them over the peer's inbound stream.
+
+To authenticate peers, give the node type passed to `WithNodes` a `TLSIdentity() string` method in addition to `Addr() string`.
+Keep the expected certificate identity with the node's address:
+
+```go
+type replica struct {
+    addr     string
+    identity string
+}
+
+func (r replica) Addr() string        { return r.addr }
+func (r replica) TLSIdentity() string { return r.identity }
+
+nodes := map[gorums.ID]replica{
+    1: {"10.0.0.1:9000", "spiffe://relab/node/1"},
+    2: {"10.0.0.2:9000", "spiffe://relab/node/2"},
+    3: {"10.0.0.3:9000", "spiffe://relab/node/3"},
+}
+srv := gorums.NewServer(
+    gorums.WithPeers(myID, gorums.WithNodes(nodes), dialOpts...),
+)
+```
+
+`WithNodes` captures the addresses and identities together.
+Later changes to the map or its node values do not affect that source.
+`WithPeers` automatically enables identity checks if any captured node implements `gorums.TLSIdentity`; no separate verification option is needed.
+Every node in that peer set, including the local node, must then implement the method and return an identity that a certificate can match.
+`NewServer` panics if a node lacks an identity, if an identity cannot match any certificate, or if two node IDs have the same identity.
+An empty identity never disables authentication.
+
+```mermaid
+flowchart TD
+    nodes["Node map with addresses and TLS identities"]
+    nodes --> source["WithNodes captures both"]
+    source --> server["WithPeers enables authentication"]
+    server --> inbound["Check claimed peer ID on inbound streams"]
+    server --> outbound["Check dialed peer ID on outbound streams"]
+```
+
+Identity checks run once per stream, before a peer's connect callback or handler runs and before the dialer sends any request.
+When the server refuses a stream that claims a peer's node ID, the refusal sent to the remote end includes the reason.
+When a stream that the server opened fails the check, the reason is in the error of the waiting call.
+The checks require mutually authenticated TLS; see [Binding Node IDs to TLS Certificates](#binding-node-ids-to-tls-certificates).
+
+| Stream | Check | When the check fails |
+| --- | --- | --- |
+| Claims the node ID of a configured peer | Certificate identity matches the claimed ID before the stream is attached to the peer | The stream ends with `codes.Unauthenticated`; no connect callback or handler runs |
+| Claims a node ID outside the peer configuration | None; there is no identity to check | The stream ends with `codes.Unauthenticated` |
+| Opened by this server to a configured peer | Certificate identity matches the dialed ID before any request is sent | The waiting call fails with `codes.Unauthenticated`; the server tries again later |
+| Claims no peer node ID (a client) | None | Served without peer identity checks |
+
+A peer that this server refuses sees the refusal, with the reason, in `Node.LastErr` of its node for this server.
+Its pending two-way calls to this server are resent on new streams until their contexts end, so they fail with the context's error, not with `codes.Unauthenticated`; give calls between peers a deadline.
+While the refused peer keeps retrying, its `ConnectedPeers` view can briefly include this server, and under `WithStreamDedup` its `WaitForAll` can return before this server has accepted any of its streams.
+
+With TLS peer identities, `ServerContext.SenderID` is authenticated for every configured peer, with and without stream deduplication:
+
+| Request arrives on | `SenderID` | Checked by |
+| --- | --- | --- |
+| A stream that a configured peer opened to this server | The peer's ID | The inbound check |
+| A stream that this server opened to a configured peer | The dialed peer's ID | The dial-side check |
+| A back-channel client's stream | The ID this server assigned | Not authenticated |
+| A regular client's stream | 0 | Not authenticated |
+| A call this server sends to itself | This server's own ID | No network involved |
+
+`SenderID` names only the last hop.
+
+Address-only node types and `WithNodeList` preserve the unauthenticated behavior.
+Identity metadata enables these checks only when the source is used with `WithPeers`; `NewConfig` alone does not enable peer identity checks.
+
+### Binding Node IDs to TLS Certificates
+
+The value returned by `TLSIdentity()` binds a node ID to a name in the peer's mTLS certificate.
+A stream is accepted for that ID only if the TLS handshake verified the remote end's certificate against a trusted CA, and the certificate has a SAN that matches the configured identity.
+An identity with a URI scheme, such as `spiffe://relab/node/2`, matches only a URI SAN with the same canonical form.
+Any other identity must be a DNS name, and matches only a DNS SAN, without regard to case.
+A wildcard DNS SAN never matches, and IP SANs and the certificate's Common Name are never used.
+Duplicate identity checks use the same matching rules, since replicas that share an identity could claim each other's IDs.
+
+`NewServer` rejects an identity that no certificate SAN can match:
+
+* a wildcard DNS name, such as `*.relab.example`;
+* a network address, such as `10.0.0.1` or `localhost:9000`, which names where a replica listens, not which replica it is;
+* text that is not printable ASCII, or that is neither a URI with a scheme nor a DNS name.
+
+Each replica needs its own certificate with:
+
+* a URI SAN or DNS SAN that names the replica, such as `spiffe://relab/node/2`;
+* an IP SAN or DNS SAN for the address its peers dial, which standard TLS checks;
+* extended key usage for both server and client authentication, because the same certificate serves both directions.
+
+The server must verify client certificates, and its peer connections must present its certificate:
+
+```go
+srv := gorums.NewServer(
+    gorums.WithGRPCServerOptions(grpc.Creds(credentials.NewTLS(&tls.Config{
+        Certificates: []tls.Certificate{cert},
+        ClientCAs:    caPool,
+        ClientAuth:   tls.VerifyClientCertIfGiven, // clients without a certificate are still served
+    }))),
+    gorums.WithPeers(2, gorums.WithNodes(nodes),
+        gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+            Certificates: []tls.Certificate{cert}, // presented to the peers this server dials
+            RootCAs:      caPool,
+        }))),
+    ),
+)
+```
+
+With `ClientAuth: tls.RequireAndVerifyClientCert`, clients without a certificate are refused as well.
+The check is only as strong as the CA pools.
+Set `ClientCAs` on the server and `RootCAs` on the dialer to a pool that holds only the cluster's CA; a nil pool means the system roots.
+That CA must issue each identity only to its replica.
+With `InsecureSkipVerify` on the dialer, or `ClientAuth` set to `tls.RequestClientCert` or `tls.RequireAnyClientCert` on the server, no chain is verified and every peer stream is refused.
+
+### Authenticating Clients
+
+Peer identity checks do not authenticate clients that claim no peer ID; the transport and interceptors do:
+
+* To require a certificate from every client, set `ClientAuth: tls.RequireAndVerifyClientCert` in the server's `tls.Config`.
+  The handshake then fails before Gorums sees a stream.
+* To decide which certificates may connect, use `tls.Config.VerifyConnection`, which runs on every handshake.
+* To decide per request, for example to let only peers call a method, use a server interceptor that checks `ctx.PeerConfig().Contains(ctx.SenderID())`.
+  A nonzero `SenderID` alone is not enough, because back-channel clients have nonzero IDs that are not authenticated.
 
 ## Send Queue Capacity and Backpressure
 

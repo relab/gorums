@@ -261,6 +261,9 @@ It refuses unknown IDs.
 For a known ID, it attaches the stream only after verification succeeds.
 The outbound manager gives the same verifier to the channels that dial configured peers.
 Both managers implement `nodeRegistry`, which a `NodeSource` uses to build a configuration.
+`WithNodes` captures each node's address and optional `TLSIdentity` together.
+When a server uses that source through `WithPeers`, `conn.NewPeerVerifier` validates the identity set and creates the internal TLS verifier.
+Address-only sources yield no verifier, while mixed, empty, invalid, or duplicate identities are configuration errors.
 
 ```mermaid
 classDiagram

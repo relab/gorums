@@ -90,6 +90,21 @@ func WithServerInterceptors(i ...ServerInterceptor) ServerOption {
 // The returned option only records the peer set; the [NewServer] call that
 // receives it panics if the node source is invalid, for example if it
 // contains a duplicate or malformed address.
+//
+// If any node supplied through [WithNodes] implements [TLSIdentity], the server
+// authenticates every peer on each stream, in both directions, before callbacks
+// or handlers run. Every node must then supply a unique identity that a
+// certificate SAN can match; see [TLSIdentity].
+// A failed check or an unknown claimed peer ID ends the stream with
+// codes.Unauthenticated. Clients that claim no peer ID are not checked.
+// Refused peers see the reason in [Node.LastErr]; give calls between peers
+// deadlines because inbound refusals cause pending two-way calls to retry.
+//
+// Both the server and its peer dialer must use TLS credentials that verify
+// certificates against the cluster's CA and present this replica's certificate.
+// The server must verify client certificates when given, and each replica's
+// certificate must be valid for both client and server authentication.
+// Without a verified TLS certificate, a peer stream is refused.
 func WithPeers(myID ID, nodes NodeSource, opts ...DialOption) ServerOption {
 	return func(o *serverOptions) {
 		o.myID = myID
