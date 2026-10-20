@@ -97,8 +97,11 @@ func WithServerInterceptors(i ...ServerInterceptor) ServerOption {
 // certificate SAN can match; see [TLSIdentity].
 // A failed check or an unknown claimed peer ID ends the stream with
 // codes.Unauthenticated. Clients that claim no peer ID are not checked.
-// Refused peers see the reason in [Node.LastErr]; give calls between peers
-// deadlines because inbound refusals cause pending two-way calls to retry.
+// A refused peer sees the reason in [Node.LastErr], and its calls on the
+// refused stream fail with the refusal instead of being resent. It backs off
+// before it opens a new stream: 50 ms after the first refusal, doubling after
+// each further refusal up to 2 s. Until the backoff ends, its calls fail at
+// once with the refusal. A failed dial-side check uses the same backoff.
 //
 // Both the server and its peer dialer must use TLS credentials that verify
 // certificates against the cluster's CA and present this replica's certificate.

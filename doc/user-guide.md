@@ -1506,6 +1506,29 @@ if err != nil {
 The error type matching uses `errors.Is`, which properly handles wrapped errors.
 This allows you to filter nodes based on the underlying cause of their failures, enabling fine-grained control over which nodes to exclude when creating new configurations.
 
+## Refused Streams
+
+A server refuses a stream when it ends the stream before it sends any message on it.
+For example, a server refuses a peer that fails its identity check (see [Authenticating Peers](#authenticating-peers)), and a server stream interceptor can refuse a client.
+A node treats a stream as refused when the stream ends with `codes.Unauthenticated`, `codes.PermissionDenied`, `codes.InvalidArgument`, or `codes.Unimplemented` before it delivered a message.
+A new stream to the same server would fail the same way, so the node fails its calls and waits before it tries again:
+
+| After a refusal | Behavior |
+| --- | --- |
+| Calls on the refused stream | Two-way and streaming calls fail with the refusal's status; they are not resent. A one-way call whose send fails on the refused stream also fails with the refusal. A one-way call sent before the refusal arrived counts as sent. |
+| New streams | The node backs off: 50 ms after the first refusal, doubling after each further refusal up to 2 s. With eager reconnection, the node opens the next stream when the backoff ends; otherwise, the first call after the backoff opens it. |
+| Calls during the backoff | They fail at once with the refusal. |
+| `Node.LastErr` | It reports the refusal until a later stream operation succeeds or fails. |
+| Connection state | Each new stream counts as connected as soon as it opens, before the server accepts or refuses it. |
+
+Connection state is optimistic, so it does not confirm that the server accepted a stream:
+
+* A refused stream counts as connected until its refusal arrives; a slow server or network extends this interval.
+* Once per backoff period, a refused peer's `ConnectedPeers` view can include the refusing server, and `WithPeerChange` can report an up/down pair.
+* Under `WithStreamDedup`, `WaitForAll` can return even if the server refuses every stream.
+
+A stream that ends with any other status, or that ends after it delivered a message, is lost, not refused: the node resends its two-way calls on a new stream.
+
 ## Working with Configurations
 
 Below is an example demonstrating how to work with configurations.
@@ -2435,12 +2458,12 @@ The checks require mutually authenticated TLS; see [Binding Node IDs to TLS Cert
 | --- | --- | --- |
 | Claims the node ID of a configured peer | Certificate identity matches the claimed ID before the stream is attached to the peer | The stream ends with `codes.Unauthenticated`; no connect callback or handler runs |
 | Claims a node ID outside the peer configuration | None; there is no identity to check | The stream ends with `codes.Unauthenticated` |
-| Opened by this server to a configured peer | Certificate identity matches the dialed ID before any request is sent | The waiting call fails with `codes.Unauthenticated`; the server tries again later |
+| Opened by this server to a configured peer | Certificate identity matches the dialed ID before any request is sent | The waiting call fails with `codes.Unauthenticated`; the server backs off before it opens a new stream to the peer, as after a refused stream |
 | Claims no peer node ID (a client) | None | Served without peer identity checks |
 
-A peer that this server refuses sees the refusal, with the reason, in `Node.LastErr` of its node for this server.
-Its pending two-way calls to this server are resent on new streams until their contexts end, so they fail with the context's error, not with `codes.Unauthenticated`; give calls between peers a deadline.
-While the refused peer keeps retrying, its `ConnectedPeers` view can briefly include this server, and under `WithStreamDedup` its `WaitForAll` can return before this server has accepted any of its streams.
+A peer that this server refuses sees the refusal, with the reason, in `Node.LastErr` of its node for this server, and its calls to this server fail with `codes.Unauthenticated`.
+[Refused Streams](#refused-streams) describes how the refused peer backs off, and what its `LastErr` and connection state report meanwhile.
+When a stream that this server opened fails this server's own check, the peer at the other end can count this server as connected until the stream is closed.
 
 With TLS peer identities, `ServerContext.SenderID` is authenticated for every configured peer, with and without stream deduplication:
 

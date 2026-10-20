@@ -22,7 +22,8 @@ type Channel interface {
 	// most recent stream operation, or nil if it succeeded.
 	LastErr() error
 	// DroppedReplies returns the number of handler replies dropped because
-	// the send queue was full or closed.
+	// the send queue was full or closed, or because they failed during the
+	// backoff after the server refused a stream.
 	DroppedReplies() int64
 	// PendingCount returns the number of two-way calls awaiting responses.
 	// The count may include calls whose callers are done but that have not
