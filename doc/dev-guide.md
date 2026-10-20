@@ -165,6 +165,10 @@ It holds a `channelRef`, an atomically replaceable reference to the node's curre
 There are three channel kinds:
 
 * `OutboundChannel` runs over streams this node dials; it opens a new `session` for each stream and requeues pending calls when a stream is lost, as far as the send queue has space.
+  A stream that the server refuses is not lost: it ends with a refusal code (`Unauthenticated`, `PermissionDenied`, `InvalidArgument`, or `Unimplemented`) before it delivered a frame.
+  Its pending two-way and streaming calls fail with the refusal, as does a one-way call whose send fails on it.
+  The channel then backs off before it opens the next stream, failing requests at once with the refusal until then.
+  Connection reporting is optimistic: each stream counts as up when opened, before the server accepts or refuses it.
 * `InboundChannel` runs over one stream that the server accepted; its single `session` ends with the stream.
 * `LocalChannel` serves requests in-process through the handler, with no stream.
 
@@ -178,6 +182,7 @@ The verifier receives the stream's context and the channel's expected node ID.
 It runs on each new stream, before any request is sent.
 If verification fails, the channel closes the stream.
 The waiting request fails with `codes.Unauthenticated`.
+The channel then backs off as for a refused stream.
 
 ```mermaid
 classDiagram
@@ -244,6 +249,30 @@ classDiagram
     Request --> Message
     Server --> PeerAcceptor
     PeerAcceptor ..> InboundChannel : returns
+```
+
+Only the receive loop of an outbound session learns whether the server refused its stream: when the server ends a stream, a concurrent `Send` returns `io.EOF`, and only `Recv` returns the server's status.
+So a send that fails with `io.EOF` before the stream delivered a frame only cancels the stream, and the receive loop disposes of the pending calls.
+The session's `handoff` state ensures that exactly one goroutine disposes of them.
+The session's `verdict` channel closes when the stream delivers its first frame or receiving ends; the run loop waits for it after a session ends, and then reads whether the server refused the stream.
+A one-way send that fails this way also waits for the verdict, so that it fails with the refusal too.
+If a frame arrives after the failed send, the stream was accepted: receiving delivers the frames that the stream buffered, and retries the calls still pending when `Recv` fails.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Fresh: stream opened
+    Fresh --> Accepted: first frame arrives
+    Fresh --> SendFailed: a send fails with io.EOF
+    Fresh --> Closed: Recv fails
+    SendFailed --> Accepted: a buffered frame arrives, so deliver the buffered frames
+    SendFailed --> Closed: Recv fails
+    Accepted --> Closed: Recv fails
+    Closed --> [*]
+    note right of Closed
+        From Fresh or SendFailed with a refusal code:
+        fail the pending calls with the refusal.
+        Otherwise: retry them.
+    end note
 ```
 
 ### Connectivity Layer (`internal/conn`)

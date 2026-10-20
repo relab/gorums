@@ -37,7 +37,9 @@ type OutboundOptions struct {
 	// Latency receives round-trip samples; may be nil.
 	Latency *Latency
 	// EagerReconnect makes the channel re-establish a lost stream with capped
-	// exponential backoff, instead of on the next request.
+	// exponential backoff, instead of on the next request. After a refused
+	// stream, it makes the channel open a new stream when the backoff ends,
+	// instead of on the first request after that.
 	EagerReconnect bool
 	// OnStreamChange, if non-nil, is called on the channel's goroutine each
 	// time the stream comes up or goes down; [OutboundChannel.StreamUp]
@@ -63,9 +65,21 @@ type OutboundOptions struct {
 // stream. Calls already sent on the old stream complete there, and the old
 // stream ends once it has no calls left.
 //
+// A server refuses a stream when the stream ends with codes.Unauthenticated,
+// codes.PermissionDenied, codes.InvalidArgument, or codes.Unimplemented
+// before it delivered a frame. The two-way and streaming calls pending on a
+// refused stream, and a one-way call whose send fails on it, fail with the
+// refusal's status and are not sent again. The channel then backs off before
+// it opens a new stream: 50 ms after the first refusal, doubling after each
+// further refusal up to 2 s, and starting over once a stream delivers a
+// frame or lives 2 s. Until the backoff ends, each request fails at once
+// with the refusal. Each new stream counts as up until its refusal arrives;
+// [OutboundChannel.StreamUp] does not confirm acceptance by the server.
+//
 // With [OutboundOptions.Verify], a stream whose remote end fails the check is
-// closed before any request is sent on it, and the waiting request fails with
-// the error from [VerificationError].
+// closed before any request is sent on it, the waiting request fails with
+// the error from [VerificationError], and the channel backs off as for a
+// refused stream.
 type OutboundChannel struct {
 	endpoint
 	conn           *grpc.ClientConn
@@ -108,11 +122,18 @@ func NewOutboundChannel(ctx context.Context, id ID, conn *grpc.ClientConn, opts 
 // when a request is waiting. Otherwise, with eager reconnect, a draining stream
 // is replaced at once and a lost one after a backoff delay; without it, either
 // is replaced on the next request.
+//
+// A refused stream (see [isRefusal]) is replaced only after a backoff delay,
+// with or without eager reconnect. Until the delay ends, each request fails
+// at once with the refusal. Then, with eager reconnect, the channel opens the
+// next stream; without it, the next request does.
 func (c *OutboundChannel) run() {
 	defer c.queue.close()
 	delay := eagerReconnectBaseDelay
 	var retry <-chan time.Time
 	var req *Request
+	var refusal error          // the latest refusal; requests fail with it until refusedUntil
+	var refusedUntil time.Time // when the backoff after the latest refusal ends
 	connect := true
 	for {
 		if !connect {
@@ -120,6 +141,10 @@ func (c *OutboundChannel) run() {
 			case <-c.ctx.Done():
 				return
 			case r := <-c.queue.ch:
+				if refusal != nil && time.Now().Before(refusedUntil) {
+					c.queue.fail(r, refusal)
+					continue
+				}
 				req = &r
 			case <-retry:
 			}
@@ -130,6 +155,7 @@ func (c *OutboundChannel) run() {
 			}
 			return
 		}
+		refusal = nil
 		s, err := c.open()
 		if err != nil {
 			if c.ctx.Err() != nil {
@@ -141,16 +167,42 @@ func (c *OutboundChannel) run() {
 				req.sendErrorResponse(c.id, err)
 				req = nil
 			}
-			retry, connect = c.pace(&delay), false
+			connect = false
+			if c.ctx.Err() == nil && isRefusal(err) {
+				// A failed check of the server, or a refusal of the stream.
+				refusal = err
+				retry, refusedUntil = c.backoff(&delay)
+				continue
+			}
+			retry = c.pace(&delay)
 			continue
 		}
 		start := time.Now()
 		req = s.sendLoop(req)
 		c.setStreamUp(false)
+		if s.ended() {
+			// The session's stream is canceled, so receiving ends promptly
+			// and tells whether the server refused the stream.
+			<-s.verdict
+			refusal = s.refusal
+		}
 		// A stream that received a frame or outlived the maximum delay has
 		// proven viable, so the backoff starts over.
 		if s.received.Load() || time.Since(start) >= eagerReconnectMaxDelay {
 			delay = eagerReconnectBaseDelay
+		}
+		if refusal != nil {
+			// The calls pending on the refused stream have failed with the
+			// refusal. The request taken from the queue fails with it too,
+			// and so do later requests until the backoff ends.
+			c.recordHealth(refusal)
+			if req != nil {
+				c.queue.fail(*req, refusal)
+				req = nil
+			}
+			connect = false
+			retry, refusedUntil = c.backoff(&delay)
+			continue
 		}
 		connect = req != nil || s.draining.Load() && c.eagerReconnect
 		retry = nil
@@ -166,9 +218,22 @@ func (c *OutboundChannel) pace(delay *time.Duration) <-chan time.Time {
 	if !c.eagerReconnect {
 		return nil
 	}
-	timer := time.After(*delay)
-	*delay = min(2*(*delay), eagerReconnectMaxDelay)
+	timer, _ := c.backoff(delay)
 	return timer
+}
+
+// backoff returns when the backoff after a refusal ends, with a timer for the
+// next eager reconnect attempt at that time, and doubles delay up to the cap,
+// with or without eager reconnect. Without eager reconnect the timer is nil,
+// and the first request after the backoff opens the next stream.
+func (c *OutboundChannel) backoff(delay *time.Duration) (<-chan time.Time, time.Time) {
+	until := time.Now().Add(*delay)
+	var timer <-chan time.Time
+	if c.eagerReconnect {
+		timer = time.After(*delay)
+	}
+	*delay = min(2*(*delay), eagerReconnectMaxDelay)
+	return timer, until
 }
 
 // open opens a stream, checks its remote end if the channel has a verifier,
@@ -237,7 +302,9 @@ func (c *OutboundChannel) setStreamUp(up bool) {
 	}
 }
 
-// StreamUp reports whether a stream is established and accepting requests.
+// StreamUp reports whether a stream is open for sending. It does not confirm
+// acceptance by the server: a refused stream counts as up until its status
+// arrives.
 func (c *OutboundChannel) StreamUp() bool {
 	return c.streamUp.Load()
 }

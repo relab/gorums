@@ -1552,11 +1552,12 @@ func TestServerIdentityRefusals(t *testing.T) {
 	t.Run("UnknownPeerIDRefused", func(t *testing.T) {
 		servers := start(t)
 		node := client(t, servers[0], gorums.WithMetadata(metadata.Pairs("gorums-node-id", "99")))
-		if err := call(t, node, 500*time.Millisecond); err == nil {
-			t.Fatal("call that claims an unknown node ID succeeded; want failure")
-		}
 		// The server refuses the stream, which ends with its status; the
-		// client's node records it as its last error.
+		// call fails with it, and the client's node records it as its last
+		// error.
+		if err := call(t, node, 3*time.Second); status.Code(err) != codes.Unauthenticated {
+			t.Fatalf("call that claims an unknown node ID: err = %v; want code %v", err, codes.Unauthenticated)
+		}
 		if !gorumstest.WaitUntil(t, 3*time.Second, func() bool {
 			return status.Code(node.LastErr()) == codes.Unauthenticated
 		}) {
