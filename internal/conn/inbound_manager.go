@@ -85,6 +85,7 @@ type InboundManager struct {
 	sendBufferSize   uint                  // send buffer size for inbound channels
 	dispatchSize     uint                  // request dispatch queue size for inbound channels
 	handler          stream.RequestHandler // handler for dispatching incoming requests on all inbound nodes
+	verify           PeerVerifier          // optional; checks peer claims in AcceptPeer and the peers this server dials
 	onConfigChange   func(Config)          // optional; called after each connected-peer config change
 	nextClientID     uint64                // next candidate ID for a client peer; uint64 represents exhaustion
 	configCh         chan struct{}         // closed and replaced on each connectedPeers/connectedClients change; protected by mu
@@ -109,7 +110,10 @@ const ClientIDStart = 1 << 20
 // their send queue and request dispatch capacities; a dispatchSize of 0
 // selects the default. It returns an error if peerNodes is invalid, for
 // example because of an invalid address or a duplicate node.
-func NewInboundManager(myID ID, peerNodes NodeSource, sendBufferSize, dispatchSize uint, onConfigChange func(Config), handler stream.RequestHandler) (*InboundManager, error) {
+// If verify is non-nil, [InboundManager.AcceptPeer] attaches a stream that
+// claims a peer's node ID only after verify accepts the claim, and the
+// server's outbound peer nodes check the peers they dial with verify.
+func NewInboundManager(myID ID, peerNodes NodeSource, sendBufferSize, dispatchSize uint, onConfigChange func(Config), handler stream.RequestHandler, verify PeerVerifier) (*InboundManager, error) {
 	im := &InboundManager{
 		myID:           myID,
 		knownNodes:     make(map[ID]*Node),
@@ -117,6 +121,7 @@ func NewInboundManager(myID ID, peerNodes NodeSource, sendBufferSize, dispatchSi
 		sendBufferSize: sendBufferSize,
 		dispatchSize:   dispatchSize,
 		handler:        handler,
+		verify:         verify,
 		onConfigChange: onConfigChange,
 		nextClientID:   ClientIDStart,
 		configCh:       make(chan struct{}),
@@ -249,7 +254,9 @@ func (im *InboundManager) isKnown(id ID) bool {
 
 // AcceptPeer accepts an inbound stream and returns its channel and a cleanup
 // function that closes the channel. It returns [errSelfNodeIDStream] for a
-// stream that presents this server's own node ID.
+// stream that presents this server's own node ID. With a peer verifier, it
+// returns a codes.Unauthenticated error for a stream that claims an unknown
+// node ID or fails the verifier's check.
 //
 // If the stream identifies a known peer, AcceptPeer attaches the channel to
 // that peer's node. If the stream includes peer metadata with node ID 0,
@@ -269,6 +276,17 @@ func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream st
 		// misconfigured peer at the connection boundary. The self-node stays
 		// in the configuration.
 		return nil, noop, errSelfNodeIDStream
+	}
+	if id != 0 && im.verify != nil {
+		// A claim for a node outside the peer configuration has no identity
+		// to check. A known peer's claim is attached only after the verifier
+		// accepts it; the verifier runs without holding im.mu.
+		if !im.isKnown(id) {
+			return nil, noop, status.Errorf(codes.Unauthenticated, "gorums: stream claims unknown node %d", id)
+		}
+		if err := im.verify(streamCtx, id); err != nil {
+			return nil, noop, stream.VerificationError(id, err)
+		}
 	}
 	if im.isKnown(id) {
 		// Known peer — register on pre-created node.

@@ -12,6 +12,9 @@ import (
 // be implemented within this package.
 type NodeSource interface {
 	newConfig(nodeRegistry) (Config, error)
+	// nodeMap returns the captured, explicitly numbered node records, or nil
+	// for a source whose IDs are assigned when the configuration is built.
+	nodeMap() nodeMap
 }
 
 // nodeRegistry abstracts the node management operations required to build a Config.
@@ -26,16 +29,52 @@ type NodeAddress interface {
 	Addr() string
 }
 
-// WithNodes returns a NodeSource containing the provided mapping from
-// application-specific IDs to types implementing NodeAddress.
-// Node IDs must be greater than 0.
-func WithNodes[T NodeAddress](nodes map[ID]T) NodeSource {
-	return nodeMap[T](nodes)
+// TLSIdentity supplies the expected URI SAN or DNS SAN of a peer's verified
+// TLS certificate. A node source captures it alongside the node's address.
+type TLSIdentity interface {
+	TLSIdentity() string
 }
 
-type nodeMap[T NodeAddress] map[ID]T
+// WithNodes returns a NodeSource containing the provided mapping from
+// application-specific IDs to types implementing NodeAddress.
+// Node IDs must be greater than 0. It captures each node's address and, when
+// the node implements [TLSIdentity], its expected certificate identity.
+func WithNodes[T NodeAddress](nodes map[ID]T) NodeSource {
+	nm := make(nodeMap, len(nodes))
+	for _, id := range slices.Sorted(maps.Keys(nodes)) {
+		node := nodes[id]
+		addr := nodeAddress{addr: node.Addr()}
+		if identity, ok := any(node).(TLSIdentity); ok {
+			addr.identity = identity.TLSIdentity()
+			addr.hasIdentity = true
+		}
+		nm[id] = addr
+	}
+	return nm
+}
 
-func (nm nodeMap[T]) newConfig(registry nodeRegistry) (Config, error) {
+// nodeAddress holds a snapshot of a node's address and optional TLS identity.
+type nodeAddress struct {
+	addr        string
+	identity    string
+	hasIdentity bool
+}
+
+type nodeMap map[ID]nodeAddress
+
+func (nm nodeMap) nodeMap() nodeMap { return nm }
+
+// hasIdentity reports whether any node declared [TLSIdentity], even if empty.
+func (nm nodeMap) hasIdentity() bool {
+	for _, node := range nm {
+		if node.hasIdentity {
+			return true
+		}
+	}
+	return false
+}
+
+func (nm nodeMap) newConfig(registry nodeRegistry) (Config, error) {
 	if len(nm) == 0 {
 		return nil, fmt.Errorf("gorums: missing required node map")
 	}
@@ -43,7 +82,7 @@ func (nm nodeMap[T]) newConfig(registry nodeRegistry) (Config, error) {
 	// Sort IDs to ensure deterministic processing order
 	for _, id := range slices.Sorted(maps.Keys(nm)) {
 		node := nm[id]
-		if err := builder.add(id, node.Addr()); err != nil {
+		if err := builder.add(id, node.addr); err != nil {
 			return nil, err
 		}
 	}
@@ -59,6 +98,8 @@ func WithNodeList(addrsList []string) NodeSource {
 }
 
 type nodeList []string
+
+func (nl nodeList) nodeMap() nodeMap { return nil }
 
 func (nl nodeList) newConfig(registry nodeRegistry) (Config, error) {
 	if len(nl) == 0 {

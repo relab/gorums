@@ -54,6 +54,7 @@ devel
 devguide
 dialable
 discardable
+DNSSAN
 donech
 dotdot
 driverhost
@@ -120,6 +121,7 @@ Ingve
 Inspectable
 installgorums
 integrationtest
+IPSAN
 Jehl
 journalctl
 keepalive
@@ -239,6 +241,7 @@ shlex
 sigfigs
 skipcq
 snmp
+spiffe
 srvs
 staticcheck
 stddev
@@ -290,6 +293,7 @@ unregistrations
 Unreportable
 unstarted
 untrackable
+URISAN
 userguide
 valuecol
 varints
