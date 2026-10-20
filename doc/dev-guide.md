@@ -173,6 +173,11 @@ A `session` sends queued requests on its `BidiStream`, records two-way calls in 
 The dispatcher runs handlers one at a time, in arrival order.
 A handler that returns without calling `Release` hands its goroutine to the next queued handler, so a busy stream keeps one goroutine and the stack it has grown; an early `Release` starts the next handler on a new goroutine.
 On the server side, `Server.NodeStream` asks a `PeerAcceptor` for the `InboundChannel` of each accepted stream.
+An `OutboundChannel` can use a `PeerVerifier` to check the remote node's identity.
+The verifier receives the stream's context and the channel's expected node ID.
+It runs on each new stream, before any request is sent.
+If verification fails, the channel closes the stream.
+The waiting request fails with `codes.Unauthenticated`.
 
 ```mermaid
 classDiagram
