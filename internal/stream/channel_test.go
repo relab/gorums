@@ -1482,6 +1482,58 @@ func TestChannelRefusalRecovers(t *testing.T) {
 	}
 }
 
+// TestChannelRefusalKeepsLastErr verifies that LastErr keeps reporting a
+// refusal while the server refuses the channel's streams, even while a
+// request is sent on a new stream that the server will refuse, and that it
+// clears once a round trip completes after the server accepts.
+func TestChannelRefusalKeepsLastErr(t *testing.T) {
+	for _, mode := range refusalModes {
+		t.Run(mode.name, func(t *testing.T) {
+			srv := refuseStreamServer(codes.Unauthenticated)
+			// The server holds each stream for a while after the request
+			// that it reads, before it refuses the stream.
+			srv.read, srv.hold = true, 20*time.Millisecond
+			tc := setupChannelEager(t, mode.eager, srv.serve)
+			if resp := sendRequest(t, tc.OutboundChannel, Request{}, 1); status.Code(resp.Err) != codes.Unauthenticated {
+				t.Fatalf("call failed with %v, want code %v", resp.Err, codes.Unauthenticated)
+			}
+
+			const window = 600 * time.Millisecond
+			ctx, stop := context.WithTimeout(t.Context(), window)
+			defer stop()
+			var wg sync.WaitGroup
+			wg.Go(func() {
+				for msgID := uint64(2); ctx.Err() == nil; msgID++ {
+					if _, err := trySendRequest(tc.OutboundChannel, Request{}, msgID); err != nil {
+						t.Error(err)
+						return
+					}
+				}
+			})
+			for ctx.Err() == nil {
+				if err := tc.LastErr(); status.Code(err) != codes.Unauthenticated {
+					t.Errorf("LastErr = %v while the server refuses every stream, want code %v", err, codes.Unauthenticated)
+					break
+				}
+				time.Sleep(100 * time.Microsecond)
+			}
+			wg.Wait()
+
+			srv.accept.Store(true)
+			msgID := uint64(1 << 20)
+			if !waitUntil(defaultTestTimeout, func() bool {
+				msgID++
+				return sendRequest(t, tc.OutboundChannel, Request{}, msgID).Err == nil
+			}) {
+				t.Fatal("no call succeeded after the server accepts")
+			}
+			if err := tc.LastErr(); err != nil {
+				t.Errorf("LastErr = %v after a round trip on an accepted stream, want nil", err)
+			}
+		})
+	}
+}
+
 // TestChannelStreamUpAfterRefusal verifies that connection reporting remains
 // optimistic: each new stream counts as up until its refusal arrives.
 func TestChannelStreamUpAfterRefusal(t *testing.T) {
