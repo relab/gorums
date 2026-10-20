@@ -1447,3 +1447,126 @@ func TestServerIdentityStandaloneConfig(t *testing.T) {
 		t.Errorf("configuration size = %d; want 1", cfg.Size())
 	}
 }
+
+// TestServerIdentityPeerStreams verifies that identities enable dial-side
+// checks on every peer stream, with and without stream deduplication.
+func TestServerIdentityPeerStreams(t *testing.T) {
+	const n = 3
+	tests := []struct {
+		name string
+		opts []gorumstest.Option
+	}{
+		{name: "Dual"},
+		{name: "Dedup", opts: []gorumstest.Option{gorums.WithStreamDedup()}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := append([]gorumstest.Option{localIdentityNodes()}, tt.opts...)
+			servers := gorumstest.LocalServers(t, n, opts...)
+			for _, srv := range servers {
+				for _, node := range srv.PeerConfig() {
+					if node.ID() == srv.NodeID() || node.IsShared() {
+						continue // Local calls use no stream; shared nodes never dial.
+					}
+					if !gorumstest.WaitUntil(t, 3*time.Second, func() bool {
+						return status.Code(node.LastErr()) == codes.Unauthenticated
+					}) {
+						t.Errorf("server %d: node %d LastErr = %v; want Unauthenticated",
+							srv.NodeID(), node.ID(), node.LastErr())
+					}
+				}
+			}
+		})
+	}
+}
+
+// localIdentityNodes supplies TLS identities on the local servers' node values.
+func localIdentityNodes() gorums.LocalServerOption {
+	return gorums.WithLocalNodes(func(id gorums.ID, addr string) gorums.NodeAddress {
+		return tlsNode{addr, fmt.Sprintf("spiffe://relab/node/%d", id)}
+	})
+}
+
+// TestServerIdentityRefusals verifies that a server with peer identities
+// fails its calls to a peer that does not pass the check, that a peer it
+// refuses sees the verifier's text in its node's last error, that it refuses
+// a client that claims a node ID outside the peer configuration, and that it
+// serves a client that claims no node ID.
+func TestServerIdentityRefusals(t *testing.T) {
+	start := func(t *testing.T) []*gorums.Server {
+		t.Helper()
+		servers := gorumstest.LocalServers(t, 2, localIdentityNodes())
+		for _, srv := range servers {
+			srv.RegisterHandler(mock.TestMethod, gorumstest.EchoHandler("echo"))
+		}
+		return servers
+	}
+	call := func(t *testing.T, node *gorums.Node, timeout time.Duration) error {
+		t.Helper()
+		ctx := gorumstest.Context(t, timeout)
+		_, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(ctx), pb.String("hello"), mock.TestMethod)
+		return err
+	}
+	client := func(t *testing.T, srv *gorums.Server, opts ...gorums.DialOption) *gorums.Node {
+		t.Helper()
+		cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList([]string{srv.Addr()}),
+			append([]gorums.DialOption{gorumstest.DialOptions(t)}, opts...)...)
+		if err != nil {
+			t.Fatalf("NewConfig: %v", err)
+		}
+		t.Cleanup(closeFn)
+		return cfg[0]
+	}
+
+	t.Run("PeerRefused", func(t *testing.T) {
+		servers := start(t)
+		node := servers[0].PeerConfig().Node(2)
+		var err error
+		// Until the connection is ready, a call can fail for that reason
+		// instead; the verifier's refusal follows once it is ready.
+		if !gorumstest.WaitUntil(t, 5*time.Second, func() bool {
+			err = call(t, node, time.Second)
+			return status.Code(err) == codes.Unauthenticated
+		}) {
+			t.Fatalf("call to a refused peer: err = %v; want code %v", err, codes.Unauthenticated)
+		}
+		if want := "gorums: node 2 failed verification: connection does not use TLS"; !strings.Contains(err.Error(), want) {
+			t.Errorf("call to a refused peer: err = %q; want it to contain %q", err, want)
+		}
+	})
+	t.Run("RefusedPeerSeesReason", func(t *testing.T) {
+		// This dialer performs no outbound identity check. The server
+		// refuses its claim to be peer 2, and it records the inbound reason.
+		servers := start(t)
+		node := client(t, servers[0], gorums.WithMetadata(metadata.Pairs("gorums-node-id", "2")))
+		_ = call(t, node, 500*time.Millisecond)
+		const want = "gorums: node 2 failed verification: connection does not use TLS"
+		var err error
+		if !gorumstest.WaitUntil(t, 3*time.Second, func() bool {
+			err = node.LastErr()
+			return status.Code(err) == codes.Unauthenticated && strings.Contains(err.Error(), want)
+		}) {
+			t.Errorf("refused peer LastErr = %v; want code %v containing %q", err, codes.Unauthenticated, want)
+		}
+	})
+	t.Run("UnknownPeerIDRefused", func(t *testing.T) {
+		servers := start(t)
+		node := client(t, servers[0], gorums.WithMetadata(metadata.Pairs("gorums-node-id", "99")))
+		if err := call(t, node, 500*time.Millisecond); err == nil {
+			t.Fatal("call that claims an unknown node ID succeeded; want failure")
+		}
+		// The server refuses the stream, which ends with its status; the
+		// client's node records it as its last error.
+		if !gorumstest.WaitUntil(t, 3*time.Second, func() bool {
+			return status.Code(node.LastErr()) == codes.Unauthenticated
+		}) {
+			t.Errorf("client node LastErr = %v; want code %v", node.LastErr(), codes.Unauthenticated)
+		}
+	})
+	t.Run("ClientServed", func(t *testing.T) {
+		servers := start(t)
+		if err := call(t, client(t, servers[0]), 3*time.Second); err != nil {
+			t.Errorf("call from a client that claims no node ID: %v", err)
+		}
+	})
+}

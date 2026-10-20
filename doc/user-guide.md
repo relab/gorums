@@ -2502,6 +2502,23 @@ Set `ClientCAs` on the server and `RootCAs` on the dialer to a pool that holds o
 That CA must issue each identity only to its replica.
 With `InsecureSkipVerify` on the dialer, or `ClientAuth` set to `tls.RequestClientCert` or `tls.RequireAnyClientCert` on the server, no chain is verified and every peer stream is refused.
 
+For a local cluster, `NewLocalServers` takes options that differ per server: `WithLocalServerOptionsFunc` and `WithLocalDialOptionsFunc` take a function that returns the options for a given node ID, such as that server's certificate.
+Use `WithLocalNodes` to keep each expected identity with its allocated listener address:
+
+```go
+gorums.WithLocalNodes(func(id gorums.ID, addr string) gorums.NodeAddress {
+    return replica{
+        addr:     addr,
+        identity: fmt.Sprintf("spiffe://relab/node/%d", id),
+    }
+})
+```
+
+The factory runs once per node, in increasing ID order, after all listeners have been allocated.
+Each returned node must use the supplied listener address.
+`NewLocalServers` returns an error and closes the allocated listeners if the node source is invalid.
+A nil factory selects address-only nodes.
+
 ### Authenticating Clients
 
 Peer identity checks do not authenticate clients that claim no peer ID; the transport and interceptors do:
