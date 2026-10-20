@@ -132,6 +132,7 @@ func newServer(opts ...ServerOption) (*Server, error) {
 		serverOpts.recvBufferSize,
 		serverOpts.onConfigChange,
 		s,
+		nil,
 	)
 	if err != nil {
 		s.grpcServer.Stop()
