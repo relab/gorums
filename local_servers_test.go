@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
+	"github.com/relab/gorums/internal/testutils/mock"
 )
 
 // TestLocalServersMissingDialOptions verifies that NewLocalServers reports an
@@ -233,6 +235,47 @@ func TestLocalServersAppliesPerServerOptions(t *testing.T) {
 		if want := fmt.Sprintf("server %d: ready", id); !strings.Contains(perServerLog.String(), want) {
 			t.Errorf("per-server log = %q; want a line %q", perServerLog.String(), want)
 		}
+	}
+}
+
+// TestLocalServersNodes verifies that the node factory runs once per listener,
+// in ID order, and supplies every server's peer configuration.
+func TestLocalServersNodes(t *testing.T) {
+	tests := []struct {
+		name    string
+		factory bool
+	}{
+		{name: "AddressOnlyFactory", factory: true},
+		{name: "NilFactory"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var ids []gorums.ID
+			addrs := make(map[gorums.ID]string)
+			var fn func(gorums.ID, string) gorums.NodeAddress
+			if tt.factory {
+				fn = func(id gorums.ID, addr string) gorums.NodeAddress {
+					ids = append(ids, id)
+					addrs[id] = addr
+					return mock.NodeAddr(addr)
+				}
+			}
+			servers := gorumstest.LocalServers(t, 3, gorums.WithLocalNodes(fn))
+			gorumstest.WaitForPeers(t, servers)
+			if tt.factory && !slices.Equal(ids, []gorums.ID{1, 2, 3}) {
+				t.Errorf("factory called for IDs %v; want [1 2 3]", ids)
+			}
+			for _, srv := range servers {
+				if tt.factory && addrs[srv.NodeID()] != srv.Addr() {
+					t.Errorf("factory address for node %d = %q; want %q", srv.NodeID(), addrs[srv.NodeID()], srv.Addr())
+				}
+				for _, peer := range servers {
+					if got := srv.PeerConfig().Node(peer.NodeID()).Address(); got != peer.Addr() {
+						t.Errorf("server %d: peer %d address = %q; want %q", srv.NodeID(), peer.NodeID(), got, peer.Addr())
+					}
+				}
+			}
+		})
 	}
 }
 

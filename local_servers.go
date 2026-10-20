@@ -14,6 +14,7 @@ type localServerOptions struct {
 	serverOptsFns []func(id ID) []ServerOption
 	dialOptsFns   []func(id ID) []DialOption
 	listen        func() (net.Listener, error)
+	nodeFunc      func(id ID, addr string) NodeAddress
 }
 
 // LocalServerOption configures [NewLocalServers]. Use [WithLocalServerOptions]
@@ -64,6 +65,17 @@ func WithLocalListeners(listen func() (net.Listener, error)) LocalServerOption {
 	}
 }
 
+// WithLocalNodes makes [NewLocalServers] build its peer source from the node
+// values returned by fn. It calls fn once per node, in increasing ID order,
+// after all listeners are allocated, with the node's ID and listener address.
+// Each returned node must have that address. It may also implement [TLSIdentity]
+// to enable peer authentication. A nil fn selects address-only nodes.
+func WithLocalNodes(fn func(id ID, addr string) NodeAddress) LocalServerOption {
+	return func(o *localServerOptions) {
+		o.nodeFunc = fn
+	}
+}
+
 // NewLocalServers creates n Gorums servers listening on random localhost ports.
 //
 // Each server is assigned a node ID from 1 to n. Every server tracks and calls
@@ -71,12 +83,13 @@ func WithLocalListeners(listen func() (net.Listener, error)) LocalServerOption {
 // to every server, and [WithLocalDialOptions] to add [DialOption]s to each
 // server's outbound connections. Use [WithLocalServerOptionsFunc] and
 // [WithLocalDialOptionsFunc] for options that differ per server.
+// [WithLocalNodes] supplies node values with optional TLS identities.
 //
 // The returned servers are not started; call [Server.ListenAndServe] after
 // registering any services. The returned stop function stops all servers and
 // closes all allocated listeners and outbound configurations. If listener
-// allocation fails, all listeners acquired so far are closed before returning
-// the error.
+// allocation or peer configuration fails, all acquired resources are closed
+// before returning the error.
 func NewLocalServers(n int, opts ...LocalServerOption) ([]*Server, func(), error) {
 	var localOpts localServerOptions
 	for _, opt := range opts {
@@ -91,6 +104,19 @@ func NewLocalServers(n int, opts ...LocalServerOption) ([]*Server, func(), error
 	listeners, nodeSource, err := allocateListeners(n, listen)
 	if err != nil {
 		return nil, nil, err
+	}
+	if localOpts.nodeFunc != nil {
+		nodes := make(map[ID]NodeAddress, n)
+		for i, lis := range listeners {
+			id, addr := ID(i+1), lis.Addr().String()
+			node := localOpts.nodeFunc(id, addr)
+			if node == nil || node.Addr() != addr {
+				closeServers(nil, listeners)
+				return nil, nil, fmt.Errorf("gorums: local node %d must use listener address %q", id, addr)
+			}
+			nodes[id] = node
+		}
+		nodeSource = WithNodes(nodes)
 	}
 	servers := make([]*Server, n)
 	for i := range n {
