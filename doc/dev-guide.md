@@ -168,6 +168,7 @@ There are three channel kinds:
   A stream that the server refuses is not lost: it ends with a refusal code (`Unauthenticated`, `PermissionDenied`, `InvalidArgument`, or `Unimplemented`) before it delivered a frame.
   Its pending two-way and streaming calls fail with the refusal, as does a one-way call whose send fails on it.
   The channel then backs off before it opens the next stream, failing requests at once with the refusal until then.
+  A stream opened after a refusal is suspect for health reporting: its sends do not clear `LastErr` until it delivers a frame or lives 2 s.
   Connection reporting is optimistic: each stream counts as up when opened, before the server accepts or refuses it.
 * `InboundChannel` runs over one stream that the server accepted; its single `session` ends with the stream.
 * `LocalChannel` serves requests in-process through the handler, with no stream.

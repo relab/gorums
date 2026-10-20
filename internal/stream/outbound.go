@@ -18,6 +18,10 @@ const (
 	eagerReconnectMaxDelay  = 2 * time.Second
 )
 
+// viableStreamAge is how long a stream must live to prove viable if it has
+// delivered no frame; see [session.proven].
+const viableStreamAge = 2 * time.Second
+
 // PeerVerifier reports whether the remote end of the stream with context ctx
 // is the node with ID id. It returns nil to accept the stream, and an error
 // that explains the refusal otherwise. ctx is the stream's context, which
@@ -134,6 +138,7 @@ func (c *OutboundChannel) run() {
 	var req *Request
 	var refusal error          // the latest refusal; requests fail with it until refusedUntil
 	var refusedUntil time.Time // when the backoff after the latest refusal ends
+	suspect := false           // no stream has proven viable since the latest refusal
 	connect := true
 	for {
 		if !connect {
@@ -156,7 +161,7 @@ func (c *OutboundChannel) run() {
 			return
 		}
 		refusal = nil
-		s, err := c.open()
+		s, err := c.open(suspect)
 		if err != nil {
 			if c.ctx.Err() != nil {
 				err = ErrNodeClosed
@@ -170,14 +175,13 @@ func (c *OutboundChannel) run() {
 			connect = false
 			if c.ctx.Err() == nil && isRefusal(err) {
 				// A failed check of the server, or a refusal of the stream.
-				refusal = err
+				refusal, suspect = err, true
 				retry, refusedUntil = c.backoff(&delay)
 				continue
 			}
 			retry = c.pace(&delay)
 			continue
 		}
-		start := time.Now()
 		req = s.sendLoop(req)
 		c.setStreamUp(false)
 		if s.ended() {
@@ -186,10 +190,10 @@ func (c *OutboundChannel) run() {
 			<-s.verdict
 			refusal = s.refusal
 		}
-		// A stream that received a frame or outlived the maximum delay has
-		// proven viable, so the backoff starts over.
-		if s.received.Load() || time.Since(start) >= eagerReconnectMaxDelay {
+		// A stream that has proven viable starts the backoff over.
+		if s.proven() {
 			delay = eagerReconnectBaseDelay
+			suspect = false
 		}
 		if refusal != nil {
 			// The calls pending on the refused stream have failed with the
@@ -200,7 +204,7 @@ func (c *OutboundChannel) run() {
 				c.queue.fail(*req, refusal)
 				req = nil
 			}
-			connect = false
+			suspect, connect = true, false
 			retry, refusedUntil = c.backoff(&delay)
 			continue
 		}
@@ -237,8 +241,9 @@ func (c *OutboundChannel) backoff(delay *time.Duration) (<-chan time.Time, time.
 }
 
 // open opens a stream, checks its remote end if the channel has a verifier,
-// and starts the session's receive loop and GOAWAY watcher.
-func (c *OutboundChannel) open() (*session, error) {
+// and starts the session's receive loop and GOAWAY watcher. A suspect session
+// follows a refused stream; see [session.healthy].
+func (c *OutboundChannel) open(suspect bool) (*session, error) {
 	ctx, cancel := context.WithCancel(c.ctx)
 	st, err := NewGorumsClient(c.conn).NodeStream(ctx)
 	if err != nil {
@@ -257,6 +262,7 @@ func (c *OutboundChannel) open() (*session, error) {
 		}
 	}
 	s := newSession(ctx, cancel, &c.endpoint, st, true, true)
+	s.suspect = suspect
 	c.mu.Lock()
 	c.sessions[s] = struct{}{}
 	c.mu.Unlock()
