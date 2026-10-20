@@ -112,10 +112,10 @@ The `Makefile` itself also serves as documentation; inspect it for details.
 | `benchtest`       | Validates that benchmarks compile and run without error (short runs).                                  |
 | `bench`           | Runs benchmarks with proper measurement for performance analysis.                                      |
 | `stresstest`      | Runs the ordering tests for a fixed duration (test flag: `-stress`) for thorough testing.              |
-| `modernize`       | Applies `go fix` and `x/tools/modernize@latest` across all workspace modules.                           |
-| `goplscheck`      | Fails on gopls diagnostics, including hint-level suggestions, in non-generated Go source.             |
-| `lint`            | Runs `golangci-lint` with `.golangci.yml` on all workspace modules, as CI does.                       |
-| `deadcode`        | Lists functions unreachable from any main or test; advisory, and run by `lint`.                         |
+| `modernize`       | Applies `go fix` and `x/tools/modernize@latest` across all workspace modules.                          |
+| `goplscheck`      | Fails on gopls diagnostics, including hint-level suggestions, in non-generated Go source.              |
+| `lint`            | Runs `golangci-lint` with `.golangci.yml` on all workspace modules, as CI does.                        |
+| `deadcode`        | Lists functions unreachable from any main or test; advisory, and run by `lint`.                        |
 
 ## Releasing
 
