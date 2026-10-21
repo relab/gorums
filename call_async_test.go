@@ -9,6 +9,7 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
+	"github.com/relab/gorums/internal/testutils/mockcall"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -47,11 +48,7 @@ func TestAsync(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := gorumstest.Config(t, tt.numNodes, gorumstest.EchoServer)
 			ctx := gorumstest.Context(t, 2*time.Second)
-			responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-				config.Context(ctx),
-				pb.String("test"),
-				mock.TestMethod,
-			)
+			responses := mockcall.QuorumCall(config.Context(ctx), mock.TestMethod, "test")
 
 			future := tt.call(responses.Responses)
 
@@ -73,11 +70,7 @@ func TestAsync_Error(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-		config.Context(ctx),
-		pb.String("test"),
-		mock.TestMethod,
-	)
+	responses := mockcall.QuorumCall(config.Context(ctx), mock.TestMethod, "test")
 
 	future := responses.AsyncMajority()
 	_, err := future.Get()
@@ -94,11 +87,7 @@ func TestAsyncDone(t *testing.T) {
 		// stays pending and Done reports false.
 		config := gorumstest.UnreachableConfig(t)
 		ctx := gorumstest.Context(t, 2*time.Second)
-		future := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-			config.Context(ctx),
-			pb.String("test"),
-			mock.TestMethod,
-		).AsyncMajority()
+		future := mockcall.QuorumCall(config.Context(ctx), mock.TestMethod, "test").AsyncMajority()
 
 		if future.Done() {
 			t.Error("Done() = true for a call that has not completed, want false")
@@ -108,11 +97,7 @@ func TestAsyncDone(t *testing.T) {
 	t.Run("CompletedReportsDone", func(t *testing.T) {
 		config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 		ctx := gorumstest.Context(t, 2*time.Second)
-		future := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-			config.Context(ctx),
-			pb.String("test"),
-			mock.TestMethod,
-		).AsyncMajority()
+		future := mockcall.QuorumCall(config.Context(ctx), mock.TestMethod, "test").AsyncMajority()
 
 		if _, err := future.Get(); err != nil {
 			t.Fatalf("Get() error: %v", err)
@@ -178,20 +163,20 @@ func TestOnewayAsyncWaitAfterContextEnds(t *testing.T) {
 		{
 			name: "Multicast",
 			async: func(ctx context.Context) *gorums.OnewayAsync {
-				return gorumsimpl.Multicast(config.Context(ctx), pb.String("x"), mock.TestMethod).Async()
+				return mockcall.Multicast(config.Context(ctx), mock.TestMethod, "x").Async()
 			},
 			barrier: func() error {
-				_, err := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](config.Context(t.Context()), pb.String("x"), mock.TestMethod).All()
+				_, err := mockcall.QuorumCall(config.Context(t.Context()), mock.TestMethod, "x").All()
 				return err
 			},
 		},
 		{
 			name: "Unicast",
 			async: func(ctx context.Context) *gorums.OnewayAsync {
-				return gorumsimpl.Unicast(node.Context(ctx), pb.String("x"), mock.TestMethod).Async()
+				return mockcall.Unicast(node.Context(ctx), mock.TestMethod, "x").Async()
 			},
 			barrier: func() error {
-				_, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(t.Context()), pb.String("x"), mock.TestMethod)
+				_, err := mockcall.RemoteCall(node.Context(t.Context()), mock.TestMethod, "x")
 				return err
 			},
 		},
