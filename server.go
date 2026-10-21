@@ -99,7 +99,7 @@ func (s *Server) WaitForClients(ctx context.Context, cond func(Config) bool) err
 func NewServer(opts ...ServerOption) *Server {
 	s, err := newServer(opts...)
 	if err != nil {
-		panic(fmt.Sprintf("gorums: invalid peer configuration: %v", err))
+		panic(err.Error())
 	}
 	return s
 }

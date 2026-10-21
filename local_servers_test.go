@@ -44,6 +44,9 @@ func TestLocalServersInvalidPeers(t *testing.T) {
 		stop()
 		t.Fatal("NewLocalServers with an invalid peer address succeeded, want an error")
 	}
+	if got := err.Error(); !strings.HasPrefix(got, "gorums: invalid address") || strings.Count(got, "gorums:") != 1 {
+		t.Errorf("NewLocalServers error = %q, want a single gorums: prefix and no peer-configuration wrapper", got)
+	}
 	if servers != nil || stop != nil {
 		t.Errorf("NewLocalServers returned servers=%v stop=%v with an error", servers, stop != nil)
 	}
