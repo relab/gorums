@@ -12,6 +12,7 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
+	"github.com/relab/gorums/internal/testutils/mockcall"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -31,7 +32,7 @@ func TestOnewayNoResourceLeak(t *testing.T) {
 	cfg := servers[0].PeerConfig()
 	ctx := gorumstest.Context(t, 5*time.Second)
 	for i := range 1000 {
-		if err := gorumsimpl.Multicast(cfg.Context(ctx), pb.String(fmt.Sprintf("mc-%d", i)), mock.TestMethod).Send(); err != nil {
+		if err := mockcall.Multicast(cfg.Context(ctx), mock.TestMethod, fmt.Sprintf("mc-%d", i)).Send(); err != nil {
 			t.Fatalf("Multicast %d: %v", i, err)
 		}
 	}
@@ -66,7 +67,7 @@ func TestOnewayDroppedHandleDoesNotDispatch(t *testing.T) {
 	cfg := servers[0].PeerConfig()
 	ctx := gorumstest.Context(t, 2*time.Second)
 	// Drop the handle without consuming it: nothing must be sent.
-	_ = gorumsimpl.Multicast(cfg.Context(ctx), pb.String("dropped"), mock.TestMethod)
+	_ = mockcall.Multicast(cfg.Context(ctx), mock.TestMethod, "dropped")
 	// Allow time for any erroneous dispatch to reach the servers.
 	time.Sleep(200 * time.Millisecond)
 	if got := received.Load(); got != 0 {
@@ -112,7 +113,7 @@ func TestOnewayCallDoubleDispatchPanics(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := gorumstest.Context(t, 2*time.Second)
-			call := gorumsimpl.Multicast(cfg.Context(ctx), pb.String("x"), mock.TestMethod)
+			call := mockcall.Multicast(cfg.Context(ctx), mock.TestMethod, "x")
 			defer func() {
 				if recover() == nil {
 					t.Errorf("%s did not panic", tt.name)
@@ -145,7 +146,7 @@ func TestOnewayCallAsync(t *testing.T) {
 	// could not proceed until each multicast had reached all three nodes.
 	handles := make([]*gorums.OnewayAsync, calls)
 	for i := range handles {
-		handles[i] = gorumsimpl.Multicast(cfg.Context(ctx), pb.String(fmt.Sprintf("async-%d", i)), mock.TestMethod).Async()
+		handles[i] = mockcall.Multicast(cfg.Context(ctx), mock.TestMethod, fmt.Sprintf("async-%d", i)).Async()
 	}
 	for i, h := range handles {
 		if err := h.Wait(); err != nil {
@@ -174,9 +175,7 @@ func TestOnewayCallAsyncReportsSendError(t *testing.T) {
 	ctx := config.Context(t.Context())
 
 	// Warm up so the streams are established before they are torn down.
-	if err := gorumsimpl.Multicast(ctx, pb.String("warmup"), mock.TestMethod).Send(); err != nil {
-		t.Fatalf("warmup: %v", err)
-	}
+	mockcall.MustMulticast(t, ctx, mock.TestMethod, "warmup")
 	stopNodes() // stop all servers
 
 	// Retry until the torn-down streams are observed, as the quorum-call
@@ -184,7 +183,7 @@ func TestOnewayCallAsyncReportsSendError(t *testing.T) {
 	// instant the server stops.
 	var err error
 	for range 5 {
-		if err = gorumsimpl.Multicast(ctx, pb.String("x"), mock.TestMethod).Async().Wait(); err != nil {
+		if err = mockcall.Multicast(ctx, mock.TestMethod, "x").Async().Wait(); err != nil {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -203,7 +202,7 @@ func TestOnewayCallAsyncReportsSendError(t *testing.T) {
 func TestCallInterceptAfterDispatchPanics(t *testing.T) {
 	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 5*time.Second)
-	call := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](config.Context(ctx), pb.String("x"), mock.TestMethod)
+	call := mockcall.QuorumCall(config.Context(ctx), mock.TestMethod, "x")
 	if _, err := call.Majority(); err != nil {
 		t.Fatalf("Majority: %v", err)
 	}
@@ -222,7 +221,7 @@ func TestCallInterceptAfterDispatchPanics(t *testing.T) {
 func TestCallInterceptAfterResultsPanics(t *testing.T) {
 	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 5*time.Second)
-	call := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](config.Context(ctx), pb.String("x"), mock.TestMethod)
+	call := mockcall.QuorumCall(config.Context(ctx), mock.TestMethod, "x")
 	_ = call.Results()
 	defer func() {
 		if recover() == nil {
@@ -237,7 +236,7 @@ func TestCallInterceptAfterResultsPanics(t *testing.T) {
 func TestCallInterceptNilIgnored(t *testing.T) {
 	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 5*time.Second)
-	resp, err := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](config.Context(ctx), pb.String("test"), mock.TestMethod).
+	resp, err := mockcall.QuorumCall(config.Context(ctx), mock.TestMethod, "test").
 		Intercept(nil).
 		Majority()
 	if err != nil {
@@ -253,7 +252,7 @@ func TestRemoteCallSuccess(t *testing.T) {
 
 	ctx := gorumstest.Context(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
-	response, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
+	response, err := mockcall.RemoteCall(nodeCtx, mock.TestMethod, "")
 	if err != nil {
 		t.Fatalf("Unexpected error, got: %v, want: %v", err, nil)
 	}
@@ -270,7 +269,7 @@ func TestRemoteCallDownedNode(t *testing.T) {
 
 	ctx := gorumstest.Context(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
-	response, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
+	response, err := mockcall.RemoteCall(nodeCtx, mock.TestMethod, "")
 	if err == nil {
 		t.Fatalf("Expected error, got: %v, want: %v", err, fmt.Errorf("rpc error: code = Unavailable desc = stream is down"))
 	}
@@ -286,7 +285,7 @@ func TestRemoteCallTimedOut(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	defer cancel()
 	nodeCtx := node.Context(ctx)
-	response, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
+	response, err := mockcall.RemoteCall(nodeCtx, mock.TestMethod, "")
 	if err == nil {
 		t.Fatalf("Expected error, got: %v, want: %v", err, fmt.Errorf("context deadline exceeded"))
 	}
@@ -317,7 +316,7 @@ func TestRemoteCallConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	for range concurrency {
 		wg.Go(func() {
-			_, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(t.Context()), pb.String(""), mock.TestMethod)
+			_, err := mockcall.RemoteCall(node.Context(t.Context()), mock.TestMethod, "")
 			if err != nil {
 				errCh <- err
 			}
