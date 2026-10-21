@@ -43,17 +43,15 @@ type session struct {
 	received    atomic.Bool // a frame has been received
 
 	// verdict is closed when the stream delivers its first frame or receiving
-	// ends, whichever comes first. refusal is set before verdict is closed if
-	// the server refused an outbound session's stream; see [isRefusal].
+	// ends. refusal is set before that if the server refused the stream.
 	verdict chan struct{}
 	refusal error
 	// handoff decides which goroutine disposes of the pending calls when a
-	// stream ends before it delivered a frame; see [session.sendFailed].
+	// stream ends before it delivered a frame.
 	handoff atomic.Int32
 
-	// suspect is set on a session opened after a refused stream, before any
-	// stream proved viable; see [session.healthy]. opened is when the session
-	// was created; see [session.proven].
+	// suspect is set on a session opened after a refusal, before any stream
+	// proved viable. opened is when the session was created.
 	suspect bool
 	opened  time.Time
 }
@@ -145,30 +143,22 @@ func (s *session) send(req Request) bool {
 	return true
 }
 
-// proven reports whether the session's stream has proven viable: it has
-// delivered a frame, or it has lived [viableStreamAge].
+// proven reports whether the stream delivered a frame or lived
+// [viableStreamAge].
 func (s *session) proven() bool {
 	return s.received.Load() || time.Since(s.opened) >= viableStreamAge
 }
 
-// healthy reports whether a completed send shows that the session's stream
-// works, so that it clears the channel's last error. A send on a stream that
-// the server will refuse completes locally, before the refusal arrives. So a
-// send on a suspect session counts only once the stream has proven viable.
+// healthy reports whether a completed send shows that the stream works. A send
+// on a stream that the server will refuse completes locally, so a suspect
+// session counts only once its stream is proven.
 func (s *session) healthy() bool {
 	return !s.suspect || s.proven()
 }
 
 // sendFailed ends the session after a send failed with err. It reports
-// whether the receive loop disposes of the pending calls, in which case the
-// session's verdict tells whether the server refused the stream.
-//
-// On an outbound session whose stream has delivered no frame, a send that
-// fails with io.EOF only cancels the stream: the server ended the stream, and
-// only receiving learns its status, which tells whether the server refused
-// the stream. The receive loop then disposes of the pending calls. It also
-// does so if receiving has already ended. Otherwise, sendFailed ends the
-// session as [session.fail] does.
+// whether the receive loop disposes of the pending calls, because only
+// receiving learns whether the server refused the stream.
 func (s *session) sendFailed(err error) bool {
 	if s.requeue {
 		for {
@@ -209,20 +199,14 @@ func (s *session) receive() error {
 	}
 }
 
-// accept records that the stream delivered its first frame, which shows that
-// the server accepted the stream. If a send failed before the frame arrived,
-// the stream is already canceled: receiving delivers the frames that the
-// stream buffered, and then [session.receiveFailed] retries the calls that
-// are still pending, as for any lost stream.
+// accept records that the stream delivered its first frame.
 func (s *session) accept() {
 	s.handoff.Store(streamAccepted)
 	close(s.verdict)
 }
 
-// receiveFailed ends the session after receiving failed with err. On an
-// outbound session whose stream delivered no frame, a refusal code in err
-// (see [isRefusal]) means that the server refused the stream: the pending
-// calls then fail with err instead of being retried.
+// receiveFailed ends the session after receiving failed with err. The pending
+// calls fail with err if it refuses the stream, and are retried otherwise.
 func (s *session) receiveFailed(err error) {
 	prev := s.handoff.Swap(streamClosed)
 	if prev != streamAccepted {
@@ -302,22 +286,25 @@ func (s *session) ended() bool {
 	}
 }
 
-// retry queues a call that was pending when the session ended, so that the
-// call is sent again on the channel's next session.
-//
-// On an outbound session, retry fails the call only in these cases:
-//
-//   - A streaming call fails with [ErrStreamDown], since the call may already
-//     have received responses.
-//   - A non-streaming call fails with [ErrSendQueueFull] if the send queue is
-//     full.
-//   - Any call fails with [ErrNodeClosed] if the channel is closed.
-//
-// An inbound channel has no next session, so on an inbound session, retry
-// fails every call with [ErrStreamDown].
-//
-// The calls of a refused stream are not retried; see
-// [session.receiveFailed].
+// outcome reports whether the stream proved viable, and the refusal that ended
+// it, if any. A refusal is nil for a live stream and for one that ended
+// without a refusal. A refused stream can also be viable, if it lived long
+// enough.
+func (s *session) outcome() (viable bool, refusal error) {
+	if s.ended() {
+		// The session canceled the stream, so receiving ends promptly. It may
+		// still deliver a buffered frame, which proves the stream viable.
+		<-s.verdict
+		refusal = s.refusal
+	}
+	return s.proven(), refusal
+}
+
+// retry queues a call that was pending when the session ended, to be sent on
+// the channel's next session. It fails a streaming call with [ErrStreamDown],
+// and any call with [ErrSendQueueFull] if the send queue is full or
+// [ErrNodeClosed] if the channel is closed. An inbound session has no next
+// session, so retry fails every call with [ErrStreamDown].
 func (s *session) retry(req Request) {
 	switch {
 	case s.requeue && !req.Streaming:
