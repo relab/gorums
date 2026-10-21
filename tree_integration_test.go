@@ -10,6 +10,7 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
+	"github.com/relab/gorums/internal/testutils/mockcall"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -86,9 +87,7 @@ func TestTreeMulticast(t *testing.T) {
 
 			ctx := gorumstest.Context(t, 5*time.Second)
 			root := trees[0].Root().ID()
-			if err := gorumsimpl.Multicast(trees[0].ChildrenOf(root).Context(ctx), pb.String("ping"), mock.TestMethod).Send(); err != nil {
-				t.Fatalf("multicast: %v", err)
-			}
+			mockcall.MustMulticast(t, trees[0].ChildrenOf(root).Context(ctx), mock.TestMethod, "ping")
 			waitWithTimeout(t, &wg)
 
 			mu.Lock()
@@ -168,7 +167,7 @@ func TestTreeMulticastRelayOrder(t *testing.T) {
 				ctx := gorumstest.Context(t, 5*time.Second)
 				rootChildren := trees[0].ChildrenOf(trees[0].Root().ID())
 				for _, v := range []string{"0", "1"} {
-					if err := gorumsimpl.Multicast(rootChildren.Context(ctx), pb.String(v), mock.TestMethod).Send(); err != nil {
+					if err := mockcall.Multicast(rootChildren.Context(ctx), mock.TestMethod, v).Send(); err != nil {
 						t.Fatalf("multicast %q: %v", v, err)
 					}
 				}
@@ -206,7 +205,7 @@ func TestTreeQuorumCall(t *testing.T) {
 				if len(children) == 0 {
 					return total, nil
 				}
-				for r := range gorumsimpl.QuorumCall[*pb.Int32Value, *pb.Int32Value](children.Context(ctx), pb.Int32(0), mock.GetValueMethod).Results() {
+				for r := range mockcall.Int32QuorumCall(children.Context(ctx), mock.GetValueMethod, 0).Results() {
 					if r.Err != nil {
 						return 0, fmt.Errorf("child %d: %w", r.NodeID, r.Err)
 					}
@@ -233,9 +232,7 @@ func TestTreeQuorumCall(t *testing.T) {
 			// the test context in place of a request context.
 			ctx := gorumstest.Context(t, 5*time.Second)
 			total := int32(trees[0].Root().ID())
-			for r := range gorumsimpl.QuorumCall[*pb.Int32Value, *pb.Int32Value](
-				trees[0].ChildrenOf(trees[0].Root().ID()).Context(ctx), pb.Int32(0), mock.GetValueMethod,
-			).Results() {
+			for r := range mockcall.Int32QuorumCall(trees[0].ChildrenOf(trees[0].Root().ID()).Context(ctx), mock.GetValueMethod, 0).Results() {
 				if r.Err != nil {
 					t.Fatalf("quorum call, node %d: %v", r.NodeID, r.Err)
 				}
@@ -261,7 +258,7 @@ func TestTreeExternalCaller(t *testing.T) {
 			ctx.Release()
 			total := int32(srv.NodeID())
 			if children := tree.ChildrenOf(srv.NodeID()); len(children) > 0 {
-				for r := range gorumsimpl.QuorumCall[*pb.Int32Value, *pb.Int32Value](children.Context(ctx), pb.Int32(0), mock.GetValueMethod).Results() {
+				for r := range mockcall.Int32QuorumCall(children.Context(ctx), mock.GetValueMethod, 0).Results() {
 					if r.Err != nil {
 						return nil, fmt.Errorf("child %d: %w", r.NodeID, r.Err)
 					}
@@ -275,7 +272,7 @@ func TestTreeExternalCaller(t *testing.T) {
 	// The caller is server 4, which uses its own view of the tree to find the root.
 	ctx := gorumstest.Context(t, 5*time.Second)
 	rootOnly := gorums.Config{trees[3].Root()}
-	resp, err := gorumsimpl.QuorumCall[*pb.Int32Value, *pb.Int32Value](rootOnly.Context(ctx), pb.Int32(0), mock.GetValueMethod).First()
+	resp, err := mockcall.Int32QuorumCall(rootOnly.Context(ctx), mock.GetValueMethod, 0).First()
 	if err != nil {
 		t.Fatalf("quorum call to the root: %v", err)
 	}
