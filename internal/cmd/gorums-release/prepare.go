@@ -201,7 +201,7 @@ func (t *tool) chooseVersion(o prepareOptions) (semver, string, error) {
 	}
 	report, err := t.query("gorelease", args...)
 	if err != nil {
-		return semver{}, "", fmt.Errorf("gorelease failed: %w\n%s", err, report)
+		return semver{}, "", fmt.Errorf("running gorelease: %w\n%s", err, report)
 	}
 	name := o.version
 	if name == "" {

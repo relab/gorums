@@ -17,7 +17,7 @@ import (
 func Run(outDir string, args ...string) (string, error) {
 	root, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
 	if err != nil {
-		return "", fmt.Errorf("protoc: find repository root: %w", err)
+		return "", fmt.Errorf("protoc: finding repository root: %w", err)
 	}
 	cmd := exec.Command("protoc", "-I.:"+strings.TrimSpace(string(root)),
 		"--go_out=paths=source_relative:"+outDir,

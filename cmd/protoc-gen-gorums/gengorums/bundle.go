@@ -75,7 +75,7 @@ func staticBundle() ([]byte, error) {
 
 	staticContent, err := format.Source([]byte(src))
 	if err != nil {
-		return nil, fmt.Errorf("formatting failed: %w", err)
+		return nil, fmt.Errorf("formatting source: %w", err)
 	}
 	return staticContent, nil
 }
@@ -102,10 +102,10 @@ func loadPackage(dir string, overlay map[string][]byte) (*packages.Package, erro
 	}
 	pkgs, err := packages.Load(cfg, files...)
 	if err != nil {
-		return nil, fmt.Errorf("load %s: %w", dir, err)
+		return nil, fmt.Errorf("loading %s: %w", dir, err)
 	}
 	if len(pkgs) != 1 {
-		return nil, fmt.Errorf("load %s: got %d packages, want 1", dir, len(pkgs))
+		return nil, fmt.Errorf("loading %s: got %d packages, want 1", dir, len(pkgs))
 	}
 	var loadErrors []packages.Error
 	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
@@ -116,7 +116,7 @@ func loadPackage(dir string, overlay map[string][]byte) (*packages.Package, erro
 	}
 	pkg := pkgs[0]
 	if pkg.Types == nil || pkg.TypesInfo == nil {
-		return nil, fmt.Errorf("load %s: missing type information", dir)
+		return nil, fmt.Errorf("loading %s: missing type information", dir)
 	}
 	return pkg, nil
 }
