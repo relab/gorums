@@ -8,8 +8,6 @@ import (
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"github.com/relab/gorums/internal/testutils/mockcall"
-	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
-	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func TestCorrectableQuorumCall(t *testing.T) {
@@ -131,11 +129,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-					cfgCtx,
-					pb.String("test"),
-					mock.TestMethod,
-				)
+				responses := mockcall.QuorumCall(cfgCtx, mock.TestMethod, "test")
 				corr := responses.Correctable(threshold)
 				<-corr.Watch(threshold)
 				_, _, err := corr.Get()
@@ -151,11 +145,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-					cfgCtx,
-					pb.String("test"),
-					mock.TestMethod,
-				)
+				responses := mockcall.QuorumCall(cfgCtx, mock.TestMethod, "test")
 				count := 0
 				for resp := range responses.Results() {
 					if resp.Err == nil {
@@ -177,11 +167,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := gorumsimpl.QuorumCallStream[*pb.StringValue, *pb.StringValue](
-					cfgCtx,
-					pb.String("test"),
-					mock.StreamMethod,
-				)
+				responses := mockcall.QuorumCallStream(cfgCtx, mock.StreamMethod, "test")
 				corr := responses.Correctable(threshold)
 				<-corr.Watch(threshold)
 				_, _, err := corr.Get()
@@ -197,11 +183,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := gorumsimpl.QuorumCallStream[*pb.StringValue, *pb.StringValue](
-					cfgCtx,
-					pb.String("test"),
-					mock.StreamMethod,
-				)
+				responses := mockcall.QuorumCallStream(cfgCtx, mock.StreamMethod, "test")
 				count := 0
 				for resp := range responses.Results() {
 					if resp.Err == nil {
