@@ -10,7 +10,6 @@ import (
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"github.com/relab/gorums/internal/testutils/mockcall"
-	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -116,11 +115,7 @@ func BenchmarkAsyncQuorumCall(b *testing.B) {
 		b.Run(fmt.Sprintf("AsyncMajority/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				future := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-					cfgCtx,
-					pb.String("test"),
-					mock.TestMethod,
-				).AsyncMajority()
+				future := mockcall.QuorumCall(cfgCtx, mock.TestMethod, "test").AsyncMajority()
 				_, err := future.Get()
 				if err != nil {
 					b.Fatalf("AsyncMajority error: %v", err)
@@ -132,11 +127,7 @@ func BenchmarkAsyncQuorumCall(b *testing.B) {
 		b.Run(fmt.Sprintf("BlockingMajority/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				_, err := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-					cfgCtx,
-					pb.String("test"),
-					mock.TestMethod,
-				).Majority()
+				_, err := mockcall.QuorumCall(cfgCtx, mock.TestMethod, "test").Majority()
 				if err != nil {
 					b.Fatalf("Majority error: %v", err)
 				}
