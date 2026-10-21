@@ -7,6 +7,7 @@ import (
 
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
+	"github.com/relab/gorums/internal/testutils/mockcall"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -15,11 +16,7 @@ func TestCorrectableQuorumCall(t *testing.T) {
 	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 2*time.Second)
 
-	responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-		config.Context(ctx),
-		pb.String("test"),
-		mock.TestMethod,
-	)
+	responses := mockcall.QuorumCall(config.Context(ctx), mock.TestMethod, "test")
 
 	// Wait for 2 responses
 	corr := responses.Correctable(2)
@@ -71,11 +68,7 @@ func TestCorrectableQuorumCallStream(t *testing.T) {
 			config := gorumstest.Config(t, 3, gorumstest.StreamServer(10*time.Millisecond))
 			ctx := gorumstest.Context(t, 2*time.Second)
 
-			responses := gorumsimpl.QuorumCallStream[*pb.StringValue, *pb.StringValue](
-				config.Context(ctx),
-				pb.String("test"),
-				mock.StreamMethod,
-			)
+			responses := mockcall.QuorumCallStream(config.Context(ctx), mock.StreamMethod, "test")
 
 			corr := responses.Correctable(tt.threshold)
 
@@ -108,11 +101,7 @@ func TestCorrectableWatch(t *testing.T) {
 	config := gorumstest.Config(t, 3, gorumstest.StreamServer(10*time.Millisecond))
 	ctx := gorumstest.Context(t, 2*time.Second)
 
-	responses := gorumsimpl.QuorumCallStream[*pb.StringValue, *pb.StringValue](
-		config.Context(ctx),
-		pb.String("test"),
-		mock.StreamMethod,
-	)
+	responses := mockcall.QuorumCallStream(config.Context(ctx), mock.StreamMethod, "test")
 
 	corr := responses.Correctable(3)
 
