@@ -87,6 +87,24 @@ Or directly:
 go test -tags=integration ./...
 ```
 
+## Error Strings
+
+An error string describes the operation that was attempted, not the failure.
+Wrapped errors then read like prose: `dialing node 3: creating stream: connection refused`.
+
+- Do not start an error with `failed to`, `could not`, `unable to`, or `error`.
+  Write `creating node %d: %w`, not `failed to create node %d: %w`.
+- An error that wraps nothing names the condition: `no nodes in configuration`.
+- A precondition has the form `cannot X without Y`.
+- Do not add an annotation that only says something failed; return the error unchanged.
+- Use a lowercase first letter, no trailing punctuation, and no newlines.
+  Sentinel errors (`ErrXxx`) name the condition.
+- Only the layer that creates a Gorums error adds the `gorums: ` prefix.
+  A caller that wraps such an error does not add it again.
+- Messages that an application end user reads directly, such as `protoc-gen-gorums` and command-line diagnostics, may keep explicit failure wording.
+
+`TestErrorStringsDescribeOperation` in `internal/lint` rejects the banned prefixes in `errors.New` and `fmt.Errorf` calls.
+
 ## Benchmarking
 
 See [benchmarking.md](./benchmarking.md)

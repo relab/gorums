@@ -36,7 +36,7 @@ func unmarshal(msg *stream.Message, msgDesc func(protoreflect.MethodDescriptor) 
 		// time requires it, so when it is missing or not linked into the
 		// binary, the failure appears here, at run time.
 		// See https://github.com/relab/gorums/issues/212.
-		return nil, fmt.Errorf("gorums: could not find method descriptor for %s: %w; check that the .pb.go file declaring the service is linked into the binary", method, err)
+		return nil, fmt.Errorf("gorums: finding method descriptor for %s: %w; check that the .pb.go file declaring the service is linked into the binary", method, err)
 	}
 	methodDesc, ok := desc.(protoreflect.MethodDescriptor)
 	if !ok {
@@ -45,12 +45,12 @@ func unmarshal(msg *stream.Message, msgDesc func(protoreflect.MethodDescriptor) 
 	name := msgDesc(methodDesc).FullName()
 	msgType, err := protoregistry.GlobalTypes.FindMessageByName(name)
 	if err != nil {
-		return nil, fmt.Errorf("gorums: could not find message type %s: %w", name, err)
+		return nil, fmt.Errorf("gorums: finding message type %s: %w", name, err)
 	}
 	m := msgType.New().Interface()
 	if payload := msg.GetPayload(); len(payload) > 0 {
 		if err := proto.Unmarshal(payload, m); err != nil {
-			return nil, fmt.Errorf("gorums: could not unmarshal %s: %w", kind, err)
+			return nil, fmt.Errorf("gorums: unmarshaling %s: %w", kind, err)
 		}
 	}
 	return m, nil

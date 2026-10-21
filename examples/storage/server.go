@@ -68,7 +68,7 @@ func runLocalCluster(srvOpts gorums.ServerOption) ([]string, func(), error) {
 		gorums.WithLocalDialOptions(dialOpts),
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create local servers: %w", err)
+		return nil, nil, fmt.Errorf("creating local servers: %w", err)
 	}
 
 	addrs := make([]string, len(servers))
@@ -85,7 +85,7 @@ func runLocalCluster(srvOpts gorums.ServerOption) ([]string, func(), error) {
 			return cfg.Size() == len(servers)
 		}); err != nil {
 			stop()
-			return nil, nil, fmt.Errorf("cluster failed to connect: %w", err)
+			return nil, nil, fmt.Errorf("connecting cluster: %w", err)
 		}
 	}
 

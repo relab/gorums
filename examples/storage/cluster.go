@@ -20,7 +20,7 @@ func runCluster(addrs string, ic string) error {
 	}
 	exe, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("could not determine executable path: %w", err)
+		return fmt.Errorf("determining executable path: %w", err)
 	}
 
 	cmds := make([]*exec.Cmd, len(all))
@@ -37,7 +37,7 @@ func runCluster(addrs string, ic string) error {
 		cmd.Stderr = os.Stderr
 		if err := cmd.Start(); err != nil {
 			stopAll(cmds[:i])
-			return fmt.Errorf("failed to start server %q: %w", addr, err)
+			return fmt.Errorf("starting server %q: %w", addr, err)
 		}
 		cmds[i] = cmd
 	}
