@@ -19,12 +19,11 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
-	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
+	"github.com/relab/gorums/internal/testutils/mockcall"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
-	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 var (
@@ -466,7 +465,7 @@ func TestConfigClose(t *testing.T) {
 	call := func(t *testing.T, node *gorums.Node) error {
 		t.Helper()
 		ctx := gorumstest.Context(t, 5*time.Second)
-		_, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(ctx), pb.String("x"), mock.TestMethod)
+		_, err := mockcall.RemoteCall(node.Context(ctx), mock.TestMethod, "x")
 		return err
 	}
 	wantClosed := func(t *testing.T, node *gorums.Node) {
@@ -885,7 +884,7 @@ func TestConfigHostnameTLS(t *testing.T) {
 		t.Errorf("Address() = %q, want %q", got, addr)
 	}
 	ctx := gorumstest.Context(t, 5*time.Second)
-	resp, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(ctx), pb.String("x"), mock.TestMethod)
+	resp, err := mockcall.RemoteCall(node.Context(ctx), mock.TestMethod, "x")
 	if err != nil {
 		t.Fatalf("RemoteCall over TLS to %s: %v", addr, err)
 	}
