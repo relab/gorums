@@ -135,7 +135,7 @@ func NewLocalServers(n int, opts ...LocalServerOption) ([]*Server, func(), error
 		srv, err := newServer(serverOpts...)
 		if err != nil {
 			closeServers(servers[:i], listeners)
-			return nil, nil, fmt.Errorf("gorums: invalid peer configuration: %w", err)
+			return nil, nil, err
 		}
 		srv.setListener(listeners[i])
 		servers[i] = srv
