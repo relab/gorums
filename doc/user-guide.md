@@ -2485,6 +2485,8 @@ It also enables the dial-side check for a source passed to `NewConfig` or `Confi
 A client built that way needs no certificate of its own: it checks the certificate of each server it dials, and a mismatch fails the call with `codes.Unauthenticated`.
 A client that dials without TLS also fails, because no certificate is verified.
 `NewConfig` returns an error if the identities are invalid, with the same rules as `NewServer`.
+`Config.Extend` returns an error if the configuration and the new source disagree: one declares identities and the other does not.
+A configuration therefore never mixes checked and unchecked nodes.
 
 ### Binding Node IDs to TLS Certificates
 

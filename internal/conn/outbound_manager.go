@@ -22,6 +22,7 @@ type outboundManager struct {
 	logger    *log.Logger
 	opts      DialOptions
 	msgIDs    atomic.Uint64
+	verifies  atomic.Bool // set once a node dials with a [PeerVerifier]
 }
 
 // newOutboundManager returns a new outboundManager for managing connection to
@@ -172,6 +173,9 @@ func (m *outboundManager) newNode(id ID, addr string, verify PeerVerifier) (*Nod
 		// peer at the other end of each stream.
 		opts.OnStreamChange = im.onStreamChange
 		opts.Verify = im.verify
+	}
+	if opts.Verify != nil {
+		m.verifies.Store(true)
 	}
 	n, err := newOutboundNode(addr, opts)
 	if err != nil {
