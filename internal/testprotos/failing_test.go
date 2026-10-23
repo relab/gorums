@@ -100,6 +100,28 @@ service Stream {
 }`,
 			want: "Stream.Watch: option 'gorums.quorumcall' is required for server-client stream methods",
 		},
+		{
+			name: "QuorumCallAndMulticast",
+			decl: `
+service Conflict {
+	rpc Write(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+		option (gorums.multicast) = true;
+	}
+}`,
+			want: "Conflict.Write: options 'gorums.quorumcall' and 'gorums.multicast' cannot be combined",
+		},
+		{
+			name: "MulticastAndUnicast",
+			decl: `
+service Conflict {
+	rpc Send(Request) returns (Response) {
+		option (gorums.multicast) = true;
+		option (gorums.unicast) = true;
+	}
+}`,
+			want: "Conflict.Send: options 'gorums.multicast' and 'gorums.unicast' cannot be combined",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
