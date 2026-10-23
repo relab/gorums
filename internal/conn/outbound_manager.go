@@ -115,7 +115,7 @@ func (m *outboundManager) isClosed() bool {
 	return m.closed
 }
 
-func (m *outboundManager) newNode(id ID, addr string) (*Node, error) {
+func (m *outboundManager) newNode(id ID, addr string, verify PeerVerifier) (*Node, error) {
 	if _, found := m.Node(id); found {
 		return nil, fmt.Errorf("gorums: node %d already exists", id)
 	}
@@ -163,6 +163,7 @@ func (m *outboundManager) newNode(id ID, addr string) (*Node, error) {
 		// connected configuration, or sends its own calls on this stream under
 		// stream deduplication, only while the stream is up.
 		EagerReconnect: m.opts.InboundManager != nil,
+		Verify:         verify,
 		Manager:        m,
 	}
 	if im := m.opts.InboundManager; im != nil && im.isKnown(id) {
