@@ -465,7 +465,7 @@ func TestConfigClose(t *testing.T) {
 	call := func(t *testing.T, node *gorums.Node) error {
 		t.Helper()
 		ctx := gorumstest.Context(t, 5*time.Second)
-		_, err := mockcall.RemoteCall(node.Context(ctx), mock.TestMethod, "x")
+		_, err := mockcall.RemoteCall(node.Context(ctx), "x")
 		return err
 	}
 	wantClosed := func(t *testing.T, node *gorums.Node) {
@@ -884,7 +884,7 @@ func TestConfigHostnameTLS(t *testing.T) {
 		t.Errorf("Address() = %q, want %q", got, addr)
 	}
 	ctx := gorumstest.Context(t, 5*time.Second)
-	resp, err := mockcall.RemoteCall(node.Context(ctx), mock.TestMethod, "x")
+	resp, err := mockcall.RemoteCall(node.Context(ctx), "x")
 	if err != nil {
 		t.Fatalf("RemoteCall over TLS to %s: %v", addr, err)
 	}

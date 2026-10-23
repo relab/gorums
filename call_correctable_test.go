@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/relab/gorums/gorumstest"
-	"github.com/relab/gorums/internal/testutils/mock"
 	"github.com/relab/gorums/internal/testutils/mockcall"
 )
 
@@ -14,7 +13,7 @@ func TestCorrectableQuorumCall(t *testing.T) {
 	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 2*time.Second)
 
-	responses := mockcall.QuorumCall(config.Context(ctx), mock.TestMethod, "test")
+	responses := mockcall.QuorumCall(config.Context(ctx), "test")
 
 	// Wait for 2 responses
 	corr := responses.Correctable(2)
@@ -66,7 +65,7 @@ func TestCorrectableQuorumCallStream(t *testing.T) {
 			config := gorumstest.Config(t, 3, gorumstest.StreamServer(10*time.Millisecond))
 			ctx := gorumstest.Context(t, 2*time.Second)
 
-			responses := mockcall.QuorumCallStream(config.Context(ctx), mock.StreamMethod, "test")
+			responses := mockcall.QuorumCallStream(config.Context(ctx), "test")
 
 			corr := responses.Correctable(tt.threshold)
 
@@ -99,7 +98,7 @@ func TestCorrectableWatch(t *testing.T) {
 	config := gorumstest.Config(t, 3, gorumstest.StreamServer(10*time.Millisecond))
 	ctx := gorumstest.Context(t, 2*time.Second)
 
-	responses := mockcall.QuorumCallStream(config.Context(ctx), mock.StreamMethod, "test")
+	responses := mockcall.QuorumCallStream(config.Context(ctx), "test")
 
 	corr := responses.Correctable(3)
 
@@ -129,7 +128,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := mockcall.QuorumCall(cfgCtx, mock.TestMethod, "test")
+				responses := mockcall.QuorumCall(cfgCtx, "test")
 				corr := responses.Correctable(threshold)
 				<-corr.Watch(threshold)
 				_, _, err := corr.Get()
@@ -145,7 +144,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := mockcall.QuorumCall(cfgCtx, mock.TestMethod, "test")
+				responses := mockcall.QuorumCall(cfgCtx, "test")
 				count := 0
 				for resp := range responses.Results() {
 					if resp.Err == nil {
@@ -167,7 +166,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := mockcall.QuorumCallStream(cfgCtx, mock.StreamMethod, "test")
+				responses := mockcall.QuorumCallStream(cfgCtx, "test")
 				corr := responses.Correctable(threshold)
 				<-corr.Watch(threshold)
 				_, _, err := corr.Get()
@@ -183,7 +182,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := mockcall.QuorumCallStream(cfgCtx, mock.StreamMethod, "test")
+				responses := mockcall.QuorumCallStream(cfgCtx, "test")
 				count := 0
 				for resp := range responses.Results() {
 					if resp.Err == nil {
