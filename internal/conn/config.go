@@ -95,7 +95,8 @@ func NewConfig(nodes NodeSource, opts ...DialOption) (Config, func(), error) {
 // The new nodes join c's connection pool, so the close function that
 // [NewConfig] returned for that pool also closes them. A node whose ID and
 // address are already in the pool is reused, not dialed again.
-// Extend returns an error if c is empty or if c's connection pool is closed.
+// Extend returns an error if c is empty, if c's connection pool is closed, or
+// if the new nodes have TLS identities when c's nodes do not, or vice versa.
 func (c Config) Extend(nodes NodeSource) (Config, error) {
 	if len(c) == 0 {
 		return nil, fmt.Errorf("gorums: cannot extend empty configuration")
@@ -106,6 +107,12 @@ func (c Config) Extend(nodes NodeSource) (Config, error) {
 	}
 	if nodes == nil {
 		return slices.Clone(c), nil
+	}
+	if mgr != nil && mgr.verifies.Load() != nodes.nodeMap().hasIdentity() {
+		if mgr.verifies.Load() {
+			return nil, errors.New("gorums: cannot extend this configuration with nodes without TLS identities")
+		}
+		return nil, errors.New("gorums: cannot extend this configuration with nodes that have TLS identities")
 	}
 	newNodes, err := nodes.newConfig(mgr)
 	if err != nil {

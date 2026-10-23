@@ -1,6 +1,7 @@
 package conn
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -88,13 +89,69 @@ func TestNodeSourceInvalidIdentity(t *testing.T) {
 			}
 		})
 		t.Run("Extend/"+tt.name, func(t *testing.T) {
-			cfg, closeFn, err := NewConfig(WithNodeList([]string{"127.0.0.1:9100"}), insecureDial)
+			pool := WithNodes(map[ID]tlsNode{9: {"127.0.0.1:9109", "node9.relab.example"}})
+			cfg, closeFn, err := NewConfig(pool, insecureDial)
 			if err != nil {
 				t.Fatalf("NewConfig: %v", err)
 			}
 			t.Cleanup(closeFn)
 			if _, err := cfg.Extend(tt.nodes); err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("Extend() error = %v; want it to contain %q", err, tt.want)
+			}
+		})
+	}
+}
+
+// TestConfigExtendIdentity verifies that [Config.Extend] accepts a source only
+// if it agrees with the pool on whether dialed servers are identity checked.
+func TestConfigExtendIdentity(t *testing.T) {
+	withIdentity := func(id ID, port int) NodeSource {
+		return WithNodes(map[ID]tlsNode{id: {fmt.Sprintf("127.0.0.1:%d", port), fmt.Sprintf("node%d.relab.example", id)}})
+	}
+	addressOnly := WithNodeList([]string{"127.0.0.1:9200"})
+	tests := []struct {
+		name    string
+		pool    NodeSource
+		extend  NodeSource
+		wantErr string
+	}{
+		{name: "IdentityWithIdentity", pool: withIdentity(1, 9101), extend: withIdentity(2, 9102)},
+		{name: "AddressOnlyWithAddressOnly", pool: WithNodeList([]string{"127.0.0.1:9100"}), extend: addressOnly},
+		{
+			name:    "IdentityWithAddressOnly",
+			pool:    withIdentity(1, 9101),
+			extend:  addressOnly,
+			wantErr: "with nodes without TLS identities",
+		},
+		{
+			name:    "AddressOnlyWithIdentity",
+			pool:    WithNodeList([]string{"127.0.0.1:9100"}),
+			extend:  withIdentity(2, 9102),
+			wantErr: "with nodes that have TLS identities",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, closeFn, err := NewConfig(tt.pool, insecureDial)
+			if err != nil {
+				t.Fatalf("NewConfig: %v", err)
+			}
+			t.Cleanup(closeFn)
+			got, err := cfg.Extend(tt.extend)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("Extend() error = %v; want it to contain %q", err, tt.wantErr)
+				}
+				if cfg.Size() != 1 {
+					t.Errorf("configuration size = %d after a rejected Extend; want 1", cfg.Size())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Extend() error = %v; want nil", err)
+			}
+			if got.Size() != 2 {
+				t.Errorf("extended configuration size = %d; want 2", got.Size())
 			}
 		})
 	}
