@@ -1369,14 +1369,35 @@ func TestServerIdentitySnapshot(t *testing.T) {
 }
 
 // TestServerIdentityStandaloneConfig verifies that NewConfig validates the
-// identities of its source as WithPeers does, instead of ignoring them.
+// identities of its source.
+// The dial-side check itself is covered by TestClientIdentityCheck.
 func TestServerIdentityStandaloneConfig(t *testing.T) {
-	nodes := gorums.WithNodes(map[gorums.ID]tlsNode{
-		1: {"127.0.0.1:9001", ""},
-	})
-	_, _, err := gorums.NewConfig(nodes, gorumstest.InsecureDialOptions(t))
-	if want := "node 1 has an empty TLS identity"; err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("NewConfig() error = %v; want it to contain %q", err, want)
+	tests := []struct {
+		name     string
+		identity string
+		wantErr  string
+	}{
+		{name: "Valid", identity: "spiffe://relab/node/1"},
+		{name: "Empty", wantErr: "node 1 has an empty TLS identity"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			nodes := gorums.WithNodes(map[gorums.ID]tlsNode{1: {"127.0.0.1:9001", tt.identity}})
+			cfg, closeFn, err := gorums.NewConfig(nodes, gorumstest.InsecureDialOptions(t))
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Errorf("NewConfig() error = %v; want it to contain %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NewConfig() error = %v; want nil", err)
+			}
+			t.Cleanup(closeFn)
+			if cfg.Size() != 1 {
+				t.Errorf("configuration size = %d; want 1", cfg.Size())
+			}
+		})
 	}
 }
 
