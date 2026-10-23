@@ -77,7 +77,7 @@ func TestOutboundManagerPeerVerifier(t *testing.T) {
 				o.GRPCDialOptions = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 			})
 			t.Cleanup(m.Close)
-			n, err := m.newNode(tt.nodeID, addr)
+			n, err := m.newNode(tt.nodeID, addr, nil)
 			if err != nil {
 				t.Fatalf("newNode(%d): %v", tt.nodeID, err)
 			}

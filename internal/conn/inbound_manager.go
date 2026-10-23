@@ -213,7 +213,7 @@ func (im *InboundManager) nextMsgID() uint64 {
 // construction before any peers connect, so no locking is needed.
 // If id equals myID, a local (in-process) node is created instead of an
 // inbound node, enabling direct handler invocation without a network round-trip.
-func (im *InboundManager) newNode(id ID, addr string) (*Node, error) {
+func (im *InboundManager) newNode(id ID, addr string, _ PeerVerifier) (*Node, error) {
 	var node *Node
 	if id == im.myID && im.handler != nil {
 		node = newLocalNode(id, addr, im.nextMsgID, im.handler, nil)

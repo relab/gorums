@@ -2480,7 +2480,11 @@ With TLS peer identities, `ServerContext.SenderID` is authenticated for every co
 `SenderID` names only the last hop.
 
 Address-only node types and `WithNodeList` preserve the unauthenticated behavior.
-Identity metadata enables these checks only when the source is used with `WithPeers`; `NewConfig` alone does not enable peer identity checks.
+Identity metadata enables the checks for a source passed to `WithPeers`.
+It also enables the dial-side check for a source passed to `NewConfig` or `Config.Extend`.
+A client built that way needs no certificate of its own: it checks the certificate of each server it dials, and a mismatch fails the call with `codes.Unauthenticated`.
+A client that dials without TLS also fails, because no certificate is verified.
+`NewConfig` returns an error if the identities are invalid, with the same rules as `NewServer`.
 
 ### Binding Node IDs to TLS Certificates
 

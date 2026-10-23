@@ -21,7 +21,9 @@ type NodeSource interface {
 // Implemented by [outboundManager] and [InboundManager].
 type nodeRegistry interface {
 	Nodes() []*Node
-	newNode(id ID, addr string) (*Node, error)
+	// newNode creates the node with the given ID. A non-nil verify checks the
+	// remote end of each stream that the node dials.
+	newNode(id ID, addr string, verify PeerVerifier) (*Node, error)
 }
 
 // NodeAddress must be implemented by types that can be used as node addresses.
@@ -78,7 +80,12 @@ func (nm nodeMap) newConfig(registry nodeRegistry) (Config, error) {
 	if len(nm) == 0 {
 		return nil, fmt.Errorf("gorums: missing required node map")
 	}
-	builder := newNodeBuilder(registry, len(nm))
+	// Nodes that declare an identity check the servers they dial.
+	verify, err := NewPeerVerifier(nm)
+	if err != nil {
+		return nil, err
+	}
+	builder := newNodeBuilder(registry, len(nm), verify)
 	// Sort IDs to ensure deterministic processing order
 	for _, id := range slices.Sorted(maps.Keys(nm)) {
 		node := nm[id]
@@ -105,7 +112,7 @@ func (nl nodeList) newConfig(registry nodeRegistry) (Config, error) {
 	if len(nl) == 0 {
 		return nil, fmt.Errorf("gorums: missing required node addresses")
 	}
-	builder := newNodeBuilder(registry, len(nl))
+	builder := newNodeBuilder(registry, len(nl), nil)
 	nextID := builder.nextID()
 	for i, addr := range nl {
 		id := nextID + ID(i)
@@ -120,6 +127,7 @@ func (nl nodeList) newConfig(registry nodeRegistry) (Config, error) {
 // It encapsulates the common logic shared between WithNodes and WithNodeList.
 type nodeBuilder struct {
 	registry nodeRegistry
+	verify   PeerVerifier  // optional; checks the remote end of each node's streams
 	addrToID map[string]ID // resolved address -> node ID
 	idToNode map[ID]*Node  // existing node ID -> node
 	maxID    ID            // maximum existing node ID
@@ -127,7 +135,7 @@ type nodeBuilder struct {
 }
 
 // newNodeBuilder creates a new nodeBuilder initialized with existing nodes from the registry.
-func newNodeBuilder(registry nodeRegistry, capacity int) *nodeBuilder {
+func newNodeBuilder(registry nodeRegistry, capacity int, verify PeerVerifier) *nodeBuilder {
 	addrToID := make(map[string]ID, capacity)
 	idToNode := make(map[ID]*Node, capacity)
 	maxID := ID(0)
@@ -140,6 +148,7 @@ func newNodeBuilder(registry nodeRegistry, capacity int) *nodeBuilder {
 	}
 	return &nodeBuilder{
 		registry: registry,
+		verify:   verify,
 		addrToID: addrToID,
 		idToNode: idToNode,
 		maxID:    maxID,
@@ -172,7 +181,7 @@ func (b *nodeBuilder) add(id ID, addr string) error {
 	}
 
 	b.addrToID[resolved] = id
-	node, err := b.registry.newNode(id, addr)
+	node, err := b.registry.newNode(id, addr, b.verify)
 	if err != nil {
 		return err
 	}

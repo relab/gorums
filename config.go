@@ -12,14 +12,15 @@ type NodeAddress = conn.NodeAddress
 
 // TLSIdentity supplies the expected name in a peer's verified TLS certificate.
 // A node type passed to [WithNodes] may implement it in addition to
-// [NodeAddress] to enable authentication of the peers configured by [WithPeers].
+// [NodeAddress] to enable authentication of the peers configured by [WithPeers]
+// and of the servers dialed by [NewConfig].
 //
 // An identity with a URI scheme matches only a URI SAN with the same canonical
 // form. Any other identity must be a DNS name, and matches only a DNS SAN,
 // without regard to case. Wildcard DNS SANs, IP SANs, and the Common Name
 // never establish identity. Every node in an authenticated peer set must
 // supply a unique identity that a certificate SAN can match. [NewServer]
-// panics for an empty or duplicate identity, a wildcard DNS name, a network
+// panics, and [NewConfig] returns an error, for an empty or duplicate identity, a wildcard DNS name, a network
 // address such as "10.0.0.1" or "localhost:9000", and text that is not
 // printable ASCII.
 type TLSIdentity = conn.TLSIdentity
@@ -29,8 +30,10 @@ type TLSIdentity = conn.TLSIdentity
 // Node IDs must be greater than 0. It captures each node's address and, when
 // the node implements [TLSIdentity], its expected certificate identity.
 // Later changes to the map or its node values do not affect the source.
-// Identities enable verification when the source is passed to [WithPeers];
-// [NewConfig] alone does not enable peer identity checks.
+// Identities enable verification when the source is passed to [WithPeers],
+// [NewConfig], or [Config.Extend]. A dialed server must present a verified
+// certificate with the node's identity, or its calls fail with
+// codes.Unauthenticated.
 func WithNodes[T NodeAddress](nodes map[ID]T) NodeSource {
 	return conn.WithNodes(nodes)
 }

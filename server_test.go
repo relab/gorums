@@ -1368,19 +1368,15 @@ func TestServerIdentitySnapshot(t *testing.T) {
 	}
 }
 
-// TestServerIdentityStandaloneConfig verifies that TLS identity checks are
-// enabled by WithPeers, not by constructing a standalone client configuration.
+// TestServerIdentityStandaloneConfig verifies that NewConfig validates the
+// identities of its source as WithPeers does, instead of ignoring them.
 func TestServerIdentityStandaloneConfig(t *testing.T) {
 	nodes := gorums.WithNodes(map[gorums.ID]tlsNode{
 		1: {"127.0.0.1:9001", ""},
 	})
-	cfg, closeFn, err := gorums.NewConfig(nodes, gorumstest.InsecureDialOptions(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(closeFn)
-	if cfg.Size() != 1 {
-		t.Errorf("configuration size = %d; want 1", cfg.Size())
+	_, _, err := gorums.NewConfig(nodes, gorumstest.InsecureDialOptions(t))
+	if want := "node 1 has an empty TLS identity"; err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("NewConfig() error = %v; want it to contain %q", err, want)
 	}
 }
 

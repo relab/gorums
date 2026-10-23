@@ -311,6 +311,8 @@ The outbound manager gives the same verifier to the channels that dial configure
 Both managers implement `nodeRegistry`, which a `NodeSource` uses to build a configuration.
 `WithNodes` captures each node's address and optional `TLSIdentity` together.
 When a server uses that source through `WithPeers`, `conn.NewPeerVerifier` validates the identity set and creates the internal TLS verifier.
+`nodeMap.newConfig` also builds a verifier and passes it to `nodeRegistry.newNode`, so `NewConfig` and `Config.Extend` check the servers they dial.
+The `InboundManager` ignores that verifier and uses its own for its known peers.
 Address-only sources yield no verifier, while mixed, empty, invalid, or duplicate identities are configuration errors.
 
 ```mermaid
