@@ -20,9 +20,9 @@ type NodeAddress = conn.NodeAddress
 // without regard to case. Wildcard DNS SANs, IP SANs, and the Common Name
 // never establish identity. Every node in an authenticated peer set must
 // supply a unique identity that a certificate SAN can match. [NewServer]
-// panics, and [NewConfig] returns an error, for an empty or duplicate identity, a wildcard DNS name, a network
-// address such as "10.0.0.1" or "localhost:9000", and text that is not
-// printable ASCII.
+// panics, and [NewConfig] returns an error, for an empty or duplicate
+// identity, a wildcard DNS name, a network address such as "10.0.0.1" or
+// "localhost:9000", and text that is not printable ASCII.
 type TLSIdentity = conn.TLSIdentity
 
 // WithNodes returns a NodeSource containing the provided mapping from
