@@ -1,0 +1,76 @@
+package gentest_test
+
+import (
+	"maps"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/relab/gorums/internal/gentest"
+)
+
+const echoProto = `
+edition = "2023";
+
+package gentest.echo;
+option go_package = "github.com/relab/gorums/internal/gentest/testdata/echo";
+
+import "gorums.proto";
+
+service Echo {
+	rpc Echo(Msg) returns (Msg) {
+		option (gorums.quorumcall) = true;
+	}
+}
+
+message Msg {
+	string value = 1;
+}
+`
+
+func TestGentestGenerate(t *testing.T) {
+	dir := gentest.Inline(t, map[string]string{"echo.proto": echoProto})
+	files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, "echo.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const prefix = "github.com/relab/gorums/internal/gentest/testdata/echo/echo"
+	for _, name := range []string{prefix + ".pb.go", prefix + "_gorums.pb.go"} {
+		if _, ok := files[name]; !ok {
+			t.Errorf("Generate did not return %s; got %v", name, slices.Sorted(maps.Keys(files)))
+		}
+	}
+	if got := files[prefix+"_gorums.pb.go"]; !strings.Contains(got, "func Echo(") {
+		t.Errorf("generated Gorums code has no Echo function:\n%s", got)
+	}
+	gentest.Compile(t, files)
+}
+
+func TestGentestGenerateDev(t *testing.T) {
+	dir := gentest.Inline(t, map[string]string{"echo.proto": echoProto})
+	files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}, Dev: true}, "echo.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const name = "github.com/relab/gorums/internal/gentest/testdata/echo/echo_quorumcall_gorums.pb.go"
+	if _, ok := files[name]; !ok {
+		t.Errorf("Generate did not return %s; got %v", name, slices.Sorted(maps.Keys(files)))
+	}
+}
+
+func TestGentestGenerateError(t *testing.T) {
+	src := strings.Replace(echoProto, "rpc Echo(Msg)", "rpc Config(Msg)", 1)
+	dir := gentest.Inline(t, map[string]string{"echo.proto": src})
+	_, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, "echo.proto")
+	if err == nil || !strings.Contains(err.Error(), "reserved Gorums identifier") {
+		t.Errorf("Generate error = %v, want a reserved identifier error", err)
+	}
+}
+
+func TestGentestNormalize(t *testing.T) {
+	in := "// versions:\n// \tprotoc-gen-gorums v0.11.0-devel\n// \tprotoc            v7.35.1\n// \tprotoc-gen-go v1.36.12\n// \tprotoc        (unknown)\n// source: a.proto\n"
+	want := "// versions:\n// \tprotoc-gen-gorums VERSION\n// \tprotoc            VERSION\n// \tprotoc-gen-go VERSION\n// \tprotoc        VERSION\n// source: a.proto\n"
+	if got := gentest.Normalize(in); got != want {
+		t.Errorf("Normalize() =\n%s\nwant:\n%s", got, want)
+	}
+}

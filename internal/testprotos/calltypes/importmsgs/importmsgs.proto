@@ -1,9 +1,10 @@
-// Test that Gorums can generate a single quorum call method.
+// Test that Gorums can generate a quorum call method whose message types are
+// imported from another package.
 
 edition = "2023";
 
-package gorums.testprotos.calltypes.quorumcall;
-option go_package = "github.com/relab/gorums/internal/testprotos/calltypes/quorumcall";
+package gorums.testprotos.calltypes.importmsgs;
+option go_package = "github.com/relab/gorums/internal/testprotos/calltypes/importmsgs";
 
 option features.field_presence = IMPLICIT;
 

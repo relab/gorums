@@ -87,6 +87,33 @@ Or directly:
 go test -tags=integration ./...
 ```
 
+### Generator Tests
+
+The tests in `internal/testprotos` run `protoc-gen-go` and `protoc-gen-gorums` in process, through the `internal/gentest` harness.
+They test the generator in this tree, not a `protoc-gen-gorums` binary installed on `PATH`, so they need no `make installgorums`.
+Only parsing uses `protoc`.
+The tests write nothing into the tree: `gentest.Compile` type-checks the generated code from memory.
+
+| Test                            | Checks                                                                           |
+| ------------------------------- | -------------------------------------------------------------------------------- |
+| `TestFailingProtoFiles`         | Proto files written inline in the test fail with the expected generator error.   |
+| `TestGenerateProtoFiles`        | The code generated for each fixture under `internal/testprotos` compiles.        |
+| `TestGoldenProtoFiles`          | The Gorums code for each fixture equals its golden file in `testdata`.           |
+| `TestStabilityZorums`           | Two runs on `dev/zorums.proto` produce identical output.                         |
+| `TestStabilityDevFilesUpToDate` | The committed `dev/zorums*.pb.go` files equal the output of the generator.       |
+
+To add a failing case, add a table entry to `TestFailingProtoFiles`.
+To add a fixture, add a `.proto` file in a new directory under `internal/testprotos`, with a `go_package` that matches the directory, and create its golden file as shown below.
+
+After an intended change to a template, refresh the golden files and the dev files, and review both diffs:
+
+```sh
+go test ./internal/testprotos -run TestGoldenProtoFiles -update
+make dev
+```
+
+Golden files replace the tool versions in the header with `VERSION`, so a release or a new `protoc` does not change them.
+
 ## Error Strings
 
 An error string describes the operation that was attempted, not the failure.

@@ -345,7 +345,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 }
 
 // gorumsCallTypes should list all available call types supported by Gorums.
-// These are considered mutually incompatible.
+// A method may have at most one of them; [validateOptions] rejects more.
 var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Quorumcall,
 	gorums.E_Multicast,
@@ -366,7 +366,17 @@ func hasMethodOption(method *protogen.Method, exts ...*protoimpl.ExtensionInfo) 
 // validateOptions returns an error if the extension options
 // for the provided method are incompatible.
 func validateOptions(method *protogen.Method) error {
+	var set []*protoimpl.ExtensionInfo
+	for _, ext := range gorumsCallTypes {
+		if hasMethodOption(method, ext) {
+			set = append(set, ext)
+		}
+	}
 	switch {
+	case len(set) > 1:
+		return fmt.Errorf("%s.%s: options '%s' and '%s' cannot be combined", method.Parent.Desc.Name(), method.Desc.Name(),
+			set[0].TypeDescriptor().FullName(), set[1].TypeDescriptor().FullName())
+
 	case !hasMethodOption(method, gorums.E_Multicast) && method.Desc.IsStreamingClient():
 		return optionErrorf("is required for client-server stream methods", method, gorums.E_Multicast)
 
