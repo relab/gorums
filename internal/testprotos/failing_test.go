@@ -1,41 +1,115 @@
 package testprotos_test
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/relab/gorums/internal/protoc"
+	"github.com/relab/gorums/internal/gentest"
 )
 
+// failingProto is the frame of each failing input; the test case supplies the
+// service and the extra declarations.
+const failingProto = `
+edition = "2023";
+
+package gorums.testprotos.failing;
+option go_package = "github.com/relab/gorums/internal/testprotos/failing";
+
+import "gorums.proto";
+
+message Request {
+	string value = 1;
+}
+message Response {
+	string value = 1;
+}
+`
+
 // TestFailingProtoFiles verifies that the generator rejects each proto file
-// that declares a Gorums reserved identifier, whatever kind of declaration,
-// and reports the reason through protoc.
+// that it cannot generate as written, and reports why.
 func TestFailingProtoFiles(t *testing.T) {
 	tests := []struct {
-		name  string
-		proto string
+		name string
+		decl string
+		want string
 	}{
-		{name: "Message", proto: "failing/reservednames/reserved.proto"},
-		{name: "RPCMethod", proto: "failing/reservedrpc/reserved.proto"},
-		{name: "Enum", proto: "failing/reservedenum/reserved.proto"},
+		{
+			name: "ReservedMessage",
+			decl: `
+message Config {
+	string value = 1;
+}
+service Reserved {
+	rpc Read(Config) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "contains message Config, which is a reserved Gorums identifier",
+		},
+		{
+			name: "ReservedRPCMethod",
+			decl: `
+service Reserved {
+	rpc Config(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "contains RPC method Config, which is a reserved Gorums identifier",
+		},
+		{
+			name: "ReservedEnum",
+			decl: `
+enum Node {
+	NODE_UNSPECIFIED = 0;
+}
+service Reserved {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "contains enum Node, which is a reserved Gorums identifier",
+		},
+		{
+			name: "MultipleServices",
+			decl: `
+service Alpha {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}
+service Beta {
+	rpc Write(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "Gorums does not support multiple services in the same proto file",
+		},
+		{
+			name: "ClientStreamWithoutMulticast",
+			decl: `
+service Stream {
+	rpc Send(stream Request) returns (Response) {}
+}`,
+			want: "Stream.Send: option 'gorums.multicast' is required for client-server stream methods",
+		},
+		{
+			name: "ServerStreamWithoutQuorumCall",
+			decl: `
+service Stream {
+	rpc Watch(Request) returns (stream Response) {}
+}`,
+			want: "Stream.Watch: option 'gorums.quorumcall' is required for server-client stream methods",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// protoc-gen-go may write its output before the Gorums plugin fails.
-			t.Cleanup(func() {
-				files, _ := filepath.Glob(filepath.Join(filepath.Dir(tt.proto), "*.pb.go"))
-				for _, f := range files {
-					_ = os.Remove(f)
-				}
-			})
-			out, err := protoc.Run(".", tt.proto)
+			dir := gentest.Inline(t, map[string]string{"failing.proto": failingProto + tt.decl})
+			files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, "failing.proto")
 			if err == nil {
-				t.Fatalf("expected protoc to fail with:\n%s", out)
+				t.Fatalf("Generate succeeded, want an error containing %q; generated %d files", tt.want, len(files))
 			}
-			if want := "reserved Gorums identifier"; !strings.Contains(out, want) {
-				t.Errorf("protoc output = %q, want it to contain %q", out, want)
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("Generate error = %q, want it to contain %q", err, tt.want)
 			}
 		})
 	}
