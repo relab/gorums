@@ -1,0 +1,27 @@
+// Test that an RPC method may share its name with a helper method of the
+// client type that does not receive it.
+
+edition = "2023";
+
+package gorums.testprotos.clientnames;
+option go_package = "github.com/relab/gorums/internal/testprotos/clientnames";
+
+option features.field_presence = IMPLICIT;
+
+import "gorums.proto";
+
+service ClientNames {
+    // Config is a remote call; ClientNamesClient.Config is a helper method.
+    rpc Config(Request) returns (Response) {}
+    // Node is a quorum call; ClientNamesClientNode.Node is a helper method.
+    rpc Node(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
+}
+
+message Request {
+    string Value = 1;
+}
+message Response {
+    int64 Result = 1;
+}

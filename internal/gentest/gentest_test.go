@@ -64,8 +64,9 @@ func TestGentestGenerateError(t *testing.T) {
 	src := strings.Replace(echoProto, "rpc Echo(Msg)", "rpc Config(Msg)", 1)
 	dir := gentest.Inline(t, map[string]string{"echo.proto": src})
 	_, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, "echo.proto")
-	if err == nil || !strings.Contains(err.Error(), "reserved Gorums identifier") {
-		t.Errorf("Generate error = %v, want a reserved identifier error", err)
+	const want = "Echo.Config: RPC method collides with the generated EchoClient.Config method"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Generate error = %v, want it to contain %q", err, want)
 	}
 }
 
