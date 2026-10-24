@@ -46,7 +46,9 @@ func (r *Responses[Resp]) AsyncAll() *Async[Resp] {
 // AsyncThreshold returns an Async future that resolves when the threshold is reached.
 // Messages are sent immediately (synchronously) to preserve ordering when multiple
 // async calls are created in sequence.
+// It panics, before sending anything, if threshold is not positive.
 func (r *Responses[Resp]) AsyncThreshold(threshold int) *Async[Resp] {
+	checkThreshold("AsyncThreshold", threshold)
 	// Send messages synchronously before spawning the goroutine to preserve ordering
 	r.sendNow()
 

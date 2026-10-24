@@ -480,14 +480,19 @@ The handle embeds `*gorums.Responses[*ReadResponse]`, so it offers the same ways
 
 The `*gorums.Responses[T]` type provides built-in *terminal methods* for common aggregation patterns:
 
-| Method          | Description               | Returns When                         |
-| --------------- | ------------------------- | ------------------------------------ |
-| `.First()`      | First successful response | Any node responds successfully       |
-| `.Majority()`   | Majority of responses     | ⌈(n+1)/2⌉ nodes respond successfully |
-| `.All()`        | All responses             | All n nodes respond                  |
-| `.Threshold(n)` | At least n responses      | n nodes respond successfully         |
+| Method                         | Description                   | Returns When                           |
+| ------------------------------ | ----------------------------- | -------------------------------------- |
+| `.First()`                     | First successful response     | Any node responds successfully         |
+| `.Majority()`                  | Majority of responses         | ⌈(n+1)/2⌉ nodes respond successfully   |
+| `.All()`                       | All responses                 | All n nodes respond                    |
+| `.Threshold(n)`                | At least n responses          | n nodes respond successfully           |
+| `.Aggregate(fn)`               | Result of your function `fn`  | `fn` returns                           |
+| `.Reduce(n, initial, step)`    | Accumulator built by `step`   | n nodes respond successfully           |
+| `.Matching(n, key)`            | Response with an agreed key   | n nodes send responses with equal keys |
+| `.MatchingCertificate(n, key)` | Agreed response and its nodes | n nodes send responses with equal keys |
 
-Each terminal method blocks until the threshold is met or the context is canceled, then returns a single aggregated response and an error.
+Each terminal method blocks until its condition is met or the context is canceled, then returns a single aggregated result and an error.
+`Threshold(n)` panics if `n` is not positive.
 
 ### Using Terminal Methods
 
@@ -516,6 +521,149 @@ Terminal methods return `gorums.ErrIncomplete` when:
 * The context is canceled before the threshold is met
 * Not enough successful responses are received
 * All nodes return errors
+
+### Aggregate: Custom Aggregation Functions
+
+`Aggregate(fn)` passes the response sequence to your function `fn` and returns its result.
+The result type does not have to be the response type.
+This lets you write the call from left to right, with the aggregation function last:
+
+```go
+resp, err := ReadQC(cfgCtx, &ReadRequest{Key: "x"}).Aggregate(newestReply)
+
+func newestReply(
+  seq gorums.ResponseSeq[*ReadResponse],
+) (*ReadResponse, error) {
+  var newest *ReadResponse
+  for response := range seq {
+    if response.Err != nil {
+      continue
+    }
+    if newest == nil || newer(response.Value, newest) {
+      newest = response.Value
+    }
+  }
+  if newest == nil {
+    return nil, gorums.ErrIncomplete
+  }
+  return newest, nil
+}
+```
+
+The call sends its requests when `fn` starts to consume the sequence.
+Your function decides how to handle each node error and when to stop.
+`Aggregate` returns the error from `fn` unchanged.
+`Aggregate` panics if `fn` is nil.
+
+Use `Aggregate` when the built-in terminals do not fit.
+For example, use it for correctable streams, for many updates from one node, or for a completion rule that depends on your protocol.
+
+### Reduce: Folding Responses into State
+
+`Reduce(n, initial, step)` folds the successful responses from up to `n` different nodes into an *accumulator*.
+You choose the accumulator type.
+It can be a counter, a selected response, a protocol struct, a map, or a certificate builder.
+
+`Reduce` calls `step` once for each successful response:
+
+* The first call gets `initial`.
+* Each later call gets the accumulator that the previous call returned.
+* Each call gets a successful response with its `NodeID`, so the accumulator can record which nodes contributed.
+
+`Reduce` does not pass responses with errors to `step`.
+It also counts only the first successful response from each node; it ignores later responses from the same node.
+`Reduce` stops after `n` successful responses and returns the accumulator.
+
+This example collects Paxos promises from a majority of nodes.
+The `PromiseQC` call and its message types are illustrative; they do not come from a proto file in this repository.
+
+```go
+// promises is the state that a proposer collects in the prepare phase.
+type promises struct {
+  from    []gorums.ID      // nodes that sent a promise
+  highest *PromiseResponse // promise with the highest accepted round
+}
+
+func addPromise(
+  acc promises,
+  resp gorums.NodeResponse[*PromiseResponse],
+) (promises, error) {
+  if !resp.Value.GetOk() {
+    return acc, fmt.Errorf("node %d: a higher round exists", resp.NodeID)
+  }
+  acc.from = append(acc.from, resp.NodeID)
+  if acc.highest == nil || resp.Value.GetAcceptedRound() > acc.highest.GetAcceptedRound() {
+    acc.highest = resp.Value
+  }
+  return acc, nil
+}
+
+quorum := config.Size()/2 + 1
+acc, err := PromiseQC(cfgCtx, &PromiseRequest{Round: round}).
+  Reduce(quorum, promises{}, addPromise)
+```
+
+`Reduce` returns an error in these cases:
+
+* If `step` returns an error, `Reduce` returns the accumulator from that call and the same error.
+* If fewer than `n` nodes respond successfully, `Reduce` returns the latest accumulator and an error that matches `gorums.ErrIncomplete`.
+  This error also holds the node errors, but not the nodes that a request transform skipped.
+
+In both cases, you can inspect the partial accumulator.
+`Reduce` panics if `n` is not positive or if `step` is nil.
+
+### Matching: Waiting for Responses That Agree
+
+`Matching(n, key)` waits until `n` different nodes send responses that agree.
+You give a `key` function that maps a response to a comparable value, such as a string or a struct with comparable fields.
+Two responses agree when their keys are equal.
+The key must compare by value.
+A pointer key, such as the response itself, compares by address, so two responses never agree.
+A key of type `any` that holds a slice compiles, but `Matching` panics when it puts the response in a bucket.
+`Matching` puts each successful response in a bucket for its key.
+It returns the first response in the first bucket that gets `n` responses.
+
+`MatchingCertificate(n, key)` works in the same way, but it also returns the evidence.
+It returns a `gorums.Certificate[T]` with two fields:
+
+* `Value` is the first response in the bucket that got `n` responses.
+* `Responses` holds the `n` responses in that bucket, in arrival order, each with its `NodeID`.
+
+Both methods count each node at most once.
+Only the first successful response from a node counts.
+They ignore later responses from the same node, whatever their key.
+Responses with errors never go into a bucket.
+
+This PBFT-style example collects a *prepared certificate*.
+The caller needs `2f+1` prepare responses that agree on the request digest, where `f` is the number of faulty nodes that the system tolerates.
+The `PrepareQC` call and its message types are illustrative; they do not come from a proto file in this repository.
+
+```go
+// digestKey returns the request digest as a comparable key.
+// A []byte is not comparable, so digestKey converts it to a string.
+func digestKey(resp *PrepareResponse) string {
+  return string(resp.GetDigest())
+}
+
+quorum := 2*f + 1
+cert, err := PrepareQC(cfgCtx, &PrepareRequest{View: view, Sequence: seq, Digest: digest}).
+  MatchingCertificate(quorum, digestKey)
+if err != nil {
+  return err
+}
+// cert.Value is a prepare response with the agreed digest.
+// cert.Responses shows which nodes sent a matching response.
+```
+
+Use `Matching` when you need only the value and not the evidence:
+
+```go
+reply, err := PrepareQC(cfgCtx, req).Matching(quorum, digestKey)
+```
+
+If no key gets `n` responses, both methods return the zero value and an error that matches `gorums.ErrIncomplete`.
+This error also holds the node errors, but not the nodes that a request transform skipped.
+`Matching` and `MatchingCertificate` panic if `n` is not positive or if `key` is nil.
 
 ### Async and Correctable Variants
 
@@ -549,11 +697,14 @@ reply, level, err := corr.Get()
 reply, level, err = corr.Get()
 ```
 
+`AsyncThreshold(n)` and `Correctable(n)` panic if `n` is not positive.
+They panic before they send any request.
+
 ### Send-Timing Model
 
 Understanding when messages are actually sent matters for ordering and for reasoning about concurrent calls.
 
-**Quorum calls are lazy.** Messages are not sent to nodes until the caller consumes the `*Responses[T]` object by calling a terminal method (`First`, `Majority`, `All`, `Threshold`) or by calling `.Results()` to begin iterating.
+**Quorum calls are lazy.** Messages are not sent to nodes until the caller consumes the `*Responses[T]` object by calling a terminal method (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`, `MatchingCertificate`) or by calling `.Results()` to begin iterating.
 This gives interceptors a chance to register per-node request transformations before any bytes go on the wire.
 
 **Async variants send immediately.** `AsyncFirst`, `AsyncMajority`, `AsyncAll`, and `AsyncThreshold` call `sendNow` synchronously before spawning the goroutine that awaits the threshold.
@@ -607,8 +758,11 @@ gRPC keepalive, enabled with `gorums.WithGRPCDialOptions(grpc.WithKeepaliveParam
 
 ## Iterator-Based Custom Aggregation
 
-For complex aggregation logic beyond the built-in terminal methods, use the iterator API provided by `responses.Results()`.
-The iterator yields responses progressively as they arrive, allowing custom decision-making logic.
+For complex aggregation logic beyond the built-in terminal methods, write a function that ranges over the response sequence.
+The sequence yields responses progressively as they arrive, allowing custom decision-making logic.
+A function that takes `gorums.ResponseSeq[Resp]` reads left to right with `.Aggregate(fn)`, as shown in [Aggregate](#aggregate-custom-aggregation-functions).
+A function that takes `*gorums.Responses[Resp]` still works; pass it the call's `Responses` field, and call `Results()` in the function.
+The examples in this section use the second form.
 
 ### Basic Iterator Pattern
 
@@ -817,10 +971,11 @@ func fastQuorum(responses *gorums.Responses[*Response]) (*Response, error) {
 Gorums supports custom aggregation functions that return types different from the proto response type.
 This is useful when you need to aggregate multiple responses into a summary, statistics object, or any other custom type.
 
-### Recommended Pattern: Functions Taking `*Responses[Resp]`
+### Functions Taking `*Responses[Resp]`
 
-The recommended approach is to define functions that accept `*Responses[Resp]` directly.
-This gives you full access to all iterator methods (`IgnoreErrors()`, `Filter()`, `CollectN()`, `CollectAll()`) and the ability to return any type.
+A function that takes `gorums.ResponseSeq[Resp]` reads left to right with `.Aggregate(fn)`, and it can return any type.
+A function that takes `*Responses[Resp]` still works; pass it the call's `Responses` field.
+Such a function can call `Size()` and all iterator methods (`IgnoreErrors()`, `Filter()`, `CollectN()`, `CollectAll()`), and it can return any type.
 
 ```go
 // Custom aggregation function that returns a different type

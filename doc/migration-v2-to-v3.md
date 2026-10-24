@@ -403,7 +403,7 @@ reply, err := future.Get()
 
 ### Async Terminal Methods
 
-All terminal methods have async variants:
+The `First`, `Majority`, `All`, and `Threshold` terminal methods have async variants:
 
 ```go
 // Async majority

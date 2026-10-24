@@ -56,7 +56,9 @@ func (c *Correctable[Resp]) Watch(level int) <-chan struct{} {
 // Its level increases with each successful response and completes at threshold.
 // A response skipped by a request transform ([ErrSkipNode]) counts toward
 // neither the level nor the final node-error count.
+// It panics if threshold is not positive.
 func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
+	checkThreshold("Correctable", threshold)
 	// Mark dispatched before spawning the goroutine so a later Intercept panics
 	// deterministically; the actual send is triggered lazily by ranging r.seq.
 	r.markDispatched()
