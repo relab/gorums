@@ -54,7 +54,81 @@ service Reserved {
 		option (gorums.quorumcall) = true;
 	}
 }`,
-			want: "contains RPC method Config, which is a reserved Gorums identifier",
+			want: "Reserved.Config: RPC method collides with the generated ReservedClient.Config method",
+		},
+		{
+			name: "ReservedClientMethod",
+			decl: `
+service Reserved {
+	rpc ForNode(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "Reserved.ForNode: RPC method collides with the generated ReservedClient.ForNode method",
+		},
+		{
+			name: "ReservedClientNodeMethod",
+			decl: `
+service Reserved {
+	rpc Node(Request) returns (Response) {}
+}`,
+			want: "Reserved.Node: RPC method collides with the generated ReservedClientNode.Node method",
+		},
+		{
+			name: "ReservedQuorumCallWithConfig",
+			decl: `
+service Reserved {
+	rpc WithConfig(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "Reserved.WithConfig: RPC method collides with the generated ReservedClient.WithConfig method",
+		},
+		{
+			name: "ReservedUnicastNode",
+			decl: `
+service Reserved {
+	rpc Node(Request) returns (Response) {
+		option (gorums.unicast) = true;
+	}
+}`,
+			want: "Reserved.Node: RPC method collides with the generated ReservedClientNode.Node method",
+		},
+		{
+			name: "ReservedMulticastForNode",
+			decl: `
+service Reserved {
+	rpc ForNode(Request) returns (Response) {
+		option (gorums.multicast) = true;
+	}
+}`,
+			want: "Reserved.ForNode: RPC method collides with the generated ReservedClient.ForNode method",
+		},
+		{
+			name: "GeneratedClientMessage",
+			decl: `
+message ReservedClient {
+	string value = 1;
+}
+service Reserved {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "contains message ReservedClient, which is a generated Gorums identifier",
+		},
+		{
+			name: "GeneratedClientNodeEnum",
+			decl: `
+enum NewReservedClientNode {
+	NEW_RESERVED_CLIENT_NODE_UNSPECIFIED = 0;
+}
+service Reserved {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "contains enum NewReservedClientNode, which is a generated Gorums identifier",
 		},
 		{
 			name: "ReservedEnum",

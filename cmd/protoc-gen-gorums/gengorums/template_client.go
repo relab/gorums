@@ -1,5 +1,22 @@
 package gengorums
 
+import "google.golang.org/protobuf/compiler/protogen"
+
+// clientHelpers lists the methods that [clientType] declares on SClient
+// besides the RPC methods.
+var clientHelpers = []string{"Config", "WithConfig", "ForNode"}
+
+// clientNodeHelpers lists the methods that [clientNodeType] declares on
+// SClientNode besides the RPC methods.
+var clientNodeHelpers = []string{"Node"}
+
+// clientIdents returns the package-level identifiers that [client] declares
+// for the given service.
+func clientIdents(service *protogen.Service) []string {
+	client := service.GoName + "Client"
+	return []string{client, client + "Node", "New" + client, "New" + client + "Node"}
+}
+
 // clientVariables qualifies the runtime types that the client types bind to.
 var clientVariables = `
 {{$config := use "gorums.Config" .GenFile}}

@@ -80,9 +80,6 @@ func shouldGenerate(gen *protogen.Plugin, file *protogen.File) (bool, error) {
 		// These cannot share the same Go package.
 		return false, fmt.Errorf("%s: Gorums does not support multiple services in the same proto file", file.Desc.Path())
 	}
-	if err := checkReservedIdents(gen, file); err != nil {
-		return false, err
-	}
 	for _, method := range file.Services[0].Methods {
 		if _, info := callType(method); info != nil {
 			if err := validateOptions(method); err != nil {
@@ -90,17 +87,31 @@ func shouldGenerate(gen *protogen.Plugin, file *protogen.File) (bool, error) {
 			}
 		}
 	}
+	if err := checkReservedIdents(gen, file); err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
-// checkReservedIdents returns an error if a Gorums reserved identifier names a
-// Go declaration in the file's Go package: a message or enum of any file in
-// the package, or an RPC method of the file's service. Each would collide with
-// the generated type aliases or client functions.
+// checkReservedIdents returns an error if a Go declaration of the file's Go
+// package collides with an identifier that Gorums declares in that package.
+// A message or enum of any file in the package must not take the name of a
+// Gorums type alias or of a client type or constructor generated for the
+// file's service. An RPC method of the file's service must not take the name
+// of a helper method of the client type that receives it.
+// The call type of a method selects its receiver, so every method must
+// have valid call type options.
 func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
+	var generated []string
+	for _, service := range file.Services {
+		generated = append(generated, clientIdents(service)...)
+	}
 	check := func(kind, name string) error {
-		if slices.Contains(reservedIdents, name) {
+		switch {
+		case slices.Contains(reservedIdents, name):
 			return fmt.Errorf("%v.proto: contains %s %s, which is a reserved Gorums identifier", file.GeneratedFilenamePrefix, kind, name)
+		case slices.Contains(generated, name):
+			return fmt.Errorf("%v.proto: contains %s %s, which is a generated Gorums identifier", file.GeneratedFilenamePrefix, kind, name)
 		}
 		return nil
 	}
@@ -121,10 +132,25 @@ func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
 	}
 	for _, service := range file.Services {
 		for _, method := range service.Methods {
-			if err := check("RPC method", method.GoName); err != nil {
+			if err := checkClientMethod(method); err != nil {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+// checkClientMethod returns an error if the method's Go name equals a helper
+// method of the generated client type that receives it: SClientNode for
+// remote calls and unicasts, and SClient for the other call types.
+func checkClientMethod(method *protogen.Method) error {
+	receiver, helpers := method.Parent.GoName+"Client", clientHelpers
+	if _, info := callType(method); info != nil && (info.ext == gorums.E_Remotecall || info.ext == gorums.E_Unicast) {
+		receiver, helpers = receiver+"Node", clientNodeHelpers
+	}
+	if slices.Contains(helpers, method.GoName) {
+		return fmt.Errorf("%s.%s: RPC method collides with the generated %s.%s method",
+			method.Parent.Desc.Name(), method.Desc.Name(), receiver, method.GoName)
 	}
 	return nil
 }
