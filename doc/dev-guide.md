@@ -19,28 +19,72 @@ The repository contains two main components located in `cmd/protoc-gen-gorums`:
 ### Generated Static Surface and Reserved Identifiers
 
 Every generated `_gorums.pb.go` file embeds a small block of static code taken verbatim from `dev/aliases.go`.
-That block currently consists of five type aliases:
+That block currently consists of three type aliases:
 
 ```go
 type (
-    Config        = gorums.Config
-    ID            = gorums.ID
-    Node          = gorums.Node
-    NodeContext   = gorums.NodeContext
-    ConfigContext = gorums.ConfigContext
+    Config = gorums.Config
+    ID     = gorums.ID
+    Node   = gorums.Node
 )
 ```
 
 These aliases make the most commonly used Gorums types available without requiring an explicit `gorums` import in user code.
 
 Each name declared in `aliases.go` (and any other non-ignored file in `dev/`) is also added to the **reserved identifier list**.
-The Gorums generator rejects proto files whose messages, enums, or RPC methods use a reserved identifier as their Go name, checking every file of the service's Go package, since such a name collides with the generated alias.
+The Gorums generator rejects proto files whose messages or enums use a reserved identifier as their Go name, checking every file of the service's Go package, since such a name collides with the generated alias.
+RPC methods are methods of the generated client types, so they do not collide with the aliases; [Generated Client Types](#generated-client-types) describes their name checks.
 
 The bundler (`gengorums/bundle.go`) discovers reserved identifiers by inspecting `TypesInfo.Defs` for all exported, package-scope declarations in the dev package.
 This means that simply declaring a type alias (or any other exported top-level name) in `aliases.go` is sufficient to reserve that name — no extra annotation is needed.
 
 The `TestBundleReservedIdentifiers` test in `gengorums/bundle_test.go` pins the expected set.
 If you add or remove an alias, update that test to match.
+
+### Generated Client Types
+
+For each service `S`, the generator emits two client types and their constructors.
+`SClient` holds a `gorums.Config`, and `SClientNode` holds a `*gorums.Node`.
+Neither type embeds its target, and neither type allocates when it is created, copied, or converted.
+The call type of each RPC method selects its receiver:
+
+| Call type                            | Receiver      | Runtime constructor                                      |
+| ------------------------------------ | ------------- | -------------------------------------------------------- |
+| quorum call                          | `SClient`     | `gorumsimpl.QuorumCall(ctx, c.config, in, method)`       |
+| quorum call with a `stream` response | `SClient`     | `gorumsimpl.QuorumCallStream(ctx, c.config, in, method)` |
+| multicast                            | `SClient`     | `gorumsimpl.Multicast(ctx, c.config, in, method)`        |
+| remote call                          | `SClientNode` | `gorumsimpl.RemoteCall(ctx, c.node, in, method)`         |
+| unicast                              | `SClientNode` | `gorumsimpl.Unicast(ctx, c.node, in, method)`            |
+
+```mermaid
+flowchart LR
+    gen["generated method<br/>c.ReadQC(ctx, in)"] --> rt["runtime/gorumsimpl<br/>QuorumCall(ctx, c.config, in, method)"]
+    rt --> impl["internal/impl<br/>QuorumCall(ctx, config, in, method)"]
+```
+
+Every service gets both types, even when a type has no RPC methods.
+The client types, constructors, and helper methods (`Config`, `WithConfig`, and `ForNode` on `SClient`; `Node` on `SClientNode`) come from `gengorums/template_client.go`.
+The generator checks the generated names for collisions:
+
+* A message or enum in the service's Go package must not be named `SClient`, `SClientNode`, `NewSClient`, or `NewSClientNode`.
+* An RPC method must not take the name of a helper method of its receiver.
+  A remote call named `Config` is valid, because `SClientNode` has no `Config` method.
+
+In dev mode, the generator writes one `dev/zorums_{name}_gorums.pb.go` file for each entry of `gorumsCallTypesInfo` in `gengorums/generate.go`:
+
+| Dev file                         | Template                 | Contents                                       |
+| -------------------------------- | ------------------------ | ---------------------------------------------- |
+| `zorums_types_gorums.pb.go`      | `template_datatypes.go`  | `Correctable` type aliases                     |
+| `zorums_client_gorums.pb.go`     | `template_client.go`     | client types, constructors, and helper methods |
+| `zorums_quorumcall_gorums.pb.go` | `template_quorumcall.go` | quorum call and streaming quorum call methods  |
+| `zorums_multicast_gorums.pb.go`  | `template_multicast.go`  | multicast methods                              |
+| `zorums_remotecall_gorums.pb.go` | `template_rpc.go`        | remote call methods                            |
+| `zorums_unicast_gorums.pb.go`    | `template_unicast.go`    | unicast methods                                |
+| `zorums_server_gorums.pb.go`     | `template_server.go`     | server interface and handler registration      |
+
+Outside dev mode, all of this code goes into a single `_gorums.pb.go` file.
+
+### Running the Generator
 
 Any changes to templates or static code requires the invocation of `make` in order to:
 
@@ -183,7 +227,7 @@ Each internal package depends only on the packages below it.
 ```mermaid
 flowchart TD
     app["Application code"]
-    gen["Generated code<br/>(*_gorums.pb.go)"]
+    gen["Generated code<br/>(service clients, *_gorums.pb.go)"]
     gorums["gorums<br/>(Server, type aliases)"]
     gorumsimpl["runtime/gorumsimpl<br/>(call constructors)"]
     impl["internal/impl<br/>(call engine)"]
@@ -351,12 +395,10 @@ classDiagram
         <<slice>>
         NodeIDs() []ID
         Size() int
-        Context(parent) ConfigContext
     }
     class Node {
         id ID
         addr string
-        Context(parent) NodeContext
         IsShared() bool
     }
     class NodeSource {
@@ -380,8 +422,6 @@ classDiagram
         <<interface>>
     }
 
-    ConfigContext --> Config
-    NodeContext --> Node
     Config o-- "*" Node
     Node --> StreamTransport : transport
     Node --> outboundManager : mgr
@@ -429,7 +469,10 @@ flowchart LR
 
 ### Call Engine (`internal/impl`)
 
-Each call constructor builds a `CallContext` that holds the request, the target `Config`, the response channel, and the response iterator (`ResponseSeq`).
+A call constructor takes the call's `context.Context` and its target directly: a `Config` for quorum calls and multicasts, and a `*Node` for remote calls and unicasts.
+It panics on an empty `Config` or a nil `*Node`, when the generated method builds the call.
+Each call constructor except `RemoteCall` builds a `CallContext` that holds the request, the target `Config`, the response channel, and the response iterator (`ResponseSeq`).
+A unicast's `CallContext` holds a one-node `Config`.
 A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`), as well as the `Correctable` future.
 `Call.Async` sends the requests at once and returns the dispatched `Responses`, so any terminal method collects the replies later.
 A one-way call (`Multicast`, `Unicast`) returns a `OnewayCall`, whose `Send` waits for the send confirmations and whose `Async` returns an `OnewayAsync`.
@@ -515,7 +558,7 @@ sequenceDiagram
     participant S as stream.session
     participant G as gRPC stream
 
-    Gen->>Call: QuorumCall(ctx, req, method)
+    Gen->>Call: QuorumCall(ctx, config, req, method)
     Call->>CC: newQuorumCallContext
     Gen->>Call: Majority()
     Call->>CC: iterate ResponseSeq (sendNow)
