@@ -7,6 +7,7 @@
 package oneway
 
 import (
+	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 )
@@ -32,37 +33,79 @@ const (
 // automatically discover them and add them to the reserved identifiers list.
 
 type (
-	Config        = gorums.Config
-	ID            = gorums.ID
-	Node          = gorums.Node
-	NodeContext   = gorums.NodeContext
-	ConfigContext = gorums.ConfigContext
+	Config = gorums.Config
+	ID     = gorums.ID
+	Node   = gorums.Node
 )
 
-// Unicast is a unicast call invoked on the node in ctx; no reply is
-// returned to the client. It returns a one-way call handle; call Send to block
-// until the send completes and observe any send error, or Async to dispatch
-// without waiting.
-//
-// Example:
-//
-//	err := Unicast(ctx, in).Send()
-//	h := Unicast(ctx, in).Async(); err := h.Wait()
-func Unicast(ctx *NodeContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Unicast(ctx, in, "oneway.OnewayTest.Unicast")
+// OnewayTestClient invokes the configuration-side calls of the OnewayTest service.
+// It is bound to a configuration.
+type OnewayTestClient struct {
+	config gorums.Config
 }
 
-// Multicast is a multicast call invoked on all nodes in the configuration in ctx.
-// It returns a one-way call handle; call Send to block until every send
-// completes and observe any send errors, or Async to dispatch without waiting.
-// Use gorums.MapRequest to send different messages to each node.
+// NewOnewayTestClient returns a client for the OnewayTest service, bound to config.
+func NewOnewayTestClient(config gorums.Config) OnewayTestClient {
+	return OnewayTestClient{config: config}
+}
+
+// Config returns the configuration to which c is bound.
+func (c OnewayTestClient) Config() gorums.Config {
+	return c.config
+}
+
+// WithConfig returns a copy of c bound to config.
+func (c OnewayTestClient) WithConfig(config gorums.Config) OnewayTestClient {
+	return OnewayTestClient{config: config}
+}
+
+// ForNode returns a node client for the OnewayTest service, bound to node.
+// The node need not belong to the configuration of c.
+func (c OnewayTestClient) ForNode(node *gorums.Node) OnewayTestClientNode {
+	return OnewayTestClientNode{node: node}
+}
+
+// OnewayTestClientNode invokes the node-side calls of the OnewayTest service.
+// It is bound to a single node.
+type OnewayTestClientNode struct {
+	node *gorums.Node
+}
+
+// NewOnewayTestClientNode returns a node client for the OnewayTest service, bound to node.
+func NewOnewayTestClientNode(node *gorums.Node) OnewayTestClientNode {
+	return OnewayTestClientNode{node: node}
+}
+
+// Node returns the node to which c is bound.
+func (c OnewayTestClientNode) Node() *gorums.Node {
+	return c.node
+}
+
+// Unicast starts the OnewayTest.Unicast one-way call
+// on the client's node; no reply is returned to the client. The request is
+// dispatched by Send, which blocks until the send completes and returns any
+// send error, or by Async, which does not wait.
 //
 // Example:
 //
-//	err := Multicast(ctx, in).Send()
-//	h := Multicast(ctx, in).Async(); err := h.Wait()
-func Multicast(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, in, "oneway.OnewayTest.Multicast")
+//	err := nodeClient.Unicast(ctx, in).Send()
+//	h := nodeClient.Unicast(ctx, in).Async(); err := h.Wait()
+func (c OnewayTestClientNode) Unicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Unicast(ctx, c.node, in, "oneway.OnewayTest.Unicast")
+}
+
+// Multicast starts the OnewayTest.Multicast one-way call
+// on the client's configuration. The request is dispatched by Send, which
+// blocks until every send completes and returns any send errors, or by Async,
+// which does not wait. Use gorums.MapRequest to send different messages to
+// each node.
+//
+// Example:
+//
+//	err := client.Multicast(ctx, in).Send()
+//	h := client.Multicast(ctx, in).Async(); err := h.Wait()
+func (c OnewayTestClient) Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "oneway.OnewayTest.Multicast")
 }
 
 // OnewayTest is the server-side API for the OnewayTest Service

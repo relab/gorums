@@ -7,6 +7,7 @@
 package benchmark
 
 import (
+	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -33,11 +34,9 @@ const (
 // automatically discover them and add them to the reserved identifiers list.
 
 type (
-	Config        = gorums.Config
-	ID            = gorums.ID
-	Node          = gorums.Node
-	NodeContext   = gorums.NodeContext
-	ConfigContext = gorums.ConfigContext
+	Config = gorums.Config
+	ID     = gorums.ID
+	Node   = gorums.Node
 )
 
 // CorrectableEcho is a correctable object for quorum calls returning *Echo.
@@ -46,28 +45,67 @@ type CorrectableEcho = *gorums.Correctable[*Echo]
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
+// BenchmarkClient invokes the configuration-side calls of the Benchmark service.
+// It is bound to a configuration.
+type BenchmarkClient struct {
+	config gorums.Config
+}
+
+// NewBenchmarkClient returns a client for the Benchmark service, bound to config.
+func NewBenchmarkClient(config gorums.Config) BenchmarkClient {
+	return BenchmarkClient{config: config}
+}
+
+// Config returns the configuration to which c is bound.
+func (c BenchmarkClient) Config() gorums.Config {
+	return c.config
+}
+
+// WithConfig returns a copy of c bound to config.
+func (c BenchmarkClient) WithConfig(config gorums.Config) BenchmarkClient {
+	return BenchmarkClient{config: config}
+}
+
+// ForNode returns a node client for the Benchmark service, bound to node.
+// The node need not belong to the configuration of c.
+func (c BenchmarkClient) ForNode(node *gorums.Node) BenchmarkClientNode {
+	return BenchmarkClientNode{node: node}
+}
+
+// BenchmarkClientNode invokes the node-side calls of the Benchmark service.
+// It is bound to a single node.
+type BenchmarkClientNode struct {
+	node *gorums.Node
+}
+
+// NewBenchmarkClientNode returns a node client for the Benchmark service, bound to node.
+func NewBenchmarkClientNode(node *gorums.Node) BenchmarkClientNode {
+	return BenchmarkClientNode{node: node}
+}
+
+// Node returns the node to which c is bound.
+func (c BenchmarkClientNode) Node() *gorums.Node {
+	return c.node
+}
+
 // QuorumCall performs an echo quorum call on all servers.
-func QuorumCall(ctx *ConfigContext, in *Echo) *gorums.Call[*Echo, *Echo] {
-	return gorumsimpl.QuorumCall[*Echo, *Echo](
-		ctx, in, "benchmark.Benchmark.QuorumCall",
-	)
+func (c BenchmarkClient) QuorumCall(ctx context.Context, in *Echo) *gorums.Call[*Echo, *Echo] {
+	return gorumsimpl.QuorumCall[*Echo, *Echo](ctx, c.config, in, "benchmark.Benchmark.QuorumCall")
 }
 
 // SlowServer performs an echo quorum call on slow servers.
-func SlowServer(ctx *ConfigContext, in *Echo) *gorums.Call[*Echo, *Echo] {
-	return gorumsimpl.QuorumCall[*Echo, *Echo](
-		ctx, in, "benchmark.Benchmark.SlowServer",
-	)
+func (c BenchmarkClient) SlowServer(ctx context.Context, in *Echo) *gorums.Call[*Echo, *Echo] {
+	return gorumsimpl.QuorumCall[*Echo, *Echo](ctx, c.config, in, "benchmark.Benchmark.SlowServer")
 }
 
 // Multicast performs a multicast call to all servers.
 //
 // Example:
 //
-//	err := Multicast(ctx, in).Send()
-//	h := Multicast(ctx, in).Async(); err := h.Wait()
-func Multicast(ctx *ConfigContext, in *TimedMsg) *gorums.OnewayCall[*TimedMsg] {
-	return gorumsimpl.Multicast(ctx, in, "benchmark.Benchmark.Multicast")
+//	err := client.Multicast(ctx, in).Send()
+//	h := client.Multicast(ctx, in).Async(); err := h.Wait()
+func (c BenchmarkClient) Multicast(ctx context.Context, in *TimedMsg) *gorums.OnewayCall[*TimedMsg] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "benchmark.Benchmark.Multicast")
 }
 
 // Benchmark is the server-side API for the Benchmark Service

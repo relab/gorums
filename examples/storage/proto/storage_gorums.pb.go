@@ -7,6 +7,7 @@
 package proto
 
 import (
+	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -33,11 +34,9 @@ const (
 // automatically discover them and add them to the reserved identifiers list.
 
 type (
-	Config        = gorums.Config
-	ID            = gorums.ID
-	Node          = gorums.Node
-	NodeContext   = gorums.NodeContext
-	ConfigContext = gorums.ConfigContext
+	Config = gorums.Config
+	ID     = gorums.ID
+	Node   = gorums.Node
 )
 
 // CorrectableReadResponse is a correctable object for quorum calls returning *ReadResponse.
@@ -49,16 +48,59 @@ type CorrectableWriteResponse = *gorums.Correctable[*WriteResponse]
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
+// StorageClient invokes the configuration-side calls of the Storage service.
+// It is bound to a configuration.
+type StorageClient struct {
+	config gorums.Config
+}
+
+// NewStorageClient returns a client for the Storage service, bound to config.
+func NewStorageClient(config gorums.Config) StorageClient {
+	return StorageClient{config: config}
+}
+
+// Config returns the configuration to which c is bound.
+func (c StorageClient) Config() gorums.Config {
+	return c.config
+}
+
+// WithConfig returns a copy of c bound to config.
+func (c StorageClient) WithConfig(config gorums.Config) StorageClient {
+	return StorageClient{config: config}
+}
+
+// ForNode returns a node client for the Storage service, bound to node.
+// The node need not belong to the configuration of c.
+func (c StorageClient) ForNode(node *gorums.Node) StorageClientNode {
+	return StorageClientNode{node: node}
+}
+
+// StorageClientNode invokes the node-side calls of the Storage service.
+// It is bound to a single node.
+type StorageClientNode struct {
+	node *gorums.Node
+}
+
+// NewStorageClientNode returns a node client for the Storage service, bound to node.
+func NewStorageClientNode(node *gorums.Node) StorageClientNode {
+	return StorageClientNode{node: node}
+}
+
+// Node returns the node to which c is bound.
+func (c StorageClientNode) Node() *gorums.Node {
+	return c.node
+}
+
 // ReadRPC executes a Read RPC on a single node and
 // returns the value for the provided key.
-func ReadRPC(ctx *NodeContext, in *ReadRequest) (*ReadResponse, error) {
-	return gorumsimpl.RemoteCall[*ReadRequest, *ReadResponse](ctx, in, "proto.Storage.ReadRPC")
+func (c StorageClientNode) ReadRPC(ctx context.Context, in *ReadRequest) (*ReadResponse, error) {
+	return gorumsimpl.RemoteCall[*ReadRequest, *ReadResponse](ctx, c.node, in, "proto.Storage.ReadRPC")
 }
 
 // WriteRPC executes a Write RPC on a single node and
 // returns true if the value was updated.
-func WriteRPC(ctx *NodeContext, in *WriteRequest) (*WriteResponse, error) {
-	return gorumsimpl.RemoteCall[*WriteRequest, *WriteResponse](ctx, in, "proto.Storage.WriteRPC")
+func (c StorageClientNode) WriteRPC(ctx context.Context, in *WriteRequest) (*WriteResponse, error) {
+	return gorumsimpl.RemoteCall[*WriteRequest, *WriteResponse](ctx, c.node, in, "proto.Storage.WriteRPC")
 }
 
 // WriteUnicast executes a one-way Write unicast call on a single node.
@@ -66,10 +108,10 @@ func WriteRPC(ctx *NodeContext, in *WriteRequest) (*WriteResponse, error) {
 //
 // Example:
 //
-//	err := WriteUnicast(ctx, in).Send()
-//	h := WriteUnicast(ctx, in).Async(); err := h.Wait()
-func WriteUnicast(ctx *NodeContext, in *WriteRequest) *gorums.OnewayCall[*WriteRequest] {
-	return gorumsimpl.Unicast(ctx, in, "proto.Storage.WriteUnicast")
+//	err := nodeClient.WriteUnicast(ctx, in).Send()
+//	h := nodeClient.WriteUnicast(ctx, in).Async(); err := h.Wait()
+func (c StorageClientNode) WriteUnicast(ctx context.Context, in *WriteRequest) *gorums.OnewayCall[*WriteRequest] {
+	return gorumsimpl.Unicast(ctx, c.node, in, "proto.Storage.WriteUnicast")
 }
 
 // WriteMulticast executes a Write multicast call on a configuration of nodes.
@@ -77,50 +119,40 @@ func WriteUnicast(ctx *NodeContext, in *WriteRequest) *gorums.OnewayCall[*WriteR
 //
 // Example:
 //
-//	err := WriteMulticast(ctx, in).Send()
-//	h := WriteMulticast(ctx, in).Async(); err := h.Wait()
-func WriteMulticast(ctx *ConfigContext, in *WriteRequest) *gorums.OnewayCall[*WriteRequest] {
-	return gorumsimpl.Multicast(ctx, in, "proto.Storage.WriteMulticast")
+//	err := client.WriteMulticast(ctx, in).Send()
+//	h := client.WriteMulticast(ctx, in).Async(); err := h.Wait()
+func (c StorageClient) WriteMulticast(ctx context.Context, in *WriteRequest) *gorums.OnewayCall[*WriteRequest] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "proto.Storage.WriteMulticast")
 }
 
 // ReadQC executes a Read quorum call on a configuration of nodes and
 // returns the most recent value.
-func ReadQC(ctx *ConfigContext, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse] {
-	return gorumsimpl.QuorumCall[*ReadRequest, *ReadResponse](
-		ctx, in, "proto.Storage.ReadQC",
-	)
+func (c StorageClient) ReadQC(ctx context.Context, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse] {
+	return gorumsimpl.QuorumCall[*ReadRequest, *ReadResponse](ctx, c.config, in, "proto.Storage.ReadQC")
 }
 
 // WriteQC executes a Write quorum call on a configuration of nodes and
 // returns true if a majority of nodes were updated.
-func WriteQC(ctx *ConfigContext, in *WriteRequest) *gorums.Call[*WriteRequest, *WriteResponse] {
-	return gorumsimpl.QuorumCall[*WriteRequest, *WriteResponse](
-		ctx, in, "proto.Storage.WriteQC",
-	)
+func (c StorageClient) WriteQC(ctx context.Context, in *WriteRequest) *gorums.Call[*WriteRequest, *WriteResponse] {
+	return gorumsimpl.QuorumCall[*WriteRequest, *WriteResponse](ctx, c.config, in, "proto.Storage.WriteQC")
 }
 
 // ReadNestedQC executes a quorum call where each server handler performs
 // a nested quorum call using ServerContext.PeerConfig().
-func ReadNestedQC(ctx *ConfigContext, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse] {
-	return gorumsimpl.QuorumCall[*ReadRequest, *ReadResponse](
-		ctx, in, "proto.Storage.ReadNestedQC",
-	)
+func (c StorageClient) ReadNestedQC(ctx context.Context, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse] {
+	return gorumsimpl.QuorumCall[*ReadRequest, *ReadResponse](ctx, c.config, in, "proto.Storage.ReadNestedQC")
 }
 
 // WriteNestedMulticast executes a quorum call where each server handler
 // performs a nested multicast using ServerContext.PeerConfig().
-func WriteNestedMulticast(ctx *ConfigContext, in *WriteRequest) *gorums.Call[*WriteRequest, *WriteResponse] {
-	return gorumsimpl.QuorumCall[*WriteRequest, *WriteResponse](
-		ctx, in, "proto.Storage.WriteNestedMulticast",
-	)
+func (c StorageClient) WriteNestedMulticast(ctx context.Context, in *WriteRequest) *gorums.Call[*WriteRequest, *WriteResponse] {
+	return gorumsimpl.QuorumCall[*WriteRequest, *WriteResponse](ctx, c.config, in, "proto.Storage.WriteNestedMulticast")
 }
 
 // ReadCorrectable executes a quorum call that supports correctable responses.
 // It returns a stream of ReadResponse as multiple nodes respond or updates occur.
-func ReadCorrectable(ctx *ConfigContext, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse] {
-	return gorumsimpl.QuorumCallStream[*ReadRequest, *ReadResponse](
-		ctx, in, "proto.Storage.ReadCorrectable",
-	)
+func (c StorageClient) ReadCorrectable(ctx context.Context, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse] {
+	return gorumsimpl.QuorumCallStream[*ReadRequest, *ReadResponse](ctx, c.config, in, "proto.Storage.ReadCorrectable")
 }
 
 // Storage is the server-side API for the Storage Service

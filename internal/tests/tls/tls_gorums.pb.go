@@ -7,6 +7,7 @@
 package tls
 
 import (
+	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 )
@@ -32,16 +33,61 @@ const (
 // automatically discover them and add them to the reserved identifiers list.
 
 type (
-	Config        = gorums.Config
-	ID            = gorums.ID
-	Node          = gorums.Node
-	NodeContext   = gorums.NodeContext
-	ConfigContext = gorums.ConfigContext
+	Config = gorums.Config
+	ID     = gorums.ID
+	Node   = gorums.Node
 )
 
-// TestTLS is an RPC call invoked on the node in ctx.
-func TestTLS(ctx *NodeContext, in *Request) (*Response, error) {
-	return gorumsimpl.RemoteCall[*Request, *Response](ctx, in, "tls.TLS.TestTLS")
+// TLSClient invokes the configuration-side calls of the TLS service.
+// It is bound to a configuration.
+type TLSClient struct {
+	config gorums.Config
+}
+
+// NewTLSClient returns a client for the TLS service, bound to config.
+func NewTLSClient(config gorums.Config) TLSClient {
+	return TLSClient{config: config}
+}
+
+// Config returns the configuration to which c is bound.
+func (c TLSClient) Config() gorums.Config {
+	return c.config
+}
+
+// WithConfig returns a copy of c bound to config.
+func (c TLSClient) WithConfig(config gorums.Config) TLSClient {
+	return TLSClient{config: config}
+}
+
+// ForNode returns a node client for the TLS service, bound to node.
+// The node need not belong to the configuration of c.
+func (c TLSClient) ForNode(node *gorums.Node) TLSClientNode {
+	return TLSClientNode{node: node}
+}
+
+// TLSClientNode invokes the node-side calls of the TLS service.
+// It is bound to a single node.
+type TLSClientNode struct {
+	node *gorums.Node
+}
+
+// NewTLSClientNode returns a node client for the TLS service, bound to node.
+func NewTLSClientNode(node *gorums.Node) TLSClientNode {
+	return TLSClientNode{node: node}
+}
+
+// Node returns the node to which c is bound.
+func (c TLSClientNode) Node() *gorums.Node {
+	return c.node
+}
+
+// TestTLS executes the TLS.TestTLS remote call on the client's node.
+//
+// Example:
+//
+//	resp, err := nodeClient.TestTLS(ctx, in)
+func (c TLSClientNode) TestTLS(ctx context.Context, in *Request) (*Response, error) {
+	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "tls.TLS.TestTLS")
 }
 
 // TLS is the server-side API for the TLS Service

@@ -7,6 +7,7 @@
 package benchkit
 
 import (
+	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 )
@@ -32,11 +33,9 @@ const (
 // automatically discover them and add them to the reserved identifiers list.
 
 type (
-	Config        = gorums.Config
-	ID            = gorums.ID
-	Node          = gorums.Node
-	NodeContext   = gorums.NodeContext
-	ConfigContext = gorums.ConfigContext
+	Config = gorums.Config
+	ID     = gorums.ID
+	Node   = gorums.Node
 )
 
 // CorrectableClockSyncResponse is a correctable object for quorum calls returning *ClockSyncResponse.
@@ -48,28 +47,65 @@ type CorrectableResult = *gorums.Correctable[*Result]
 // CorrectableStartResponse is a correctable object for quorum calls returning *StartResponse.
 type CorrectableStartResponse = *gorums.Correctable[*StartResponse]
 
+// ControlClient invokes the configuration-side calls of the Control service.
+// It is bound to a configuration.
+type ControlClient struct {
+	config gorums.Config
+}
+
+// NewControlClient returns a client for the Control service, bound to config.
+func NewControlClient(config gorums.Config) ControlClient {
+	return ControlClient{config: config}
+}
+
+// Config returns the configuration to which c is bound.
+func (c ControlClient) Config() gorums.Config {
+	return c.config
+}
+
+// WithConfig returns a copy of c bound to config.
+func (c ControlClient) WithConfig(config gorums.Config) ControlClient {
+	return ControlClient{config: config}
+}
+
+// ForNode returns a node client for the Control service, bound to node.
+// The node need not belong to the configuration of c.
+func (c ControlClient) ForNode(node *gorums.Node) ControlClientNode {
+	return ControlClientNode{node: node}
+}
+
+// ControlClientNode invokes the node-side calls of the Control service.
+// It is bound to a single node.
+type ControlClientNode struct {
+	node *gorums.Node
+}
+
+// NewControlClientNode returns a node client for the Control service, bound to node.
+func NewControlClientNode(node *gorums.Node) ControlClientNode {
+	return ControlClientNode{node: node}
+}
+
+// Node returns the node to which c is bound.
+func (c ControlClientNode) Node() *gorums.Node {
+	return c.node
+}
+
 // Start resets the server-side op counter and Stats baseline.
-func Start(ctx *ConfigContext, in *StartRequest) *gorums.Call[*StartRequest, *StartResponse] {
-	return gorumsimpl.QuorumCall[*StartRequest, *StartResponse](
-		ctx, in, "benchkit.Control.Start",
-	)
+func (c ControlClient) Start(ctx context.Context, in *StartRequest) *gorums.Call[*StartRequest, *StartResponse] {
+	return gorumsimpl.QuorumCall[*StartRequest, *StartResponse](ctx, c.config, in, "benchkit.Control.Start")
 }
 
 // Stop ends measurement and returns this server's Result. For server-measured
 // benchmarks (e.g. Multicast) the Result carries latency samples; for
 // client-measured benchmarks (e.g. QuorumCall) it carries only memory stats.
-func Stop(ctx *ConfigContext, in *StopRequest) *gorums.Call[*StopRequest, *Result] {
-	return gorumsimpl.QuorumCall[*StopRequest, *Result](
-		ctx, in, "benchkit.Control.Stop",
-	)
+func (c ControlClient) Stop(ctx context.Context, in *StopRequest) *gorums.Call[*StopRequest, *Result] {
+	return gorumsimpl.QuorumCall[*StopRequest, *Result](ctx, c.config, in, "benchkit.Control.Stop")
 }
 
 // ClockSync returns the server's wall-clock time, enabling NTP-style
 // clock-offset estimation between peers for one-way latency correction.
-func ClockSync(ctx *ConfigContext, in *ClockSyncRequest) *gorums.Call[*ClockSyncRequest, *ClockSyncResponse] {
-	return gorumsimpl.QuorumCall[*ClockSyncRequest, *ClockSyncResponse](
-		ctx, in, "benchkit.Control.ClockSync",
-	)
+func (c ControlClient) ClockSync(ctx context.Context, in *ClockSyncRequest) *gorums.Call[*ClockSyncRequest, *ClockSyncResponse] {
+	return gorumsimpl.QuorumCall[*ClockSyncRequest, *ClockSyncResponse](ctx, c.config, in, "benchkit.Control.ClockSync")
 }
 
 // Done is an advisory, one-way signal: a node multicasts it to all peers
@@ -80,10 +116,10 @@ func ClockSync(ctx *ConfigContext, in *ClockSyncRequest) *gorums.Call[*ClockSync
 //
 // Example:
 //
-//	err := Done(ctx, in).Send()
-//	h := Done(ctx, in).Async(); err := h.Wait()
-func Done(ctx *ConfigContext, in *DoneRequest) *gorums.OnewayCall[*DoneRequest] {
-	return gorumsimpl.Multicast(ctx, in, "benchkit.Control.Done")
+//	err := client.Done(ctx, in).Send()
+//	h := client.Done(ctx, in).Async(); err := h.Wait()
+func (c ControlClient) Done(ctx context.Context, in *DoneRequest) *gorums.OnewayCall[*DoneRequest] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "benchkit.Control.Done")
 }
 
 // Control is the server-side API for the Control Service
