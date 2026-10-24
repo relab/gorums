@@ -3,6 +3,7 @@ package gorums_test
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,22 @@ import (
 
 // streamCall is the call handle returned by [mockcall.QuorumCallStream].
 type streamCall = gorums.Call[*pb.StringValue, *pb.StringValue]
+
+// prefixKey is a Matching key function that maps "echo: test-i" to
+// "echo: test", so that all responses from [gorumstest.StreamServer] match.
+func prefixKey(resp *pb.StringValue) string {
+	prefix, _, _ := strings.Cut(resp.GetValue(), "-")
+	return prefix
+}
+
+// certificateIDs returns the node IDs of the responses in cert.
+func certificateIDs(cert gorums.Certificate[*pb.StringValue]) []gorums.ID {
+	var ids []gorums.ID
+	for _, resp := range cert.Responses {
+		ids = append(ids, resp.NodeID)
+	}
+	return ids
+}
 
 // addNodeID is a Reduce step function that records the node ID of each
 // folded response.
@@ -48,6 +65,24 @@ func TestCallTerminalsStream(t *testing.T) {
 			},
 			allNodes: true,
 			wantErr:  gorums.ErrIncomplete,
+		},
+		{
+			name:    "MatchingCertificate/CountsEachNodeOnce",
+			timeout: 2 * time.Second,
+			run: func(call *streamCall) ([]gorums.ID, error) {
+				cert, err := call.MatchingCertificate(3, prefixKey)
+				return certificateIDs(cert), err
+			},
+			allNodes: true,
+		},
+		{
+			name:    "MatchingCertificate/IncompleteWhenContextEnds",
+			timeout: 100 * time.Millisecond,
+			run: func(call *streamCall) ([]gorums.ID, error) {
+				cert, err := call.MatchingCertificate(4, prefixKey)
+				return certificateIDs(cert), err
+			},
+			wantErr: gorums.ErrIncomplete,
 		},
 	}
 	for _, tt := range tests {

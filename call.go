@@ -43,6 +43,11 @@ func MapResponse[Req, Resp proto.Message](fn func(Resp, *Node) Resp) ClientInter
 // Responses provides response iteration and aggregation for a quorum call.
 type Responses[Resp proto.Message] = impl.Responses[Resp]
 
+// Certificate contains a representative value and the successful node
+// responses that established it. Responses are retained in arrival order.
+// [Responses.MatchingCertificate] returns a Certificate.
+type Certificate[Resp proto.Message] = impl.Certificate[Resp]
+
 // Async represents the eventual result of an asynchronous quorum call.
 type Async[Resp any] = impl.Async[Resp]
 
