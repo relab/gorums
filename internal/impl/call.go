@@ -59,7 +59,7 @@ func MapResponse[Req, Resp proto.Message](fn func(Resp, *Node) Resp) ClientInter
 // Intercept registers interceptors for this call, applied in call-site order.
 // It returns the same handle for fluent chaining:
 //
-//	resp, err := storage.ReadQC(ctx, req).Intercept(logging, audit).Majority()
+//	resp, err := client.ReadQC(ctx, req).Intercept(logging, audit).Majority()
 //
 // Intercept must be called before any method that dispatches the call: a
 // terminal method, [Call.Async], [Responses.Correctable], or
@@ -76,8 +76,8 @@ func (c *Call[Req, Resp]) Intercept(ics ...ClientInterceptor[Req, Resp]) *Call[R
 // Async sends the requests now and returns the dispatched responses, so a
 // single goroutine can keep several quorum calls in flight, in send order:
 //
-//	a := WriteQC(ctx, reqA).Async()
-//	b := WriteQC(ctx, reqB).Async()
+//	a := client.WriteQC(ctx, reqA).Async()
+//	b := client.WriteQC(ctx, reqB).Async()
 //	_, errA := a.Majority()
 //	_, errB := b.Majority()
 //
@@ -140,7 +140,7 @@ func (c *OnewayCall[Req]) Send() error {
 // Async dispatches the request without waiting for the sends to complete, so a
 // single goroutine can keep several one-way calls in flight:
 //
-//	h := Multicast(ctx, msg).Async()
+//	h := client.WriteMulticast(ctx, msg).Async()
 //	// ... dispatch more calls ...
 //	err := h.Wait()
 //

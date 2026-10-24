@@ -2,6 +2,8 @@
 
 Status: retained as a version-specific historical migration guide.
 It does not describe the later API redesign; that missing guide is tracked in [issue-redesign-migration-guide.md](issue-redesign-migration-guide.md).
+Its call examples use the generated service clients.
+To migrate code from the generated call functions to service clients, see [Function API to Service Clients](#function-api-to-service-clients).
 
 This guide helps you migrate from Gorums v2 (QuorumSpec-based design) to v3 (iterator-based design with generic functions).
 
@@ -12,7 +14,7 @@ Gorums v3 introduces a fundamental redesign focused on:
 - **Type aliases** instead of generated concrete types
 - **Generic functions** with terminal methods instead of QuorumSpec interface
 - **Iterator-based response aggregation** for flexible custom logic
-- **ConfigContext pattern** for passing configuration to generic functions
+- **Service clients** that bind the generated call methods to a configuration or a node
 - **Custom return types** support for aggregation functions
 
 ### Why These Changes?
@@ -76,15 +78,15 @@ func newestValue(responses *gorums.Responses[*ReadResponse]) (*ReadResponse, err
 // Configuration created without QuorumSpec
 config, _ := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 
-// Generic function with ConfigContext
-cfgCtx := config.Context(ctx)
-responses := ReadQC(cfgCtx, &ReadRequest{})
+// Service client bound to the configuration
+client := NewStorageClient(config)
+call := client.ReadQC(ctx, &ReadRequest{})
 
 // Option 1: Use custom aggregation
-reply, err := newestValue(responses)
+reply, err := newestValue(call.Responses)
 
 // Option 2: Use built-in terminal method
-reply, err := ReadQC(cfgCtx, &ReadRequest{}).Majority()
+reply, err := client.ReadQC(ctx, &ReadRequest{}).Majority()
 ```
 
 ## Migration Steps
@@ -100,7 +102,7 @@ make genproto
 This generates new `*_gorums.pb.go` files with:
 
 - Type aliases for `Manager`, `Configuration`, `Node`
-- Generic functions for quorum calls (e.g., `ReadQC`, `WriteQC`)
+- Service client types with a method for each call (e.g., `client.ReadQC`, `client.WriteQC`)
 - Terminal methods on `*gorums.Responses[T]`
 
 ### Step 2: Update Configuration Creation
@@ -187,7 +189,8 @@ func newestState(responses *gorums.Responses[*State]) (*State, error) {
 
 ### Step 4: Update Call Sites
 
-Change from Configuration methods to generic functions with ConfigContext.
+Change from Configuration methods to the methods of the generated service client.
+The examples below use `client`, the generated client of your service, bound to a configuration.
 
 **Before:**
 
@@ -201,20 +204,20 @@ reply, err := cfg.Read(ctx, &ReadRequest{Key: "x"})
 ```go
 // Option 1: With custom aggregation
 ctx := context.Background()
-cfgCtx := config.Context(ctx)
-reply, err := newestState(ReadQC(cfgCtx, &ReadRequest{Key: "x"}))
+client := NewStorageClient(config)
+reply, err := newestState(client.ReadQC(ctx, &ReadRequest{Key: "x"}).Responses)
 
 // Option 2: With terminal method
-reply, err := ReadQC(cfgCtx, &ReadRequest{Key: "x"}).Majority()
+reply, err := client.ReadQC(ctx, &ReadRequest{Key: "x"}).Majority()
 
 // Option 3: With threshold (e.g., wait for 3 responses)
-reply, err := ReadQC(cfgCtx, &ReadRequest{Key: "x"}).Threshold(3)
+reply, err := client.ReadQC(ctx, &ReadRequest{Key: "x"}).Threshold(3)
 
 // Option 4: First successful response
-reply, err := ReadQC(cfgCtx, &ReadRequest{Key: "x"}).First()
+reply, err := client.ReadQC(ctx, &ReadRequest{Key: "x"}).First()
 
 // Option 5: Wait for all responses
-reply, err := ReadQC(cfgCtx, &ReadRequest{Key: "x"}).All()
+reply, err := client.ReadQC(ctx, &ReadRequest{Key: "x"}).All()
 ```
 
 ## Terminal Methods Reference
@@ -232,16 +235,16 @@ The new design provides built-in aggregation patterns via terminal methods on `*
 
 ```go
 // Fast reads: return first successful response
-reply, err := ReadQC(cfgCtx, req).First()
+reply, err := client.ReadQC(ctx, req).First()
 
 // Byzantine fault tolerance: require majority
-reply, err := WriteQC(cfgCtx, req).Majority()
+reply, err := client.WriteQC(ctx, req).Majority()
 
 // Wait for all nodes (e.g., for debugging)
-reply, err := ReadQC(cfgCtx, req).All()
+reply, err := client.ReadQC(ctx, req).All()
 
 // Custom threshold (e.g., f+1 for crash tolerance)
-reply, err := ReadQC(cfgCtx, req).Threshold(f + 1)
+reply, err := client.ReadQC(ctx, req).Threshold(f + 1)
 ```
 
 **Error Handling:**
@@ -349,7 +352,7 @@ reply, err := future.Get()
 
 ```go
 // Send the requests now
-responses := ReadQC(cfgCtx, req).Async()
+responses := client.ReadQC(ctx, req).Async()
 // Do other work...
 reply, err := responses.Majority()
 ```
@@ -359,9 +362,9 @@ reply, err := responses.Majority()
 Every terminal method works after `Async`:
 
 ```go
-reply, err := ReadQC(cfgCtx, req).Async().First()
-reply, err = ReadQC(cfgCtx, req).Async().Threshold(3)
-reply, err = ReadQC(cfgCtx, req).Async().Aggregate(newestValue)
+reply, err := client.ReadQC(ctx, req).Async().First()
+reply, err = client.ReadQC(ctx, req).Async().Threshold(3)
+reply, err = client.ReadQC(ctx, req).Async().Aggregate(newestValue)
 ```
 
 `Async` starts no goroutine.
@@ -386,7 +389,7 @@ reply = correctable.Get()
 
 ```go
 // Create correctable with initial threshold
-corr := ReadQC(cfgCtx, req).Correctable(2)
+corr := client.ReadQC(ctx, req).Correctable(2)
 
 // Get initial result (blocks until threshold met)
 reply, level, err := corr.Get()
@@ -405,8 +408,8 @@ for level := range corr.Levels() {
 ### Progressive Response Handling
 
 ```go
-func progressiveRead(cfgCtx *gorums.ConfigContext, req *ReadRequest) {
-    corr := ReadQC(cfgCtx, req).Correctable(1)
+func progressiveRead(ctx context.Context, client StorageClient, req *ReadRequest) {
+    corr := client.ReadQC(ctx, req).Correctable(1)
 
     // Process each new level as it arrives
     for level := range corr.Levels() {
@@ -453,7 +456,7 @@ func StopBenchmarkQF(replies map[gorums.ID]*MemoryStat) (*MemoryStatList, error)
 }
 
 // Usage:
-replies := collect(StopBenchmark(cfgCtx, &StopRequest{}).Results())  // map[gorums.ID]*MemoryStat
+replies := collect(client.StopBenchmark(ctx, &StopRequest{}).Results())  // map[gorums.ID]*MemoryStat
 memStats, err := StopBenchmarkQF(replies)  // Returns *MemoryStatList
 ```
 
@@ -513,7 +516,7 @@ func collect[T proto.Message](seq gorums.ResponseSeq[T]) map[gorums.ID]T {
 }
 
 // Step 1: Collect responses
-replies := collect(CustomQC(cfgCtx, req).Results())  // map[gorums.ID]*ProtoResponse
+replies := collect(client.CustomQC(ctx, req).Results())  // map[gorums.ID]*ProtoResponse
 
 // Step 2: Apply custom aggregation
 result, err := CustomAggregationQF(replies)  // Returns *CustomType
@@ -540,7 +543,7 @@ The new design adds `WithoutErrors()` to create configurations excluding nodes t
 
 ```go
 // Make a quorum call
-reply, err := ReadQC(cfgCtx, req).Majority()
+reply, err := client.ReadQC(ctx, req).Majority()
 
 // If there was a quorum error, filter out failed nodes
 if qcErr, ok := err.(gorums.QuorumCallError); ok {
@@ -548,8 +551,7 @@ if qcErr, ok := err.(gorums.QuorumCallError); ok {
     goodCfg, _ := gorums.NewConfiguration(mgr, config.WithoutErrors(qcErr))
 
     // Retry with good nodes only
-    cfgCtx := goodCfg.Context(ctx)
-    reply, err = ReadQC(cfgCtx, req).Majority()
+    reply, err = client.WithConfig(goodCfg).ReadQC(ctx, req).Majority()
 }
 ```
 
@@ -560,7 +562,7 @@ Error handling is similar but with some improvements.
 ### QuorumCallError
 
 ```go
-reply, err := ReadQC(cfgCtx, req).Majority()
+reply, err := client.ReadQC(ctx, req).Majority()
 if err != nil {
     // Check if it's a quorum call error
     if qcErr, ok := err.(gorums.QuorumCallError); ok {
@@ -581,8 +583,8 @@ if err != nil {
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 defer cancel()
 
-cfgCtx := config.Context(ctx)
-reply, err := ReadQC(cfgCtx, req).Majority()
+client := NewStorageClient(config)
+reply, err := client.ReadQC(ctx, req).Majority()
 if err != nil {
     if ctx.Err() != nil {
         fmt.Println("Request timed out")
@@ -601,12 +603,12 @@ if err != nil {
 - [ ] Update configuration creation
   - [ ] Remove QuorumSpec from `NewConfiguration()` calls
 - [ ] Update all quorum call sites
-  - [ ] Replace `cfg.Read(ctx, req)` with `ReadQC(cfgCtx, req).Majority()`
-  - [ ] Or use custom aggregation: `customAggregation(ReadQC(cfgCtx, req))`
+  - [ ] Replace `cfg.Read(ctx, req)` with `client.ReadQC(ctx, req).Majority()`
+  - [ ] Or use custom aggregation: `customAggregation(client.ReadQC(ctx, req))`
 - [ ] Update async calls to use `Async()`
-  - [ ] Replace `cfg.ReadAsync(ctx, req)` with `ReadQC(cfgCtx, req).Async()`, and collect the replies later with a terminal method such as `.Majority()`
+  - [ ] Replace `cfg.ReadAsync(ctx, req)` with `client.ReadQC(ctx, req).Async()`, and collect the replies later with a terminal method such as `.Majority()`
 - [ ] Update correctable calls to use `.Correctable(threshold)`
-  - [ ] Replace `cfg.ReadCorrectable(ctx, req)` with `ReadQC(cfgCtx, req).Correctable(threshold)`
+  - [ ] Replace `cfg.ReadCorrectable(ctx, req)` with `client.ReadQC(ctx, req).Correctable(threshold)`
 - [ ] Test thoroughly with your existing test suite
 - [ ] Update documentation and examples
 
@@ -640,8 +642,8 @@ reply, err := cfg.Read(ctx, req)
 // No QuorumSpec needed
 
 config, _ := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
-cfgCtx := config.Context(ctx)
-reply, err := ReadQC(cfgCtx, req).Majority()
+client := NewStorageClient(config)
+reply, err := client.ReadQC(ctx, req).Majority()
 ```
 
 ### Pattern 2: Custom Aggregation (Select Newest)
@@ -683,7 +685,7 @@ func newestState(responses *gorums.Responses[*State]) (*State, error) {
 }
 
 // Usage
-reply, err := newestState(ReadQC(cfgCtx, req))
+reply, err := newestState(client.ReadQC(ctx, req).Responses)
 ```
 
 ### Pattern 3: Counting Responses
@@ -725,7 +727,7 @@ func countSuccessful(responses *gorums.Responses[*WriteResponse]) (*WriteRespons
 }
 
 // Usage
-reply, err := countSuccessful(WriteQC(cfgCtx, req))
+reply, err := countSuccessful(client.WriteQC(ctx, req).Responses)
 ```
 
 ### Pattern 4: Early Termination
@@ -747,7 +749,7 @@ func (qs *QSpec) FastReadQF(_ *ReadRequest, replies map[uint32]*State) (*State, 
 
 ```go
 // Built-in terminal method
-reply, err := ReadQC(cfgCtx, req).First()
+reply, err := client.ReadQC(ctx, req).First()
 
 // Or custom implementation
 func firstValid(responses *gorums.Responses[*State]) (*State, error) {
@@ -769,11 +771,11 @@ func firstValid(responses *gorums.Responses[*State]) (*State, error) {
 
 **Problem:** Configuration no longer has RPC methods.
 
-**Solution:** Use generic functions with ConfigContext:
+**Solution:** Use the methods of the generated service client:
 
 ```go
-cfgCtx := config.Context(ctx)
-reply, err := ReadQC(cfgCtx, req).Majority()
+client := NewStorageClient(config)
+reply, err := client.ReadQC(ctx, req).Majority()
 ```
 
 ### "QuorumSpec interface not found"
@@ -801,7 +803,7 @@ for resp := range responses.Results().IgnoreErrors() {
 **Solution:** Use `.All()` terminal method:
 
 ```go
-reply, err := ReadQC(cfgCtx, req).All()
+reply, err := client.ReadQC(ctx, req).All()
 ```
 
 ### "How do I implement early termination?"
@@ -818,6 +820,90 @@ func earlyTermination(responses *gorums.Responses[*Response]) (*Response, error)
     return nil, gorums.ErrIncomplete
 }
 ```
+
+## Function API to Service Clients
+
+This section applies to code that uses the generated call functions.
+Those functions took a `*gorums.ConfigContext` or a `*gorums.NodeContext` as their first argument.
+Gorums no longer generates them.
+For each service `S`, Gorums now generates two client types:
+
+- `SClient` is bound to a `gorums.Config`.
+  It has the quorum call, streaming quorum call, and multicast methods.
+- `SClientNode` is bound to a `*gorums.Node`.
+  It has the remote call and unicast methods.
+
+Each call method takes a `context.Context` as its first argument.
+
+| Removed                                          | Replacement                                           |
+| ------------------------------------------------ | ----------------------------------------------------- |
+| `gorums.ConfigContext` and `Config.Context`      | `NewSClient(cfg)`, then pass `ctx` to the call method |
+| `gorums.NodeContext` and `Node.Context`          | `NewSClientNode(node)` or `client.ForNode(node)`      |
+| `pb.ReadQC(cfgCtx, req)`                         | `client.ReadQC(ctx, req)`                             |
+| `pb.ReadRPC(nodeCtx, req)`                       | `nodeClient.ReadRPC(ctx, req)`                        |
+| Generated `ConfigContext`, `NodeContext` aliases | None; use `context.Context`                           |
+
+Configuration calls migrate from generated functions and a configuration context to a bound service client:
+
+```go
+// Before
+cfgCtx := cfg.Context(ctx)
+resp, err := pb.ReadQC(cfgCtx, req).Majority()
+
+// After
+client := pb.NewStorageClient(cfg)
+resp, err := client.ReadQC(ctx, req).Majority()
+```
+
+Node calls migrate to a standalone or derived node client:
+
+```go
+// Before
+nodeCtx := node.Context(ctx)
+resp, err := pb.ReadRPC(nodeCtx, req)
+
+// After, standalone
+nodeClient := pb.NewStorageClientNode(node)
+resp, err := nodeClient.ReadRPC(ctx, req)
+
+// After, derived from an existing configuration client
+resp, err = client.ForNode(node).ReadRPC(ctx, req)
+```
+
+`ForNode` accepts any node, also a node that is not in the client's configuration.
+
+Configuration transformations remain on `gorums.Config`:
+
+```go
+smaller := client.Config().Remove(nodeID)
+smallerClient := client.WithConfig(smaller)
+```
+
+A nested call in a server handler binds the peer configuration to a client:
+
+```go
+// Before
+resp, err := pb.ReadQC(ctx.PeerConfig().Context(ctx), req).Majority()
+
+// After
+resp, err := pb.NewStorageClient(ctx.PeerConfig()).ReadQC(ctx, req).Majority()
+```
+
+The generated client types do not own or close their targets.
+Connection ownership and the close function returned by `NewConfig` are unchanged.
+A client allocates nothing when you create it, so you can create one at each call site.
+
+A call on an empty configuration or a nil node still panics.
+The panic now comes from the call method, not from `Config.Context` or `Node.Context`.
+
+Regeneration reports an error for names that collide with the generated client code:
+
+- a message or enum named `SClient`, `SClientNode`, `NewSClient`, or `NewSClientNode`;
+- a quorum call, streaming quorum call, or multicast named `Config`, `WithConfig`, or `ForNode`;
+- a remote call or unicast named `Node`.
+
+Hand-written Go code in the generated package that declares `SClient`, `SClientNode`, `NewSClient`, or `NewSClientNode`, such as your own `StorageClient` wrapper, now fails to compile.
+The generator cannot detect this collision, so rename such code.
 
 ## Additional Resources
 
