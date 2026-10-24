@@ -142,7 +142,7 @@ func TestRunPhaseRunOverStopsWorker(t *testing.T) {
 func TestMeasureLatencyRunOverNotRecorded(t *testing.T) {
 	opts := Options{Workers: 2, Duration: 2 * time.Second}
 	var calls atomic.Int64
-	setup := func(_ Options, _ *gorums.ConfigContext) func() error {
+	setup := func(context.Context, gorums.Config, Options) func() error {
 		return func() error {
 			if calls.Add(1) > 3 {
 				return ErrRunOver
@@ -696,7 +696,7 @@ func TestRunStampsFullConfig(t *testing.T) {
 func TestClientMeasuredCountsErrorsWithoutAborting(t *testing.T) {
 	var calls atomic.Int64
 	run := ClientMeasured(gorumstest.UnreachableConfig(t),
-		func(_ Options, _ *gorums.ConfigContext) func() error {
+		func(context.Context, gorums.Config, Options) func() error {
 			return func() error {
 				// Fail every other op; persistent errors must not abort.
 				if calls.Add(1)%2 == 0 {
@@ -725,7 +725,7 @@ func TestClientMeasuredQuiesce(t *testing.T) {
 	var opsAtQuiesce int64
 	quiesceCalls := 0
 	run := ClientMeasured(gorumstest.UnreachableConfig(t),
-		func(_ Options, _ *gorums.ConfigContext) func() error {
+		func(context.Context, gorums.Config, Options) func() error {
 			return func() error {
 				opsDone.Add(1)
 				return nil
@@ -754,7 +754,7 @@ func TestClientMeasuredQuiesce(t *testing.T) {
 
 	errDrain := errors.New("drain failed")
 	failing := ClientMeasured(gorumstest.UnreachableConfig(t),
-		func(_ Options, _ *gorums.ConfigContext) func() error {
+		func(context.Context, gorums.Config, Options) func() error {
 			return func() error { return nil }
 		},
 		WithQuiesce(func(context.Context) error { return errDrain }))
@@ -769,7 +769,7 @@ func TestClientMeasuredQuiesce(t *testing.T) {
 func TestClientMeasuredVerify(t *testing.T) {
 	verifyCalls := 0
 	var gotReplies map[uint32]*Result
-	setup := func(_ Options, _ *gorums.ConfigContext) func() error {
+	setup := func(context.Context, gorums.Config, Options) func() error {
 		return func() error { return nil }
 	}
 	run := ClientMeasured(gorumstest.UnreachableConfig(t), setup,

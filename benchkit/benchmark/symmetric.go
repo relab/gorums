@@ -161,7 +161,7 @@ func SignalDone(ctx context.Context, t *SymmetricTarget) {
 		// finished and exited makes a failed send the expected outcome, not a
 		// fault. Logging it still distinguishes that from a run where every
 		// send failed and no peer was ever told.
-		if err := benchkit.Done(out.Context(ctx), req).Send(); err != nil {
+		if err := benchkit.NewControlClient(out).Done(ctx, req).Send(); err != nil {
 			benchkit.Logf("Done signal from node %d: %v\n", t.controls[i].ID(), err)
 		}
 	}
@@ -305,7 +305,7 @@ func probeOutbound(ctx context.Context, srv *gorums.Server, label string) error 
 		var wg sync.WaitGroup
 		for _, node := range pending {
 			wg.Go(func() {
-				if _, err := QuorumCall(gorums.Config{node}.Context(attemptCtx), msg).Threshold(1); err == nil {
+				if _, err := NewBenchmarkClient(gorums.Config{node}).QuorumCall(attemptCtx, msg).Threshold(1); err == nil {
 					mu.Lock()
 					responded = append(responded, node.ID())
 					mu.Unlock()
@@ -425,7 +425,7 @@ func flushOutbound(ctx context.Context, srv *gorums.Server) error {
 	if n == 0 {
 		return gorums.ErrIncomplete
 	}
-	_, err := QuorumCall(out.Context(ctx), Echo_builder{}.Build()).Threshold(n)
+	_, err := NewBenchmarkClient(out).QuorumCall(ctx, Echo_builder{}.Build()).Threshold(n)
 	if err != nil {
 		// A flush failure means a peer stopped responding mid-run (e.g. it
 		// exited before the grace period elapsed). Name the unresponsive peers
@@ -471,13 +471,14 @@ func runSymmetricQuorumCall(t *SymmetricTarget, opts benchkit.Options) (*benchki
 			}
 		}
 	}
-	setup := func(opts benchkit.Options, cc *gorums.ConfigContext) func() error {
+	setup := func(ctx context.Context, cfg gorums.Config, opts benchkit.Options) func() error {
+		client := NewBenchmarkClient(cfg)
 		msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 		// Honor the configured quorum size, matching the coordinator QuorumCall
 		// benchmark; fall back to a majority of the outbound peers when unset.
-		quorumSize := cmp.Or(opts.QuorumSize, cc.Config().Size()/2+1)
-		call := func(cc *gorums.ConfigContext) error {
-			_, err := QuorumCall(cc, msg).Threshold(quorumSize)
+		quorumSize := cmp.Or(opts.QuorumSize, cfg.Size()/2+1)
+		call := func(ctx context.Context) error {
+			_, err := client.QuorumCall(ctx, msg).Threshold(quorumSize)
 			if err != nil && quorumRunOver(t, quorumSize) {
 				// Peers finished and closed their listeners; the incomplete
 				// quorum is the expected end of the run, not a fault. Cancel the
@@ -491,17 +492,16 @@ func runSymmetricQuorumCall(t *SymmetricTarget, opts benchkit.Options) (*benchki
 			return err
 		}
 		if opts.CallTimeout <= 0 {
-			return func() error { return call(cc) }
+			return func() error { return call(ctx) }
 		}
 		// With -call-timeout, each call carries its own deadline so a call
 		// stalled behind an unresponsive peer fails with DeadlineExceeded
 		// instead of hanging until run end. The branch is taken here at setup
 		// so the default path stays free of per-op timers.
-		cfg := cc.Config()
 		return func() error {
-			callCtx, cancelCall := context.WithTimeout(cc, opts.CallTimeout)
+			callCtx, cancelCall := context.WithTimeout(ctx, opts.CallTimeout)
 			defer cancelCall()
-			return call(cfg.Context(callCtx))
+			return call(callCtx)
 		}
 	}
 	return benchkit.MeasureLatency(ctx, opts, configs, setup)
@@ -547,10 +547,10 @@ func runSymmetricMulticast(t *SymmetricTarget, opts benchkit.Options) (*benchkit
 	// the receiving server can bucket and clock-correct samples per sender.
 	sends := make([]func() error, len(t.servers))
 	for i, srv := range t.servers {
-		cfgCtx := srv.PeerConfig().Context(ctx)
+		client := NewBenchmarkClient(srv.PeerConfig())
 		senderID := t.controls[i].ID()
 		sends[i] = func() error {
-			if err := Multicast(cfgCtx, newMsg(senderID)).Send(); err != nil {
+			if err := client.Multicast(ctx, newMsg(senderID)).Send(); err != nil {
 				return err
 			}
 			totalSent.Add(1)

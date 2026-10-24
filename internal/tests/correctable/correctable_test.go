@@ -1,6 +1,7 @@
 package correctable
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 // run a test on a correctable call.
 // n is the number of replicas.
 // the target level is n (quorum size).
-func run(t testing.TB, n int, corr func(*ConfigContext, int) CorrectableResponse) {
+func run(t testing.TB, n int, corr func(context.Context, CorrectableTestClient, int) CorrectableResponse) {
 	t.Helper()
 	config := gorumstest.Config(t, n, func(_ int) gorumstest.ServerIface {
 		gorumsSrv := gorums.NewServer()
@@ -20,8 +21,7 @@ func run(t testing.TB, n int, corr func(*ConfigContext, int) CorrectableResponse
 	})
 
 	ctx := gorumstest.Context(t, 100*time.Millisecond)
-	configCtx := config.Context(ctx)
-	res := corr(configCtx, n)
+	res := corr(ctx, NewCorrectableTestClient(config), n)
 
 	done := res.Done()
 	for i := 1; i <= n; i++ {
@@ -37,16 +37,16 @@ func run(t testing.TB, n int, corr func(*ConfigContext, int) CorrectableResponse
 }
 
 func TestCorrectable(t *testing.T) {
-	run(t, 4, func(ctx *ConfigContext, n int) CorrectableResponse {
+	run(t, 4, func(ctx context.Context, client CorrectableTestClient, n int) CorrectableResponse {
 		// Correctable returns *Responses, user calls Correctable to get *Correctable
-		return Correctable(ctx, &Request{}).Correctable(n)
+		return client.Correctable(ctx, &Request{}).Correctable(n)
 	})
 }
 
 func TestCorrectableStream(t *testing.T) {
-	run(t, 4, func(ctx *ConfigContext, n int) CorrectableResponse {
+	run(t, 4, func(ctx context.Context, client CorrectableTestClient, n int) CorrectableResponse {
 		// CorrectableStream returns *Responses, user calls Correctable to get *Correctable
-		return CorrectableStream(ctx, &Request{}).Correctable(n)
+		return client.CorrectableStream(ctx, &Request{}).Correctable(n)
 	})
 }
 
@@ -60,10 +60,10 @@ func TestCorrectableWithWatch(t *testing.T) {
 	})
 
 	ctx := gorumstest.Context(t, 100*time.Millisecond)
-	configCtx := config.Context(ctx)
+	client := NewCorrectableTestClient(config)
 
 	// Use the type alias for the correctable result
-	corr := CorrectableStream(configCtx, &Request{}).Correctable(n)
+	corr := client.CorrectableStream(ctx, &Request{}).Correctable(n)
 
 	// Watch for each level progressively
 	for level := 1; level <= n; level++ {

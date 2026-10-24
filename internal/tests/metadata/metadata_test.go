@@ -75,7 +75,7 @@ func TestMetadata(t *testing.T) {
 			if tt.msgMD {
 				ctx = metadata.NewOutgoingContext(ctx, md)
 			}
-			resp, err := IDFromMD(node.Context(ctx), &emptypb.Empty{})
+			resp, err := NewMetadataTestClientNode(node).IDFromMD(ctx, &emptypb.Empty{})
 			if err != nil {
 				t.Fatalf("RPC error: %v", err)
 			}
@@ -120,7 +120,7 @@ func TestPerMessageMetadataAcrossStreamTopologies(t *testing.T) {
 
 			const want = uint32(42)
 			ctx := metadata.NewOutgoingContext(t.Context(), metadata.Pairs("id", fmt.Sprint(want)))
-			resp, err := IDFromMD(target.Context(ctx), &emptypb.Empty{})
+			resp, err := NewMetadataTestClientNode(target).IDFromMD(ctx, &emptypb.Empty{})
 			if err != nil {
 				t.Fatalf("IDFromMD: %v", err)
 			}
@@ -133,8 +133,7 @@ func TestPerMessageMetadataAcrossStreamTopologies(t *testing.T) {
 
 func TestMetadataPeerInfo(t *testing.T) {
 	node := gorumstest.Node(t, serverFn)
-	nodeCtx := node.Context(t.Context())
-	ip, err := WhatIP(nodeCtx, &emptypb.Empty{})
+	ip, err := NewMetadataTestClientNode(node).WhatIP(t.Context(), &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
 	}

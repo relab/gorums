@@ -115,11 +115,10 @@ func serverFn(_ int) gorumstest.ServerIface {
 }
 
 func TestUnaryRPCOrdering(t *testing.T) {
-	node := gorumstest.Node(t, serverFn)
+	nodeClient := NewOrderingClientNode(gorumstest.Node(t, serverFn))
 
 	for i := range iterations() {
-		nodeCtx := node.Context(t.Context())
-		resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(i)}.Build())
+		resp, err := nodeClient.UnaryRPC(t.Context(), Request_builder{Num: uint64(i)}.Build())
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
 		}
@@ -134,11 +133,11 @@ func TestUnaryRPCOrdering(t *testing.T) {
 
 func TestQuorumCallOrdering(t *testing.T) {
 	config := gorumstest.Config(t, 4, serverFn)
-	cfgCtx := config.Context(t.Context())
+	client := NewOrderingClient(config)
 
 	for i := range iterations() {
 		// Wait for every reply and check that each server saw the request in order.
-		responses := QuorumCall(cfgCtx, Request_builder{Num: uint64(i)}.Build())
+		responses := client.QuorumCall(t.Context(), Request_builder{Num: uint64(i)}.Build())
 		replies := 0
 		for reply := range responses.Results().IgnoreErrors() {
 			replies++
@@ -153,14 +152,13 @@ func TestQuorumCallOrdering(t *testing.T) {
 }
 
 func TestQuorumCallAsyncOrdering(t *testing.T) {
-	config := gorumstest.Config(t, 4, serverFn)
-	cfgCtx := config.Context(t.Context())
+	client := NewOrderingClient(gorumstest.Config(t, 4, serverFn))
 
 	var wg sync.WaitGroup
 	for i := range iterations() {
 		// Async sends the request before it returns, so the calls go out in
 		// loop order although their replies are collected concurrently.
-		responses := QuorumCall(cfgCtx, Request_builder{Num: uint64(i)}.Build()).Async()
+		responses := client.QuorumCall(t.Context(), Request_builder{Num: uint64(i)}.Build()).Async()
 		wg.Go(func() {
 			resp, err := responses.Majority()
 			if err != nil {
@@ -182,11 +180,11 @@ func TestQuorumCallAsyncOrdering(t *testing.T) {
 
 func TestMixedOrdering(t *testing.T) {
 	config := gorumstest.Config(t, 4, serverFn)
-	cfgCtx := config.Context(t.Context())
+	client := NewOrderingClient(config)
 
 	for i := range iterations() {
 		// Wait for every reply and check that each server saw the request in order.
-		responses := QuorumCall(cfgCtx, Request_builder{Num: uint64(2*i - 1)}.Build())
+		responses := client.QuorumCall(t.Context(), Request_builder{Num: uint64(2*i - 1)}.Build())
 		replies := 0
 		for reply := range responses.Results().IgnoreErrors() {
 			replies++
@@ -200,8 +198,7 @@ func TestMixedOrdering(t *testing.T) {
 		var wg sync.WaitGroup
 		for _, node := range config.Nodes() {
 			wg.Go(func() {
-				nodeCtx := node.Context(t.Context())
-				resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(2 * i)}.Build())
+				resp, err := client.ForNode(node).UnaryRPC(t.Context(), Request_builder{Num: uint64(2 * i)}.Build())
 				if err != nil {
 					t.Errorf("RPC error: %v", err)
 					return
@@ -240,7 +237,7 @@ func TestDedupBackChannelOrdering(t *testing.T) {
 	}
 
 	call := func(num uint64, done chan<- error) {
-		resp, err := UnaryRPC(target.Context(ctx), Request_builder{Num: num}.Build())
+		resp, err := NewOrderingClientNode(target).UnaryRPC(ctx, Request_builder{Num: num}.Build())
 		if err == nil && !resp.GetInOrder() {
 			err = errors.New("handler reported an out-of-order request")
 		}

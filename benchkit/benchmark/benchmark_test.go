@@ -146,8 +146,8 @@ func TestAsyncQCBoundsInFlight(t *testing.T) {
 	)
 	opts := benchkit.Options{Workers: 2, MaxAsync: maxAsync, Duration: 2 * time.Second, QuorumSize: 2}
 	res, err := runAsyncQCBenchmark(opts, target.servers[0].PeerConfig(),
-		func(cc *ConfigContext, in *Echo, quorumSize int) func() error {
-			wait := asyncThreshold(cc, in, quorumSize)
+		func(ctx context.Context, client BenchmarkClient, in *Echo, quorumSize int) func() error {
+			wait := asyncThreshold(ctx, client, in, quorumSize)
 			mu.Lock()
 			outstanding++
 			peak = max(peak, outstanding)
@@ -235,7 +235,7 @@ func TestAsyncQCComplete(t *testing.T) {
 // touched.
 func TestRunAsyncQCBenchmarkRejectsRateRamp(t *testing.T) {
 	opts := benchkit.Options{Workers: 1, Duration: time.Second, RateStep: 10, RateStepMax: 100}
-	_, err := runAsyncQCBenchmark(opts, nil, func(*ConfigContext, *Echo, int) func() error {
+	_, err := runAsyncQCBenchmark(opts, nil, func(context.Context, BenchmarkClient, *Echo, int) func() error {
 		t.Fatal("asyncQCFunc invoked despite rejected rate-ramp options")
 		return nil
 	})
@@ -325,7 +325,7 @@ func TestAsyncSendsPipelinesAndDrains(t *testing.T) {
 	if err := awaitReady(ctx, target); err != nil {
 		t.Fatalf("awaitReady: %v", err)
 	}
-	cc := target.servers[0].PeerConfig().Context(ctx)
+	client := NewBenchmarkClient(target.servers[0].PeerConfig())
 
 	const depth = 4
 	outstanding := newAsyncSends(depth)
@@ -333,7 +333,7 @@ func TestAsyncSendsPipelinesAndDrains(t *testing.T) {
 	// reap an earlier send to make room.
 	for range depth * 3 {
 		msg := TimedMsg_builder{SendTime: time.Now().UnixNano()}.Build()
-		if err := outstanding.dispatch(func() asyncSend { return Multicast(cc, msg).Async() }); err != nil {
+		if err := outstanding.dispatch(func() asyncSend { return client.Multicast(ctx, msg).Async() }); err != nil {
 			t.Fatalf("dispatch: %v", err)
 		}
 	}
@@ -519,10 +519,11 @@ func TestServerMeasuredMulticastHDR(t *testing.T) {
 	}
 
 	run := benchkit.ServerMeasured(target.servers[0].PeerConfig(),
-		func(_ benchkit.Options, cc *ConfigContext) func() error {
+		func(ctx context.Context, cfg Config, _ benchkit.Options) func() error {
+			client := NewBenchmarkClient(cfg)
 			return func() error {
 				msg := TimedMsg_builder{SendTime: time.Now().UnixNano()}.Build()
-				return Multicast(cc, msg).Send()
+				return client.Multicast(ctx, msg).Send()
 			}
 		})
 
@@ -555,10 +556,11 @@ func TestServerMeasuredQuiesce(t *testing.T) {
 
 	quiesceCalls := 0
 	run := benchkit.ServerMeasured(target.servers[0].PeerConfig(),
-		func(_ benchkit.Options, cc *ConfigContext) func() error {
+		func(ctx context.Context, cfg Config, _ benchkit.Options) func() error {
+			client := NewBenchmarkClient(cfg)
 			return func() error {
 				msg := TimedMsg_builder{SendTime: time.Now().UnixNano()}.Build()
-				return Multicast(cc, msg).Send()
+				return client.Multicast(ctx, msg).Send()
 			}
 		},
 		benchkit.WithQuiesce(func(context.Context) error {
@@ -590,10 +592,11 @@ func TestServerMeasuredVerify(t *testing.T) {
 		t.Fatalf("awaitReady: %v", err)
 	}
 
-	setup := func(_ benchkit.Options, cc *ConfigContext) func() error {
+	setup := func(ctx context.Context, cfg Config, _ benchkit.Options) func() error {
+		client := NewBenchmarkClient(cfg)
 		return func() error {
 			msg := TimedMsg_builder{SendTime: time.Now().UnixNano()}.Build()
-			return Multicast(cc, msg).Send()
+			return client.Multicast(ctx, msg).Send()
 		}
 	}
 
@@ -643,10 +646,11 @@ func TestServerMeasuredWindowExcludesClockSync(t *testing.T) {
 		t.Fatalf("awaitReady: %v", err)
 	}
 
-	setup := func(_ benchkit.Options, cc *ConfigContext) func() error {
+	setup := func(ctx context.Context, cfg Config, _ benchkit.Options) func() error {
+		client := NewBenchmarkClient(cfg)
 		return func() error {
 			msg := TimedMsg_builder{SendTime: time.Now().UnixNano()}.Build()
-			return Multicast(cc, msg).Send()
+			return client.Multicast(ctx, msg).Send()
 		}
 	}
 

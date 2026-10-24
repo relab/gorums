@@ -40,13 +40,13 @@ func clockOffset(t1, serverTime, t4 int64) (offset, delay int64) {
 // is kept for each peer. The returned offset of a node relative to itself
 // (loopback) is approximately zero.
 func EstimateOffsets(ctx context.Context, cfg gorums.Config) (map[uint32]int64, error) {
-	cfgCtx := cfg.Context(ctx)
+	control := NewControlClient(cfg)
 	n := cfg.Size()
 	bestDelay := make(map[uint32]int64, n)
 	offsets := make(map[uint32]int64, n)
 	for range clockSyncRounds {
 		t1 := time.Now().UnixNano()
-		for r := range ClockSync(cfgCtx, &ClockSyncRequest{}).Results() {
+		for r := range control.ClockSync(ctx, &ClockSyncRequest{}).Results() {
 			t4 := time.Now().UnixNano()
 			if r.Err != nil {
 				continue

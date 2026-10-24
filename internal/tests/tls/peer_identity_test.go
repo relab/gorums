@@ -70,7 +70,7 @@ func peerGroup(t *testing.T, ca *testCA, n int, certIDs []gorums.ID, opts ...gor
 func remoteCall(t *testing.T, node *gorums.Node, timeout time.Duration) (string, error) {
 	t.Helper()
 	ctx := gorumstest.Context(t, timeout)
-	resp, err := mockcall.RemoteCall(node.Context(ctx), "hello")
+	resp, err := mockcall.RemoteCall(ctx, node, "hello")
 	return resp.GetValue(), err
 }
 

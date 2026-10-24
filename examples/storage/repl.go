@@ -194,8 +194,7 @@ func (r repl) unicast(args []string) {
 
 	node := r.cfg[index]
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	nodeCtx := node.Context(ctx)
-	err = pb.WriteUnicast(nodeCtx, pb.WriteRequest_builder{
+	err = pb.NewStorageClientNode(node).WriteUnicast(ctx, pb.WriteRequest_builder{
 		Key: args[1], Value: args[2], Time: timestamppb.Now(),
 	}.Build()).Send()
 	cancel()
@@ -214,8 +213,7 @@ func (r repl) multicast(args []string) {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cfgCtx := r.cfg.Context(ctx)
-	err := pb.WriteMulticast(cfgCtx, pb.WriteRequest_builder{
+	err := pb.NewStorageClient(r.cfg).WriteMulticast(ctx, pb.WriteRequest_builder{
 		Key: args[0], Value: args[1], Time: timestamppb.Now(),
 	}.Build()).Send()
 	cancel()
@@ -277,8 +275,7 @@ func (repl) readRPC(args []string, node *pb.Node) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	nodeCtx := node.Context(ctx)
-	resp, err := pb.ReadRPC(nodeCtx, pb.ReadRequest_builder{Key: args[0]}.Build())
+	resp, err := pb.NewStorageClientNode(node).ReadRPC(ctx, pb.ReadRequest_builder{Key: args[0]}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -297,8 +294,7 @@ func (repl) writeRPC(args []string, node *pb.Node) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	nodeCtx := node.Context(ctx)
-	resp, err := pb.WriteRPC(nodeCtx, pb.WriteRequest_builder{
+	resp, err := pb.NewStorageClientNode(node).WriteRPC(ctx, pb.WriteRequest_builder{
 		Key: args[0], Value: args[1], Time: timestamppb.Now(),
 	}.Build())
 	cancel()
@@ -319,9 +315,8 @@ func (repl) readQC(args []string, config pb.Config) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cfgCtx := config.Context(ctx)
 	// Use the responses iterator to find the newest value
-	resp, err := pb.ReadQC(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build()).Aggregate(newestValue)
+	resp, err := pb.NewStorageClient(config).ReadQC(ctx, pb.ReadRequest_builder{Key: args[0]}.Build()).Aggregate(newestValue)
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -340,11 +335,10 @@ func (repl) creadQC(args []string, config pb.Config) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	cfgCtx := config.Context(ctx)
 
 	// Create a correctable call expecting at least majority
 	majority := config.Size()/2 + 1
-	corr := pb.ReadCorrectable(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build()).Correctable(majority)
+	corr := pb.NewStorageClient(config).ReadCorrectable(ctx, pb.ReadRequest_builder{Key: args[0]}.Build()).Correctable(majority)
 
 	// Process updates as they arrive
 	for level := 1; level <= majority; level++ {
@@ -371,9 +365,8 @@ func (repl) writeQC(args []string, config pb.Config) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cfgCtx := config.Context(ctx)
 	// Use the responses iterator to count successful updates
-	resp, err := pb.WriteQC(cfgCtx, pb.WriteRequest_builder{
+	resp, err := pb.NewStorageClient(config).WriteQC(ctx, pb.WriteRequest_builder{
 		Key: args[0], Value: args[1], Time: timestamppb.Now(),
 	}.Build()).Aggregate(numUpdated(config.Size()))
 	cancel()
@@ -394,8 +387,7 @@ func (repl) readNestedQC(args []string, config pb.Config) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cfgCtx := config.Context(ctx)
-	resp, err := pb.ReadNestedQC(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build()).Aggregate(newestValue)
+	resp, err := pb.NewStorageClient(config).ReadNestedQC(ctx, pb.ReadRequest_builder{Key: args[0]}.Build()).Aggregate(newestValue)
 	cancel()
 	if err != nil {
 		fmt.Printf("Nested read quorum call finished with error: %v\n", err)
@@ -415,8 +407,7 @@ func (repl) writeNestedMulticast(args []string, config pb.Config) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cfgCtx := config.Context(ctx)
-	resp, err := pb.WriteNestedMulticast(cfgCtx, pb.WriteRequest_builder{
+	resp, err := pb.NewStorageClient(config).WriteNestedMulticast(ctx, pb.WriteRequest_builder{
 		Key: args[0], Value: args[1], Time: timestamppb.Now(),
 	}.Build()).Majority()
 	cancel()
