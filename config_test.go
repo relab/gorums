@@ -200,12 +200,6 @@ func TestEmptyConfiguration(t *testing.T) {
 	var empty gorums.Config
 	populated := gorumstest.UnreachableConfig(t, nodeList...)
 
-	t.Run("ContextPanics", func(t *testing.T) {
-		assertPanic(t, "gorums: Context called on an empty configuration", func() {
-			_ = empty.Context(t.Context())
-		})
-	})
-
 	t.Run("ExtendReturnsError", func(t *testing.T) {
 		got, err := empty.Extend(nil)
 		if err == nil {
@@ -465,7 +459,7 @@ func TestConfigClose(t *testing.T) {
 	call := func(t *testing.T, node *gorums.Node) error {
 		t.Helper()
 		ctx := gorumstest.Context(t, 5*time.Second)
-		_, err := mockcall.RemoteCall(node.Context(ctx), "x")
+		_, err := mockcall.RemoteCall(ctx, node, "x")
 		return err
 	}
 	wantClosed := func(t *testing.T, node *gorums.Node) {
@@ -884,7 +878,7 @@ func TestConfigHostnameTLS(t *testing.T) {
 		t.Errorf("Address() = %q, want %q", got, addr)
 	}
 	ctx := gorumstest.Context(t, 5*time.Second)
-	resp, err := mockcall.RemoteCall(node.Context(ctx), "x")
+	resp, err := mockcall.RemoteCall(ctx, node, "x")
 	if err != nil {
 		t.Fatalf("RemoteCall over TLS to %s: %v", addr, err)
 	}

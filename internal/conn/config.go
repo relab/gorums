@@ -14,36 +14,6 @@ import (
 // operate on a configuration always return a new Config instance.
 type Config []*Node
 
-// ConfigContext is a context that carries a configuration for multicast or
-// quorum calls. It embeds context.Context and provides access to the configuration.
-//
-// Use [Config.Context] to create a ConfigContext from an existing context.
-type ConfigContext struct {
-	context.Context
-	cfg Config
-}
-
-// Config returns the configuration associated with this context.
-func (c ConfigContext) Config() Config {
-	return c.cfg
-}
-
-// Context creates a new ConfigContext from the given parent context
-// and this configuration. It panics if the configuration is empty.
-//
-// Example:
-//
-//	config, closeFn, _ := gorums.NewConfig(gorums.WithNodeList(addrs), dialOpts...)
-//	defer closeFn()
-//	cfgCtx := config.Context(context.Background())
-//	resp, err := paxos.Prepare(cfgCtx, req).Majority()
-func (c Config) Context(parent context.Context) *ConfigContext {
-	if len(c) == 0 {
-		panic("gorums: Context called on an empty configuration")
-	}
-	return &ConfigContext{Context: parent, cfg: c}
-}
-
 // NewConfig returns a new [Config] based on the provided nodes and dial
 // options, and a function that closes the configuration's connection pool.
 //

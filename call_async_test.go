@@ -20,7 +20,7 @@ func TestCallAsyncCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	responses := mockcall.QuorumCall(config.Context(ctx), "test").Async()
+	responses := mockcall.QuorumCall(ctx, config, "test").Async()
 
 	if _, err := responses.Majority(); err == nil {
 		t.Error("Majority() error = nil, want an error for a canceled context")
@@ -30,12 +30,12 @@ func TestCallAsyncCanceledContext(t *testing.T) {
 func BenchmarkAsyncQuorumCall(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9} {
 		config := gorumstest.Config(b, numNodes, gorumstest.EchoServer)
-		cfgCtx := config.Context(b.Context())
+		ctx := b.Context()
 
 		b.Run(fmt.Sprintf("AsyncThenMajority/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := mockcall.QuorumCall(cfgCtx, "test").Async()
+				responses := mockcall.QuorumCall(ctx, config, "test").Async()
 				if _, err := responses.Majority(); err != nil {
 					b.Fatalf("Async().Majority() error: %v", err)
 				}
@@ -46,7 +46,7 @@ func BenchmarkAsyncQuorumCall(b *testing.B) {
 		b.Run(fmt.Sprintf("BlockingMajority/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				_, err := mockcall.QuorumCall(cfgCtx, "test").Majority()
+				_, err := mockcall.QuorumCall(ctx, config, "test").Majority()
 				if err != nil {
 					b.Fatalf("Majority error: %v", err)
 				}
@@ -73,20 +73,20 @@ func TestOnewayAsyncWaitAfterContextEnds(t *testing.T) {
 		{
 			name: "Multicast",
 			async: func(ctx context.Context) *gorums.OnewayAsync {
-				return mockcall.Multicast(config.Context(ctx), "x").Async()
+				return mockcall.Multicast(ctx, config, "x").Async()
 			},
 			barrier: func() error {
-				_, err := mockcall.QuorumCall(config.Context(t.Context()), "x").All()
+				_, err := mockcall.QuorumCall(t.Context(), config, "x").All()
 				return err
 			},
 		},
 		{
 			name: "Unicast",
 			async: func(ctx context.Context) *gorums.OnewayAsync {
-				return mockcall.Unicast(node.Context(ctx), "x").Async()
+				return mockcall.Unicast(ctx, node, "x").Async()
 			},
 			barrier: func() error {
-				_, err := mockcall.RemoteCall(node.Context(t.Context()), "x")
+				_, err := mockcall.RemoteCall(t.Context(), node, "x")
 				return err
 			},
 		},
@@ -158,7 +158,7 @@ func TestCallAsyncTerminals(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 			ctx := gorumstest.Context(t, 2*time.Second)
-			responses := mockcall.QuorumCall(config.Context(ctx), "test").Async()
+			responses := mockcall.QuorumCall(ctx, config, "test").Async()
 
 			got, err := tt.collect(responses)
 			if !checkQuorumCall(t, err, nil) {
@@ -188,7 +188,7 @@ func TestCallAsyncSendsBeforeReturn(t *testing.T) {
 	})
 	ctx := gorumstest.Context(t, 2*time.Second)
 
-	_ = mockcall.QuorumCall(config.Context(ctx), "test").Async()
+	_ = mockcall.QuorumCall(ctx, config, "test").Async()
 
 	if got := gorumstest.Collect(t, 2*time.Second, numNodes, received); len(got) != numNodes {
 		t.Errorf("servers received %d requests before any reply was read, want %d", len(got), numNodes)
@@ -240,7 +240,7 @@ func TestCallAsyncAfterDispatchPanics(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 			ctx := gorumstest.Context(t, 2*time.Second)
-			call := mockcall.QuorumCall(config.Context(ctx), "test")
+			call := mockcall.QuorumCall(ctx, config, "test")
 			tt.dispatch(call)
 			assertPanic(t, tt.wantPrefix, func() { tt.then(call) })
 		})

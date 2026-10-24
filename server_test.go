@@ -101,8 +101,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 	node := gorumstest.Node(t, interceptorServerFn)
 
 	ctx := gorumstest.Context(t, 5*time.Second)
-	nodeCtx := node.Context(ctx)
-	res, err := mockcall.RemoteCall(nodeCtx, "client-")
+	res, err := mockcall.RemoteCall(ctx, node, "client-")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -139,8 +138,7 @@ func TestServerBufferSizesProcessRequests(t *testing.T) {
 			errs := make([]error, concurrency)
 			for i := range concurrency {
 				wg.Go(func() {
-					nodeCtx := node.Context(ctx)
-					_, errs[i] = mockcall.RemoteCall(nodeCtx, "")
+					_, errs[i] = mockcall.RemoteCall(ctx, node, "")
 				})
 			}
 			wg.Wait()
@@ -419,19 +417,19 @@ func createServerAndClient(t *testing.T) (*gorums.Server, *gorums.Server, gorums
 	return srv, clientSrv, cfg
 }
 
-func configContext(ctx gorums.ServerContext, client bool) (*gorums.ConfigContext, error) {
+func callConfig(ctx gorums.ServerContext, client bool) (gorums.Config, error) {
 	if client {
 		cfg := ctx.ConnectedClients()
 		if len(cfg) == 0 {
 			return nil, errors.New("ConnectedClients: expected non-empty config")
 		}
-		return cfg.Context(ctx), nil
+		return cfg, nil
 	}
 	cfg := ctx.PeerConfig()
 	if len(cfg) == 0 {
 		return nil, errors.New("PeerConfig: expected non-empty config")
 	}
-	return cfg.Context(ctx), nil
+	return cfg, nil
 }
 
 // outerChainedHandler returns an outer handler that fans out an inner quorum call
@@ -453,12 +451,13 @@ func outerChainedHandler(
 		// this stream can start while this handler waits for the inner-call
 		// responses.
 		ctx.Release()
-		configCtx, err := configContext(ctx, client)
+		config, err := callConfig(ctx, client)
 		if err != nil {
 			return nil, err
 		}
 		responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-			configCtx,
+			ctx,
+			config,
 			req,
 			innerMethod,
 		)
@@ -511,7 +510,7 @@ func TestServerSymmetricConfigurationRoutesQuorumCalls(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := gorumstest.Context(t, 2*time.Second)
 
-			responses := mockcall.QuorumCall(cfg.Context(ctx), "test")
+			responses := mockcall.QuorumCall(ctx, cfg, "test")
 
 			result, err := tt.call(responses.Responses)
 			if err != nil {
@@ -543,7 +542,7 @@ func TestServerSymmetricConfigurationRoutesMulticast(t *testing.T) {
 
 	cfg := servers[0].PeerConfig()
 	ctx := gorumstest.Context(t, 2*time.Second)
-	mockcall.MustMulticast(t, cfg.Context(ctx), "test")
+	mockcall.MustMulticast(t, ctx, cfg, "test")
 
 	waitWithTimeout(t, &wg)
 }
@@ -565,7 +564,7 @@ func TestServerHandlerCanMulticastViaConfig(t *testing.T) {
 			// this handler's dispatch lock.
 			ctx.Release()
 			if cfg := ctx.PeerConfig(); cfg.Size() == 3 {
-				err := gorumsimpl.Multicast(cfg.Context(t.Context()), pb.String("inner-multicast"), mock.StreamMethod).Send()
+				err := gorumsimpl.Multicast(t.Context(), cfg, pb.String("inner-multicast"), mock.StreamMethod).Send()
 				if err != nil {
 					return nil, err // failed to multicast
 				}
@@ -584,7 +583,7 @@ func TestServerHandlerCanMulticastViaConfig(t *testing.T) {
 
 	cfg := servers[0].PeerConfig()
 	ctx := gorumstest.Context(t, 2*time.Second)
-	mockcall.MustMulticast(t, cfg.Context(ctx), "outer-multicast")
+	mockcall.MustMulticast(t, ctx, cfg, "outer-multicast")
 
 	waitWithTimeout(t, &wg)
 }
@@ -634,7 +633,7 @@ func TestServerHandlerCanChainQuorumCallViaConfig(t *testing.T) {
 			cfg := servers[0].PeerConfig()
 			ctx := gorumstest.Context(t, 2*time.Second)
 
-			responses := mockcall.QuorumCall(cfg.Context(ctx), "outer-call")
+			responses := mockcall.QuorumCall(ctx, cfg, "outer-call")
 			result, err := tt.outerFn(responses.Responses)
 			if err != nil {
 				t.Fatalf("quorum call error: %v", err)
@@ -662,7 +661,7 @@ func TestServerHandlerCanChainQuorumCallViaConnectedClients(t *testing.T) {
 	awaitClientReady(t, srv, 1)
 
 	ctx := gorumstest.Context(t, 2*time.Second)
-	responses := mockcall.QuorumCall(cfgClient.Context(ctx), "outer-call")
+	responses := mockcall.QuorumCall(ctx, cfgClient, "outer-call")
 	result, err := responses.First()
 	if err != nil {
 		t.Fatalf("quorum call error: %v", err)
@@ -686,7 +685,7 @@ func TestServerHandlerCanMulticastViaConnectedClients(t *testing.T) {
 	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		t.Logf("SERVER received multicast: %v", in.Proto)
 		if cfg := ctx.ConnectedClients(); cfg.Size() == 1 {
-			err := gorumsimpl.Multicast(cfg.Context(t.Context()), pb.String("inner-call"), mock.StreamMethod).Send()
+			err := gorumsimpl.Multicast(t.Context(), cfg, pb.String("inner-call"), mock.StreamMethod).Send()
 			if err != nil {
 				return nil, err // failed to multicast
 			}
@@ -704,7 +703,7 @@ func TestServerHandlerCanMulticastViaConnectedClients(t *testing.T) {
 	awaitClientReady(t, srv, 1)
 
 	ctx := gorumstest.Context(t, 2*time.Second)
-	mockcall.MustMulticast(t, cfgClient.Context(ctx), "trigger")
+	mockcall.MustMulticast(t, ctx, cfgClient, "trigger")
 
 	waitWithTimeout(t, &wg)
 }
@@ -742,7 +741,7 @@ func TestServerLocalDispatchContention(t *testing.T) {
 		const iterations = 500
 		for i := range iterations {
 			ctx, cancel := context.WithTimeout(t.Context(), delay)
-			responses := mockcall.QuorumCall(cfg.Context(ctx), fmt.Sprintf("m-%d", i))
+			responses := mockcall.QuorumCall(ctx, cfg, fmt.Sprintf("m-%d", i))
 			if _, err := responses.Majority(); err != nil {
 				cancel()
 				t.Fatalf("iteration %d: Majority: %v", i, err)
@@ -750,7 +749,7 @@ func TestServerLocalDispatchContention(t *testing.T) {
 			cancel()
 
 			ctx, cancel = context.WithTimeout(t.Context(), delay)
-			responses = mockcall.QuorumCall(cfg.Context(ctx), fmt.Sprintf("a-%d", i))
+			responses = mockcall.QuorumCall(ctx, cfg, fmt.Sprintf("a-%d", i))
 			if _, err := responses.All(); err != nil {
 				cancel()
 				t.Fatalf("iteration %d: All: %v", i, err)
@@ -770,7 +769,7 @@ func TestServerLocalDispatchContention(t *testing.T) {
 		const iterations = 500
 		for i := range iterations {
 			ctx, cancel := context.WithTimeout(t.Context(), delay)
-			responses := mockcall.QuorumCall(cfg.Context(ctx), fmt.Sprintf("g-%d", i))
+			responses := mockcall.QuorumCall(ctx, cfg, fmt.Sprintf("g-%d", i))
 			if _, err := responses.First(); err != nil {
 				cancel()
 				t.Fatalf("iteration %d: First: %v", i, err)
@@ -778,7 +777,7 @@ func TestServerLocalDispatchContention(t *testing.T) {
 			cancel()
 
 			ctx, cancel = context.WithTimeout(t.Context(), delay)
-			responses = mockcall.QuorumCall(cfg.Context(ctx), fmt.Sprintf("ga-%d", i))
+			responses = mockcall.QuorumCall(ctx, cfg, fmt.Sprintf("ga-%d", i))
 			if _, err := responses.All(); err != nil {
 				cancel()
 				t.Fatalf("iteration %d: All: %v", i, err)
@@ -824,7 +823,7 @@ func TestServerLocalDispatchContentionSlowReplica(t *testing.T) {
 	// Step 1: First(1) succeeds from a remote response while the local reply is
 	// still blocked.
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
-	responses := mockcall.QuorumCall(cfg.Context(ctx), "first-call")
+	responses := mockcall.QuorumCall(ctx, cfg, "first-call")
 	result, err := responses.First()
 	cancel()
 	if err != nil {
@@ -845,7 +844,7 @@ func TestServerLocalDispatchContentionSlowReplica(t *testing.T) {
 	// Step 3: All(3) should succeed. The remote replies are expected promptly,
 	// and the delayed local reply should arrive once the blocker releases.
 	ctx, cancel = context.WithTimeout(t.Context(), 2*time.Second)
-	responses = mockcall.QuorumCall(cfg.Context(ctx), "all-call")
+	responses = mockcall.QuorumCall(ctx, cfg, "all-call")
 	result, err = responses.All()
 	cancel()
 	if err != nil {
@@ -1001,7 +1000,7 @@ func TestServerGracefulStopWithOpenClientStream(t *testing.T) {
 
 	call := func() error {
 		ctx := gorumstest.Context(t, 2*time.Second)
-		_, err := mockcall.RemoteCall(node.Context(ctx), "x")
+		_, err := mockcall.RemoteCall(ctx, node, "x")
 		return err
 	}
 	if err := call(); err != nil {
@@ -1048,7 +1047,7 @@ func TestServerBackChannelNestedCallBeforeRelease(t *testing.T) {
 		}
 		nctx, cancel := context.WithTimeout(t.Context(), time.Second)
 		defer cancel()
-		resp, err := mockcall.EchoRemoteCall(clientCfg.Nodes()[0].Context(nctx), "nested")
+		resp, err := mockcall.EchoRemoteCall(nctx, clientCfg.Nodes()[0], "nested")
 		if err != nil {
 			return nil, err
 		}
@@ -1070,7 +1069,7 @@ func TestServerBackChannelNestedCallBeforeRelease(t *testing.T) {
 	call := func() {
 		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 		defer cancel()
-		_, callErr := mockcall.RemoteCall(clientNode.Context(ctx), "bc")
+		_, callErr := mockcall.RemoteCall(ctx, clientNode, "bc")
 		errCh <- callErr
 	}
 	go call()
@@ -1110,7 +1109,7 @@ func TestServerHandlerNestedCallBeforeRelease(t *testing.T) {
 		}
 		nctx, cancel := context.WithTimeout(t.Context(), time.Second)
 		defer cancel()
-		resp, err := mockcall.EchoRemoteCall(clients.Nodes()[0].Context(nctx), "nested")
+		resp, err := mockcall.EchoRemoteCall(nctx, clients.Nodes()[0], "nested")
 		if err != nil {
 			return nil, err
 		}
@@ -1133,7 +1132,7 @@ func TestServerHandlerNestedCallBeforeRelease(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
-	mockcall.MustRemoteCall(t, cfg.Nodes()[0].Context(ctx), "trigger")
+	mockcall.MustRemoteCall(t, ctx, cfg.Nodes()[0], "trigger")
 }
 
 // senderRecord is the sender ID that a receiving server's handler observed.
@@ -1165,7 +1164,7 @@ func TestServerSenderID(t *testing.T) {
 		}
 		gorumstest.WaitForPeers(t, servers)
 		for _, srv := range servers {
-			mockcall.MustMulticast(t, srv.PeerConfig().Context(gorumstest.Context(t, 2*time.Second)), "sender")
+			mockcall.MustMulticast(t, gorumstest.Context(t, 2*time.Second), srv.PeerConfig(), "sender")
 			for _, r := range gorumstest.Collect(t, 2*time.Second, len(servers), records) {
 				if r.sender != srv.NodeID() {
 					t.Errorf("server %d: SenderID() = %d, want %d", r.receiver, r.sender, srv.NodeID())
@@ -1184,7 +1183,7 @@ func TestServerSenderID(t *testing.T) {
 			return srv
 		}
 		cfg := gorumstest.Config(t, 1, srvFn, opts...)
-		mockcall.MustMulticast(t, cfg.Context(gorumstest.Context(t, 2*time.Second)), "sender")
+		mockcall.MustMulticast(t, gorumstest.Context(t, 2*time.Second), cfg, "sender")
 		return gorumstest.Collect(t, 2*time.Second, 1, records)[0].sender
 	}
 
@@ -1210,7 +1209,7 @@ func TestServerSenderID(t *testing.T) {
 		records := make(chan senderRecord, 1)
 		srv.RegisterHandler(mock.TestMethod, senderRecorder(0, records))
 		awaitClientReady(t, srv, 1)
-		mockcall.MustMulticast(t, cfg.Context(gorumstest.Context(t, 2*time.Second)), "sender")
+		mockcall.MustMulticast(t, gorumstest.Context(t, 2*time.Second), cfg, "sender")
 		got := gorumstest.Collect(t, 2*time.Second, 1, records)[0].sender
 		if want := srv.ConnectedClients().NodeIDs()[0]; got != want {
 			t.Errorf("SenderID() = %d, want %d (the client's assigned ID)", got, want)
@@ -1221,7 +1220,7 @@ func TestServerSenderID(t *testing.T) {
 		records := make(chan senderRecord, 1)
 		clientSrv.RegisterHandler(mock.TestMethod, senderRecorder(0, records))
 		awaitClientReady(t, srv, 1)
-		mockcall.MustMulticast(t, srv.ConnectedClients().Context(gorumstest.Context(t, 2*time.Second)), "sender")
+		mockcall.MustMulticast(t, gorumstest.Context(t, 2*time.Second), srv.ConnectedClients(), "sender")
 		got := gorumstest.Collect(t, 2*time.Second, 1, records)[0].sender
 		if want := cfg.NodeIDs()[0]; got != want {
 			t.Errorf("SenderID() = %d, want %d (the client's ID for the server)", got, want)
@@ -1319,7 +1318,7 @@ func TestServerIdentityRequiresTLS(t *testing.T) {
 		return srv
 	}, gorums.WithMetadata(metadata.Pairs("gorums-node-id", "2")))
 	ctx := gorumstest.Context(t, 500*time.Millisecond)
-	if _, err := mockcall.RemoteCall(node.Context(ctx), "hello"); err == nil {
+	if _, err := mockcall.RemoteCall(ctx, node, "hello"); err == nil {
 		t.Fatal("call claiming a TLS peer ID over an insecure stream succeeded")
 	}
 	if !gorumstest.WaitUntil(t, 3*time.Second, func() bool {
@@ -1446,7 +1445,7 @@ func TestServerIdentityRefusals(t *testing.T) {
 	call := func(t *testing.T, node *gorums.Node, timeout time.Duration) error {
 		t.Helper()
 		ctx := gorumstest.Context(t, timeout)
-		_, err := mockcall.RemoteCall(node.Context(ctx), "hello")
+		_, err := mockcall.RemoteCall(ctx, node, "hello")
 		return err
 	}
 	client := func(t *testing.T, srv *gorums.Server, opts ...gorums.DialOption) *gorums.Node {

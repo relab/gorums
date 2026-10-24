@@ -2,6 +2,7 @@ package impl
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/relab/gorums/internal/conn"
@@ -9,6 +10,70 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
+
+// TestCallConstructorsPanic verifies that each call constructor panics when
+// it has no target: a multi-node constructor on a nil or empty configuration,
+// and a single-node constructor on a nil node.
+func TestCallConstructorsPanic(t *testing.T) {
+	const method = "test.Method"
+	req := pb.String("hello")
+	tests := []struct {
+		name      string
+		call      func()
+		wantPanic string
+	}{
+		{
+			name:      "QuorumCall/NilConfig",
+			call:      func() { QuorumCall[*pb.StringValue, *pb.StringValue](t.Context(), nil, req, method) },
+			wantPanic: "gorums: QuorumCall called on an empty configuration",
+		},
+		{
+			name:      "QuorumCall/EmptyConfig",
+			call:      func() { QuorumCall[*pb.StringValue, *pb.StringValue](t.Context(), Config{}, req, method) },
+			wantPanic: "gorums: QuorumCall called on an empty configuration",
+		},
+		{
+			name:      "QuorumCallStream/NilConfig",
+			call:      func() { QuorumCallStream[*pb.StringValue, *pb.StringValue](t.Context(), nil, req, method) },
+			wantPanic: "gorums: QuorumCallStream called on an empty configuration",
+		},
+		{
+			name:      "QuorumCallStream/EmptyConfig",
+			call:      func() { QuorumCallStream[*pb.StringValue, *pb.StringValue](t.Context(), Config{}, req, method) },
+			wantPanic: "gorums: QuorumCallStream called on an empty configuration",
+		},
+		{
+			name:      "Multicast/NilConfig",
+			call:      func() { Multicast(t.Context(), nil, req, method) },
+			wantPanic: "gorums: Multicast called on an empty configuration",
+		},
+		{
+			name:      "Multicast/EmptyConfig",
+			call:      func() { Multicast(t.Context(), Config{}, req, method) },
+			wantPanic: "gorums: Multicast called on an empty configuration",
+		},
+		{
+			name:      "RemoteCall/NilNode",
+			call:      func() { _, _ = RemoteCall[*pb.StringValue, *pb.StringValue](t.Context(), nil, req, method) },
+			wantPanic: "gorums: RemoteCall called on a nil node",
+		},
+		{
+			name:      "Unicast/NilNode",
+			call:      func() { Unicast(t.Context(), nil, req, method) },
+			wantPanic: "gorums: Unicast called on a nil node",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if got := fmt.Sprint(recover()); got != tt.wantPanic {
+					t.Errorf("panic = %q, want %q", got, tt.wantPanic)
+				}
+			}()
+			tt.call()
+		})
+	}
+}
 
 // TestCallOnewaySkipNode verifies how a one-way call reports a node that a
 // request transform skips with [ErrSkipNode]: multicast drops the skipped node
@@ -46,7 +111,7 @@ func TestCallOnewaySkipNode(t *testing.T) {
 
 	t.Run("Multicast/SkippedNodeIsNotAnError", func(t *testing.T) {
 		config, recorders := newConfig(0, 1, 2, 3)
-		err := Multicast(config.Context(t.Context()), pb.String("hello"), "test.Method").Intercept(skipNode).Send()
+		err := Multicast(t.Context(), config, pb.String("hello"), "test.Method").Intercept(skipNode).Send()
 		if err != nil {
 			t.Fatalf("Send() = %v, want nil", err)
 		}
@@ -59,7 +124,7 @@ func TestCallOnewaySkipNode(t *testing.T) {
 
 	t.Run("Multicast/OnlyFailedNodeIsAnError", func(t *testing.T) {
 		config, _ := newConfig(3, 1, 2, 3)
-		err := Multicast(config.Context(t.Context()), pb.String("hello"), "test.Method").Intercept(skipNode).Send()
+		err := Multicast(t.Context(), config, pb.String("hello"), "test.Method").Intercept(skipNode).Send()
 		var qcErr conn.QuorumCallError
 		if !errors.As(err, &qcErr) {
 			t.Fatalf("Send() = %v, want a QuorumCallError", err)
@@ -80,7 +145,7 @@ func TestCallOnewaySkipNode(t *testing.T) {
 
 	t.Run("Unicast/SkippedNodeIsAnError", func(t *testing.T) {
 		config, recorders := newConfig(0, skipID)
-		err := Unicast(config[0].Context(t.Context()), pb.String("hello"), "test.Method").Intercept(skipNode).Send()
+		err := Unicast(t.Context(), config[0], pb.String("hello"), "test.Method").Intercept(skipNode).Send()
 		if !errors.Is(err, ErrSkipNode) {
 			t.Fatalf("Send() = %v, want %v", err, ErrSkipNode)
 		}

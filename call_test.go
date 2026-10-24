@@ -32,7 +32,7 @@ func TestOnewayNoResourceLeak(t *testing.T) {
 	cfg := servers[0].PeerConfig()
 	ctx := gorumstest.Context(t, 5*time.Second)
 	for i := range 1000 {
-		if err := mockcall.Multicast(cfg.Context(ctx), fmt.Sprintf("mc-%d", i)).Send(); err != nil {
+		if err := mockcall.Multicast(ctx, cfg, fmt.Sprintf("mc-%d", i)).Send(); err != nil {
 			t.Fatalf("Multicast %d: %v", i, err)
 		}
 	}
@@ -67,7 +67,7 @@ func TestOnewayDroppedHandleDoesNotDispatch(t *testing.T) {
 	cfg := servers[0].PeerConfig()
 	ctx := gorumstest.Context(t, 2*time.Second)
 	// Drop the handle without consuming it: nothing must be sent.
-	_ = mockcall.Multicast(cfg.Context(ctx), "dropped")
+	_ = mockcall.Multicast(ctx, cfg, "dropped")
 	// Allow time for any erroneous dispatch to reach the servers.
 	time.Sleep(200 * time.Millisecond)
 	if got := received.Load(); got != 0 {
@@ -113,7 +113,7 @@ func TestOnewayCallDoubleDispatchPanics(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := gorumstest.Context(t, 2*time.Second)
-			call := mockcall.Multicast(cfg.Context(ctx), "x")
+			call := mockcall.Multicast(ctx, cfg, "x")
 			defer func() {
 				if recover() == nil {
 					t.Errorf("%s did not panic", tt.name)
@@ -146,7 +146,7 @@ func TestOnewayCallAsync(t *testing.T) {
 	// could not proceed until each multicast had reached all three nodes.
 	handles := make([]*gorums.OnewayAsync, calls)
 	for i := range handles {
-		handles[i] = mockcall.Multicast(cfg.Context(ctx), fmt.Sprintf("async-%d", i)).Async()
+		handles[i] = mockcall.Multicast(ctx, cfg, fmt.Sprintf("async-%d", i)).Async()
 	}
 	for i, h := range handles {
 		if err := h.Wait(); err != nil {
@@ -172,10 +172,10 @@ func TestOnewayCallAsyncReportsSendError(t *testing.T) {
 	const numServers = 3
 	var stopNodes func(...int)
 	config := gorumstest.Config(t, numServers, nil, gorumstest.WithStopFunc(t, &stopNodes))
-	ctx := config.Context(t.Context())
+	ctx := t.Context()
 
 	// Warm up so the streams are established before they are torn down.
-	mockcall.MustMulticast(t, ctx, "warmup")
+	mockcall.MustMulticast(t, ctx, config, "warmup")
 	stopNodes() // stop all servers
 
 	// Retry until the torn-down streams are observed, as the quorum-call
@@ -183,7 +183,7 @@ func TestOnewayCallAsyncReportsSendError(t *testing.T) {
 	// instant the server stops.
 	var err error
 	for range 5 {
-		if err = mockcall.Multicast(ctx, "x").Async().Wait(); err != nil {
+		if err = mockcall.Multicast(ctx, config, "x").Async().Wait(); err != nil {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -202,7 +202,7 @@ func TestOnewayCallAsyncReportsSendError(t *testing.T) {
 func TestCallInterceptAfterDispatchPanics(t *testing.T) {
 	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 5*time.Second)
-	call := mockcall.QuorumCall(config.Context(ctx), "x")
+	call := mockcall.QuorumCall(ctx, config, "x")
 	if _, err := call.Majority(); err != nil {
 		t.Fatalf("Majority: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestCallInterceptAfterDispatchPanics(t *testing.T) {
 func TestCallInterceptAfterResultsPanics(t *testing.T) {
 	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 5*time.Second)
-	call := mockcall.QuorumCall(config.Context(ctx), "x")
+	call := mockcall.QuorumCall(ctx, config, "x")
 	_ = call.Results()
 	defer func() {
 		if recover() == nil {
@@ -236,7 +236,7 @@ func TestCallInterceptAfterResultsPanics(t *testing.T) {
 func TestCallInterceptNilIgnored(t *testing.T) {
 	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 5*time.Second)
-	resp, err := mockcall.QuorumCall(config.Context(ctx), "test").
+	resp, err := mockcall.QuorumCall(ctx, config, "test").
 		Intercept(nil).
 		Majority()
 	if err != nil {
@@ -251,8 +251,7 @@ func TestRemoteCallSuccess(t *testing.T) {
 	node := gorumstest.Node(t, nil)
 
 	ctx := gorumstest.Context(t, 5*time.Second)
-	nodeCtx := node.Context(ctx)
-	response, err := mockcall.RemoteCall(nodeCtx, "")
+	response, err := mockcall.RemoteCall(ctx, node, "")
 	if err != nil {
 		t.Fatalf("Unexpected error, got: %v, want: %v", err, nil)
 	}
@@ -268,8 +267,7 @@ func TestRemoteCallDownedNode(t *testing.T) {
 	}))
 
 	ctx := gorumstest.Context(t, 5*time.Second)
-	nodeCtx := node.Context(ctx)
-	response, err := mockcall.RemoteCall(nodeCtx, "")
+	response, err := mockcall.RemoteCall(ctx, node, "")
 	if err == nil {
 		t.Fatalf("Expected error, got: %v, want: %v", err, fmt.Errorf("rpc error: code = Unavailable desc = stream is down"))
 	}
@@ -284,8 +282,7 @@ func TestRemoteCallTimedOut(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 0*time.Second)
 	time.Sleep(50 * time.Millisecond)
 	defer cancel()
-	nodeCtx := node.Context(ctx)
-	response, err := mockcall.RemoteCall(nodeCtx, "")
+	response, err := mockcall.RemoteCall(ctx, node, "")
 	if err == nil {
 		t.Fatalf("Expected error, got: %v, want: %v", err, fmt.Errorf("context deadline exceeded"))
 	}
@@ -298,8 +295,7 @@ func TestRemoteCallTypeMismatch(t *testing.T) {
 	node := gorumstest.Node(t, nil)
 
 	ctx := gorumstest.Context(t, 5*time.Second)
-	nodeCtx := node.Context(ctx)
-	response, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.Int32Value](nodeCtx, pb.String(""), mock.TestMethod)
+	response, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.Int32Value](ctx, node, pb.String(""), mock.TestMethod)
 	if err != gorums.ErrTypeMismatch {
 		t.Fatalf("Expected error, got: %v, want: %v", err, gorums.ErrTypeMismatch)
 	}
@@ -316,7 +312,7 @@ func TestRemoteCallConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	for range concurrency {
 		wg.Go(func() {
-			_, err := mockcall.RemoteCall(node.Context(t.Context()), "")
+			_, err := mockcall.RemoteCall(t.Context(), node, "")
 			if err != nil {
 				errCh <- err
 			}

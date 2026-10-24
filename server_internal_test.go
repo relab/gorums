@@ -544,7 +544,7 @@ func TestConnectedClientsServerCallsClient(t *testing.T) {
 			// that wait would stop this connection from reading further
 			// inbound frames.
 			ctx.Release()
-			if err := impl.Multicast(cfg.Context(ctx), pb.String("ping"), mock.StreamMethod).Send(); err != nil {
+			if err := impl.Multicast(ctx, cfg, pb.String("ping"), mock.StreamMethod).Send(); err != nil {
 				t.Errorf("back-channel Multicast: %v", err)
 			}
 		}
@@ -572,7 +572,7 @@ func TestConnectedClientsServerCallsClient(t *testing.T) {
 
 	// Trigger: client multicasts TestMethod to the server; server fans it back via ConnectedClients.
 	ctx := testTimeoutContext(t, 2*time.Second)
-	if err := impl.Multicast(clientConfig.Context(ctx), pb.String("trigger"), mock.TestMethod).Send(); err != nil {
+	if err := impl.Multicast(ctx, clientConfig, pb.String("trigger"), mock.TestMethod).Send(); err != nil {
 		t.Fatalf("Multicast error: %v", err)
 	}
 

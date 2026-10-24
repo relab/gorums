@@ -71,15 +71,31 @@ func (c *CallContext[Req, Resp]) intercept(ics ...ClientInterceptor[Req, Resp]) 
 	}
 }
 
+// requireConfig panics if config is empty; name is the call constructor that
+// received config.
+func requireConfig(name string, config Config) {
+	if len(config) == 0 {
+		panic("gorums: " + name + " called on an empty configuration")
+	}
+}
+
+// requireNode panics if node is nil; name is the call constructor that
+// received node.
+func requireNode(name string, node *Node) {
+	if node == nil {
+		panic("gorums: " + name + " called on a nil node")
+	}
+}
+
 // newQuorumCallContext constructs a CallContext for quorum calls (two-way, always returns responses).
 // A response channel is always created; streaming controls both its buffer size and the response iterator type.
 func newQuorumCallContext[Req, Resp proto.Message](
-	ctx *ConfigContext,
+	ctx context.Context,
+	config Config,
 	req Req,
 	method string,
 	streaming bool,
 ) *CallContext[Req, Resp] {
-	config := ctx.Config()
 	n := config.Size()
 	if streaming {
 		n *= 10

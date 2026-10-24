@@ -256,7 +256,7 @@ func TestStreamDedupCallBeforePeerConnectsFailsFast(t *testing.T) {
 
 	ctx := gorumstest.Context(t, 5*time.Second)
 	start := time.Now()
-	_, err = mockcall.QuorumCall(gorums.Config{node1}.Context(ctx), "hello").Threshold(1)
+	_, err = mockcall.QuorumCall(ctx, gorums.Config{node1}, "hello").Threshold(1)
 	elapsed := time.Since(start)
 	if err == nil {
 		t.Fatal("QuorumCall to a disconnected born-shared node succeeded, want stream-down failure")
@@ -296,7 +296,7 @@ func TestStreamDedupRetainedConfigurationsRemainUsable(t *testing.T) {
 		"Subset": retainedSubset,
 	} {
 		t.Run(name, func(t *testing.T) {
-			resp, err := mockcall.QuorumCall(cfg.Context(ctx), "hello").Majority()
+			resp, err := mockcall.QuorumCall(ctx, cfg, "hello").Majority()
 			if err != nil {
 				t.Fatalf("QuorumCall: %v", err)
 			}
@@ -315,8 +315,8 @@ func TestStreamDedupMulticastAndQuorumCall(t *testing.T) {
 
 	ctx := gorumstest.Context(t, 3*time.Second)
 	cfg := servers[0].PeerConfig()
-	mockcall.MustMulticast(t, cfg.Context(ctx), "hello")
-	resp, err := mockcall.QuorumCall(cfg.Context(ctx), "hello").Majority()
+	mockcall.MustMulticast(t, ctx, cfg, "hello")
+	resp, err := mockcall.QuorumCall(ctx, cfg, "hello").Majority()
 	if err != nil {
 		t.Fatalf("QuorumCall: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestStreamDedupOwnerReconnectHealsBorrower(t *testing.T) {
 	recovered := gorumstest.WaitUntil(t, 10*time.Second, func() bool {
 		callCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		resp, err := mockcall.QuorumCall(gorums.Config{owner}.Context(callCtx), "hello").Threshold(1)
+		resp, err := mockcall.QuorumCall(callCtx, gorums.Config{owner}, "hello").Threshold(1)
 		return err == nil && resp.GetValue() == "echo: hello"
 	})
 	if !recovered {
@@ -397,7 +397,7 @@ func TestStreamDedupChainedQuorumCall(t *testing.T) {
 	}
 
 	ctx := gorumstest.Context(t, 3*time.Second)
-	res, err := mockcall.QuorumCall(servers[2].PeerConfig().Context(ctx), "outer-call").Majority()
+	res, err := mockcall.QuorumCall(ctx, servers[2].PeerConfig(), "outer-call").Majority()
 	if err != nil {
 		t.Fatalf("QuorumCall: %v", err)
 	}
@@ -433,7 +433,7 @@ func TestStreamDedupBorrowerSlowHandlerDoesNotBlockOwnCalls(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 				n2 := gorumstest.PeerNode(t, servers[0].PeerConfig(), 2)
-				_, _ = mockcall.RemoteCall(n2.Context(ctx), "x")
+				_, _ = mockcall.RemoteCall(ctx, n2, "x")
 			}()
 			<-started
 
@@ -442,7 +442,7 @@ func TestStreamDedupBorrowerSlowHandlerDoesNotBlockOwnCalls(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
 			start := time.Now()
-			resp, err := mockcall.EchoRemoteCall(n1.Context(ctx), "hi")
+			resp, err := mockcall.EchoRemoteCall(ctx, n1, "hi")
 			t.Logf("dedup=%v node2->node1 echo: resp=%q err=%v elapsed=%v shared=%v", dedup, resp.GetValue(), err, time.Since(start), n1.IsShared())
 			if err != nil {
 				t.Errorf("node 2 -> node 1 echo failed while node 2 handles a node-1 request: %v", err)
@@ -478,7 +478,7 @@ func TestStreamDedupOwnerSlowHandlerDoesNotBlockOwnCalls(t *testing.T) {
 				go func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					defer cancel()
-					_, _ = mockcall.RemoteCall(n1.Context(ctx), "x")
+					_, _ = mockcall.RemoteCall(ctx, n1, "x")
 				}()
 			}
 			<-started
@@ -488,7 +488,7 @@ func TestStreamDedupOwnerSlowHandlerDoesNotBlockOwnCalls(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
 			start := time.Now()
-			resp, err := mockcall.EchoRemoteCall(n2.Context(ctx), "hi")
+			resp, err := mockcall.EchoRemoteCall(ctx, n2, "hi")
 			t.Logf("dedup=%v node1->node2 echo: resp=%q err=%v elapsed=%v", dedup, resp.GetValue(), err, time.Since(start))
 			if err != nil {
 				t.Errorf("node 1 -> node 2 echo failed while node 1 handles node-2 requests: %v", err)
@@ -511,7 +511,7 @@ func TestStreamDedupNestedCallToRequesterWithoutRelease(t *testing.T) {
 				n1 := gorumstest.PeerNode(t, ctx.PeerConfig(), 1)
 				cctx, cancel := context.WithTimeout(ctx, time.Second)
 				defer cancel()
-				resp, err := mockcall.EchoRemoteCall(n1.Context(cctx), "inner")
+				resp, err := mockcall.EchoRemoteCall(cctx, n1, "inner")
 				if err != nil {
 					return nil, err
 				}
@@ -524,7 +524,7 @@ func TestStreamDedupNestedCallToRequesterWithoutRelease(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			start := time.Now()
-			resp, err := mockcall.RemoteCall(n2.Context(ctx), "x")
+			resp, err := mockcall.RemoteCall(ctx, n2, "x")
 			t.Logf("dedup=%v nested: resp=%q err=%v elapsed=%v", dedup, resp.GetValue(), err, time.Since(start))
 			if err != nil {
 				t.Errorf("nested call to requester failed: %v", err)
@@ -556,7 +556,7 @@ func TestStreamDedupInflightCallFailsWithStreamDown(t *testing.T) {
 	go func() {
 		c, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
-		_, err := mockcall.RemoteCall(n1.Context(c), "x")
+		_, err := mockcall.RemoteCall(c, n1, "x")
 		errc <- err
 	}()
 	<-started

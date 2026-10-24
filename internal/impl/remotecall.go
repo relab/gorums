@@ -1,17 +1,19 @@
 package impl
 
 import (
+	"context"
+
 	"github.com/relab/gorums/internal/conn"
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/protobuf/proto"
 )
 
-// RemoteCall executes a remote procedure call on the node.
+// RemoteCall executes a remote procedure call on node. It panics if node is nil.
 //
 // This method should be used by generated code only.
-func RemoteCall[Req, Resp proto.Message](ctx *NodeContext, req Req, method string) (Resp, error) {
+func RemoteCall[Req, Resp proto.Message](ctx context.Context, node *Node, req Req, method string) (Resp, error) {
+	requireNode("RemoteCall", node)
 	responseChan := make(chan NodeResponse[*stream.Message], 1)
-	node := ctx.Node()
 	transport := conn.NodeTransport(node)
 	reqMsg, err := stream.NewMessage(ctx, transport.NextMsgID(), method, req)
 	if err != nil {

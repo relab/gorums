@@ -69,7 +69,7 @@ func TestCustomLoggingInterceptor(t *testing.T) {
 	ctx := gorumstest.Context(t, 2*time.Second)
 
 	// Use the custom logging interceptor from this external package
-	responses := mockcall.QuorumCall(config.Context(ctx), "test").Intercept(LoggingInterceptor[*pb.StringValue, *pb.StringValue])
+	responses := mockcall.QuorumCall(ctx, config, "test").Intercept(LoggingInterceptor[*pb.StringValue, *pb.StringValue])
 
 	result, err := responses.Majority()
 	if err != nil {
@@ -87,7 +87,7 @@ func TestCustomFilterInterceptor(t *testing.T) {
 
 	// Use a filter interceptor that only keeps responses from node 1
 	// (In practice, this would filter based on response content)
-	responses := mockcall.QuorumCall(config.Context(ctx), "test").Intercept(FilterInterceptor[*pb.StringValue](
+	responses := mockcall.QuorumCall(ctx, config, "test").Intercept(FilterInterceptor[*pb.StringValue](
 		func(resp gorums.NodeResponse[*pb.StringValue]) bool {
 			return resp.Err == nil // Only keep successful responses
 		},
@@ -110,7 +110,7 @@ func TestInterceptorChaining(t *testing.T) {
 	var count int
 
 	// Chain multiple custom interceptors
-	responses := mockcall.QuorumCall(config.Context(ctx), "test").Intercept(
+	responses := mockcall.QuorumCall(ctx, config, "test").Intercept(
 		LoggingInterceptor[*pb.StringValue, *pb.StringValue],
 		CountingInterceptor[*pb.StringValue, *pb.StringValue](&count),
 	)
@@ -137,7 +137,7 @@ func TestCustomInterceptorWithMapRequest(t *testing.T) {
 	var count int
 
 	// Mix custom interceptor with built-in MapRequest
-	responses := mockcall.QuorumCall(config.Context(ctx), "test").Intercept(
+	responses := mockcall.QuorumCall(ctx, config, "test").Intercept(
 		// Custom: count responses
 		CountingInterceptor[*pb.StringValue, *pb.StringValue](&count),
 		// Built-in: transform request (identity transform for this test)
@@ -169,13 +169,13 @@ func TestCustomInterceptorWithMapRequest(t *testing.T) {
 func BenchmarkQuorumCallMapRequest(b *testing.B) {
 	for _, numNodes := range []int{3, 7, 13} {
 		config := gorumstest.Config(b, numNodes, gorumstest.EchoServer)
-		cfgCtx := config.Context(b.Context())
+		ctx := b.Context()
 
 		// Baseline: no interceptors — single marshal, shared message
 		b.Run(fmt.Sprintf("NoTransform/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := mockcall.QuorumCall(cfgCtx, "benchmark payload")
+				responses := mockcall.QuorumCall(ctx, config, "benchmark payload")
 				if _, err := responses.Majority(); err != nil {
 					b.Fatal(err)
 				}
@@ -186,7 +186,7 @@ func BenchmarkQuorumCallMapRequest(b *testing.B) {
 		b.Run(fmt.Sprintf("MapRequestIdentity/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := mockcall.QuorumCall(cfgCtx, "benchmark payload").Intercept(
+				responses := mockcall.QuorumCall(ctx, config, "benchmark payload").Intercept(
 					gorums.MapRequest[*pb.StringValue, *pb.StringValue](
 						func(req *pb.StringValue, _ *gorums.Node) *pb.StringValue {
 							return req
@@ -203,7 +203,7 @@ func BenchmarkQuorumCallMapRequest(b *testing.B) {
 		b.Run(fmt.Sprintf("MapRequestPerNode/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := mockcall.QuorumCall(cfgCtx, "benchmark payload").Intercept(
+				responses := mockcall.QuorumCall(ctx, config, "benchmark payload").Intercept(
 					gorums.MapRequest[*pb.StringValue, *pb.StringValue](
 						func(req *pb.StringValue, n *gorums.Node) *pb.StringValue {
 							return pb.String(fmt.Sprintf("%s-node-%d", req.GetValue(), n.ID()))
