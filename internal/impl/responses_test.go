@@ -341,3 +341,26 @@ func TestResponseSeqMethods(t *testing.T) {
 		}
 	})
 }
+
+func TestResponsesThresholdPanics(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(r *Responses[*pb.StringValue])
+		want string
+	}{
+		{"Threshold0", func(r *Responses[*pb.StringValue]) { _, _ = r.Threshold(0) }, "gorums: Threshold called with non-positive threshold 0"},
+		{"ThresholdNegative", func(r *Responses[*pb.StringValue]) { _, _ = r.Threshold(-1) }, "gorums: Threshold called with non-positive threshold -1"},
+		{"AsyncThreshold0", func(r *Responses[*pb.StringValue]) { r.AsyncThreshold(0) }, "gorums: AsyncThreshold called with non-positive threshold 0"},
+		{"Correctable0", func(r *Responses[*pb.StringValue]) { r.Correctable(0) }, "gorums: Correctable called with non-positive threshold 0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, nil)
+			r := newResponses(callCtx)
+			checkPanic(t, tt.want, func() { tt.call(r) })
+			if callCtx.dispatched.Load() {
+				t.Error("call was dispatched before the panic")
+			}
+		})
+	}
+}

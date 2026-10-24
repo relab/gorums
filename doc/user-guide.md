@@ -492,6 +492,7 @@ The `*gorums.Responses[T]` type provides built-in *terminal methods* for common 
 | `.MatchingCertificate(n, key)` | Agreed response and its nodes | n nodes send responses with equal keys |
 
 Each terminal method blocks until its condition is met or the context is canceled, then returns a single aggregated result and an error.
+`Threshold(n)` panics if `n` is not positive.
 
 ### Using Terminal Methods
 
@@ -695,6 +696,9 @@ reply, level, err := corr.Get()
 <-corr.Watch(3)  // Wait for higher level
 reply, level, err = corr.Get()
 ```
+
+`AsyncThreshold(n)` and `Correctable(n)` panic if `n` is not positive.
+They panic before they send any request.
 
 ### Send-Timing Model
 

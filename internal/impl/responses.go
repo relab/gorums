@@ -170,7 +170,9 @@ func (r *Responses[Resp]) All() (Resp, error) {
 // It returns the first response once the threshold is reached.
 // A response skipped by a request transform ([ErrSkipNode]) counts toward
 // neither the successful-response count nor the reported node errors.
+// It panics if threshold is not positive.
 func (r *Responses[Resp]) Threshold(threshold int) (resp Resp, err error) {
+	checkThreshold("Threshold", threshold)
 	var (
 		count int
 		errs  []conn.NodeError
