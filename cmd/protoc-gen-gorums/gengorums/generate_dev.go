@@ -31,6 +31,6 @@ func generateDevFile(gen *protogen.Plugin, file *protogen.File, gorumsType strin
 	case clientEntry, callTypeName(gorums.E_Multicast), callTypeName(gorums.E_Unicast):
 		genReferenceImports(g, file.Services)
 	}
-	genGorumsType(g, file.Services, gorumsType)
+	genGorumsType(gen, file, g, gorumsType)
 	genGorumsMethods(g, file, gorumsType)
 }
