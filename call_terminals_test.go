@@ -90,7 +90,7 @@ func TestCallTerminalsStream(t *testing.T) {
 			config := gorumstest.Config(t, 3, gorumstest.StreamServer(5*time.Millisecond))
 			ctx := gorumstest.Context(t, tt.timeout)
 
-			ids, err := tt.run(mockcall.QuorumCallStream(config.Context(ctx), "test"))
+			ids, err := tt.run(mockcall.QuorumCallStream(ctx, config, "test"))
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("error = %v, want %v", err, tt.wantErr)
 			}
@@ -126,12 +126,12 @@ func TestCallTerminalsAggregateFunc(t *testing.T) {
 	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 2*time.Second)
 
-	ok, err := mockcall.QuorumCall(config.Context(ctx), "test").Aggregate(countAtLeast(2))
+	ok, err := mockcall.QuorumCall(ctx, config, "test").Aggregate(countAtLeast(2))
 	if err != nil || !ok {
 		t.Errorf("Aggregate(countAtLeast(2)) = %v, %v, want true, nil", ok, err)
 	}
 
-	value, err := mockcall.QuorumCall(config.Context(ctx), "test").Aggregate(
+	value, err := mockcall.QuorumCall(ctx, config, "test").Aggregate(
 		func(seq gorums.ResponseSeq[*pb.StringValue]) (string, error) {
 			for resp := range seq.IgnoreErrors() {
 				return resp.Value.GetValue(), nil

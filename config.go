@@ -59,12 +59,6 @@ type ID = conn.ID
 // performed. Nodes are created as part of a [Config] built with [NewConfig].
 type Node = conn.Node
 
-// NodeContext is a context that carries a node for unicast and RPC calls.
-// It embeds context.Context and provides access to the Node.
-//
-// Use [Node.Context] to create a NodeContext from an existing context.
-type NodeContext = conn.NodeContext
-
 // ByID compares nodes by their identifier in increasing order.
 // It is compatible with [slices.SortFunc] and [Config.Sort].
 var ByID = conn.ByID
@@ -84,12 +78,6 @@ var ByLatency = conn.ByLatency
 // A configuration should be treated as immutable. Therefore, methods that
 // operate on a configuration always return a new Config instance.
 type Config = conn.Config
-
-// ConfigContext is a context that carries a configuration for multicast or
-// quorum calls. It embeds context.Context and provides access to the configuration.
-//
-// Use [Config.Context] to create a ConfigContext from an existing context.
-type ConfigContext = conn.ConfigContext
 
 // NewConfig returns a new [Config] based on the provided nodes and dial
 // options, and a function that closes the configuration's connection pool.

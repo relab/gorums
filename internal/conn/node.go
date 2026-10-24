@@ -17,20 +17,6 @@ import (
 
 const nilAngleString = "<nil>"
 
-// NodeContext is a context that carries a node for unicast and RPC calls.
-// It embeds context.Context and provides access to the Node.
-//
-// Use [Node.Context] to create a NodeContext from an existing context.
-type NodeContext struct {
-	context.Context
-	node *Node
-}
-
-// Node returns the Node associated with this context.
-func (c NodeContext) Node() *Node {
-	return c.node
-}
-
 // sharedNodeTransport derives a borrower transport from an inbound peer node,
 // reusing the peer's channel, latency estimate, and server-space message-ID generator.
 // It returns nil if the peer has no transport.
@@ -87,20 +73,6 @@ func NodeTransport(n *Node) *stream.Transport {
 		return nil
 	}
 	return n.transport
-}
-
-// Context creates a new NodeContext from the given parent context
-// and this node.
-//
-// Example:
-//
-//	nodeCtx := node.Context(context.Background())
-//	resp, err := storage.ReadRPC(nodeCtx, req)
-func (n *Node) Context(parent context.Context) *NodeContext {
-	if n == nil {
-		panic("gorums: Context called on nil node")
-	}
-	return &NodeContext{Context: parent, node: n}
 }
 
 // nodeOptions contains configuration options for creating a new Node.

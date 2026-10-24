@@ -28,7 +28,7 @@ func TestServersNilServerFunc(t *testing.T) {
 func TestServersEchoServer(t *testing.T) {
 	node := gorumstest.Node(t, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 5*time.Second)
-	resp, err := mockcall.RemoteCall(node.Context(ctx), "hello")
+	resp, err := mockcall.RemoteCall(ctx, node, "hello")
 	if err != nil {
 		t.Fatalf("RemoteCall: %v", err)
 	}

@@ -4,39 +4,45 @@
 package gorumsimpl
 
 import (
+	"context"
+
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/impl"
 	"google.golang.org/protobuf/proto"
 )
 
-// QuorumCall executes a quorum-call on the nodes in ctx and returns
-// a handle for consuming the responses. It is used by generated code.
-func QuorumCall[Req, Resp proto.Message](ctx *gorums.ConfigContext, req Req, method string) *gorums.Call[Req, Resp] {
-	return impl.QuorumCall[Req, Resp](ctx, req, method)
+// QuorumCall executes a quorum-call on the nodes in config and returns
+// a handle for consuming the responses. It panics if config is empty.
+// It is used by generated code.
+func QuorumCall[Req, Resp proto.Message](ctx context.Context, config gorums.Config, req Req, method string) *gorums.Call[Req, Resp] {
+	return impl.QuorumCall[Req, Resp](ctx, config, req, method)
 }
 
-// QuorumCallStream executes a streaming quorum-call on the nodes in ctx and
-// returns a handle for consuming the responses. It is used by generated code.
-func QuorumCallStream[Req, Resp proto.Message](ctx *gorums.ConfigContext, req Req, method string) *gorums.Call[Req, Resp] {
-	return impl.QuorumCallStream[Req, Resp](ctx, req, method)
+// QuorumCallStream executes a streaming quorum-call on the nodes in config and
+// returns a handle for consuming the responses. It panics if config is empty.
+// It is used by generated code.
+func QuorumCallStream[Req, Resp proto.Message](ctx context.Context, config gorums.Config, req Req, method string) *gorums.Call[Req, Resp] {
+	return impl.QuorumCallStream[Req, Resp](ctx, config, req, method)
 }
 
-// Multicast executes a one-way call on every node in ctx. No reply is returned.
+// Multicast executes a one-way call on every node in config. No reply is
+// returned. Send errors are reported by [gorums.OnewayCall.Send] or
+// [gorums.OnewayAsync.Wait]. It panics if config is empty.
+// It is used by generated code.
+func Multicast[Req proto.Message](ctx context.Context, config gorums.Config, req Req, method string) *gorums.OnewayCall[Req] {
+	return impl.Multicast(ctx, config, req, method)
+}
+
+// Unicast executes a one-way call on node. No reply is returned.
 // Send errors are reported by [gorums.OnewayCall.Send] or
-// [gorums.OnewayAsync.Wait]. It is used by generated code.
-func Multicast[Req proto.Message](ctx *gorums.ConfigContext, req Req, method string) *gorums.OnewayCall[Req] {
-	return impl.Multicast(ctx, req, method)
+// [gorums.OnewayAsync.Wait]. It panics if node is nil.
+// It is used by generated code.
+func Unicast[Req proto.Message](ctx context.Context, node *gorums.Node, req Req, method string) *gorums.OnewayCall[Req] {
+	return impl.Unicast(ctx, node, req, method)
 }
 
-// Unicast executes a one-way call on the node in ctx. No reply is returned.
-// Send errors are reported by [gorums.OnewayCall.Send] or
-// [gorums.OnewayAsync.Wait]. It is used by generated code.
-func Unicast[Req proto.Message](ctx *gorums.NodeContext, req Req, method string) *gorums.OnewayCall[Req] {
-	return impl.Unicast(ctx, req, method)
-}
-
-// RemoteCall executes a remote procedure call on the node in ctx and
-// returns the response or an error. It is used by generated code.
-func RemoteCall[Req, Resp proto.Message](ctx *gorums.NodeContext, req Req, method string) (Resp, error) {
-	return impl.RemoteCall[Req, Resp](ctx, req, method)
+// RemoteCall executes a remote procedure call on node and returns the
+// response or an error. It panics if node is nil. It is used by generated code.
+func RemoteCall[Req, Resp proto.Message](ctx context.Context, node *gorums.Node, req Req, method string) (Resp, error) {
+	return impl.RemoteCall[Req, Resp](ctx, node, req, method)
 }

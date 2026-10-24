@@ -1,6 +1,7 @@
 package gorums_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -82,7 +83,7 @@ func TestQuorumCall(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := gorumstest.Config(t, tt.numNodes, gorumstest.EchoServer)
 			ctx := gorumstest.Context(t, 2*time.Second)
-			responses := mockcall.QuorumCall(config.Context(ctx), "test")
+			responses := mockcall.QuorumCall(ctx, config, "test")
 
 			result, err := tt.call(responses)
 			if !checkQuorumCall(t, err, nil) {
@@ -100,7 +101,7 @@ func TestQuorumCallPartialFailures(t *testing.T) {
 	// Function type for the call to test
 	type callInfo struct {
 		name     string
-		callFunc func(*gorums.ConfigContext, *pb.StringValue) error
+		callFunc func(context.Context, gorums.Config, *pb.StringValue) error
 	}
 
 	const numServers = 3
@@ -111,8 +112,8 @@ func TestQuorumCallPartialFailures(t *testing.T) {
 	quorumcall := func(name string, aggregateFunc func(respType) (*pb.StringValue, error)) callInfo {
 		return callInfo{
 			name: "QuorumCall/" + name,
-			callFunc: func(ctx *gorums.ConfigContext, req *pb.StringValue) error {
-				_, err := aggregateFunc(mockcall.QuorumCall(ctx, req.GetValue()))
+			callFunc: func(ctx context.Context, config gorums.Config, req *pb.StringValue) error {
+				_, err := aggregateFunc(mockcall.QuorumCall(ctx, config, req.GetValue()))
 				return err
 			},
 		}
@@ -122,8 +123,8 @@ func TestQuorumCallPartialFailures(t *testing.T) {
 	multicast := func(name string) callInfo {
 		return callInfo{
 			name: "Multicast/" + name,
-			callFunc: func(ctx *gorums.ConfigContext, req *pb.StringValue) error {
-				return mockcall.Multicast(ctx, req.GetValue()).Send()
+			callFunc: func(ctx context.Context, config gorums.Config, req *pb.StringValue) error {
+				return mockcall.Multicast(ctx, config, req.GetValue()).Send()
 			},
 		}
 	}
@@ -162,11 +163,11 @@ func TestQuorumCallPartialFailures(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			var stopNodes func(...int)
 			config := gorumstest.Config(t, numServers, nil, gorumstest.WithStopFunc(t, &stopNodes))
-			ctx := config.Context(t.Context())
+			ctx := t.Context()
 			req := pb.String("test")
 
 			// Warmup to ensure connections
-			if err := tt.call.callFunc(ctx, req); err != nil {
+			if err := tt.call.callFunc(ctx, config, req); err != nil {
 				t.Fatalf("Warmup failed: %v", err)
 			}
 
@@ -183,7 +184,7 @@ func TestQuorumCallPartialFailures(t *testing.T) {
 			// Execute test calls after stopping nodes, if any
 			var err error
 			for range 5 {
-				err = tt.call.callFunc(ctx, req)
+				err = tt.call.callFunc(ctx, config, req)
 				if tt.wantErr != nil && err != nil {
 					break // failed as expected
 				}
@@ -206,7 +207,7 @@ func TestQuorumCallCustomAggregation(t *testing.T) {
 	config := gorumstest.Config(t, 3, nil) // uses default server that returns (i+1)*10
 
 	ctx := gorumstest.Context(t, 2*time.Second)
-	responses := mockcall.Int32QuorumCall(config.Context(ctx), 0)
+	responses := mockcall.Int32QuorumCall(ctx, config, 0)
 
 	// Custom aggregation: sum all responses
 	// Default server returns 10, 20, 30 for nodes 0, 1, 2
@@ -225,9 +226,8 @@ func TestQuorumCallSynctest(t *testing.T) {
 		// Create configuration inside synctest bubble for controlled time
 		config := gorumstest.Config(t, 3, gorumstest.EchoServer, gorumstest.SkipGoleak())
 		ctx := gorumstest.Context(t, 2*time.Second)
-		cfgCtx := config.Context(ctx)
 
-		responses := mockcall.QuorumCall(cfgCtx, "synctest-demo")
+		responses := mockcall.QuorumCall(ctx, config, "synctest-demo")
 
 		resp, err := responses.Majority()
 		if err != nil {
@@ -246,11 +246,10 @@ func TestQuorumCallAsyncSynctest(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		config := gorumstest.Config(t, 5, gorumstest.EchoServer, gorumstest.SkipGoleak())
 		ctx := gorumstest.Context(t, 3*time.Second)
-		cfgCtx := config.Context(ctx)
 
 		// Async sends both calls before either reply is collected.
-		responses1 := mockcall.QuorumCall(cfgCtx, "async1").Async()
-		responses2 := mockcall.QuorumCall(cfgCtx, "async2").Async()
+		responses1 := mockcall.QuorumCall(ctx, config, "async1").Async()
+		responses2 := mockcall.QuorumCall(ctx, config, "async2").Async()
 
 		reply1, err1 := responses1.Majority()
 		reply2, err2 := responses2.Majority()
@@ -277,12 +276,12 @@ func TestQuorumCallAsyncSynctest(t *testing.T) {
 func BenchmarkQuorumCallTerminalMethods(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9, 13, 17, 19} {
 		config := gorumstest.Config(b, numNodes, gorumstest.EchoServer)
-		cfgCtx := config.Context(b.Context())
+		ctx := b.Context()
 
 		b.Run(fmt.Sprintf("Majority/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				resp, err := mockcall.QuorumCall(cfgCtx, "test").Majority()
+				resp, err := mockcall.QuorumCall(ctx, config, "test").Majority()
 				if err != nil {
 					b.Fatalf("QuorumCall error: %v", err)
 				}
@@ -294,7 +293,7 @@ func BenchmarkQuorumCallTerminalMethods(b *testing.B) {
 			b.ReportAllocs()
 			threshold := numNodes/2 + 1
 			for b.Loop() {
-				resp, err := mockcall.QuorumCall(cfgCtx, "test").Threshold(threshold)
+				resp, err := mockcall.QuorumCall(ctx, config, "test").Threshold(threshold)
 				if err != nil {
 					b.Fatalf("QuorumCall error: %v", err)
 				}
@@ -305,7 +304,7 @@ func BenchmarkQuorumCallTerminalMethods(b *testing.B) {
 		b.Run(fmt.Sprintf("First/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				resp, err := mockcall.QuorumCall(cfgCtx, "test").First()
+				resp, err := mockcall.QuorumCall(ctx, config, "test").First()
 				if err != nil {
 					b.Fatalf("QuorumCall error: %v", err)
 				}
@@ -316,7 +315,7 @@ func BenchmarkQuorumCallTerminalMethods(b *testing.B) {
 		b.Run(fmt.Sprintf("All/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				resp, err := mockcall.QuorumCall(cfgCtx, "test").All()
+				resp, err := mockcall.QuorumCall(ctx, config, "test").All()
 				if err != nil {
 					b.Fatalf("QuorumCall error: %v", err)
 				}
@@ -330,14 +329,14 @@ func BenchmarkQuorumCallTerminalMethods(b *testing.B) {
 func BenchmarkQuorumCall(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9, 13, 17, 19} {
 		config := gorumstest.Config(b, numNodes, gorumstest.EchoServer)
-		cfgCtx := config.Context(b.Context())
+		ctx := b.Context()
 
 		// Using manual iteration with early return
 		b.Run(fmt.Sprintf("Iterator/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			quorum := numNodes/2 + 1
 			for b.Loop() {
-				responses := mockcall.QuorumCall(cfgCtx, "test")
+				responses := mockcall.QuorumCall(ctx, config, "test")
 				var firstResp *pb.StringValue
 				var count int
 				for result := range responses.Results() {

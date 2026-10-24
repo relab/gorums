@@ -1,9 +1,14 @@
 package impl
 
-import "google.golang.org/protobuf/proto"
+import (
+	"context"
 
-// QuorumCall performs a quorum call and returns a [Call] handle that provides
-// access to node responses via terminal methods and fluent iteration.
+	"google.golang.org/protobuf/proto"
+)
+
+// QuorumCall performs a quorum call on the nodes in config and returns a
+// [Call] handle that provides access to node responses via terminal methods
+// and fluent iteration. It panics if config is empty.
 //
 // Type parameters:
 //   - Req: The request message type
@@ -16,23 +21,26 @@ import "google.golang.org/protobuf/proto"
 // transformations.
 //
 // This function should only be used by generated code.
-func QuorumCall[Req, Resp proto.Message](ctx *ConfigContext, req Req, method string) *Call[Req, Resp] {
-	return invokeQuorumCall[Req, Resp](ctx, req, method, false)
+func QuorumCall[Req, Resp proto.Message](ctx context.Context, config Config, req Req, method string) *Call[Req, Resp] {
+	requireConfig("QuorumCall", config)
+	return invokeQuorumCall[Req, Resp](ctx, config, req, method, false)
 }
 
-// QuorumCallStream performs a streaming quorum call and returns a [Call] handle.
+// QuorumCallStream performs a streaming quorum call on the nodes in config and
+// returns a [Call] handle. It panics if config is empty.
 // This is used for correctable stream methods where the server sends multiple responses.
 //
 // In streaming mode, the response iterator continues indefinitely until the context
 // is canceled, allowing the server to send multiple responses over time.
 //
 // This function should only be used by generated code.
-func QuorumCallStream[Req, Resp proto.Message](ctx *ConfigContext, req Req, method string) *Call[Req, Resp] {
-	return invokeQuorumCall[Req, Resp](ctx, req, method, true)
+func QuorumCallStream[Req, Resp proto.Message](ctx context.Context, config Config, req Req, method string) *Call[Req, Resp] {
+	requireConfig("QuorumCallStream", config)
+	return invokeQuorumCall[Req, Resp](ctx, config, req, method, true)
 }
 
 // invokeQuorumCall is the internal implementation shared by QuorumCall and QuorumCallStream.
-func invokeQuorumCall[Req, Resp proto.Message](ctx *ConfigContext, req Req, method string, streaming bool) *Call[Req, Resp] {
-	callCtx := newQuorumCallContext[Req, Resp](ctx, req, method, streaming)
+func invokeQuorumCall[Req, Resp proto.Message](ctx context.Context, config Config, req Req, method string, streaming bool) *Call[Req, Resp] {
+	callCtx := newQuorumCallContext[Req, Resp](ctx, config, req, method, streaming)
 	return &Call[Req, Resp]{Responses: newResponses(callCtx), ctx: callCtx}
 }
