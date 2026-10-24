@@ -42,8 +42,8 @@ func TestGentestGenerate(t *testing.T) {
 			t.Errorf("Generate did not return %s; got %v", name, slices.Sorted(maps.Keys(files)))
 		}
 	}
-	if got := files[prefix+"_gorums.pb.go"]; !strings.Contains(got, "func Echo(") {
-		t.Errorf("generated Gorums code has no Echo function:\n%s", got)
+	if got := files[prefix+"_gorums.pb.go"]; !strings.Contains(got, "func (c EchoClient) Echo(") {
+		t.Errorf("generated Gorums code has no EchoClient.Echo method:\n%s", got)
 	}
 	gentest.Compile(t, files)
 }
