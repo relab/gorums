@@ -157,9 +157,9 @@ func TestOnewayCalls(t *testing.T) {
 				in := oneway.Request_builder{Num: uint64(i)}.Build()
 				var err error
 				if test.unicast {
-					err = oneway.Unicast(c.cfg[0].Context(context.Background()), in).Send()
+					err = oneway.NewOnewayTestClientNode(c.cfg[0]).Unicast(context.Background(), in).Send()
 				} else {
-					err = oneway.Multicast(c.cfg.Context(context.Background()), in).Send()
+					err = oneway.NewOnewayTestClient(c.cfg).Multicast(context.Background(), in).Send()
 				}
 				if err != nil {
 					t.Error(err)
@@ -220,12 +220,12 @@ func TestMulticastPerNode(t *testing.T) {
 			// create a test-local ignore function to avoid data races between tests
 			ignore := makeIgnoreFunc(test.ignoreNodes)
 			mapFunc := makeMapFunc(ignore)
+			client := oneway.NewOnewayTestClient(c.cfg)
 
 			for i := 1; i <= test.calls; i++ {
 				in := oneway.Request_builder{Num: uint64(i)}.Build()
-				cfgCtx := c.cfg.Context(context.Background())
 				mapInterceptor := gorums.MapRequest[*oneway.Request, *emptypb.Empty](mapFunc)
-				if err := oneway.Multicast(cfgCtx, in).Intercept(mapInterceptor).Send(); err != nil {
+				if err := client.Multicast(context.Background(), in).Intercept(mapInterceptor).Send(); err != nil {
 					t.Error(err)
 				}
 			}
@@ -251,12 +251,11 @@ func BenchmarkUnicast(b *testing.B) {
 	for _, srv := range srvs {
 		srv.benchmark = true
 	}
-	node := cfg[0]
+	nodeClient := oneway.NewOnewayTestClientNode(cfg[0])
 	in := oneway.Request_builder{Num: 0}.Build()
 	for c := 1; c <= b.N; c++ {
 		in.SetNum(uint64(c))
-		nodeCtx := node.Context(context.Background())
-		if err := oneway.Unicast(nodeCtx, in).Send(); err != nil {
+		if err := nodeClient.Unicast(context.Background(), in).Send(); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -267,11 +266,11 @@ func BenchmarkMulticast(b *testing.B) {
 	for _, srv := range srvs {
 		srv.benchmark = true
 	}
+	client := oneway.NewOnewayTestClient(config)
 	in := oneway.Request_builder{Num: 0}.Build()
 	for c := 1; c <= b.N; c++ {
 		in.SetNum(uint64(c))
-		cfgCtx := config.Context(context.Background())
-		if err := oneway.Multicast(cfgCtx, in).Send(); err != nil {
+		if err := client.Multicast(context.Background(), in).Send(); err != nil {
 			b.Fatal(err)
 		}
 	}

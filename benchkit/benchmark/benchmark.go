@@ -28,16 +28,16 @@ type Target struct {
 	Symmetric *SymmetricTarget
 }
 
-// asyncQCFunc dispatches one quorum call and returns a function that waits for
-// quorumSize replies and reports the call's error.
-type asyncQCFunc func(ctx *ConfigContext, in *Echo, quorumSize int) (wait func() error)
+// asyncQCFunc dispatches one quorum call with client and returns a function
+// that waits for quorumSize replies and reports the call's error.
+type asyncQCFunc func(ctx context.Context, client BenchmarkClient, in *Echo, quorumSize int) (wait func() error)
 
 // asyncThreshold is the [asyncQCFunc] of the AsyncQuorumCall benchmark. It
 // dispatches the call with [gorums.Call.Async], so the requests are sent before
 // it returns, and the returned function collects the replies with
 // [gorums.Responses.Threshold].
-func asyncThreshold(ctx *ConfigContext, in *Echo, quorumSize int) func() error {
-	responses := QuorumCall(ctx, in).Async()
+func asyncThreshold(ctx context.Context, client BenchmarkClient, in *Echo, quorumSize int) func() error {
+	responses := client.QuorumCall(ctx, in).Async()
 	return func() error {
 		_, err := responses.Threshold(quorumSize)
 		return err
@@ -79,13 +79,13 @@ func runAsyncQCBenchmark(opts benchkit.Options, config Config, f asyncQCFunc) (*
 	}
 	ctx, cancel := benchkit.BenchContext(opts)
 	defer cancel()
-	cfgCtx := config.Context(ctx)
+	client := NewBenchmarkClient(config)
 	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 	var g errgroup.Group
 	var sent atomic.Uint64
 	offered := opts.OfferedOps()
 
-	if err := benchkit.StartRemote(cfgCtx, opts); err != nil {
+	if err := benchkit.StartRemote(ctx, config, opts); err != nil {
 		return nil, err
 	}
 
@@ -116,7 +116,7 @@ func runAsyncQCBenchmark(opts benchkit.Options, config Config, f asyncQCFunc) (*
 				sent.Add(1)
 			}
 			start := time.Now()
-			wait := f(cfgCtx, msg, opts.QuorumSize)
+			wait := f(ctx, client, msg, opts.QuorumSize)
 			// The completion goroutine times the call and does nothing else.
 			// Dispatching from here instead would put this goroutine's own work
 			// between the call completing and the clock being read, so the
@@ -145,7 +145,7 @@ func runAsyncQCBenchmark(opts benchkit.Options, config Config, f asyncQCFunc) (*
 	}
 
 	result := m.Finish()
-	if _, err := benchkit.StopRemote(cfgCtx, opts, result); err != nil {
+	if _, err := benchkit.StopRemote(ctx, config, opts, result); err != nil {
 		return nil, err
 	}
 
@@ -251,22 +251,22 @@ var benchDescs = []benchDesc{
 		Description: "NodeStream based quorum call implementation with FIFO ordering",
 		Needs:       needsConfig,
 		build: func(cfg Config, _ *SymmetricTarget) func(benchkit.Options) (*benchkit.Result, error) {
-			return benchkit.ClientMeasured(cfg, func(opts benchkit.Options, cc *ConfigContext) func() error {
+			return benchkit.ClientMeasured(cfg, func(ctx context.Context, cfg Config, opts benchkit.Options) func() error {
+				client := NewBenchmarkClient(cfg)
 				msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 				if opts.CallTimeout <= 0 {
 					return func() error {
-						_, err := QuorumCall(cc, msg).Threshold(opts.QuorumSize)
+						_, err := client.QuorumCall(ctx, msg).Threshold(opts.QuorumSize)
 						return err
 					}
 				}
 				// With -call-timeout, each call carries its own deadline so a
 				// call stalled behind an unresponsive peer fails with
 				// DeadlineExceeded instead of hanging until run end.
-				callCfg := cc.Config()
 				return func() error {
-					callCtx, cancel := context.WithTimeout(cc, opts.CallTimeout)
+					callCtx, cancel := context.WithTimeout(ctx, opts.CallTimeout)
 					defer cancel()
-					_, err := QuorumCall(callCfg.Context(callCtx), msg).Threshold(opts.QuorumSize)
+					_, err := client.QuorumCall(callCtx, msg).Threshold(opts.QuorumSize)
 					return err
 				}
 			})
@@ -287,10 +287,11 @@ var benchDescs = []benchDesc{
 		Description: "Quorum Call with a 10ms processing time on the server",
 		Needs:       needsConfig,
 		build: func(cfg Config, _ *SymmetricTarget) func(benchkit.Options) (*benchkit.Result, error) {
-			return benchkit.ClientMeasured(cfg, func(opts benchkit.Options, cc *ConfigContext) func() error {
+			return benchkit.ClientMeasured(cfg, func(ctx context.Context, cfg Config, opts benchkit.Options) func() error {
+				client := NewBenchmarkClient(cfg)
 				msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 				return func() error {
-					_, err := SlowServer(cc, msg).Threshold(opts.QuorumSize)
+					_, err := client.SlowServer(ctx, msg).Threshold(opts.QuorumSize)
 					return err
 				}
 			})
@@ -301,11 +302,12 @@ var benchDescs = []benchDesc{
 		Description: "NodeStream based multicast implementation (servers measure latency and throughput)",
 		Needs:       needsConfig,
 		build: func(cfg Config, _ *SymmetricTarget) func(benchkit.Options) (*benchkit.Result, error) {
-			return benchkit.ServerMeasured(cfg, func(opts benchkit.Options, cc *ConfigContext) func() error {
+			return benchkit.ServerMeasured(cfg, func(ctx context.Context, cfg Config, opts benchkit.Options) func() error {
+				client := NewBenchmarkClient(cfg)
 				payload := make([]byte, opts.Payload)
 				return func() error {
 					msg := TimedMsg_builder{SendTime: time.Now().UnixNano(), Payload: payload}.Build()
-					return Multicast(cc, msg).Send()
+					return client.Multicast(ctx, msg).Send()
 				}
 			})
 		},
@@ -320,12 +322,13 @@ var benchDescs = []benchDesc{
 			// goroutine, in that order.
 			var outstanding *asyncSends
 			return benchkit.ServerMeasured(cfg,
-				func(opts benchkit.Options, cc *ConfigContext) func() error {
+				func(ctx context.Context, cfg Config, opts benchkit.Options) func() error {
+					client := NewBenchmarkClient(cfg)
 					payload := make([]byte, opts.Payload)
 					outstanding = newAsyncSends(opts.MaxAsync)
 					return func() error {
 						msg := TimedMsg_builder{SendTime: time.Now().UnixNano(), Payload: payload}.Build()
-						return outstanding.dispatch(func() asyncSend { return Multicast(cc, msg).Async() })
+						return outstanding.dispatch(func() asyncSend { return client.Multicast(ctx, msg).Async() })
 					}
 				},
 				benchkit.WithQuiesce(func(context.Context) error {

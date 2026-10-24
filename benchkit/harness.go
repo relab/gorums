@@ -448,28 +448,29 @@ func runSchedule(ctx context.Context, ticker *Ticker, opts Options, levelDone fu
 	return nil
 }
 
-// StartRemote resets the remote servers' op counters and Stats baselines at the
-// start of a client-measured run, so the Stop reply observes only the work done
-// in the measurement window. It is a no-op in local mode, where the in-process
-// servers share the client's heap and their memory stats cannot be separated.
-func StartRemote(cc *gorums.ConfigContext, opts Options) error {
+// StartRemote resets the op counters and Stats baselines of the remote servers
+// in cfg at the start of a client-measured run, so the Stop reply observes only
+// the work done in the measurement window. It is a no-op in local mode, where
+// the in-process servers share the client's heap and their memory stats cannot
+// be separated.
+func StartRemote(ctx context.Context, cfg gorums.Config, opts Options) error {
 	if !opts.Remote {
 		return nil
 	}
-	_, err := Start(cc, StartRequest_builder{StatsMode: opts.StatsMode}.Build()).All()
+	_, err := NewControlClient(cfg).Start(ctx, StartRequest_builder{StatsMode: opts.StatsMode}.Build()).All()
 	return err
 }
 
-// StopRemote collects each remote server's per-op memory stats via
+// StopRemote collects the per-op memory stats of each remote server in cfg via
 // [Control.Stop] and appends them to result. It returns the per-server Stop
 // replies keyed by node ID so callers can verify them (see [WithVerify]). It
 // is the counterpart to [StartRemote] and is likewise a no-op in local mode,
 // where it returns a nil map.
-func StopRemote(cc *gorums.ConfigContext, opts Options, result *Result) (map[uint32]*Result, error) {
+func StopRemote(ctx context.Context, cfg gorums.Config, opts Options, result *Result) (map[uint32]*Result, error) {
 	if !opts.Remote {
 		return nil, nil
 	}
-	replies, err := CollectReplies(Stop(cc, &StopRequest{}).Results())
+	replies, err := CollectReplies(NewControlClient(cfg).Stop(ctx, &StopRequest{}).Results())
 	if err != nil {
 		return nil, err
 	}
@@ -479,21 +480,21 @@ func StopRemote(cc *gorums.ConfigContext, opts Options, result *Result) (map[uin
 
 // MeasureLatency runs the client-measured measurement window over one or more
 // configurations and returns the Result built from the accumulated latency
-// samples. setup is invoked once per yielded configuration (outside the loop) to
-// build the request message and bind the context; the returned closure is the
-// tight per-operation send, which MeasureLatency times and records via
-// [Stats.AddLatency]. Yielding a single configuration drives the coordinator
+// samples. setup is invoked once per yielded configuration (outside the loop)
+// with the run's context and that configuration, to build the request message
+// and the client; the returned closure is the tight per-operation send, which
+// MeasureLatency times and records via [Stats.AddLatency]. Yielding a single configuration drives the coordinator
 // case (one send target); yielding one configuration per peer system drives
 // the symmetric case (every system sends concurrently in one shared phase).
 //
 // MeasureLatency owns only the measurement window; any control-plane
 // lifecycle ([StartRemote]/[StopRemote], local server resets) is the
 // caller's concern.
-func MeasureLatency(ctx context.Context, opts Options, configs iter.Seq[gorums.Config], setup func(opts Options, cc *gorums.ConfigContext) func() error) (*Result, error) {
+func MeasureLatency(ctx context.Context, opts Options, configs iter.Seq[gorums.Config], setup func(ctx context.Context, cfg gorums.Config, opts Options) func() error) (*Result, error) {
 	m := StartMeasurement(opts)
 	var doOps []func() error
 	for cfg := range configs {
-		op := setup(opts, cfg.Context(ctx))
+		op := setup(ctx, cfg, opts)
 		doOps = append(doOps, func() error {
 			start := time.Now()
 			err := op()
@@ -615,17 +616,16 @@ func WithVerify(f func(map[uint32]*Result) error) LifecycleOption {
 // client-measured lifecycle: (in remote mode) [Control.Start], a paced
 // measurement window timed on the client via [Stats] from t=0, and finally
 // [Control.Stop] to collect each server's memory stats. The protocol author
-// supplies setup, which binds a configuration context and returns the tight
-// per-operation closure; building the request message and binding the
-// context happen once, outside the measurement loop. Optional lifecycle
-// hooks (e.g. [WithQuiesce]) run between the window and Control.Stop.
-func ClientMeasured(cfg gorums.Config, setup func(opts Options, cc *gorums.ConfigContext) func() error, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
+// supplies setup, which receives the run's context and cfg and returns the
+// tight per-operation closure; building the request message and the client
+// happen once, outside the measurement loop. Optional lifecycle hooks (e.g.
+// [WithQuiesce]) run between the window and Control.Stop.
+func ClientMeasured(cfg gorums.Config, setup func(ctx context.Context, cfg gorums.Config, opts Options) func() error, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
 	hooks := newLifecycleHooks(lifecycleOpts)
 	return func(opts Options) (*Result, error) {
 		ctx, cancel := BenchContext(opts)
 		defer cancel()
-		cc := cfg.Context(ctx)
-		if err := StartRemote(cc, opts); err != nil {
+		if err := StartRemote(ctx, cfg, opts); err != nil {
 			return nil, err
 		}
 		result, err := MeasureLatency(ctx, opts, slices.Values([]gorums.Config{cfg}), setup)
@@ -635,7 +635,7 @@ func ClientMeasured(cfg gorums.Config, setup func(opts Options, cc *gorums.Confi
 		if err := hooks.runQuiesce(ctx); err != nil {
 			return nil, err
 		}
-		replies, err := StopRemote(cc, opts, result)
+		replies, err := StopRemote(ctx, cfg, opts, result)
 		if err != nil {
 			return nil, err
 		}
@@ -650,18 +650,18 @@ func ClientMeasured(cfg gorums.Config, setup func(opts Options, cc *gorums.Confi
 // server-measured lifecycle: [Control.Start], a paced one-way send window
 // from t=0 with clock-offset correction around it, and [Control.Stop] to
 // collect each server's latency samples. The protocol author supplies setup,
-// which binds a configuration context and returns the tight per-send closure
-// (it stamps and sends one one-way message). A failed send aborts the run and
-// is not counted as an operation, as in [ClientMeasured]. Optional lifecycle
+// which receives the run's context and cfg and returns the tight per-send
+// closure (it stamps and sends one one-way message). A failed send aborts the
+// run and is not counted as an operation, as in [ClientMeasured]. Optional lifecycle
 // hooks (e.g. [WithQuiesce]) run between the send window and Control.Stop,
 // where a drain ensures the servers observe every in-flight one-way send.
-func ServerMeasured(cfg gorums.Config, setup func(opts Options, cc *gorums.ConfigContext) func() error, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
+func ServerMeasured(cfg gorums.Config, setup func(ctx context.Context, cfg gorums.Config, opts Options) func() error, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
 	hooks := newLifecycleHooks(lifecycleOpts)
 	return func(opts Options) (*Result, error) {
 		ctx, cancel := BenchContext(opts)
 		defer cancel()
-		cc := cfg.Context(ctx)
-		send := setup(opts, cc)
+		control := NewControlClient(cfg)
+		send := setup(ctx, cfg, opts)
 		var startMem, endMem memSnapshot
 		var replies map[uint32]*Result
 
@@ -671,7 +671,7 @@ func ServerMeasured(cfg gorums.Config, setup func(opts Options, cc *gorums.Confi
 			// window estimate() brackets, so the two clock-sync phases (50
 			// sequential RPC rounds each) never inflate client per-op memory
 			// accounting or the server-measured throughput window.
-			if _, err := Start(cc, StartRequest_builder{StatsMode: opts.StatsMode}.Build()).All(); err != nil {
+			if _, err := control.Start(ctx, StartRequest_builder{StatsMode: opts.StatsMode}.Build()).All(); err != nil {
 				return err
 			}
 			startMem.read()
@@ -683,7 +683,7 @@ func ServerMeasured(cfg gorums.Config, setup func(opts Options, cc *gorums.Confi
 			}
 			endMem.read()
 			var err error
-			replies, err = CollectReplies(Stop(cc, &StopRequest{}).Results())
+			replies, err = CollectReplies(control.Stop(ctx, &StopRequest{}).Results())
 			return err
 		}
 		estimate := func() (map[uint32]int64, error) {

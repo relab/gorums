@@ -222,7 +222,7 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadReque
 	// Release first: the nested reads of different requests may run in any
 	// order, and the next request starts while they are in flight.
 	ctx.Release()
-	return pb.ReadQC(cfg.Context(ctx), req).Aggregate(newestValue)
+	return pb.NewStorageClient(cfg).ReadQC(ctx, req).Aggregate(newestValue)
 }
 
 // WriteNestedMulticast is a quorum-call handler that performs a nested multicast
@@ -234,7 +234,7 @@ func (s *storageServer) WriteNestedMulticast(ctx gorums.ServerContext, req *pb.W
 	}
 	// Dispatch before Release, so the peers receive the writes in arrival
 	// order, and wait after Release, so the next request need not wait.
-	relay := pb.WriteMulticast(cfg.Context(ctx), req).Async()
+	relay := pb.NewStorageClient(cfg).WriteMulticast(ctx, req).Async()
 	ctx.Release()
 	if err := relay.Wait(); err != nil {
 		return nil, fmt.Errorf("write_nested_multicast: %w", err)
