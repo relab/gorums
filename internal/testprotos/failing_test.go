@@ -25,13 +25,26 @@ message Response {
 }
 `
 
+// otherProto is the frame of a second input file in the Go package of
+// failingProto; the test case supplies the service.
+const otherProto = `
+edition = "2023";
+
+package internal.testprotos.failing;
+option go_package = "github.com/relab/gorums/internal/testprotos/failing";
+
+import "gorums.proto";
+import "failing.proto";
+`
+
 // TestFailingProtoFiles verifies that the generator rejects each proto file
 // that it cannot generate as written, and reports why.
 func TestFailingProtoFiles(t *testing.T) {
 	tests := []struct {
-		name string
-		decl string
-		want string
+		name  string
+		decl  string
+		other string // declarations of other.proto, if not empty
+		want  string
 	}{
 		{
 			name: "ReservedMessage",
@@ -57,7 +70,7 @@ service Reserved {
 		option (gorums.quorumcall) = true;
 	}
 }`,
-			want: "contains message ReservedClient, which is a generated Gorums identifier",
+			want: "failing.proto: contains message ReservedClient, which is the Gorums identifier generated for service Reserved (failing.proto)",
 		},
 		{
 			name: "GeneratedConstructorEnum",
@@ -70,7 +83,7 @@ service Reserved {
 		option (gorums.quorumcall) = true;
 	}
 }`,
-			want: "contains enum NewReservedClient, which is a generated Gorums identifier",
+			want: "failing.proto: contains enum NewReservedClient, which is the Gorums identifier generated for service Reserved (failing.proto)",
 		},
 		{
 			name: "GeneratedNodeClientMessage",
@@ -81,7 +94,7 @@ message ReservedNodeClient {
 service Reserved {
 	rpc Read(Request) returns (Response) {}
 }`,
-			want: "contains message ReservedNodeClient, which is a generated Gorums identifier",
+			want: "failing.proto: contains message ReservedNodeClient, which is the Gorums identifier generated for service Reserved (failing.proto)",
 		},
 		{
 			name: "GeneratedNodeConstructorEnum",
@@ -94,7 +107,7 @@ service Reserved {
 		option (gorums.unicast) = true;
 	}
 }`,
-			want: "contains enum NewReservedNodeClient, which is a generated Gorums identifier",
+			want: "failing.proto: contains enum NewReservedNodeClient, which is the Gorums identifier generated for service Reserved (failing.proto)",
 		},
 		{
 			name: "GeneratedNodeClientWithConfigClient",
@@ -110,7 +123,7 @@ service Reserved {
 		option (gorums.unicast) = true;
 	}
 }`,
-			want: "contains message ReservedNodeClient, which is a generated Gorums identifier",
+			want: "failing.proto: contains message ReservedNodeClient, which is the Gorums identifier generated for service Reserved (failing.proto)",
 		},
 		{
 			name: "NestedGeneratedClientMessage",
@@ -125,7 +138,7 @@ service Outer_Inner {
 		option (gorums.quorumcall) = true;
 	}
 }`,
-			want: "contains message Outer_InnerClient, which is a generated Gorums identifier",
+			want: "failing.proto: contains message Outer_InnerClient, which is the Gorums identifier generated for service Outer_Inner (failing.proto)",
 		},
 		{
 			name: "NestedGeneratedConstructorEnum",
@@ -142,7 +155,7 @@ service Outer_Middle_Inner {
 		option (gorums.quorumcall) = true;
 	}
 }`,
-			want: "contains enum NewOuter_Middle_InnerClient, which is a generated Gorums identifier",
+			want: "failing.proto: contains enum NewOuter_Middle_InnerClient, which is the Gorums identifier generated for service Outer_Middle_Inner (failing.proto)",
 		},
 		{
 			name: "GeneratedClientEnumValue",
@@ -155,7 +168,7 @@ service Outer_Inner {
 		option (gorums.quorumcall) = true;
 	}
 }`,
-			want: "contains enum value Outer_InnerClient, which is a generated Gorums identifier",
+			want: "failing.proto: contains enum value Outer_InnerClient, which is the Gorums identifier generated for service Outer_Inner (failing.proto)",
 		},
 		{
 			name: "NestedGeneratedClientEnumValue",
@@ -170,7 +183,7 @@ service Outer_Inner {
 		option (gorums.quorumcall) = true;
 	}
 }`,
-			want: "contains enum value Outer_InnerClient, which is a generated Gorums identifier",
+			want: "failing.proto: contains enum value Outer_InnerClient, which is the Gorums identifier generated for service Outer_Inner (failing.proto)",
 		},
 		{
 			name: "GeneratedClientOneofWrapper",
@@ -185,7 +198,7 @@ service Outer_Inner {
 		option (gorums.quorumcall) = true;
 	}
 }`,
-			want: "contains oneof wrapper Outer_InnerClient, which is a generated Gorums identifier",
+			want: "contains oneof wrapper Outer_InnerClient, which is the Gorums identifier generated for service Outer_Inner (failing.proto)",
 		},
 		{
 			name: "NestedGeneratedClientOneofWrapper",
@@ -202,7 +215,7 @@ service Outer_Middle_Inner {
 		option (gorums.quorumcall) = true;
 	}
 }`,
-			want: "contains oneof wrapper Outer_Middle_InnerClient, which is a generated Gorums identifier",
+			want: "contains oneof wrapper Outer_Middle_InnerClient, which is the Gorums identifier generated for service Outer_Middle_Inner (failing.proto)",
 		},
 		{
 			name: "ReservedEnum",
@@ -218,7 +231,7 @@ service Reserved {
 			want: "contains enum Node, which is a reserved Gorums identifier",
 		},
 		{
-			name: "MultipleServices",
+			name: "SecondServiceServerStreamWithoutQuorumCall",
 			decl: `
 service Alpha {
 	rpc Read(Request) returns (Response) {
@@ -226,11 +239,98 @@ service Alpha {
 	}
 }
 service Beta {
-	rpc Write(Request) returns (Response) {
+	rpc Watch(Request) returns (stream Response) {}
+}`,
+			want: "Beta.Watch: option 'gorums.quorumcall' is required for server-client stream methods",
+		},
+		{
+			name: "ServicesGenerateSameClientIdent",
+			decl: `
+service NewFoo {
+	rpc Read(Request) returns (Response) {}
+}
+service Foo {
+	rpc Read(Request) returns (Response) {}
+}`,
+			want: "failing.proto: services NewFoo and Foo both generate the Gorums identifier NewFooNodeClient",
+		},
+		{
+			name: "ServicesGenerateSameNodeClientIdent",
+			decl: `
+service FooNode {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}
+service Foo {
+	rpc Read(Request) returns (Response) {}
+}`,
+			want: "failing.proto: services FooNode and Foo both generate the Gorums identifier FooNodeClient",
+		},
+		{
+			name: "ServicesGenerateSameServerIdent",
+			decl: `
+service Foo {
+	rpc Read(Request) returns (Response) {}
+}
+service RegisterFoo {
+	rpc Read(Request) returns (Response) {}
+}`,
+			want: "failing.proto: services Foo and RegisterFoo both generate the Gorums identifier RegisterFooServer",
+		},
+		{
+			name: "PackageServicesGenerateSameClientIdent",
+			decl: `
+service Foo {
+	rpc Read(Request) returns (Response) {}
+}`,
+			other: `
+service NewFoo {
+	rpc Read(Request) returns (Response) {}
+}`,
+			want: "failing.proto: services Foo and NewFoo (other.proto) both generate the Gorums identifier NewFooNodeClient",
+		},
+		{
+			name: "MessageNamedAfterPackageService",
+			decl: `
+message OtherNodeClient {
+	string value = 1;
+}
+service Reserved {
+	rpc Read(Request) returns (Response) {}
+}`,
+			other: `
+service Other {
+	rpc Read(Request) returns (Response) {}
+}`,
+			want: "failing.proto: contains message OtherNodeClient, which is the Gorums identifier generated for service Other (other.proto)",
+		},
+		{
+			name: "PackageMessageNamedAfterService",
+			decl: `
+service Reserved {
+	rpc Read(Request) returns (Response) {
 		option (gorums.quorumcall) = true;
 	}
 }`,
-			want: "Gorums does not support multiple services in the same proto file",
+			other: `
+message ReservedClient {
+	string value = 1;
+}`,
+			want: "other.proto: contains message ReservedClient, which is the Gorums identifier generated for service Reserved (failing.proto)",
+		},
+		{
+			name: "GeneratedServerRegisterMessage",
+			decl: `
+message RegisterReservedServer {
+	string value = 1;
+}
+service Reserved {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "failing.proto: contains message RegisterReservedServer, which is the Gorums identifier generated for service Reserved (failing.proto)",
 		},
 		{
 			name: "ClientStreamWithoutMulticast",
@@ -273,8 +373,14 @@ service Conflict {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := gentest.Inline(t, map[string]string{"failing.proto": failingProto + tt.decl})
-			files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, "failing.proto")
+			sources := map[string]string{"failing.proto": failingProto + tt.decl}
+			protos := []string{"failing.proto"}
+			if tt.other != "" {
+				sources["other.proto"] = otherProto + tt.other
+				protos = append(protos, "other.proto")
+			}
+			dir := gentest.Inline(t, sources)
+			files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, protos...)
 			if err == nil {
 				t.Fatalf("Generate succeeded, want an error containing %q; generated %d files", tt.want, len(files))
 			}

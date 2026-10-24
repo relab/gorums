@@ -1,0 +1,31 @@
+edition = "2023";
+
+package multiservice;
+option go_package = "github.com/relab/gorums/internal/tests/multiservice";
+
+option features.field_presence = IMPLICIT;
+
+import "gorums.proto";
+
+service Alpha {
+    rpc Heartbeat(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
+    rpc Read(Request) returns (Response) {}
+}
+
+service Beta {
+    rpc Heartbeat(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
+    rpc Write(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
+}
+
+message Request {
+    string Value = 1;
+}
+message Response {
+    string Value = 1;
+}
