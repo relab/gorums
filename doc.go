@@ -11,8 +11,9 @@
 // A method's behavior is selected by one of four options in the .proto file:
 //
 //   - quorumcall: fan the request out to every node in a configuration and
-//     return a handle whose terminal methods (First, Majority, All, Threshold)
-//     block until the required number of successful responses arrive.
+//     return a handle whose terminal methods (First, Majority, All, Threshold,
+//     Aggregate, Reduce) wait for the responses and aggregate them into a
+//     result.
 //   - rpc: a plain unary call to a single node.
 //   - multicast: a one-way call to every node in a configuration.
 //   - unicast: a one-way call to a single node.
