@@ -1,5 +1,14 @@
 package gengorums
 
+import "google.golang.org/protobuf/compiler/protogen"
+
+// serverIdents returns the package-level identifiers that [server] declares
+// for the given service.
+func serverIdents(service *protogen.Service) []string {
+	server := service.GoName + "Server"
+	return []string{server, "Register" + server}
+}
+
 var serverVariables = `
 {{$context := use "gorums.ServerContext" .GenFile}}
 `
@@ -32,6 +41,7 @@ var registerInterface = `
 {{range .Services -}}
 {{$service := .GoName}}
 {{$reg := localNames "srv impl" $context $gorumsMessage $asProto $newMessage (methodTypes $genFile .)}}
+
 func Register{{$service}}Server({{$reg.srv}} *{{$gorumsServer}}, {{$reg.impl}} {{$service}}Server) {
 	{{- range .Methods}}
 	{{- $local := localNames "ctx in req resp err out" $context $gorumsMessage $asProto $newMessage (in $genFile .) (out $genFile .) $reg.impl}}

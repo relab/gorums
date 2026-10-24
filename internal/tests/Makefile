@@ -1,7 +1,7 @@
 # Tests that should be run each time
-TESTS := ordering metadata tls unresponsive oneway correctable
+TESTS := ordering metadata tls unresponsive oneway correctable multiservice
 
-.PHONY: all clean ordering metadata tls unresponsive oneway correctable
+.PHONY: all clean ordering metadata tls unresponsive oneway correctable multiservice
 
 all: $(TESTS)
 
@@ -16,6 +16,8 @@ unresponsive: unresponsive/unresponsive.pb.go unresponsive/unresponsive_gorums.p
 oneway: oneway/oneway.pb.go oneway/oneway_gorums.pb.go
 
 correctable: correctable/correctable.pb.go correctable/correctable_gorums.pb.go
+
+multiservice: multiservice/multiservice.pb.go multiservice/multiservice_gorums.pb.go
 
 %.pb.go : %.proto
 	@protoc -I=../..:. --go_out=paths=source_relative:. --go_opt=default_api_level=API_OPAQUE $<

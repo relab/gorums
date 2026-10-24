@@ -74,16 +74,12 @@ func shouldGenerate(gen *protogen.Plugin, file *protogen.File) (bool, error) {
 		// there is nothing for this plugin to do
 		return false, nil
 	}
-	if len(file.Services) > 1 {
-		// To build multiple services, make separate proto files and
-		// run the plugin separately for each proto file.
-		// These cannot share the same Go package.
-		return false, fmt.Errorf("%s: Gorums does not support multiple services in the same proto file", file.Desc.Path())
-	}
-	for _, method := range file.Services[0].Methods {
-		if _, info := callType(method); info != nil {
-			if err := validateOptions(method); err != nil {
-				return false, err
+	for _, service := range file.Services {
+		for _, method := range service.Methods {
+			if _, info := callType(method); info != nil {
+				if err := validateOptions(method); err != nil {
+					return false, err
+				}
 			}
 		}
 	}
@@ -95,20 +91,24 @@ func shouldGenerate(gen *protogen.Plugin, file *protogen.File) (bool, error) {
 
 // checkReservedIdents returns an error if a Go declaration of the file's Go
 // package collides with an identifier that Gorums declares in that package.
-// A message, enum, or enum value of any file in the package, nested or not,
-// must not take the name of a Gorums type alias or of a client interface,
-// constructor, or implementing struct generated for the file's service.
+// The Gorums services of the package are the services of every file in the
+// package that this run generates Gorums code for. Two of these services
+// must not generate the same identifier. A message, enum, or enum value of
+// any file in the package, nested or not, must not take the name of a Gorums
+// type alias or of an identifier generated for one of these services.
 func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
-	var generated []string
-	for _, service := range file.Services {
-		generated = append(generated, clientIdents(service)...)
+	generated, err := packageIdents(gen, file.GoImportPath)
+	if err != nil {
+		return err
 	}
-	check := func(kind, name string) error {
+	check := func(f *protogen.File, kind, name string) error {
 		switch {
 		case slices.Contains(reservedIdents, name):
-			return fmt.Errorf("%v.proto: contains %s %s, which is a reserved Gorums identifier", file.GeneratedFilenamePrefix, kind, name)
-		case slices.Contains(generated, name):
-			return fmt.Errorf("%v.proto: contains %s %s, which is a generated Gorums identifier", file.GeneratedFilenamePrefix, kind, name)
+			return fmt.Errorf("%s: contains %s %s, which is a reserved Gorums identifier", f.Desc.Path(), kind, name)
+		case generated[name] != nil:
+			service := generated[name]
+			return fmt.Errorf("%s: contains %s %s, which is the Gorums identifier generated for service %s (%s)",
+				f.Desc.Path(), kind, name, service.Desc.Name(), service.Desc.ParentFile().Path())
 		}
 		return nil
 	}
@@ -116,7 +116,8 @@ func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
 		if f.GoImportPath != file.GoImportPath {
 			continue
 		}
-		if err := checkTypes(f.Messages, f.Enums, check); err != nil {
+		inFile := func(kind, name string) error { return check(f, kind, name) }
+		if err := checkTypes(f.Messages, f.Enums, inFile); err != nil {
 			return err
 		}
 	}
@@ -161,6 +162,39 @@ func checkTypes(msgs []*protogen.Message, enums []*protogen.Enum, check func(kin
 		}
 	}
 	return nil
+}
+
+// packageIdents returns the package-level identifiers that Gorums generates
+// for the services of the Go package with the given import path, mapped to
+// the service that generates each one. It considers every file of the
+// package that this run generates Gorums code for, in the order of
+// gen.Files. It returns an error if two services generate the same
+// identifier; the error names the file of the first service, and the file
+// of the second if it differs.
+func packageIdents(gen *protogen.Plugin, importPath protogen.GoImportPath) (map[string]*protogen.Service, error) {
+	idents := make(map[string]*protogen.Service)
+	for _, f := range gen.Files {
+		if !f.Generate || f.GoImportPath != importPath || !hasGorumsMethods(f.Services) {
+			continue
+		}
+		for _, service := range f.Services {
+			for _, name := range slices.Concat(clientIdents(service), serverIdents(service)) {
+				first, ok := idents[name]
+				if !ok {
+					idents[name] = service
+					continue
+				}
+				firstPath, secondPath := first.Desc.ParentFile().Path(), f.Desc.Path()
+				second := string(service.Desc.Name())
+				if secondPath != firstPath {
+					second += " (" + secondPath + ")"
+				}
+				return nil, fmt.Errorf("%s: services %s and %s both generate the Gorums identifier %s",
+					firstPath, first.Desc.Name(), second, name)
+			}
+		}
+	}
+	return idents, nil
 }
 
 // generateFileContent generates the Gorums service definitions, excluding the package statement.

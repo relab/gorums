@@ -1,0 +1,34 @@
+// Test that Gorums can generate several services in one proto file, and that
+// two services may each have a method with the same name.
+
+edition = "2023";
+
+package gorums.testprotos.calltypes.multiservice;
+option go_package = "github.com/relab/gorums/internal/testprotos/calltypes/multiservice";
+
+option features.field_presence = IMPLICIT;
+
+import "gorums.proto";
+
+service Alpha {
+    rpc Heartbeat(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
+    rpc Read(Request) returns (Response) {}
+}
+
+service Beta {
+    rpc Heartbeat(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
+    rpc Write(stream Request) returns (Response) {
+        option (gorums.multicast) = true;
+    }
+}
+
+message Request {
+    string Value = 1;
+}
+message Response {
+    int64 Result = 1;
+}

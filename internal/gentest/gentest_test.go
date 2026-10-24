@@ -65,7 +65,7 @@ func TestGentestGenerateError(t *testing.T) {
 	src = strings.ReplaceAll(src, "(Msg)", "(EchoClient)")
 	dir := gentest.Inline(t, map[string]string{"echo.proto": src})
 	_, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, "echo.proto")
-	const want = "contains message EchoClient, which is a generated Gorums identifier"
+	const want = "echo.proto: contains message EchoClient, which is the Gorums identifier generated for service Echo (echo.proto)"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Generate error = %v, want it to contain %q", err, want)
 	}
