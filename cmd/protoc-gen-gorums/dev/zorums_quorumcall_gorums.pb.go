@@ -7,6 +7,7 @@
 package dev
 
 import (
+	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -20,44 +21,32 @@ const (
 )
 
 // QuorumCall plain.
-func QuorumCall(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *Response] {
-	return gorumsimpl.QuorumCall[*Request, *Response](
-		ctx, in, "dev.ZorumsService.QuorumCall",
-	)
+func (c ZorumsServiceClient) QuorumCall(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
+	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCall")
 }
 
 // QuorumCallEmpty for testing imported message type.
-func QuorumCallEmpty(ctx *ConfigContext, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response] {
-	return gorumsimpl.QuorumCall[*emptypb.Empty, *Response](
-		ctx, in, "dev.ZorumsService.QuorumCallEmpty",
-	)
+func (c ZorumsServiceClient) QuorumCallEmpty(ctx context.Context, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response] {
+	return gorumsimpl.QuorumCall[*emptypb.Empty, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCallEmpty")
 }
 
 // QuorumCallEmpty2 for testing imported message type.
-func QuorumCallEmpty2(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *emptypb.Empty] {
-	return gorumsimpl.QuorumCall[*Request, *emptypb.Empty](
-		ctx, in, "dev.ZorumsService.QuorumCallEmpty2",
-	)
+func (c ZorumsServiceClient) QuorumCallEmpty2(ctx context.Context, in *Request) *gorums.Call[*Request, *emptypb.Empty] {
+	return gorumsimpl.QuorumCall[*Request, *emptypb.Empty](ctx, c.config, in, "dev.ZorumsService.QuorumCallEmpty2")
 }
 
 // QuorumCallStream plain.
-func QuorumCallStream(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *Response] {
-	return gorumsimpl.QuorumCallStream[*Request, *Response](
-		ctx, in, "dev.ZorumsService.QuorumCallStream",
-	)
+func (c ZorumsServiceClient) QuorumCallStream(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
+	return gorumsimpl.QuorumCallStream[*Request, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCallStream")
 }
 
 // QuorumCallStreamWithEmpty for testing imported message type.
-func QuorumCallStreamWithEmpty(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *emptypb.Empty] {
-	return gorumsimpl.QuorumCallStream[*Request, *emptypb.Empty](
-		ctx, in, "dev.ZorumsService.QuorumCallStreamWithEmpty",
-	)
+func (c ZorumsServiceClient) QuorumCallStreamWithEmpty(ctx context.Context, in *Request) *gorums.Call[*Request, *emptypb.Empty] {
+	return gorumsimpl.QuorumCallStream[*Request, *emptypb.Empty](ctx, c.config, in, "dev.ZorumsService.QuorumCallStreamWithEmpty")
 }
 
 // QuorumCallStreamWithEmpty2 for testing imported message type; with same return
 // type as QuorumCallStream: Response.
-func QuorumCallStreamWithEmpty2(ctx *ConfigContext, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response] {
-	return gorumsimpl.QuorumCallStream[*emptypb.Empty, *Response](
-		ctx, in, "dev.ZorumsService.QuorumCallStreamWithEmpty2",
-	)
+func (c ZorumsServiceClient) QuorumCallStreamWithEmpty2(ctx context.Context, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response] {
+	return gorumsimpl.QuorumCallStream[*emptypb.Empty, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCallStreamWithEmpty2")
 }

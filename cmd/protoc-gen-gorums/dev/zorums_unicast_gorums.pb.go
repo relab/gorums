@@ -7,6 +7,7 @@
 package dev
 
 import (
+	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -22,28 +23,28 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// Unicast is a unicast call invoked on the node in ctx; no reply is
-// returned to the client. It returns a one-way call handle; call Send to block
-// until the send completes and observe any send error, or Async to dispatch
-// without waiting.
+// Unicast starts the ZorumsService.Unicast one-way call
+// on the client's node; no reply is returned to the client. The request is
+// dispatched by Send, which blocks until the send completes and returns any
+// send error, or by Async, which does not wait.
 //
 // Example:
 //
-//	err := Unicast(ctx, in).Send()
-//	h := Unicast(ctx, in).Async(); err := h.Wait()
-func Unicast(ctx *NodeContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Unicast(ctx, in, "dev.ZorumsService.Unicast")
+//	err := nodeClient.Unicast(ctx, in).Send()
+//	h := nodeClient.Unicast(ctx, in).Async(); err := h.Wait()
+func (c ZorumsServiceClientNode) Unicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Unicast(ctx, c.node, in, "dev.ZorumsService.Unicast")
 }
 
-// Unicast2 is a unicast call invoked on the node in ctx; no reply is
-// returned to the client. It returns a one-way call handle; call Send to block
-// until the send completes and observe any send error, or Async to dispatch
-// without waiting.
+// Unicast2 starts the ZorumsService.Unicast2 one-way call
+// on the client's node; no reply is returned to the client. The request is
+// dispatched by Send, which blocks until the send completes and returns any
+// send error, or by Async, which does not wait.
 //
 // Example:
 //
-//	err := Unicast2(ctx, in).Send()
-//	h := Unicast2(ctx, in).Async(); err := h.Wait()
-func Unicast2(ctx *NodeContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Unicast(ctx, in, "dev.ZorumsService.Unicast2")
+//	err := nodeClient.Unicast2(ctx, in).Send()
+//	h := nodeClient.Unicast2(ctx, in).Async(); err := h.Wait()
+func (c ZorumsServiceClientNode) Unicast2(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Unicast(ctx, c.node, in, "dev.ZorumsService.Unicast2")
 }

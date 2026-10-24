@@ -7,6 +7,7 @@
 package correctable
 
 import (
+	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 )
@@ -32,41 +33,79 @@ const (
 // automatically discover them and add them to the reserved identifiers list.
 
 type (
-	Config        = gorums.Config
-	ID            = gorums.ID
-	Node          = gorums.Node
-	NodeContext   = gorums.NodeContext
-	ConfigContext = gorums.ConfigContext
+	Config = gorums.Config
+	ID     = gorums.ID
+	Node   = gorums.Node
 )
 
 // CorrectableResponse is a correctable object for quorum calls returning *Response.
 type CorrectableResponse = *gorums.Correctable[*Response]
 
-// Correctable is a quorum call invoked on all nodes in the configuration,
-// with the same argument in. Use terminal methods like Majority(), First(),
-// or Threshold(n) to retrieve the aggregated result.
-//
-// Example:
-//
-//	resp, err := Correctable(ctx, in).Majority()
-func Correctable(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *Response] {
-	return gorumsimpl.QuorumCall[*Request, *Response](
-		ctx, in, "correctable.CorrectableTest.Correctable",
-	)
+// CorrectableTestClient invokes the configuration-side calls of the CorrectableTest service.
+// It is bound to a configuration.
+type CorrectableTestClient struct {
+	config gorums.Config
 }
 
-// CorrectableStream is a streaming quorum call where the server can send multiple responses.
-// The response iterator continues until the context is canceled.
+// NewCorrectableTestClient returns a client for the CorrectableTest service, bound to config.
+func NewCorrectableTestClient(config gorums.Config) CorrectableTestClient {
+	return CorrectableTestClient{config: config}
+}
+
+// Config returns the configuration to which c is bound.
+func (c CorrectableTestClient) Config() gorums.Config {
+	return c.config
+}
+
+// WithConfig returns a copy of c bound to config.
+func (c CorrectableTestClient) WithConfig(config gorums.Config) CorrectableTestClient {
+	return CorrectableTestClient{config: config}
+}
+
+// ForNode returns a node client for the CorrectableTest service, bound to node.
+// The node need not belong to the configuration of c.
+func (c CorrectableTestClient) ForNode(node *gorums.Node) CorrectableTestClientNode {
+	return CorrectableTestClientNode{node: node}
+}
+
+// CorrectableTestClientNode invokes the node-side calls of the CorrectableTest service.
+// It is bound to a single node.
+type CorrectableTestClientNode struct {
+	node *gorums.Node
+}
+
+// NewCorrectableTestClientNode returns a node client for the CorrectableTest service, bound to node.
+func NewCorrectableTestClientNode(node *gorums.Node) CorrectableTestClientNode {
+	return CorrectableTestClientNode{node: node}
+}
+
+// Node returns the node to which c is bound.
+func (c CorrectableTestClientNode) Node() *gorums.Node {
+	return c.node
+}
+
+// Correctable executes the CorrectableTest.Correctable quorum call on the client's
+// configuration. Use terminal methods like Majority(), First(), or
+// Threshold(n) to retrieve the aggregated result.
 //
 // Example:
 //
-//	corr := CorrectableStream(ctx, in).Correctable(2)
+//	resp, err := client.Correctable(ctx, in).Majority()
+func (c CorrectableTestClient) Correctable(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
+	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "correctable.CorrectableTest.Correctable")
+}
+
+// CorrectableStream executes the CorrectableTest.CorrectableStream streaming quorum call on the
+// client's configuration. The server can send multiple responses, and the
+// response iterator continues until the context is canceled.
+//
+// Example:
+//
+//	corr := client.CorrectableStream(ctx, in).Correctable(2)
 //	<-corr.Watch(2)
 //	resp, level, err := corr.Get()
-func CorrectableStream(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *Response] {
-	return gorumsimpl.QuorumCallStream[*Request, *Response](
-		ctx, in, "correctable.CorrectableTest.CorrectableStream",
-	)
+func (c CorrectableTestClient) CorrectableStream(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
+	return gorumsimpl.QuorumCallStream[*Request, *Response](ctx, c.config, in, "correctable.CorrectableTest.CorrectableStream")
 }
 
 // CorrectableTest is the server-side API for the CorrectableTest Service

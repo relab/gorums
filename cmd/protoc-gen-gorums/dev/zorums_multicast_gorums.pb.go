@@ -7,6 +7,7 @@
 package dev
 
 import (
+	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -26,38 +27,38 @@ var _ emptypb.Empty
 //
 // Example:
 //
-//	err := Multicast(ctx, in).Send()
-//	h := Multicast(ctx, in).Async(); err := h.Wait()
-func Multicast(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, in, "dev.ZorumsService.Multicast")
+//	err := client.Multicast(ctx, in).Send()
+//	h := client.Multicast(ctx, in).Async(); err := h.Wait()
+func (c ZorumsServiceClient) Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast")
 }
 
 // Multicast2 is testing whether multiple streams work.
 //
 // Example:
 //
-//	err := Multicast2(ctx, in).Send()
-//	h := Multicast2(ctx, in).Async(); err := h.Wait()
-func Multicast2(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, in, "dev.ZorumsService.Multicast2")
+//	err := client.Multicast2(ctx, in).Send()
+//	h := client.Multicast2(ctx, in).Async(); err := h.Wait()
+func (c ZorumsServiceClient) Multicast2(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast2")
 }
 
 // Multicast3 is testing imported message type.
 //
 // Example:
 //
-//	err := Multicast3(ctx, in).Send()
-//	h := Multicast3(ctx, in).Async(); err := h.Wait()
-func Multicast3(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, in, "dev.ZorumsService.Multicast3")
+//	err := client.Multicast3(ctx, in).Send()
+//	h := client.Multicast3(ctx, in).Async(); err := h.Wait()
+func (c ZorumsServiceClient) Multicast3(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast3")
 }
 
 // Multicast4 is testing imported message type.
 //
 // Example:
 //
-//	err := Multicast4(ctx, in).Send()
-//	h := Multicast4(ctx, in).Async(); err := h.Wait()
-func Multicast4(ctx *ConfigContext, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty] {
-	return gorumsimpl.Multicast(ctx, in, "dev.ZorumsService.Multicast4")
+//	err := client.Multicast4(ctx, in).Send()
+//	h := client.Multicast4(ctx, in).Async(); err := h.Wait()
+func (c ZorumsServiceClient) Multicast4(ctx context.Context, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast4")
 }
