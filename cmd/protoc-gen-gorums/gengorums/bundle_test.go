@@ -11,7 +11,7 @@ import (
 )
 
 // wantReservedIdents is the set of reserved identifiers the dev package exports.
-var wantReservedIdents = []string{"Config", "ConfigContext", "ID", "Node", "NodeContext"}
+var wantReservedIdents = []string{"Config", "ID", "Node"}
 
 // TestBundleReservedIdentifiers pins the set of identifiers that the bundler
 // will mark as reserved and inject as type aliases into every generated

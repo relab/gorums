@@ -5,20 +5,22 @@ var remoteCallComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-// {{$method}} is an RPC call invoked on the node in ctx.
+// {{$method}} executes the {{$service}}.{{$method}} remote call on the client's node.
+//
+// Example:
+//   resp, err := nodeClient.{{$method}}(ctx, in)
 {{end -}}
 `
 
 var remoteCallVar = `
 {{$genFile := .GenFile}}
-{{$nodeContext := "NodeContext"}}
 {{$rpc := use "gorumsimpl.RemoteCall" .GenFile}}
 `
 
-var remoteCallSignature = `func {{$method}}(ctx *{{$nodeContext}}, in *{{$in}}) (*{{$out}}, error) {
+var remoteCallSignature = `func (c {{$service}}ClientNode) {{$method}}(ctx {{$context}}, in *{{$in}}) (*{{$out}}, error) {
 `
 
-var remoteCallBody = ` return {{$rpc}}[*{{$in}}, *{{$out}}](ctx, in, "{{$fullName}}")
+var remoteCallBody = ` return {{$rpc}}[*{{$in}}, *{{$out}}](ctx, c.node, in, "{{$fullName}}")
 }
 `
 

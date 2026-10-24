@@ -14,6 +14,7 @@ import (
 // function resolves a "pkg.Ident" reference through it, and [addImport]
 // adds the packages that [staticCode] imports.
 var importMap = map[string]protogen.GoImportPath{
+	"context":    protogen.GoImportPath("context"),
 	"gorums":     protogen.GoImportPath("github.com/relab/gorums"),
 	"gorumsimpl": protogen.GoImportPath("github.com/relab/gorums/runtime/gorumsimpl"),
 }

@@ -137,10 +137,13 @@ func generateFileContent(file *protogen.File, g *protogen.GeneratedFile) {
 	// 2. Reference Imports
 	genReferenceImports(g, file.Services)
 
-	// 3. Client Methods (in proto order)
+	// 3. Client Types
+	genGorumsType(g, file.Services, "client")
+
+	// 4. Client Methods (in proto order)
 	genGorumsMethods(g, file.Services, "")
 
-	// 4. Server Interface and Registration
+	// 5. Server Interface and Registration
 	genGorumsType(g, file.Services, "server")
 }
 
@@ -177,8 +180,8 @@ func genReferenceImports(g *protogen.GeneratedFile, services []*protogen.Service
 }
 
 // genGorumsType generates the service-level code for the named entry in
-// [gorumsCallTypesInfo], such as "types" or "server". It generates nothing
-// for an entry that belongs to a method option.
+// [gorumsCallTypesInfo], such as "types", "client", or "server". It
+// generates nothing for an entry that belongs to a method option.
 func genGorumsType(g *protogen.GeneratedFile, services []*protogen.Service, name string) {
 	if info := gorumsCallTypesInfo[name]; info.ext == nil {
 		// servicesData hold the services to generate and a reference to the file in which
@@ -249,7 +252,8 @@ func hasGorumsMethods(services []*protogen.Service) bool {
 // callTypeInfo describes how to generate code for one call type.
 type callTypeInfo struct {
 	// ext is the Gorums method option of this call type.
-	// It is nil for the service-level entries, such as "types" and "server".
+	// It is nil for the service-level entries, such as "types", "client",
+	// and "server".
 	ext *protoimpl.ExtensionInfo
 	// template generates the code for this call type. For a method option,
 	// it generates one method; for a service-level entry, it generates the
@@ -297,6 +301,7 @@ func callTypeName(ext *protoimpl.ExtensionInfo) string {
 // zorums_{key}_gorums.pb.go file.
 var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	"types":  {template: dataTypes},
+	"client": {template: client},
 	"server": {template: server},
 
 	callTypeName(gorums.E_Remotecall): {

@@ -7,6 +7,7 @@
 package quorumcall
 
 import (
+	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 )
@@ -32,27 +33,66 @@ const (
 // automatically discover them and add them to the reserved identifiers list.
 
 type (
-	Config        = gorums.Config
-	ID            = gorums.ID
-	Node          = gorums.Node
-	NodeContext   = gorums.NodeContext
-	ConfigContext = gorums.ConfigContext
+	Config = gorums.Config
+	ID     = gorums.ID
+	Node   = gorums.Node
 )
 
 // CorrectableResponse is a correctable object for quorum calls returning *Response.
 type CorrectableResponse = *gorums.Correctable[*Response]
 
-// QuorumCall is a quorum call invoked on all nodes in the configuration,
-// with the same argument in. Use terminal methods like Majority(), First(),
-// or Threshold(n) to retrieve the aggregated result.
+// QuorumCallClient invokes the configuration-side calls of the QuorumCall service.
+// It is bound to a configuration.
+type QuorumCallClient struct {
+	config gorums.Config
+}
+
+// NewQuorumCallClient returns a client for the QuorumCall service, bound to config.
+func NewQuorumCallClient(config gorums.Config) QuorumCallClient {
+	return QuorumCallClient{config: config}
+}
+
+// Config returns the configuration to which c is bound.
+func (c QuorumCallClient) Config() gorums.Config {
+	return c.config
+}
+
+// WithConfig returns a copy of c bound to config.
+func (c QuorumCallClient) WithConfig(config gorums.Config) QuorumCallClient {
+	return QuorumCallClient{config: config}
+}
+
+// ForNode returns a node client for the QuorumCall service, bound to node.
+// The node need not belong to the configuration of c.
+func (c QuorumCallClient) ForNode(node *gorums.Node) QuorumCallClientNode {
+	return QuorumCallClientNode{node: node}
+}
+
+// QuorumCallClientNode invokes the node-side calls of the QuorumCall service.
+// It is bound to a single node.
+type QuorumCallClientNode struct {
+	node *gorums.Node
+}
+
+// NewQuorumCallClientNode returns a node client for the QuorumCall service, bound to node.
+func NewQuorumCallClientNode(node *gorums.Node) QuorumCallClientNode {
+	return QuorumCallClientNode{node: node}
+}
+
+// Node returns the node to which c is bound.
+func (c QuorumCallClientNode) Node() *gorums.Node {
+	return c.node
+}
+
+// QuorumCall executes the QuorumCall.QuorumCall quorum call on the client's
+// configuration. Use terminal methods like Majority(), First(), or
+// Threshold(n) to retrieve the aggregated result.
 //
 // Example:
 //
-//	resp, err := QuorumCall(ctx, in).Majority()
-func QuorumCall(ctx *ConfigContext, in *Request) *gorums.Call[*Request, *Response] {
-	return gorumsimpl.QuorumCall[*Request, *Response](
-		ctx, in, "internal.testprotos.calltypes.quorumcall.QuorumCall.QuorumCall",
-	)
+//	resp, err := client.QuorumCall(ctx, in).Majority()
+func (c QuorumCallClient) QuorumCall(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
+	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "internal.testprotos.calltypes.quorumcall.QuorumCall.QuorumCall")
 }
 
 // QuorumCall is the server-side API for the QuorumCall Service

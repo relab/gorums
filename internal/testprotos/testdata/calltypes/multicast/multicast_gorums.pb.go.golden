@@ -7,6 +7,7 @@
 package multicast
 
 import (
+	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -33,37 +34,79 @@ const (
 // automatically discover them and add them to the reserved identifiers list.
 
 type (
-	Config        = gorums.Config
-	ID            = gorums.ID
-	Node          = gorums.Node
-	NodeContext   = gorums.NodeContext
-	ConfigContext = gorums.ConfigContext
+	Config = gorums.Config
+	ID     = gorums.ID
+	Node   = gorums.Node
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// Multicast is a multicast call invoked on all nodes in the configuration in ctx.
-// It returns a one-way call handle; call Send to block until every send
-// completes and observe any send errors, or Async to dispatch without waiting.
-// Use gorums.MapRequest to send different messages to each node.
+// MulticastClient invokes the configuration-side calls of the Multicast service.
+// It is bound to a configuration.
+type MulticastClient struct {
+	config gorums.Config
+}
+
+// NewMulticastClient returns a client for the Multicast service, bound to config.
+func NewMulticastClient(config gorums.Config) MulticastClient {
+	return MulticastClient{config: config}
+}
+
+// Config returns the configuration to which c is bound.
+func (c MulticastClient) Config() gorums.Config {
+	return c.config
+}
+
+// WithConfig returns a copy of c bound to config.
+func (c MulticastClient) WithConfig(config gorums.Config) MulticastClient {
+	return MulticastClient{config: config}
+}
+
+// ForNode returns a node client for the Multicast service, bound to node.
+// The node need not belong to the configuration of c.
+func (c MulticastClient) ForNode(node *gorums.Node) MulticastClientNode {
+	return MulticastClientNode{node: node}
+}
+
+// MulticastClientNode invokes the node-side calls of the Multicast service.
+// It is bound to a single node.
+type MulticastClientNode struct {
+	node *gorums.Node
+}
+
+// NewMulticastClientNode returns a node client for the Multicast service, bound to node.
+func NewMulticastClientNode(node *gorums.Node) MulticastClientNode {
+	return MulticastClientNode{node: node}
+}
+
+// Node returns the node to which c is bound.
+func (c MulticastClientNode) Node() *gorums.Node {
+	return c.node
+}
+
+// Multicast starts the Multicast.Multicast one-way call
+// on the client's configuration. The request is dispatched by Send, which
+// blocks until every send completes and returns any send errors, or by Async,
+// which does not wait. Use gorums.MapRequest to send different messages to
+// each node.
 //
 // Example:
 //
-//	err := Multicast(ctx, in).Send()
-//	h := Multicast(ctx, in).Async(); err := h.Wait()
-func Multicast(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, in, "internal.testprotos.calltypes.multicast.Multicast.Multicast")
+//	err := client.Multicast(ctx, in).Send()
+//	h := client.Multicast(ctx, in).Async(); err := h.Wait()
+func (c MulticastClient) Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "internal.testprotos.calltypes.multicast.Multicast.Multicast")
 }
 
 // MulticastEmpty is testing imported message type.
 //
 // Example:
 //
-//	err := MulticastEmpty(ctx, in).Send()
-//	h := MulticastEmpty(ctx, in).Async(); err := h.Wait()
-func MulticastEmpty(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, in, "internal.testprotos.calltypes.multicast.Multicast.MulticastEmpty")
+//	err := client.MulticastEmpty(ctx, in).Send()
+//	h := client.MulticastEmpty(ctx, in).Async(); err := h.Wait()
+func (c MulticastClient) MulticastEmpty(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "internal.testprotos.calltypes.multicast.Multicast.MulticastEmpty")
 }
 
 // Multicast is the server-side API for the Multicast Service
