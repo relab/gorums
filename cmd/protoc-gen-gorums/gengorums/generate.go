@@ -34,7 +34,7 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) error {
 			addImport(path, ident, g)
 		}
 	}
-	generateFileContent(file, g)
+	generateFileContent(gen, file, g)
 	return nil
 }
 
@@ -200,48 +200,87 @@ func checkTypes(msgs []*protogen.Message, enums []*protogen.Enum, check func(kin
 // for the services of the Go package with the given import path, mapped to
 // the service that generates each one. It considers every file of the
 // package that this run generates Gorums code for, in the order of
-// gen.Files. It returns an error if two services generate the same
-// identifier; the error names the file of the first service, and the file
-// of the second if it differs.
+// gen.Files. Services share the Correctable aliases of their quorum calls;
+// such an alias maps to the first service that produces it.
+// It returns an error if two services, or one service twice, generate the
+// same identifier otherwise; the error names the file of the first service,
+// and the file of the second if it differs.
 func packageIdents(gen *protogen.Plugin, importPath protogen.GoImportPath) (map[string]*protogen.Service, error) {
 	idents := make(map[string]*protogen.Service)
+	aliases := make(map[string]bool) // the type aliases in idents
 	for f := range gorumsPackageFiles(gen, importPath) {
 		for _, service := range f.Services {
-			for _, name := range slices.Concat(clientIdents(service), serverIdents(service)) {
+			add := func(name string, alias bool) error {
 				first, ok := idents[name]
 				if !ok {
-					idents[name] = service
-					continue
+					idents[name], aliases[name] = service, alias
+					return nil
+				}
+				if alias && aliases[name] {
+					return nil
+				}
+				if first == service {
+					return fmt.Errorf("%s: service %s generates the Gorums identifier %s twice",
+						f.Desc.Path(), service.Desc.Name(), name)
 				}
 				firstPath, secondPath := first.Desc.ParentFile().Path(), f.Desc.Path()
 				second := string(service.Desc.Name())
 				if secondPath != firstPath {
 					second += " (" + secondPath + ")"
 				}
-				return nil, fmt.Errorf("%s: services %s and %s both generate the Gorums identifier %s",
+				return fmt.Errorf("%s: services %s and %s both generate the Gorums identifier %s",
 					firstPath, first.Desc.Name(), second, name)
+			}
+			for _, name := range slices.Concat(clientIdents(service), serverIdents(service)) {
+				if err := add(name, false); err != nil {
+					return nil, err
+				}
+			}
+			for _, name := range typeAliasIdents(service) {
+				if err := add(name, true); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
 	return idents, nil
 }
 
+// declaredTypeAliases returns the Correctable aliases that the files of
+// file's Go package before file, in the order of [gorumsPackageFiles],
+// produce. The generated file of the first such file declares each alias, so
+// file must not declare these aliases again.
+func declaredTypeAliases(gen *protogen.Plugin, file *protogen.File) map[string]bool {
+	declared := make(map[string]bool)
+	for f := range gorumsPackageFiles(gen, file.GoImportPath) {
+		if f == file {
+			break
+		}
+		for _, service := range f.Services {
+			for _, name := range typeAliasIdents(service) {
+				declared[name] = true
+			}
+		}
+	}
+	return declared
+}
+
 // generateFileContent generates the Gorums service definitions, excluding the package statement.
-func generateFileContent(file *protogen.File, g *protogen.GeneratedFile) {
+func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile) {
 	// 1. Data Types (Correctable aliases)
-	genGorumsType(g, file.Services, "types")
+	genGorumsType(gen, file, g, "types")
 
 	// 2. Reference Imports
 	genReferenceImports(g, file.Services)
 
 	// 3. Client Interfaces, Constructors, and Structs
-	genGorumsType(g, file.Services, "client")
+	genGorumsType(gen, file, g, "client")
 
 	// 4. Client Method Implementations (in proto order)
 	genGorumsMethods(g, file, "")
 
 	// 5. Server Interface and Registration
-	genGorumsType(g, file.Services, "server")
+	genGorumsType(gen, file, g, "server")
 }
 
 // genReferenceImports generates a dummy reference to suppress unused import errors.
@@ -276,26 +315,28 @@ func genReferenceImports(g *protogen.GeneratedFile, services []*protogen.Service
 	}
 }
 
-// genGorumsType generates the service-level code for the named entry in
-// [gorumsCallTypesInfo], such as "types", "client", or "server". It
-// generates nothing for an entry that belongs to a method option. The client
-// entry has no template of its own; [genClients] generates its code from the
-// templates of the call types.
-func genGorumsType(g *protogen.GeneratedFile, services []*protogen.Service, name string) {
+// genGorumsType generates the service-level code of file's services for the
+// named entry in [gorumsCallTypesInfo], such as "types", "client", or
+// "server". It generates nothing for an entry that belongs to a method
+// option. The client entry has no template of its own; [genClients]
+// generates its code from the templates of the call types.
+func genGorumsType(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, name string) {
 	info := gorumsCallTypesInfo[name]
 	switch {
 	case info.ext != nil:
 		// A method option entry has no service-level code.
 	case name == clientEntry:
-		genClients(g, services)
+		genClients(g, file.Services)
 	default:
 		// servicesData hold the services to generate and a reference to the file in which
 		// the services should be generated. This is data to be used by template generator.
+		// Declared holds the type aliases that an earlier file of the Go package declares.
 		type servicesData struct {
 			GenFile  *protogen.GeneratedFile
 			Services []*protogen.Service
+			Declared map[string]bool
 		}
-		g.P(mustExecute(parseTemplate(name, info.template), servicesData{g, services}))
+		g.P(mustExecute(parseTemplate(name, info.template), servicesData{g, file.Services, declaredTypeAliases(gen, file)}))
 	}
 }
 

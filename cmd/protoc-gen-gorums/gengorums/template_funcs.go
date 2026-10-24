@@ -110,14 +110,20 @@ func methodTypes(g *protogen.GeneratedFile, service *protogen.Service) []string 
 	return types
 }
 
-type mapFunc func(*protogen.GeneratedFile, *protogen.Method, map[string]string)
-
-// mapType returns a map of types as defined by the function mapFn.
-func mapType(g *protogen.GeneratedFile, services []*protogen.Service, mapFn mapFunc) (s map[string]string) {
-	s = make(map[string]string)
+// mapType returns a map from alias name to qualified output type for the
+// quorum call methods of the given services, where name returns the alias
+// name of a method. It skips the alias names in declared.
+func mapType(g *protogen.GeneratedFile, services []*protogen.Service, declared map[string]bool, name func(*protogen.Method) string) map[string]string {
+	s := make(map[string]string)
 	for _, service := range services {
 		for _, method := range service.Methods {
-			mapFn(g, method, s)
+			// Quorum call results offer Correctable.
+			if !hasMethodOption(method, gorums.E_Quorumcall) {
+				continue
+			}
+			if alias := name(method); !declared[alias] {
+				s[alias] = out(g, method)
+			}
 		}
 	}
 	return s
@@ -127,22 +133,11 @@ func out(g *protogen.GeneratedFile, method *protogen.Method) string {
 	return g.QualifiedGoIdent(method.Output.GoIdent)
 }
 
-func mapCorrectableOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
-	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-		// Generate Correctable type aliases for quorumcall methods since
-		// users can call .Correctable() on any quorum call result
-		if hasMethodOption(method, gorums.E_Quorumcall) {
-			o := out(g, method)
-			corrOut := fmt.Sprintf("Correctable%s", field(o))
-			s[corrOut] = o
-		}
-	})
-}
-
-// field derives an embedded field name from the given typeName.
-// If typeName contains a package, this will be removed.
-func field(typeName string) string {
-	return typeName[strings.LastIndex(typeName, ".")+1:]
+// mapCorrectableOutType returns the Correctable aliases that the quorum calls
+// of the given services produce, except those in declared, mapped to their
+// qualified output types.
+func mapCorrectableOutType(g *protogen.GeneratedFile, services []*protogen.Service, declared map[string]bool) map[string]string {
+	return mapType(g, services, declared, correctableAlias)
 }
 
 // unexport returns s with its leading acronym or first word in lower case.

@@ -112,17 +112,24 @@ import "gorums.proto";
 // emits once per Go package.
 var aliasDecl = regexp.MustCompile(`Config\s*=\s*gorums\.Config\b`)
 
+// typeAliasDecl matches the declaration of a Correctable alias and captures
+// its name.
+var typeAliasDecl = regexp.MustCompile(`(?m)^type (Correctable\w+) =`)
+
 // TestGeneratePackageFiles checks that the code generated for several proto
 // files of one Go package compiles as one package. In each Go package, only
 // the Gorums file of the first proto file with Gorums methods in protoc's
 // file order declares the static aliases (Config, ID, and Node). Imported
-// files come first in that order.
+// files come first in that order. Each Correctable alias is declared only in
+// the Gorums file of the first proto file, in the same order, whose quorum
+// calls produce it.
 func TestGeneratePackageFiles(t *testing.T) {
 	tests := []struct {
-		name     string
-		sources  map[string]string // declarations, keyed by proto file name
-		packages map[string]string // Go package of a proto file, if not pkgfiles
-		aliases  []string          // proto files whose Gorums file declares the aliases
+		name        string
+		sources     map[string]string   // declarations, keyed by proto file name
+		packages    map[string]string   // Go package of a proto file, if not pkgfiles
+		aliases     []string            // proto files whose Gorums file declares the aliases
+		typeAliases map[string][]string // Correctable aliases declared, keyed by proto file
 	}{
 		{
 			name: "OneServicePerFile",
@@ -154,6 +161,40 @@ message BetaResponse {
 }`,
 			},
 			aliases: []string{"alpha.proto"},
+			typeAliases: map[string][]string{
+				"alpha.proto": {"CorrectableAlphaResponse"},
+				"beta.proto":  {"CorrectableBetaResponse"},
+			},
+		},
+		{
+			// Both services return Response; only alpha.proto declares its aliases.
+			name: "SharedResponseType",
+			sources: map[string]string{
+				"alpha.proto": `
+service Alpha {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}
+message Request {
+	string value = 1;
+}
+message Response {
+	string value = 1;
+}`,
+				"beta.proto": `
+import "alpha.proto";
+
+service Beta {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			},
+			aliases: []string{"alpha.proto"},
+			typeAliases: map[string][]string{
+				"alpha.proto": {"CorrectableResponse"},
+			},
 		},
 		{
 			// The first file has no Gorums methods and gets no Gorums file.
@@ -176,16 +217,24 @@ service Beta {
 }`,
 			},
 			aliases: []string{"b.proto"},
+			typeAliases: map[string][]string{
+				"b.proto": {"CorrectableResponse"},
+			},
 		},
 		{
-			// protoc places the imported b.proto before a.proto.
+			// protoc places the imported b.proto before a.proto. Both files
+			// return Response, so b.proto declares its aliases; a.proto
+			// declares only the aliases of AlphaResponse.
 			name: "ImportedFileFirst",
 			sources: map[string]string{
 				"a.proto": `
 import "b.proto";
 
 service Alpha {
-	rpc Read(Request) returns (AlphaResponse) {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+	rpc Write(Request) returns (AlphaResponse) {
 		option (gorums.quorumcall) = true;
 	}
 }
@@ -194,49 +243,58 @@ message AlphaResponse {
 }`,
 				"b.proto": `
 service Beta {
-	rpc Read(Request) returns (BetaResponse) {
+	rpc Read(Request) returns (Response) {
 		option (gorums.quorumcall) = true;
 	}
 }
 message Request {
 	string value = 1;
 }
-message BetaResponse {
+message Response {
 	string value = 1;
 }`,
 			},
 			aliases: []string{"b.proto"},
+			typeAliases: map[string][]string{
+				"a.proto": {"CorrectableAlphaResponse"},
+				"b.proto": {"CorrectableResponse"},
+			},
 		},
 		{
+			// Each Go package declares its own aliases of Response.
 			name: "TwoGoPackages",
 			sources: map[string]string{
 				"alpha.proto": `
 service Alpha {
-	rpc Read(AlphaRequest) returns (AlphaResponse) {
+	rpc Read(Request) returns (Response) {
 		option (gorums.quorumcall) = true;
 	}
 }
-message AlphaRequest {
+message Request {
 	string value = 1;
 }
-message AlphaResponse {
+message Response {
 	string value = 1;
 }`,
 				"beta.proto": `
 service Beta {
-	rpc Read(BetaRequest) returns (BetaResponse) {
+	rpc Read(Request) returns (Response) {
 		option (gorums.quorumcall) = true;
 	}
 }
-message BetaRequest {
+message Request {
 	string value = 1;
 }
-message BetaResponse {
+message Response {
 	string value = 1;
 }`,
 			},
 			packages: map[string]string{"beta.proto": "pkgother"},
 			aliases:  []string{"alpha.proto", "beta.proto"},
+			typeAliases: map[string][]string{
+				"alpha.proto": {"CorrectableResponse"},
+				"beta.proto":  {"CorrectableResponse"},
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -252,9 +310,37 @@ message BetaResponse {
 			if err != nil {
 				t.Fatal(err)
 			}
+			for _, proto := range protos {
+				base := strings.TrimSuffix(proto, ".proto")
+				// Only a proto file with a service gets a Gorums file.
+				if strings.Contains(tt.sources[proto], "service ") && gorumsFile(files, base) == "" {
+					t.Errorf("no Gorums output for %s; generated files: %v", proto, slices.Sorted(maps.Keys(files)))
+				}
+			}
 			gentest.Compile(t, files)
 			checkAliasFiles(t, files, tt.aliases)
+			checkTypeAliases(t, files, tt.typeAliases)
 		})
+	}
+}
+
+// checkTypeAliases checks that each generated Gorums file declares exactly
+// the Correctable aliases listed for its proto file in want.
+func checkTypeAliases(t *testing.T, files map[string]string, want map[string][]string) {
+	t.Helper()
+	for _, name := range slices.Sorted(maps.Keys(files)) {
+		if !strings.HasSuffix(name, "_gorums.pb.go") {
+			continue
+		}
+		var got []string
+		for _, m := range typeAliasDecl.FindAllStringSubmatch(files[name], -1) {
+			got = append(got, m[1])
+		}
+		slices.Sort(got)
+		proto := strings.TrimSuffix(path.Base(name), "_gorums.pb.go") + ".proto"
+		if wantNames := slices.Sorted(slices.Values(want[proto])); !slices.Equal(got, wantNames) {
+			t.Errorf("%s declares type aliases %v, want %v", name, got, wantNames)
+		}
 	}
 }
 

@@ -333,6 +333,67 @@ service Reserved {
 			want: "failing.proto: contains message RegisterReservedServer, which is the Gorums identifier generated for service Reserved (failing.proto)",
 		},
 		{
+			name: "GeneratedCorrectableMessage",
+			decl: `
+message CorrectableResponse {
+	string value = 1;
+}
+service Reserved {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "failing.proto: contains message CorrectableResponse, which is the Gorums identifier generated for service Reserved (failing.proto)",
+		},
+		{
+			name: "PackageEnumNamedAfterCorrectable",
+			decl: `
+enum CorrectableResponse {
+	CORRECTABLE_RESPONSE_UNSPECIFIED = 0;
+}
+service Reserved {
+	rpc Read(Request) returns (Response) {}
+}`,
+			other: `
+service Other {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "failing.proto: contains enum CorrectableResponse, which is the Gorums identifier generated for service Other (other.proto)",
+		},
+		{
+			name: "TypeAliasAndClientIdent",
+			decl: `
+message FooClient {
+	string value = 1;
+}
+service CorrectableFoo {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}
+service Bar {
+	rpc Read(Request) returns (FooClient) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "failing.proto: services CorrectableFoo and Bar both generate the Gorums identifier CorrectableFooClient",
+		},
+		{
+			name: "TypeAliasAndOwnClientIdent",
+			decl: `
+message FooClient {
+	string value = 1;
+}
+service CorrectableFoo {
+	rpc Read(Request) returns (FooClient) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "failing.proto: service CorrectableFoo generates the Gorums identifier CorrectableFooClient twice",
+		},
+		{
 			name: "ClientStreamWithoutMulticast",
 			decl: `
 service Stream {
