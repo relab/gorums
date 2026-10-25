@@ -488,8 +488,7 @@ The `*gorums.Responses[T]` type provides built-in *terminal methods* for common 
 | `.Threshold(n)`                | At least n responses          | n nodes respond successfully           |
 | `.Aggregate(fn)`               | Result of your function `fn`  | `fn` returns                           |
 | `.Reduce(n, initial, add)`     | Accumulator built by `add`    | n nodes respond successfully           |
-| `.Matching(n, key)`            | Response with an agreed key   | n nodes send responses with equal keys |
-| `.MatchingAgreement(n, key)`   | Agreed response and its nodes | n nodes send responses with equal keys |
+| `.Matching(n, key)`            | Agreed response and its nodes | n nodes send responses with equal keys |
 
 Each terminal method blocks until its condition is met or the context is canceled, then returns a single aggregated result and an error.
 `Threshold(n)` panics if `n` is not positive.
@@ -621,18 +620,16 @@ Two responses agree when their keys are equal.
 The key must compare by value.
 A pointer key, such as the response itself, compares by address, so two responses never agree.
 A key of type `any` that holds a slice compiles, but `Matching` panics when it puts the response in a bucket.
+
 `Matching` puts each successful response in a bucket for its key.
-It returns the first response in the first bucket that gets `n` responses.
+When a bucket gets `n` responses, `Matching` returns a `gorums.Agreement[T]` with two fields:
 
-`MatchingAgreement(n, key)` works in the same way, but it also returns the evidence.
-It returns a `gorums.Agreement[T]` with two fields:
-
-* `Value` is the first response in the bucket that got `n` responses.
+* `Value` is the first response in that bucket.
 * `Responses` holds the `n` responses in that bucket, in arrival order, each with its `NodeID`.
 
-Both methods count each node at most once.
+`Matching` counts each node at most once.
 Only the first successful response from a node counts.
-They ignore later responses from the same node, whatever their key.
+It ignores later responses from the same node, whatever their key.
 Responses with errors never go into a bucket.
 
 This PBFT-style example collects a *prepared certificate*.
@@ -648,7 +645,7 @@ func digestKey(resp *PrepareResponse) string {
 
 quorum := 2*f + 1
 agreement, err := PrepareQC(cfgCtx, &PrepareRequest{View: view, Sequence: seq, Digest: digest}).
-  MatchingAgreement(quorum, digestKey)
+  Matching(quorum, digestKey)
 if err != nil {
   return err
 }
@@ -657,15 +654,11 @@ if err != nil {
 // serves as the prepared certificate.
 ```
 
-Use `Matching` when you need only the value and not the evidence:
+When you need only the agreed value, use `agreement.Value` and ignore the evidence.
 
-```go
-reply, err := PrepareQC(cfgCtx, req).Matching(quorum, digestKey)
-```
-
-If no key gets `n` responses, both methods return the zero value and an error that matches `gorums.ErrIncomplete`.
+If no key gets `n` responses, `Matching` returns an empty agreement and an error that matches `gorums.ErrIncomplete`.
 This error also holds the node errors, but not the nodes that a request transform skipped.
-`Matching` and `MatchingAgreement` panic if `n` is not positive or if `key` is nil.
+`Matching` panics if `n` is not positive or if `key` is nil.
 
 ### Async and Correctable Variants
 
@@ -708,7 +701,7 @@ It panics before it sends any request.
 
 Understanding when messages are actually sent matters for ordering and for reasoning about concurrent calls.
 
-**Quorum calls are lazy.** Messages are not sent to nodes until the caller consumes the `*Responses[T]` object by calling a terminal method (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`, `MatchingAgreement`) or by calling `.Results()` to begin iterating.
+**Quorum calls are lazy.** Messages are not sent to nodes until the caller consumes the `*Responses[T]` object by calling a terminal method (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`) or by calling `.Results()` to begin iterating.
 This gives interceptors a chance to register per-node request transformations before any bytes go on the wire.
 
 **Async sends immediately.** `Async()` sends the requests before it returns.

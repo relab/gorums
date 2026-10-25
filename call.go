@@ -45,7 +45,7 @@ type Responses[Resp proto.Message] = impl.Responses[Resp]
 
 // Agreement contains a representative value and the successful node
 // responses that established it. Responses are retained in arrival order.
-// [Responses.MatchingAgreement] returns an Agreement.
+// [Responses.Matching] returns an Agreement.
 type Agreement[Resp proto.Message] = impl.Agreement[Resp]
 
 // LevelNotSet is the zero value level used to indicate that no level

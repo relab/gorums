@@ -121,11 +121,13 @@ type Agreement[Resp proto.Message] struct {
 }
 
 // Matching waits for successful responses from n distinct nodes that produce
-// the same comparable key. It returns the first response belonging to the
-// first key bucket that reaches n responses.
+// the same comparable key. It returns the agreement of the first key that
+// reaches n responses: its Value is the first response with that key, and its
+// Responses are the n matching responses, in arrival order.
 //
-// Matching ignores repeated responses from an already-counted node. It returns
-// a QuorumCallError caused by ErrIncomplete if no key reaches n responses.
+// Matching counts only a node's first successful response and ignores later
+// responses from the same node. It returns a QuorumCallError caused by
+// ErrIncomplete if no key reaches n responses.
 //
 // Keys compare by value: a pointer key, such as the response itself, never
 // matches another response, and an interface key holding a slice panics.
@@ -134,35 +136,10 @@ type Agreement[Resp proto.Message] struct {
 func (r *Responses[Resp]) Matching[Key comparable](
 	n int,
 	key func(Resp) Key,
-) (Resp, error) {
+) (Agreement[Resp], error) {
 	checkThreshold("Matching", n)
 	if key == nil {
 		panic("gorums: Matching called with nil key function")
-	}
-	agreement, err := r.MatchingAgreement(n, key)
-	return agreement.Value, err
-}
-
-// MatchingAgreement waits for successful responses from n distinct nodes
-// that produce the same comparable key. It returns the representative value
-// and the responses that established the first matching agreement.
-//
-// The agreement contains only successful responses, ordered by arrival.
-// MatchingAgreement ignores repeated responses from an already-counted
-// node. It returns a QuorumCallError caused by ErrIncomplete if no key reaches
-// n responses.
-//
-// Keys compare by value: a pointer key, such as the response itself, never
-// matches another response, and an interface key holding a slice panics.
-//
-// MatchingAgreement panics if n is not positive or key is nil.
-func (r *Responses[Resp]) MatchingAgreement[Key comparable](
-	n int,
-	key func(Resp) Key,
-) (Agreement[Resp], error) {
-	checkThreshold("MatchingAgreement", n)
-	if key == nil {
-		panic("gorums: MatchingAgreement called with nil key function")
 	}
 	var (
 		tally   = nodeTally{counted: make([]ID, 0, r.size)}

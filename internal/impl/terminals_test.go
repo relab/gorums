@@ -364,33 +364,8 @@ func firstLetter(v *pb.StringValue) byte {
 	return v.GetValue()[0]
 }
 
-// matchingFunc adapts Matching and MatchingAgreement to one signature so
-// that the same test table runs against both methods.
-type matchingFunc func(*Responses[*pb.StringValue], int) (Agreement[*pb.StringValue], error)
-
 func TestTerminalsMatching(t *testing.T) {
 	errNode := errors.New("node error")
-	methods := []struct {
-		name     string
-		hasCerts bool
-		call     matchingFunc
-	}{
-		{
-			name:     "Matching",
-			hasCerts: false,
-			call: func(r *Responses[*pb.StringValue], n int) (Agreement[*pb.StringValue], error) {
-				value, err := r.Matching(n, firstLetter)
-				return Agreement[*pb.StringValue]{Value: value}, err
-			},
-		},
-		{
-			name:     "MatchingAgreement",
-			hasCerts: true,
-			call: func(r *Responses[*pb.StringValue], n int) (Agreement[*pb.StringValue], error) {
-				return r.MatchingAgreement(n, firstLetter)
-			},
-		},
-	}
 	tests := []struct {
 		name      string
 		numNodes  int
@@ -484,82 +459,72 @@ func TestTerminalsMatching(t *testing.T) {
 			wantErr: ErrIncomplete,
 		},
 	}
-	for _, m := range methods {
-		for _, tt := range tests {
-			t.Run(m.name+"/"+tt.name, func(t *testing.T) {
-				r := newResponses(makeCallContext[*pb.StringValue, *pb.StringValue](t, tt.numNodes, tt.responses))
-				got, err := m.call(r, tt.n)
-				if tt.wantValue == "" {
-					if got.Value != nil {
-						t.Errorf("%s() value = %v, want nil", m.name, got.Value)
-					}
-				} else if got.Value.GetValue() != tt.wantValue {
-					t.Errorf("%s() value = %q, want %q", m.name, got.Value.GetValue(), tt.wantValue)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := newResponses(makeCallContext[*pb.StringValue, *pb.StringValue](t, tt.numNodes, tt.responses))
+			got, err := r.Matching(tt.n, firstLetter)
+			if tt.wantValue == "" {
+				if got.Value != nil {
+					t.Errorf("Matching() value = %v, want nil", got.Value)
 				}
-				if m.hasCerts {
-					var gotIDs []ID
-					var gotVals []string
-					for _, resp := range got.Responses {
-						if resp.Err != nil {
-							t.Errorf("agreement holds response with error %v", resp.Err)
-						}
-						gotIDs = append(gotIDs, resp.NodeID)
-						gotVals = append(gotVals, resp.Value.GetValue())
-					}
-					if !slices.Equal(gotIDs, tt.wantIDs) {
-						t.Errorf("%s() agreement ids = %v, want %v", m.name, gotIDs, tt.wantIDs)
-					}
-					if !slices.Equal(gotVals, tt.wantVals) {
-						t.Errorf("%s() agreement values = %v, want %v", m.name, gotVals, tt.wantVals)
-					}
+			} else if got.Value.GetValue() != tt.wantValue {
+				t.Errorf("Matching() value = %q, want %q", got.Value.GetValue(), tt.wantValue)
+			}
+			var gotIDs []ID
+			var gotVals []string
+			for _, resp := range got.Responses {
+				if resp.Err != nil {
+					t.Errorf("agreement holds response with error %v", resp.Err)
 				}
-				if tt.wantErr == nil {
-					if err != nil {
-						t.Fatalf("%s() error = %v, want nil", m.name, err)
-					}
-					return
+				gotIDs = append(gotIDs, resp.NodeID)
+				gotVals = append(gotVals, resp.Value.GetValue())
+			}
+			if !slices.Equal(gotIDs, tt.wantIDs) {
+				t.Errorf("Matching() agreement ids = %v, want %v", gotIDs, tt.wantIDs)
+			}
+			if !slices.Equal(gotVals, tt.wantVals) {
+				t.Errorf("Matching() agreement values = %v, want %v", gotVals, tt.wantVals)
+			}
+			if tt.wantErr == nil {
+				if err != nil {
+					t.Fatalf("Matching() error = %v, want nil", err)
 				}
-				if !errors.Is(err, tt.wantErr) {
-					t.Fatalf("%s() error = %v, want %v", m.name, err, tt.wantErr)
-				}
-				var qcErr conn.QuorumCallError
-				if !errors.As(err, &qcErr) {
-					t.Fatalf("%s() error = %v, want a QuorumCallError", m.name, err)
-				}
-				if got := qcErr.NumErrors(); got != tt.wantNodes {
-					t.Errorf("NumErrors() = %d, want %d", got, tt.wantNodes)
-				}
-				if tt.wantNodes > 0 && !errors.Is(err, errNode) {
-					t.Errorf("%s() error = %v, want it to wrap %v", m.name, err, errNode)
-				}
-				if errors.Is(err, ErrSkipNode) {
-					t.Errorf("%s() error = %v, want it not to wrap %v", m.name, err, ErrSkipNode)
-				}
-			})
-		}
+				return
+			}
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Matching() error = %v, want %v", err, tt.wantErr)
+			}
+			var qcErr conn.QuorumCallError
+			if !errors.As(err, &qcErr) {
+				t.Fatalf("Matching() error = %v, want a QuorumCallError", err)
+			}
+			if got := qcErr.NumErrors(); got != tt.wantNodes {
+				t.Errorf("NumErrors() = %d, want %d", got, tt.wantNodes)
+			}
+			if tt.wantNodes > 0 && !errors.Is(err, errNode) {
+				t.Errorf("Matching() error = %v, want it to wrap %v", err, errNode)
+			}
+			if errors.Is(err, ErrSkipNode) {
+				t.Errorf("Matching() error = %v, want it not to wrap %v", err, ErrSkipNode)
+			}
+		})
 	}
 
 	panicTests := []struct {
 		name string
 		n    int
 		key  func(*pb.StringValue) byte
-		want string // panic message after "gorums: <method> called with "
+		want string // panic message after "gorums: Matching called with "
 	}{
 		{name: "ZeroThreshold", n: 0, key: firstLetter, want: "non-positive threshold 0"},
 		{name: "NegativeThreshold", n: -1, key: firstLetter, want: "non-positive threshold -1"},
 		{name: "NilKey", n: 1, key: nil, want: "nil key function"},
 	}
 	for _, tt := range panicTests {
-		t.Run("Matching/"+tt.name+"Panics", func(t *testing.T) {
+		t.Run(tt.name+"Panics", func(t *testing.T) {
 			r := newResponses(makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, nil))
 			checkPanic(t, "gorums: Matching called with "+tt.want, func() {
 				_, _ = r.Matching(tt.n, tt.key)
-			})
-		})
-		t.Run("MatchingAgreement/"+tt.name+"Panics", func(t *testing.T) {
-			r := newResponses(makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, nil))
-			checkPanic(t, "gorums: MatchingAgreement called with "+tt.want, func() {
-				_, _ = r.MatchingAgreement(tt.n, tt.key)
 			})
 		})
 	}

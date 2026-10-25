@@ -429,7 +429,7 @@ flowchart LR
 ### Call Engine (`internal/impl`)
 
 Each call constructor builds a `CallContext` that holds the request, the target `Config`, the response channel, and the response iterator (`ResponseSeq`).
-A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`, `MatchingAgreement`), as well as the `Correctable` future.
+A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`), as well as the `Correctable` future.
 `Call.Async` sends the requests at once and returns the dispatched `Responses`, so any terminal method collects the replies later.
 A one-way call (`Multicast`, `Unicast`) returns a `OnewayCall`, whose `Send` waits for the send confirmations and whose `Async` returns an `OnewayAsync`.
 A `ClientInterceptor` wraps the response iterator and may register per-node request transformations before the call is dispatched.
@@ -455,8 +455,7 @@ classDiagram
         Threshold(n) Resp, error
         Aggregate(fn) Out, error
         Reduce(n, initial, add) Acc, error
-        Matching(n, key) Resp, error
-        MatchingAgreement(n, key) Agreement, error
+        Matching(n, key) Agreement, error
         Results() ResponseSeq
     }
     class OnewayCall~Req~ {

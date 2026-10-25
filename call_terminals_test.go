@@ -67,19 +67,19 @@ func TestCallTerminalsStream(t *testing.T) {
 			wantErr:  gorums.ErrIncomplete,
 		},
 		{
-			name:    "MatchingAgreement/CountsEachNodeOnce",
+			name:    "Matching/CountsEachNodeOnce",
 			timeout: 2 * time.Second,
 			run: func(call *streamCall) ([]gorums.ID, error) {
-				agreement, err := call.MatchingAgreement(3, prefixKey)
+				agreement, err := call.Matching(3, prefixKey)
 				return agreementIDs(agreement), err
 			},
 			allNodes: true,
 		},
 		{
-			name:    "MatchingAgreement/IncompleteWhenContextEnds",
+			name:    "Matching/IncompleteWhenContextEnds",
 			timeout: 100 * time.Millisecond,
 			run: func(call *streamCall) ([]gorums.ID, error) {
-				agreement, err := call.MatchingAgreement(4, prefixKey)
+				agreement, err := call.Matching(4, prefixKey)
 				return agreementIDs(agreement), err
 			},
 			wantErr: gorums.ErrIncomplete,
