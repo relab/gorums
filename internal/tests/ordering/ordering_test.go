@@ -137,16 +137,17 @@ func TestQuorumCallOrdering(t *testing.T) {
 	cfgCtx := config.Context(t.Context())
 
 	for i := range iterations() {
-		// Use CollectAll to get all responses and check for ordering
+		// Wait for every reply and check that each server saw the request in order.
 		responses := QuorumCall(cfgCtx, Request_builder{Num: uint64(i)}.Build())
-		replies := responses.Results().CollectAll()
-		if len(replies) < config.Size() {
-			t.Fatalf("incomplete call: %d replies", len(replies))
-		}
-		for _, reply := range replies {
-			if !reply.GetInOrder() {
+		replies := 0
+		for reply := range responses.Results().IgnoreErrors() {
+			replies++
+			if !reply.Value.GetInOrder() {
 				t.Fatalf("Message received out of order.")
 			}
+		}
+		if replies < config.Size() {
+			t.Fatalf("incomplete call: %d replies", replies)
 		}
 	}
 }
@@ -184,16 +185,17 @@ func TestMixedOrdering(t *testing.T) {
 	cfgCtx := config.Context(t.Context())
 
 	for i := range iterations() {
-		// Use CollectAll to get all responses and check for ordering
+		// Wait for every reply and check that each server saw the request in order.
 		responses := QuorumCall(cfgCtx, Request_builder{Num: uint64(2*i - 1)}.Build())
-		replies := responses.Results().CollectAll()
-		if len(replies) < config.Size() {
-			t.Fatalf("incomplete call: %d replies", len(replies))
-		}
-		for _, reply := range replies {
-			if !reply.GetInOrder() {
+		replies := 0
+		for reply := range responses.Results().IgnoreErrors() {
+			replies++
+			if !reply.Value.GetInOrder() {
 				t.Fatalf("Message received out of order.")
 			}
+		}
+		if replies < config.Size() {
+			t.Fatalf("incomplete call: %d replies", replies)
 		}
 		var wg sync.WaitGroup
 		for _, node := range config.Nodes() {

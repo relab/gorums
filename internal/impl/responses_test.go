@@ -286,60 +286,6 @@ func TestResponseSeqMethods(t *testing.T) {
 			t.Errorf("Expected 2 successful responses, got %d", count)
 		}
 	})
-
-	t.Run("Filter", func(t *testing.T) {
-		responses := []NodeResponse[proto.Message]{
-			{NodeID: 1, Value: pb.String("response1"), Err: nil},
-			{NodeID: 2, Value: pb.String("response2"), Err: nil},
-			{NodeID: 3, Value: pb.String("response3"), Err: nil},
-		}
-		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := newResponses(callCtx)
-
-		// Filter to only node 2
-		var count int
-		for resp := range r.Results().Filter(func(resp NodeResponse[*pb.StringValue]) bool {
-			return resp.NodeID == 2
-		}) {
-			count++
-			if resp.Value.GetValue() != "response2" {
-				t.Errorf("Expected 'response2', got '%s'", resp.Value.GetValue())
-			}
-		}
-		if count != 1 {
-			t.Errorf("Expected 1 filtered response, got %d", count)
-		}
-	})
-
-	t.Run("CollectN", func(t *testing.T) {
-		responses := []NodeResponse[proto.Message]{
-			{NodeID: 1, Value: pb.String("response1"), Err: nil},
-			{NodeID: 2, Value: pb.String("response2"), Err: nil},
-			{NodeID: 3, Value: pb.String("response3"), Err: nil},
-		}
-		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := newResponses(callCtx)
-
-		collected := r.Results().CollectN(2)
-		if len(collected) != 2 {
-			t.Errorf("Expected 2 collected responses, got %d", len(collected))
-		}
-	})
-
-	t.Run("CollectAll", func(t *testing.T) {
-		responses := []NodeResponse[proto.Message]{
-			{NodeID: 1, Value: pb.String("response1"), Err: nil},
-			{NodeID: 2, Value: pb.String("response2"), Err: nil},
-			{NodeID: 3, Value: pb.String("response3"), Err: nil},
-		}
-		callCtx := makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := newResponses(callCtx)
-
-		collected := r.Results().CollectAll()
-		if len(collected) != 3 {
-			t.Errorf("Expected 3 collected responses, got %d", len(collected))
-		}
-	})
 }
 
 func TestResponsesThresholdPanics(t *testing.T) {

@@ -24,11 +24,11 @@ func runClient(addresses []string) error {
 	return runRepl(cfg)
 }
 
-// newestValue processes responses from a ReadQC call and returns the reply
-// with the most recent timestamp.
-func newestValue(responses *gorums.Call[*proto.ReadRequest, *proto.ReadResponse]) (*proto.ReadResponse, error) {
+// newestValue returns the ReadQC reply with the most recent timestamp. Use it
+// with [gorums.Responses.Aggregate].
+func newestValue(seq gorums.ResponseSeq[*proto.ReadResponse]) (*proto.ReadResponse, error) {
 	var newest *proto.ReadResponse
-	for resp := range responses.Results() {
+	for resp := range seq {
 		if resp.Err != nil {
 			continue
 		}
@@ -42,22 +42,18 @@ func newestValue(responses *gorums.Call[*proto.ReadRequest, *proto.ReadResponse]
 	return newest, nil
 }
 
-// numUpdated processes responses from a WriteQC call and returns true if
-// a majority of nodes updated their value.
-func numUpdated(responses *gorums.Call[*proto.WriteRequest, *proto.WriteResponse]) (*proto.WriteResponse, error) {
-	var count int
-	size := responses.Size()
-	for resp := range responses.Results() {
-		if resp.Err != nil {
-			continue
+// numUpdated returns a function for [gorums.Responses.Aggregate] that
+// reports, for a WriteQC call to size nodes, whether a majority of the nodes
+// updated their value.
+func numUpdated(size int) func(gorums.ResponseSeq[*proto.WriteResponse]) (*proto.WriteResponse, error) {
+	return func(seq gorums.ResponseSeq[*proto.WriteResponse]) (*proto.WriteResponse, error) {
+		var count int
+		for resp := range seq.IgnoreErrors() {
+			if resp.Value.GetNew() {
+				count++
+			}
 		}
-		if resp.Value.GetNew() {
-			count++
-		}
+		// We need a majority of nodes to have updated the value
+		return proto.WriteResponse_builder{New: count > size/2}.Build(), nil
 	}
-	// We need a majority of nodes to have updated the value
-	if count > size/2 {
-		return proto.WriteResponse_builder{New: true}.Build(), nil
-	}
-	return proto.WriteResponse_builder{New: false}.Build(), nil
 }

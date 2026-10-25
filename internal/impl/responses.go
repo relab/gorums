@@ -54,45 +54,6 @@ func (seq ResponseSeq[Resp]) IgnoreErrors() ResponseSeq[Resp] {
 	}
 }
 
-// Filter returns a sequence containing the responses for which keep returns true.
-func (seq ResponseSeq[Resp]) Filter(keep func(NodeResponse[Resp]) bool) ResponseSeq[Resp] {
-	return func(yield func(NodeResponse[Resp]) bool) {
-		for result := range seq {
-			if keep(result) {
-				if !yield(result) {
-					return
-				}
-			}
-		}
-	}
-}
-
-// CollectN collects up to n values from the iterator into a map by node ID.
-// It returns early if n entries are collected or the iterator is exhausted.
-// When a node response carries an error, the zero value of Resp is stored for
-// that node ID; use [ResponseSeq.IgnoreErrors] to skip errored nodes entirely.
-func (seq ResponseSeq[Resp]) CollectN(n int) map[ID]Resp {
-	replies := make(map[ID]Resp, n)
-	for result := range seq {
-		replies[result.NodeID] = result.Value
-		if len(replies) >= n {
-			break
-		}
-	}
-	return replies
-}
-
-// CollectAll collects all values from the iterator into a map by node ID.
-// When a node response carries an error, the zero value of Resp is stored for
-// that node ID; use [ResponseSeq.IgnoreErrors] to skip errored nodes entirely.
-func (seq ResponseSeq[Resp]) CollectAll() map[ID]Resp {
-	replies := make(map[ID]Resp)
-	for result := range seq {
-		replies[result.NodeID] = result.Value
-	}
-	return replies
-}
-
 // -------------------------------------------------------------------------
 // Response Methods
 // -------------------------------------------------------------------------

@@ -294,57 +294,9 @@ func countSuccessful(responses *gorums.Responses[*Response]) int {
 }
 ```
 
-#### `Filter()` - Custom Filtering
-
-```go
-func newestValue(responses *gorums.Responses[*ReadResponse]) (*ReadResponse, error) {
-    var newest *ReadResponse
-
-    // Filter for responses with non-zero timestamps
-    filtered := responses.Results().Filter(func(nr gorums.NodeResponse[*ReadResponse]) bool {
-        return nr.Err == nil && nr.Value.GetTimestamp() > 0
-    })
-
-    for resp := range filtered {
-        if newest == nil || resp.Value.GetTimestamp() > newest.GetTimestamp() {
-            newest = resp.Value
-        }
-    }
-
-    if newest == nil {
-        return nil, gorums.ErrIncomplete
-    }
-    return newest, nil
-}
-```
-
-#### `CollectN()` - Collect First N Responses
-
-```go
-func majorityWrite(responses *gorums.Responses[*WriteResponse]) (*WriteResponse, error) {
-    majority := (responses.Size() + 1) / 2
-    replies := responses.Results().IgnoreErrors().CollectN(majority)
-
-    if len(replies) < majority {
-        return nil, gorums.ErrIncomplete
-    }
-
-    // Process the map[uint32]*WriteResponse
-    return aggregateWrites(replies), nil
-}
-```
-
-#### `CollectAll()` - Collect All Responses
-
-```go
-// Collect all responses into a map
-replies := responses.Results().CollectAll()
-// Returns map[uint32]*Response (may include failed nodes with nil values)
-
-// Collect only successful responses
-replies := responses.Results().IgnoreErrors().CollectAll()
-// Returns map[uint32]*Response (only successful responses)
-```
+To skip responses on other conditions, use an `if` statement in the loop.
+To collect the responses into a map, range over the sequence and add each successful response by its `NodeID`.
+To stop after a fixed number of successful responses, use the `Reduce` terminal method.
 
 ### Complete Example: Quorum with Verification
 
@@ -491,7 +443,7 @@ Consider a `StopBenchmark` RPC that returns `*MemoryStat` from each node, but yo
 // message MemoryStatList { repeated MemoryStat memory_stats = 1; }
 
 // Custom aggregation function with different return type
-func StopBenchmarkQF(replies map[uint32]*MemoryStat) (*MemoryStatList, error) {
+func StopBenchmarkQF(replies map[gorums.ID]*MemoryStat) (*MemoryStatList, error) {
     if len(replies) == 0 {
         return nil, gorums.ErrIncomplete
     }
@@ -501,8 +453,7 @@ func StopBenchmarkQF(replies map[uint32]*MemoryStat) (*MemoryStatList, error) {
 }
 
 // Usage:
-responses := StopBenchmark(cfgCtx, &StopRequest{})
-replies := responses.Results().IgnoreErrors().CollectAll()  // map[uint32]*MemoryStat
+replies := collect(StopBenchmark(cfgCtx, &StopRequest{}).Results())  // map[gorums.ID]*MemoryStat
 memStats, err := StopBenchmarkQF(replies)  // Returns *MemoryStatList
 ```
 
@@ -511,7 +462,7 @@ memStats, err := StopBenchmarkQF(replies)  // Returns *MemoryStatList
 ```go
 // Proto: rpc StopServerBenchmark(StopRequest) returns (Result)
 
-func StopServerBenchmarkQF(replies map[uint32]*Result) (*Result, error) {
+func StopServerBenchmarkQF(replies map[gorums.ID]*Result) (*Result, error) {
     if len(replies) == 0 {
         return nil, gorums.ErrIncomplete
     }
@@ -548,13 +499,21 @@ func StopServerBenchmarkQF(replies map[uint32]*Result) (*Result, error) {
 
 For custom return types, follow this pattern:
 
-1. **Collect responses** using `CollectAll()` or `CollectN()`
+1. **Collect responses** into a map by node ID, with a small helper such as `collect` below
 2. **Apply custom aggregation function** that transforms the collected map
 
 ```go
+// collect gathers the successful responses into a map by node ID.
+func collect[T proto.Message](seq gorums.ResponseSeq[T]) map[gorums.ID]T {
+    replies := make(map[gorums.ID]T)
+    for resp := range seq.IgnoreErrors() {
+        replies[resp.NodeID] = resp.Value
+    }
+    return replies
+}
+
 // Step 1: Collect responses
-responses := CustomQC(cfgCtx, req)
-replies := responses.Results().IgnoreErrors().CollectAll()  // map[uint32]*ProtoResponse
+replies := collect(CustomQC(cfgCtx, req).Results())  // map[gorums.ID]*ProtoResponse
 
 // Step 2: Apply custom aggregation
 result, err := CustomAggregationQF(replies)  // Returns *CustomType
@@ -751,7 +710,7 @@ func (qs *QSpec) WriteQF(_ *WriteRequest, replies map[uint32]*WriteResponse) (*W
 ```go
 func countSuccessful(responses *gorums.Responses[*WriteResponse]) (*WriteResponse, error) {
     count := 0
-    quorumSize := (responses.Size() + 1) / 2
+    quorumSize := responses.Size()/2 + 1
 
     for resp := range responses.Results().IgnoreErrors() {
         if resp.Value.Success {
@@ -830,7 +789,10 @@ reply, err := ReadQC(cfgCtx, req).Majority()
 **Solution:** Iterators can only be consumed once. Collect into a map if you need multiple passes:
 
 ```go
-replies := responses.Results().CollectAll()
+replies := make(map[gorums.ID]*Response)
+for resp := range responses.Results().IgnoreErrors() {
+    replies[resp.NodeID] = resp.Value
+}
 // Now you can iterate over replies multiple times
 ```
 
