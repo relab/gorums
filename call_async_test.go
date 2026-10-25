@@ -139,11 +139,7 @@ func TestCallAsyncTerminals(t *testing.T) {
 			})
 		}},
 		{name: "Matching", collect: func(r respType) (string, error) {
-			resp, err := r.Matching(3, key)
-			return resp.GetValue(), err
-		}},
-		{name: "MatchingAgreement", collect: func(r respType) (string, error) {
-			agreement, err := r.MatchingAgreement(3, key)
+			agreement, err := r.Matching(3, key)
 			if err == nil && len(agreement.Responses) != 3 {
 				return "", fmt.Errorf("agreement has %d responses, want 3", len(agreement.Responses))
 			}
