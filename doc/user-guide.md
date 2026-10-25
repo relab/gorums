@@ -1119,9 +1119,25 @@ The generator reports such a collision with the names of both services.
 
 Gorums declares the `Config`, `ID`, and `Node` aliases in only one generated file per Go package.
 Gorums also declares each `CorrectableX` alias in only one generated file per Go package, even if the quorum calls of several files return `X`.
-Thus, compile all `.proto` files of a Go package in one `protoc` run.
-The generator then emits the aliases once and checks the generated names across all files of the package.
-If you compile the files in separate runs, each run declares the aliases, and the package does not compile.
+Such an alias belongs to the first `.proto` file of the package that needs it.
+Imported files come first.
+The simplest way is to compile all `.proto` files of a Go package in one `protoc` run.
+The generator then emits each alias once and checks the generated names across all files of the package.
+
+You can also compile two files of a package in separate runs if one file imports the other, directly or indirectly.
+For example, `b.proto` imports `a.proto`, and both files are in one Go package.
+The run for `b.proto` reads `a.proto` as an import.
+It then leaves out the aliases that `a.proto` owns, because the run for `a.proto` declares them.
+The order of the runs does not matter.
+Two files where neither imports the other, directly or indirectly, must be compiled in one run.
+If you compile them in separate runs, each run declares the aliases, and the package does not compile.
+
+Gorums treats every service in a Go package that has Gorums code as a Gorums service.
+A method without a Gorums option is a remote call.
+Thus, put plain gRPC services, compiled only with `protoc-gen-go-grpc`, in another Go package.
+Otherwise, an imported file with such a service can own the aliases.
+No file then declares them, and the package does not compile (`undefined: pb.Config`).
+The names of such a service also take part in the collision check.
 
 ## Interceptors for Request/Response Transformation
 

@@ -44,7 +44,10 @@ func TestFailingProtoFiles(t *testing.T) {
 		name  string
 		decl  string
 		other string // declarations of other.proto, if not empty
-		want  string
+		// importOnly generates only other.proto; failing.proto is then
+		// only an import of the run, as in a separate protoc run.
+		importOnly bool
+		want       string
 	}{
 		{
 			name: "ReservedMessage",
@@ -291,6 +294,37 @@ service NewFoo {
 			want: "failing.proto: services Foo and NewFoo (other.proto) both generate the Gorums identifier NewFooNodeClient",
 		},
 		{
+			name: "ImportedServiceGeneratesSameClientIdent",
+			decl: `
+service Foo {
+	rpc Read(Request) returns (Response) {}
+}`,
+			other: `
+service NewFoo {
+	rpc Read(Request) returns (Response) {}
+}`,
+			importOnly: true,
+			want:       "failing.proto: services Foo and NewFoo (other.proto) both generate the Gorums identifier NewFooNodeClient",
+		},
+		{
+			name: "MessageNamedAfterImportedAlias",
+			decl: `
+service Reserved {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			other: `
+message CorrectableResponse {
+	string value = 1;
+}
+service Other {
+	rpc Read(Request) returns (Response) {}
+}`,
+			importOnly: true,
+			want:       "other.proto: contains message CorrectableResponse, which is the Gorums identifier generated for service Reserved (failing.proto)",
+		},
+		{
 			name: "MessageNamedAfterPackageService",
 			decl: `
 message OtherNodeClient {
@@ -439,6 +473,9 @@ service Conflict {
 			if tt.other != "" {
 				sources["other.proto"] = otherProto + tt.other
 				protos = append(protos, "other.proto")
+			}
+			if tt.importOnly {
+				protos = []string{"other.proto"}
 			}
 			dir := gentest.Inline(t, sources)
 			files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, protos...)

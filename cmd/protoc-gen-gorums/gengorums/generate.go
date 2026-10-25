@@ -40,10 +40,11 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) error {
 
 // isStaticCodeFile reports whether the file's generated Gorums file holds the
 // static code of its Go package. The static code declares package-level
-// names, so exactly one generated file per Go package and protoc run holds
-// it: the file of the first proto file of the package, in protoc's file
-// order, that this run generates Gorums code for. In protoc's file order,
-// imported files come first.
+// names, so exactly one generated file per Go package holds it: the file of
+// the first proto file of the package with Gorums methods, in protoc's file
+// order. In protoc's file order, imported files come first. If that proto
+// file is only an import of this run, no file of this run holds the static
+// code; the run that generates that proto file emits it.
 func isStaticCodeFile(gen *protogen.Plugin, file *protogen.File) bool {
 	for f := range gorumsPackageFiles(gen, file.GoImportPath) {
 		return f == file
@@ -52,12 +53,13 @@ func isStaticCodeFile(gen *protogen.Plugin, file *protogen.File) bool {
 }
 
 // gorumsPackageFiles returns the files of the Go package with the given
-// import path that this run generates Gorums code for, in the order of
-// gen.Files.
+// import path that have Gorums methods, in the order of gen.Files. It
+// includes the files that are only imports of this run, because the run that
+// generates such a file emits its Gorums code into the same Go package.
 func gorumsPackageFiles(gen *protogen.Plugin, importPath protogen.GoImportPath) iter.Seq[*protogen.File] {
 	return func(yield func(*protogen.File) bool) {
 		for _, f := range gen.Files {
-			if !f.Generate || f.GoImportPath != importPath || !hasGorumsMethods(f.Services) {
+			if f.GoImportPath != importPath || !hasGorumsMethods(f.Services) {
 				continue
 			}
 			if !yield(f) {
@@ -124,10 +126,11 @@ func shouldGenerate(gen *protogen.Plugin, file *protogen.File) (bool, error) {
 // checkReservedIdents returns an error if a Go declaration of the file's Go
 // package collides with an identifier that Gorums declares in that package.
 // The Gorums services of the package are the services of every file in the
-// package that this run generates Gorums code for. Two of these services
-// must not generate the same identifier. A message, enum, or enum value of
-// any file in the package, nested or not, must not take the name of a Gorums
-// type alias or of an identifier generated for one of these services.
+// package with Gorums methods, including the files that are only imports of
+// this run. Two of these services must not generate the same identifier. A
+// message, enum, or enum value of any file in the package, nested or not,
+// must not take the name of a Gorums type alias or of an identifier generated
+// for one of these services.
 func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
 	generated, err := packageIdents(gen, file.GoImportPath)
 	if err != nil {
@@ -199,9 +202,9 @@ func checkTypes(msgs []*protogen.Message, enums []*protogen.Enum, check func(kin
 // packageIdents returns the package-level identifiers that Gorums generates
 // for the services of the Go package with the given import path, mapped to
 // the service that generates each one. It considers every file of the
-// package that this run generates Gorums code for, in the order of
-// gen.Files. Services share the Correctable aliases of their quorum calls;
-// such an alias maps to the first service that produces it.
+// package in [gorumsPackageFiles], in the order of gen.Files. Services share
+// the Correctable aliases of their quorum calls; such an alias maps to the
+// first service that produces it.
 // It returns an error if two services, or one service twice, generate the
 // same identifier otherwise; the error names the file of the first service,
 // and the file of the second if it differs.
@@ -248,8 +251,9 @@ func packageIdents(gen *protogen.Plugin, importPath protogen.GoImportPath) (map[
 
 // declaredTypeAliases returns the Correctable aliases that the files of
 // file's Go package before file, in the order of [gorumsPackageFiles],
-// produce. The generated file of the first such file declares each alias, so
-// file must not declare these aliases again.
+// produce. The generated file of the first such file declares each alias, in
+// this run or in the run that generates that file, so file must not declare
+// these aliases again.
 func declaredTypeAliases(gen *protogen.Plugin, file *protogen.File) map[string]bool {
 	declared := make(map[string]bool)
 	for f := range gorumsPackageFiles(gen, file.GoImportPath) {
