@@ -9,7 +9,7 @@ var pkgIdentMap = map[string]string{"github.com/relab/gorums": "Config"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
-var reservedIdents = []string{"Config", "ConfigContext", "Node", "NodeContext"}
+var reservedIdents = []string{"Config", "ConfigContext", "ID", "Node", "NodeContext"}
 
 var staticCode = `// The type aliases below are useful Gorums types that we make accessible
 // from generated code. These names therefore become reserved identifiers,
@@ -26,6 +26,7 @@ var staticCode = `// The type aliases below are useful Gorums types that we make
 
 type (
 	Config        = gorums.Config
+	ID            = gorums.ID
 	Node          = gorums.Node
 	NodeContext   = gorums.NodeContext
 	ConfigContext = gorums.ConfigContext
