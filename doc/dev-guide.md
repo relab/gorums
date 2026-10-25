@@ -452,7 +452,7 @@ classDiagram
         All() Resp, error
         Threshold(n) Resp, error
         Aggregate(fn) Out, error
-        Reduce(n, initial, step) Acc, error
+        Reduce(n, initial, add) Acc, error
         Matching(n, key) Resp, error
         MatchingCertificate(n, key) Certificate, error
         Results() ResponseSeq

@@ -2,6 +2,7 @@ package impl
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -101,7 +102,7 @@ func TestTerminalsAggregate(t *testing.T) {
 	})
 }
 
-// reduceAcc records the node IDs and values passed to a Reduce step function.
+// reduceAcc records the node IDs and values passed to a Reduce add function.
 type reduceAcc struct {
 	ids    []ID
 	values []string
@@ -109,13 +110,13 @@ type reduceAcc struct {
 
 func TestTerminalsReduce(t *testing.T) {
 	errNode := errors.New("node error")
-	errStep := errors.New("step error")
+	errAdd := errors.New("add error")
 	tests := []struct {
 		name      string
 		numNodes  int
 		responses []NodeResponse[proto.Message]
 		n         int
-		failAt    int // step returns errStep when it folds this many responses; 0 never fails
+		failAt    int // add returns errAdd when it folds this many responses; 0 never fails
 		wantIDs   []ID
 		wantVals  []string
 		wantErr   error
@@ -158,7 +159,7 @@ func TestTerminalsReduce(t *testing.T) {
 			failAt:   2,
 			wantIDs:  []ID{1, 2},
 			wantVals: []string{"a", "b"},
-			wantErr:  errStep,
+			wantErr:  errAdd,
 		},
 		{
 			name:     "StepErrorOnNthFoldWins",
@@ -172,7 +173,7 @@ func TestTerminalsReduce(t *testing.T) {
 			failAt:   2,
 			wantIDs:  []ID{1, 2},
 			wantVals: []string{"a", "b"},
-			wantErr:  errStep,
+			wantErr:  errAdd,
 		},
 		{
 			name:     "ErrorThenSuccessFromSameNodeCounted",
@@ -246,12 +247,12 @@ func TestTerminalsReduce(t *testing.T) {
 			r := newResponses(makeCallContext[*pb.StringValue, *pb.StringValue](t, tt.numNodes, tt.responses))
 			got, err := r.Reduce(tt.n, reduceAcc{}, func(acc reduceAcc, resp NodeResponse[*pb.StringValue]) (reduceAcc, error) {
 				if resp.Err != nil {
-					t.Errorf("step got response with error %v", resp.Err)
+					t.Errorf("add got response with error %v", resp.Err)
 				}
 				acc.ids = append(acc.ids, resp.NodeID)
 				acc.values = append(acc.values, resp.Value.GetValue())
 				if len(acc.ids) == tt.failAt {
-					return acc, errStep
+					return acc, errAdd
 				}
 				return acc, nil
 			})
@@ -267,9 +268,9 @@ func TestTerminalsReduce(t *testing.T) {
 					t.Fatalf("Reduce() error = %v, want nil", err)
 				}
 				return
-			case errStep:
-				if err != errStep {
-					t.Fatalf("Reduce() error = %v, want %v", err, errStep)
+			case errAdd:
+				if err != errAdd {
+					t.Fatalf("Reduce() error = %v, want %v", err, errAdd)
 				}
 				return
 			}
@@ -313,20 +314,48 @@ func TestTerminalsReduce(t *testing.T) {
 	panicTests := []struct {
 		name string
 		n    int
-		step func(int, NodeResponse[*pb.StringValue]) (int, error)
+		add  func(int, NodeResponse[*pb.StringValue]) (int, error)
 		want string
 	}{
-		{name: "ZeroThreshold", n: 0, step: func(c int, _ NodeResponse[*pb.StringValue]) (int, error) { return c, nil }, want: "gorums: Reduce called with non-positive threshold 0"},
-		{name: "NegativeThreshold", n: -1, step: func(c int, _ NodeResponse[*pb.StringValue]) (int, error) { return c, nil }, want: "gorums: Reduce called with non-positive threshold -1"},
-		{name: "NilStep", n: 1, step: nil, want: "gorums: Reduce called with nil step function"},
+		{name: "ZeroThreshold", n: 0, add: func(c int, _ NodeResponse[*pb.StringValue]) (int, error) { return c, nil }, want: "gorums: Reduce called with non-positive threshold 0"},
+		{name: "NegativeThreshold", n: -1, add: func(c int, _ NodeResponse[*pb.StringValue]) (int, error) { return c, nil }, want: "gorums: Reduce called with non-positive threshold -1"},
+		{name: "NilAdd", n: 1, add: nil, want: "gorums: Reduce called with nil add function"},
 	}
 	for _, tt := range panicTests {
 		t.Run(tt.name+"Panics", func(t *testing.T) {
 			r := newResponses(makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, nil))
 			checkPanic(t, tt.want, func() {
-				_, _ = r.Reduce(tt.n, 0, tt.step)
+				_, _ = r.Reduce(tt.n, 0, tt.add)
 			})
 		})
+	}
+}
+
+// TestTerminalsReduceNilInitial verifies that Reduce passes a nil initial
+// accumulator to add unchanged, so add can allocate it on first use.
+func TestTerminalsReduceNilInitial(t *testing.T) {
+	responses := []NodeResponse[proto.Message]{
+		{NodeID: 1, Value: pb.String("a")},
+		{NodeID: 2, Value: pb.String("b")},
+	}
+	r := newResponses(makeCallContext[*pb.StringValue, *pb.StringValue](t, 2, responses))
+	calls := 0
+	got, err := r.Reduce(2, map[ID]string(nil), func(acc map[ID]string, resp NodeResponse[*pb.StringValue]) (map[ID]string, error) {
+		calls++
+		if calls == 1 && acc != nil {
+			t.Errorf("first add got %v, want the nil initial map", acc)
+		}
+		if acc == nil {
+			acc = make(map[ID]string)
+		}
+		acc[resp.NodeID] = resp.Value.GetValue()
+		return acc, nil
+	})
+	if err != nil {
+		t.Fatalf("Reduce() error = %v, want nil", err)
+	}
+	if want := map[ID]string{1: "a", 2: "b"}; !maps.Equal(got, want) {
+		t.Errorf("Reduce() = %v, want %v", got, want)
 	}
 }
 
