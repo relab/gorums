@@ -33,6 +33,7 @@ const (
 
 type (
 	Config        = gorums.Config
+	ID            = gorums.ID
 	Node          = gorums.Node
 	NodeContext   = gorums.NodeContext
 	ConfigContext = gorums.ConfigContext
