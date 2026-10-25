@@ -11,8 +11,8 @@ import (
 )
 
 // Call represents a lazily dispatched quorum call.
-// Register interceptors with [Call.Intercept] before consuming its responses.
-// A Call may be consumed once.
+// Register interceptors with [Call.Intercept] before the call is dispatched.
+// A Call may be dispatched once.
 type Call[Req, Resp proto.Message] struct {
 	*Responses[Resp]
 	ctx *CallContext[Req, Resp]
@@ -61,9 +61,10 @@ func MapResponse[Req, Resp proto.Message](fn func(Resp, *Node) Resp) ClientInter
 //
 //	resp, err := storage.ReadQC(ctx, req).Intercept(logging, audit).Majority()
 //
-// Intercept must be called before any consuming method (a terminal method,
-// [Call.Async], a correctable call, or ranging Results). Calling it after
-// dispatch has started panics. Nil interceptors are ignored.
+// Intercept must be called before any method that dispatches the call: a
+// terminal method, [Call.Async], [Responses.Correctable], or
+// [Responses.Results]. Calling it after the call was dispatched panics. Nil
+// interceptors are ignored.
 func (c *Call[Req, Resp]) Intercept(ics ...ClientInterceptor[Req, Resp]) *Call[Req, Resp] {
 	c.ctx.intercept(ics...)
 	// The interceptors may have wrapped the response sequence; re-sync the
@@ -87,7 +88,7 @@ func (c *Call[Req, Resp]) Intercept(ics ...ClientInterceptor[Req, Resp]) *Call[R
 // ends, so read the replies of such a call soon, or use
 // [Responses.Correctable].
 //
-// Async consumes the call: calling Async or [Call.Intercept] after the call
+// Async dispatches the call. Calling Async or [Call.Intercept] after the call
 // was dispatched panics.
 func (c *Call[Req, Resp]) Async() *Responses[Resp] {
 	if c.ctx.dispatched.Swap(true) {
@@ -98,8 +99,8 @@ func (c *Call[Req, Resp]) Async() *Responses[Resp] {
 }
 
 // OnewayCall represents a lazily dispatched multicast or unicast call.
-// [OnewayCall.Send] and [OnewayCall.Async] each consume the call; invoking
-// either after the call has been consumed panics.
+// [OnewayCall.Send] and [OnewayCall.Async] each dispatch the call; invoking
+// either after the call was dispatched panics.
 type OnewayCall[Req proto.Message] struct {
 	ctx     *CallContext[Req, *emptypb.Empty]
 	unicast bool
@@ -130,7 +131,7 @@ func (c *OnewayCall[Req]) Intercept(ics ...ClientInterceptor[Req, *emptypb.Empty
 // wait for the send. Use [OnewayCall.Async] also to keep several sends in
 // flight from a single goroutine.
 //
-// Send consumes the call; calling it again on the same handle panics.
+// Send dispatches the call; calling it again on the same handle panics.
 func (c *OnewayCall[Req]) Send() error {
 	c.dispatch()
 	return c.collect()
@@ -146,14 +147,14 @@ func (c *OnewayCall[Req]) Send() error {
 // Async starts no goroutine; [OnewayAsync.Wait] collects the send confirmations
 // on the caller's goroutine. Dropping the handle without calling Wait is safe.
 //
-// Async consumes the call; calling it again on the same handle panics.
+// Async dispatches the call; calling it again on the same handle panics.
 func (c *OnewayCall[Req]) Async() *OnewayAsync {
 	c.dispatch()
 	return &OnewayAsync{collect: c.collect}
 }
 
 // dispatch installs the response channel and sends the request exactly once.
-// It panics if the handle was already consumed.
+// It panics if the handle was already dispatched.
 func (c *OnewayCall[Req]) dispatch() {
 	if c.ctx.dispatched.Swap(true) {
 		panic("gorums: OnewayCall.Send or OnewayCall.Async called more than once on the same handle")
