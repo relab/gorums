@@ -175,7 +175,8 @@ message WriteRequest {
 
 For the `unicast` and `multicast` call types, the response message type will be unused by Gorums.
 
-> **Reserved names:** The following names are reserved by Gorums: `Config`, `Node`, `NodeContext`, `ConfigContext`.
+> **Reserved names:** The following names are reserved by Gorums: `Config`, `ID`, `Node`, `NodeContext`, `ConfigContext`.
+> A message field named `ID` is fine; only type names are reserved.
 > Gorums injects type aliases with these names into every generated `_gorums.pb.go` file, so the names cannot be used for messages, enums, or RPC methods in any `.proto` file of the same Go package.
 > The generator reports an error for a `.proto` file that uses one of them.
 
