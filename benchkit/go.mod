@@ -1,12 +1,12 @@
 module github.com/relab/gorums/benchkit
 
-go 1.27.2
+go 1.27.3
 
 require (
-	github.com/google/pprof v0.0.0-20261008003335-7bae8d8c4c9e
-	github.com/relab/gorums v0.11.0
+	github.com/google/pprof v0.0.0-20261016150608-1facf8f91b50
+	github.com/relab/gorums v0.12.0
 	github.com/relab/iago v0.0.0-20260715045113-2b8915a614a8
-	golang.org/x/exp v0.0.0-20261007192929-f45ad48fbe92
+	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e
 	golang.org/x/sync v0.24.0
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
@@ -15,14 +15,15 @@ require (
 require (
 	github.com/kevinburke/ssh_config v1.6.0 // indirect
 	github.com/kr/fs v0.1.0 // indirect
-	github.com/pkg/sftp v1.13.11 // indirect
+	github.com/pkg/sftp v1.13.12 // indirect
 	github.com/relab/wrfs v0.0.0-20220416082020-a641cd350078 // indirect
 	go.uber.org/goleak v1.3.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/net v0.60.0 // indirect
+	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20261005182115-fad411399dd8 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
 )
 
 // benchkit tracks the gorums source in this repository rather than a released

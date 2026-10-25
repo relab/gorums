@@ -10,9 +10,9 @@ import (
 // The release guide describes how to change them when cutting a release.
 const (
 	Major      = 0
-	Minor      = 11
+	Minor      = 12
 	Patch      = 0
-	PreRelease = "devel"
+	PreRelease = ""
 )
 
 // String formats the version string for this module in semver format.
