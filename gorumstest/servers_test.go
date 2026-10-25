@@ -10,11 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/relab/gorums/internal/testutils/mockcall"
+
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
-	"github.com/relab/gorums/internal/testutils/mock"
-	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
-	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // TestServersNilServerFunc verifies that a nil srvFn selects the default server.
@@ -29,7 +28,7 @@ func TestServersNilServerFunc(t *testing.T) {
 func TestServersEchoServer(t *testing.T) {
 	node := gorumstest.Node(t, gorumstest.EchoServer)
 	ctx := gorumstest.Context(t, 5*time.Second)
-	resp, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(ctx), pb.String("hello"), mock.TestMethod)
+	resp, err := mockcall.RemoteCall(node.Context(ctx), "hello")
 	if err != nil {
 		t.Fatalf("RemoteCall: %v", err)
 	}

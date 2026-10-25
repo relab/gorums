@@ -11,7 +11,6 @@ import (
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"github.com/relab/gorums/internal/testutils/mockcall"
-	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -73,7 +72,7 @@ func TestTreeMulticast(t *testing.T) {
 					ctx.Release()
 					if children := tree.ChildrenOf(srv.NodeID()); len(children) > 0 {
 						req := gorums.AsProto[*pb.StringValue](in)
-						if err := gorumsimpl.Multicast(children.Context(ctx), req, mock.TestMethod).Send(); err != nil {
+						if err := mockcall.Multicast(children.Context(ctx), req.GetValue()).Send(); err != nil {
 							t.Errorf("node %d: relay: %v", srv.NodeID(), err)
 						}
 					}
@@ -145,14 +144,14 @@ func TestTreeMulticastRelayOrder(t *testing.T) {
 						}
 						var relay *gorums.OnewayAsync
 						if tt.relayBeforeRelease {
-							relay = gorumsimpl.Multicast(children.Context(ctx), req, mock.TestMethod).Async()
+							relay = mockcall.Multicast(children.Context(ctx), req.GetValue()).Async()
 						}
 						ctx.Release()
 						if req.GetValue() == "0" {
 							<-relayedOne
 						}
 						if !tt.relayBeforeRelease {
-							relay = gorumsimpl.Multicast(children.Context(ctx), req, mock.TestMethod).Async()
+							relay = mockcall.Multicast(children.Context(ctx), req.GetValue()).Async()
 						}
 						if req.GetValue() == "1" {
 							close(relayedOne)

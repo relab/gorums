@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/relab/gorums/internal/testutils/mockcall"
+
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
-	"github.com/relab/gorums/internal/testutils/mock"
-	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -70,11 +70,7 @@ func TestCustomLoggingInterceptor(t *testing.T) {
 	ctx := gorumstest.Context(t, 2*time.Second)
 
 	// Use the custom logging interceptor from this external package
-	responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-		config.Context(ctx),
-		pb.String("test"),
-		mock.TestMethod,
-	).Intercept(LoggingInterceptor[*pb.StringValue, *pb.StringValue])
+	responses := mockcall.QuorumCall(config.Context(ctx), "test").Intercept(LoggingInterceptor[*pb.StringValue, *pb.StringValue])
 
 	result, err := responses.Majority()
 	if err != nil {
@@ -92,11 +88,7 @@ func TestCustomFilterInterceptor(t *testing.T) {
 
 	// Use a filter interceptor that only keeps responses from node 1
 	// (In practice, this would filter based on response content)
-	responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-		config.Context(ctx),
-		pb.String("test"),
-		mock.TestMethod,
-	).Intercept(FilterInterceptor[*pb.StringValue](
+	responses := mockcall.QuorumCall(config.Context(ctx), "test").Intercept(FilterInterceptor[*pb.StringValue](
 		func(resp gorums.NodeResponse[*pb.StringValue]) bool {
 			return resp.Err == nil // Only keep successful responses
 		},
@@ -119,11 +111,7 @@ func TestInterceptorChaining(t *testing.T) {
 	var count int
 
 	// Chain multiple custom interceptors
-	responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-		config.Context(ctx),
-		pb.String("test"),
-		mock.TestMethod,
-	).Intercept(
+	responses := mockcall.QuorumCall(config.Context(ctx), "test").Intercept(
 		LoggingInterceptor[*pb.StringValue, *pb.StringValue],
 		CountingInterceptor[*pb.StringValue, *pb.StringValue](&count),
 	)
@@ -150,11 +138,7 @@ func TestCustomInterceptorWithMapRequest(t *testing.T) {
 	var count int
 
 	// Mix custom interceptor with built-in MapRequest
-	responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-		config.Context(ctx),
-		pb.String("test"),
-		mock.TestMethod,
-	).Intercept(
+	responses := mockcall.QuorumCall(config.Context(ctx), "test").Intercept(
 		// Custom: count responses
 		CountingInterceptor[*pb.StringValue, *pb.StringValue](&count),
 		// Built-in: transform request (identity transform for this test)
@@ -192,11 +176,7 @@ func BenchmarkQuorumCallMapRequest(b *testing.B) {
 		b.Run(fmt.Sprintf("NoTransform/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-					cfgCtx,
-					pb.String("benchmark payload"),
-					mock.TestMethod,
-				)
+				responses := mockcall.QuorumCall(cfgCtx, "benchmark payload")
 				if _, err := responses.Majority(); err != nil {
 					b.Fatal(err)
 				}
@@ -207,11 +187,7 @@ func BenchmarkQuorumCallMapRequest(b *testing.B) {
 		b.Run(fmt.Sprintf("MapRequestIdentity/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-					cfgCtx,
-					pb.String("benchmark payload"),
-					mock.TestMethod,
-				).Intercept(
+				responses := mockcall.QuorumCall(cfgCtx, "benchmark payload").Intercept(
 					gorums.MapRequest[*pb.StringValue, *pb.StringValue](
 						func(req *pb.StringValue, _ *gorums.Node) *pb.StringValue {
 							return req
@@ -228,11 +204,7 @@ func BenchmarkQuorumCallMapRequest(b *testing.B) {
 		b.Run(fmt.Sprintf("MapRequestPerNode/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-					cfgCtx,
-					pb.String("benchmark payload"),
-					mock.TestMethod,
-				).Intercept(
+				responses := mockcall.QuorumCall(cfgCtx, "benchmark payload").Intercept(
 					gorums.MapRequest[*pb.StringValue, *pb.StringValue](
 						func(req *pb.StringValue, n *gorums.Node) *pb.StringValue {
 							return pb.String(fmt.Sprintf("%s-node-%d", req.GetValue(), n.ID()))
