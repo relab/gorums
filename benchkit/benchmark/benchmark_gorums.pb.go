@@ -39,9 +39,6 @@ type (
 	ConfigContext = gorums.ConfigContext
 )
 
-// AsyncEcho is a future for async quorum calls returning *Echo.
-type AsyncEcho = *gorums.Async[*Echo]
-
 // CorrectableEcho is a correctable object for quorum calls returning *Echo.
 type CorrectableEcho = *gorums.Correctable[*Echo]
 

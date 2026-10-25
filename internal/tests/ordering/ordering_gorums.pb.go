@@ -38,9 +38,6 @@ type (
 	ConfigContext = gorums.ConfigContext
 )
 
-// AsyncResponse is a future for async quorum calls returning *Response.
-type AsyncResponse = *gorums.Async[*Response]
-
 // CorrectableResponse is a correctable object for quorum calls returning *Response.
 type CorrectableResponse = *gorums.Correctable[*Response]
 
