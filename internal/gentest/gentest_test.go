@@ -2,6 +2,8 @@ package gentest_test
 
 import (
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -72,5 +74,19 @@ func TestGentestNormalize(t *testing.T) {
 	want := "// versions:\n// \tprotoc-gen-gorums VERSION\n// \tprotoc            VERSION\n// \tprotoc-gen-go VERSION\n// \tprotoc        VERSION\n// source: a.proto\n"
 	if got := gentest.Normalize(in); got != want {
 		t.Errorf("Normalize() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestGentestRootDir(t *testing.T) {
+	root := gentest.RootDir(t)
+	if !filepath.IsAbs(root) {
+		t.Errorf("RootDir() = %q, want an absolute path", root)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(data), "module github.com/relab/gorums\n") {
+		t.Errorf("RootDir() = %q, whose go.mod is not the gorums module", root)
 	}
 }
