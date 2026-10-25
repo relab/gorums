@@ -380,7 +380,8 @@ func (s *storageServer) WriteMulticast(ctx gorums.ServerContext, req *pb.WriteRe
 }
 ```
 
-`OnewayCall.Async` and `Call.Async` (see [Async and Correctable Variants](#async-and-correctable-variants)) send the requests before they return, so the dispatches leave in the order the handlers reach them.
+`OnewayCall.Async` and `Call.Async` (see [Async and Correctable Variants](#async-and-correctable-variants)) send the requests before they return.
+So when a handler dispatches its nested call before `Release`, the nested calls leave in the order in which the requests reached the handler.
 A call dispatched after `Release` may overtake the same call from the handler of the next request.
 That is correct only when the nested calls of different requests may run in any order, as for the nested reads in [Nested Quorum Calls with ServerContext.PeerConfig](#nested-quorum-calls-with-servercontextpeerconfig).
 A handler that waits for a reply before `Release` keeps the next request waiting.
@@ -552,7 +553,7 @@ func newestReply(
 }
 ```
 
-The call sends its requests when `fn` starts to consume the sequence.
+The call is dispatched when `fn` starts to range over the sequence.
 Your function decides how to handle each node error and when to stop.
 `Aggregate` returns the error from `fn` unchanged.
 `Aggregate` panics if `fn` is nil.
@@ -659,7 +660,7 @@ if err != nil {
 
 When you need only the agreed value, use `agreement.Value` and ignore the evidence.
 
-If no key gets `n` responses, `Matching` returns an empty agreement and an error that matches `gorums.ErrIncomplete`.
+If no key gets `n` responses, `Matching` returns an empty agreement and a `gorums.ErrIncomplete` error.
 This error also holds the node errors, but not the nodes that a request transform skipped.
 `Matching` panics if `n` is not positive or if `key` is nil.
 
@@ -704,14 +705,14 @@ It panics before it sends any request.
 
 Understanding when messages are actually sent matters for ordering and for reasoning about concurrent calls.
 
-**Quorum calls are lazy.** Messages are not sent to nodes until the caller consumes the `*Responses[T]` object by calling a terminal method (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`) or by calling `.Results()` to begin iterating.
-This gives interceptors a chance to register per-node request transformations before any bytes go on the wire.
+**Quorum calls are lazy.** A quorum call is not dispatched until the caller calls a terminal method (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`), `Async`, or `Correctable`, or ranges over `.Results()`.
+So interceptors can register per-node request transformations before any message is sent.
 
 **Async sends immediately.** `Async()` sends the requests before it returns.
 This preserves message ordering when one goroutine issues several calls in sequence:
 
 ```go
-// Messages for both calls are enqueued in order before either reply is read.
+// Both calls are dispatched in order before either reply is read.
 a := WriteQC(cfgCtx, reqA).Async()
 b := WriteQC(cfgCtx, reqB).Async()
 _, _ = a.Majority()
@@ -720,12 +721,18 @@ _, _ = b.Majority()
 
 Collecting the replies one call after the other takes about as long as the slowest call, because the replies of both calls arrive in their buffers at the same time.
 
-**Multicast and unicast are lazy too.** A one-way call returns an `OnewayCall` handle instead of a `*Responses[T]`, but the request is not enqueued until the caller consumes that handle with `.Send()` or `.Async()`.
-A handle that is dropped without consuming it never dispatches.
+**Multicast and unicast are lazy too.** A one-way call returns a `*OnewayCall[Req]` handle.
+The call is not dispatched until the caller calls `.Send()` or `.Async()` on the handle.
+If the caller drops the handle without calling either method, the call is never dispatched.
 
-Both terminals report every send failure, so a one-way call cannot fail silently.
-They return once the message has reached each node's stream; since a one-way call carries no reply, there is nothing further to wait for.
-A server handler that multicasts dispatches with `.Async()` before `ServerContext.Release()` and calls `.Wait()` after it, so that the sends keep the order of the requests and the next request does not wait for them; see [Request Ordering and ServerContext.Release](#request-ordering-and-servercontextrelease).
+`.Send()` and the `.Wait()` of an `.Async()` handle report every send failure, so a one-way call cannot fail silently.
+Each send completes when the message reaches the stream of its node.
+A one-way call has no reply, so there is nothing more to wait for.
+
+A server handler that multicasts calls `.Async()` before `ServerContext.Release()` and `.Wait()` after it.
+The sends then keep the order of the requests.
+The next request also does not wait for the sends.
+For details, see [Request Ordering and ServerContext.Release](#request-ordering-and-servercontextrelease).
 
 `.Send()` blocks until the sends complete, so one goroutine holds a single outstanding message per node — the same depth a quorum call has.
 `.Async()` dispatches and returns a `*OnewayAsync` whose `.Wait()` collects the errors later, letting one goroutine keep several calls in flight:
@@ -748,7 +755,7 @@ Summary:
 
 | Call type            | When messages are sent              |
 | -------------------- | ----------------------------------- |
-| Quorum call          | On first consumption (lazy)         |
+| Quorum call          | On dispatch (lazy)                  |
 | Quorum call, `Async` | Immediately, before `Async` returns |
 | Multicast / unicast  | On `.Send()` or `.Async()` (lazy)   |
 
@@ -814,7 +821,22 @@ func countSuccessful(seq gorums.ResponseSeq[*Response]) (int, error) {
 }
 ```
 
-To drop responses on other conditions, use an `if` statement in the loop.
+To skip responses on other conditions, use an `if` statement in the loop:
+
+```go
+// countValid counts the successful responses that pass isValid.
+func countValid(seq gorums.ResponseSeq[*Response]) (int, error) {
+  count := 0
+  for resp := range seq.IgnoreErrors() {
+    if !isValid(resp.Value) {
+      continue // skip invalid responses
+    }
+    count++
+  }
+  return count, nil
+}
+```
+
 To drop or change responses before a built-in terminal method sees them, use an interceptor; see [Interceptors for Request/Response Transformation](#interceptors-for-requestresponse-transformation).
 
 ### Per-Node Error Inspection
