@@ -12,7 +12,7 @@
 //
 //   - quorumcall: fan the request out to every node in a configuration and
 //     return a handle whose terminal methods (First, Majority, All, Threshold,
-//     Aggregate, Reduce, Matching, MatchingCertificate) wait for the responses
+//     Aggregate, Reduce, Matching, MatchingAgreement) wait for the responses
 //     and aggregate them into a result.
 //   - rpc: a plain unary call to a single node.
 //   - multicast: a one-way call to every node in a configuration.

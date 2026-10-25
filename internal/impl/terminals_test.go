@@ -364,9 +364,9 @@ func firstLetter(v *pb.StringValue) byte {
 	return v.GetValue()[0]
 }
 
-// matchingFunc adapts Matching and MatchingCertificate to one signature so
+// matchingFunc adapts Matching and MatchingAgreement to one signature so
 // that the same test table runs against both methods.
-type matchingFunc func(*Responses[*pb.StringValue], int) (Certificate[*pb.StringValue], error)
+type matchingFunc func(*Responses[*pb.StringValue], int) (Agreement[*pb.StringValue], error)
 
 func TestTerminalsMatching(t *testing.T) {
 	errNode := errors.New("node error")
@@ -378,16 +378,16 @@ func TestTerminalsMatching(t *testing.T) {
 		{
 			name:     "Matching",
 			hasCerts: false,
-			call: func(r *Responses[*pb.StringValue], n int) (Certificate[*pb.StringValue], error) {
+			call: func(r *Responses[*pb.StringValue], n int) (Agreement[*pb.StringValue], error) {
 				value, err := r.Matching(n, firstLetter)
-				return Certificate[*pb.StringValue]{Value: value}, err
+				return Agreement[*pb.StringValue]{Value: value}, err
 			},
 		},
 		{
-			name:     "MatchingCertificate",
+			name:     "MatchingAgreement",
 			hasCerts: true,
-			call: func(r *Responses[*pb.StringValue], n int) (Certificate[*pb.StringValue], error) {
-				return r.MatchingCertificate(n, firstLetter)
+			call: func(r *Responses[*pb.StringValue], n int) (Agreement[*pb.StringValue], error) {
+				return r.MatchingAgreement(n, firstLetter)
 			},
 		},
 	}
@@ -446,7 +446,7 @@ func TestTerminalsMatching(t *testing.T) {
 			wantVals:  []string{"a1", "a2"},
 		},
 		{
-			name:     "ErrorsAndSkipsNotInCertificate",
+			name:     "ErrorsAndSkipsNotInAgreement",
 			numNodes: 4,
 			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Err: errNode},
@@ -501,16 +501,16 @@ func TestTerminalsMatching(t *testing.T) {
 					var gotVals []string
 					for _, resp := range got.Responses {
 						if resp.Err != nil {
-							t.Errorf("certificate holds response with error %v", resp.Err)
+							t.Errorf("agreement holds response with error %v", resp.Err)
 						}
 						gotIDs = append(gotIDs, resp.NodeID)
 						gotVals = append(gotVals, resp.Value.GetValue())
 					}
 					if !slices.Equal(gotIDs, tt.wantIDs) {
-						t.Errorf("%s() certificate ids = %v, want %v", m.name, gotIDs, tt.wantIDs)
+						t.Errorf("%s() agreement ids = %v, want %v", m.name, gotIDs, tt.wantIDs)
 					}
 					if !slices.Equal(gotVals, tt.wantVals) {
-						t.Errorf("%s() certificate values = %v, want %v", m.name, gotVals, tt.wantVals)
+						t.Errorf("%s() agreement values = %v, want %v", m.name, gotVals, tt.wantVals)
 					}
 				}
 				if tt.wantErr == nil {
@@ -556,10 +556,10 @@ func TestTerminalsMatching(t *testing.T) {
 				_, _ = r.Matching(tt.n, tt.key)
 			})
 		})
-		t.Run("MatchingCertificate/"+tt.name+"Panics", func(t *testing.T) {
+		t.Run("MatchingAgreement/"+tt.name+"Panics", func(t *testing.T) {
 			r := newResponses(makeCallContext[*pb.StringValue, *pb.StringValue](t, 3, nil))
-			checkPanic(t, "gorums: MatchingCertificate called with "+tt.want, func() {
-				_, _ = r.MatchingCertificate(tt.n, tt.key)
+			checkPanic(t, "gorums: MatchingAgreement called with "+tt.want, func() {
+				_, _ = r.MatchingAgreement(tt.n, tt.key)
 			})
 		})
 	}
