@@ -429,7 +429,8 @@ flowchart LR
 ### Call Engine (`internal/impl`)
 
 Each call constructor builds a `CallContext` that holds the request, the target `Config`, the response channel, and the response iterator (`ResponseSeq`).
-A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`, `MatchingAgreement`), as well as the `Async` and `Correctable` futures.
+A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`, `MatchingAgreement`), as well as the `Correctable` future.
+`Call.Async` sends the requests at once and returns the dispatched `Responses`, so any terminal method collects the replies later.
 A one-way call (`Multicast`, `Unicast`) returns a `OnewayCall`, whose `Send` waits for the send confirmations and whose `Async` returns an `OnewayAsync`.
 A `ClientInterceptor` wraps the response iterator and may register per-node request transformations before the call is dispatched.
 `CallContext` reaches each node's send path through `conn.NodeTransport`.
@@ -445,6 +446,7 @@ classDiagram
     }
     class Call~Req, Resp~ {
         Intercept(interceptors) Call
+        Async() Responses
     }
     class Responses~Resp~ {
         First() Resp, error
@@ -470,9 +472,6 @@ classDiagram
     class ClientInterceptor~Req, Resp~ {
         <<func>>
     }
-    class Async~Resp~ {
-        Get() Resp, error
-    }
     class Correctable~Resp~ {
         Get() Resp, int, error
         Watch(level)
@@ -492,7 +491,7 @@ classDiagram
     Responses --> ResponseSeq : seq
     Responses --> starter : start
     starter <|.. CallContext
-    Responses ..> Async : AsyncMajority() etc.
+    Call ..> Responses : Async()
     Responses ..> Correctable : Correctable(n)
     CallContext --> ConnConfig : config
     CallContext --> ResponseSeq : responseSeq

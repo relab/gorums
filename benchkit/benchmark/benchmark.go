@@ -28,8 +28,21 @@ type Target struct {
 	Symmetric *SymmetricTarget
 }
 
-// asyncQCFunc issues one async quorum call and returns its future.
-type asyncQCFunc func(*ConfigContext, *Echo, int) AsyncEcho
+// asyncQCFunc dispatches one quorum call and returns a function that waits for
+// quorumSize replies and reports the call's error.
+type asyncQCFunc func(ctx *ConfigContext, in *Echo, quorumSize int) (wait func() error)
+
+// asyncThreshold is the [asyncQCFunc] of the AsyncQuorumCall benchmark. It
+// dispatches the call with [gorums.Call.Async], so the requests are sent before
+// it returns, and the returned function collects the replies with
+// [gorums.Responses.Threshold].
+func asyncThreshold(ctx *ConfigContext, in *Echo, quorumSize int) func() error {
+	responses := QuorumCall(ctx, in).Async()
+	return func() error {
+		_, err := responses.Threshold(quorumSize)
+		return err
+	}
+}
 
 // errAsyncQCRampUnsupported is returned by runAsyncQCBenchmark when rate
 // ramping (-rate-step/-rate-step-max) is requested; AsyncQuorumCall does not
@@ -103,13 +116,13 @@ func runAsyncQCBenchmark(opts benchkit.Options, config Config, f asyncQCFunc) (*
 				sent.Add(1)
 			}
 			start := time.Now()
-			fut := f(cfgCtx, msg, opts.QuorumSize)
+			wait := f(cfgCtx, msg, opts.QuorumSize)
 			// The completion goroutine times the call and does nothing else.
 			// Dispatching from here instead would put this goroutine's own work
 			// between the call completing and the clock being read, so the
 			// harness's scheduling would land inside the measurement.
 			g.Go(func() error {
-				_, err := fut.Get()
+				err := wait()
 				elapsed := time.Since(start)
 				<-inFlight
 				if !asyncQCComplete(err, elapsed, m) {
@@ -265,9 +278,7 @@ var benchDescs = []benchDesc{
 		Needs:       needsConfig,
 		build: func(cfg Config, _ *SymmetricTarget) func(benchkit.Options) (*benchkit.Result, error) {
 			return func(opts benchkit.Options) (*benchkit.Result, error) {
-				return runAsyncQCBenchmark(opts, cfg, func(ctx *ConfigContext, in *Echo, quorumSize int) AsyncEcho {
-					return QuorumCall(ctx, in).AsyncThreshold(quorumSize)
-				})
+				return runAsyncQCBenchmark(opts, cfg, asyncThreshold)
 			}
 		},
 	},

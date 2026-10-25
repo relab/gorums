@@ -380,7 +380,8 @@ func verifiedQuorum(responses *gorums.Responses[*SignedResponse]) (*SignedRespon
 
 ## Async Calls
 
-Async calls remain similar but now use terminal methods to create futures.
+An async call sends its requests at once and collects the replies later.
+`Async()` sends the requests and returns the dispatched responses; any terminal method then collects the replies.
 
 ### Basic Async Pattern
 
@@ -395,52 +396,24 @@ reply, err := future.Get()
 **After:**
 
 ```go
-// Create async future with terminal method
-future := ReadQC(cfgCtx, req).AsyncMajority()
+// Send the requests now
+responses := ReadQC(cfgCtx, req).Async()
 // Do other work...
-reply, err := future.Get()
+reply, err := responses.Majority()
 ```
 
-### Async Terminal Methods
+### Async with Any Terminal Method
 
-The `First`, `Majority`, `All`, and `Threshold` terminal methods have async variants:
+Every terminal method works after `Async`:
 
 ```go
-// Async majority
-fut := ReadQC(cfgCtx, req).AsyncMajority()
-
-// Async first
-fut := ReadQC(cfgCtx, req).AsyncFirst()
-
-// Async all
-fut := ReadQC(cfgCtx, req).AsyncAll()
-
-// Async threshold
-fut := ReadQC(cfgCtx, req).AsyncThreshold(3)
+reply, err := ReadQC(cfgCtx, req).Async().First()
+reply, err = ReadQC(cfgCtx, req).Async().Threshold(3)
+reply, err = ReadQC(cfgCtx, req).Async().Aggregate(newestValue)
 ```
 
-### Using Async with Custom Aggregation
-
-For custom aggregation with async, get responses first then apply aggregation:
-
-```go
-// Start the quorum call
-responses := ReadQC(cfgCtx, req)
-
-// Get async future for custom threshold
-future := responses.AsyncThreshold(3)
-
-// Do other work...
-
-// Wait for completion
-reply, err := future.Get()
-if err != nil {
-    return err
-}
-
-// Now apply custom aggregation to collected responses
-result := customAggregation(reply)
-```
+`Async` starts no goroutine.
+To wait for the replies in parallel with other work, call the terminal method in a goroutine of your own.
 
 ## Correctable Calls
 
@@ -671,8 +644,8 @@ if err != nil {
 - [ ] Update all quorum call sites
   - [ ] Replace `cfg.Read(ctx, req)` with `ReadQC(cfgCtx, req).Majority()`
   - [ ] Or use custom aggregation: `customAggregation(ReadQC(cfgCtx, req))`
-- [ ] Update async calls to use async terminal methods
-  - [ ] Replace `cfg.ReadAsync(ctx, req)` with `ReadQC(cfgCtx, req).AsyncMajority()`
+- [ ] Update async calls to use `Async()`
+  - [ ] Replace `cfg.ReadAsync(ctx, req)` with `ReadQC(cfgCtx, req).Async()`, and collect the replies later with a terminal method such as `.Majority()`
 - [ ] Update correctable calls to use `.Correctable(threshold)`
   - [ ] Replace `cfg.ReadCorrectable(ctx, req)` with `ReadQC(cfgCtx, req).Correctable(threshold)`
 - [ ] Test thoroughly with your existing test suite

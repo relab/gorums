@@ -140,7 +140,7 @@ service Storage {
 
   // ReadQC is a FIFO-ordered synchronous quorum call.
   // Use terminal methods (.Majority(), .First(), etc.) to retrieve results.
-  // Use .AsyncMajority() for async variant, .Correctable(n) for correctable variant.
+  // Use .Async() to send at once and collect later, .Correctable(n) for progressive results.
   rpc ReadQC(ReadRequest) returns (ReadResponse) {
     option (gorums.quorumcall) = true;
   }
@@ -380,7 +380,7 @@ func (s *storageServer) WriteMulticast(ctx gorums.ServerContext, req *pb.WriteRe
 }
 ```
 
-`OnewayCall.Async` and the `Async*` terminals of a quorum call (see [Async and Correctable Variants](#async-and-correctable-variants)) send the requests before they return, so the dispatches leave in the order the handlers reach them.
+`OnewayCall.Async` and `Call.Async` (see [Async and Correctable Variants](#async-and-correctable-variants)) send the requests before they return, so the dispatches leave in the order the handlers reach them.
 A call dispatched after `Release` may overtake the same call from the handler of the next request.
 That is correct only when the nested calls of different requests may run in any order, as for the nested reads in [Nested Quorum Calls with ServerContext.PeerConfig](#nested-quorum-calls-with-servercontextpeerconfig).
 A handler that waits for a reply before `Release` keeps the next request waiting.
@@ -669,22 +669,24 @@ This error also holds the node errors, but not the nodes that a request transfor
 
 ### Async and Correctable Variants
 
-Quorum calls support asynchronous and correctable variants through additional *terminal methods*.
-
-**Async variants** return a future (`*Async[T]`) that can be awaited later:
-
-| Method               | Description          | Returns     |
-| -------------------- | -------------------- | ----------- |
-| `.AsyncFirst()`      | First response async | `*Async[T]` |
-| `.AsyncMajority()`   | Majority async       | `*Async[T]` |
-| `.AsyncAll()`        | All responses async  | `*Async[T]` |
-| `.AsyncThreshold(n)` | Threshold async      | `*Async[T]` |
+**Async dispatch.** `Async()` sends the requests at once and returns the dispatched `*gorums.Responses[T]`.
+Any terminal method then collects the replies later:
 
 ```go
-future := ReadQC(cfgCtx, &ReadRequest{Key: "x"}).AsyncMajority()
+responses := ReadQC(cfgCtx, &ReadRequest{Key: "x"}).Async()
 // Do other work...
-reply, err := future.Get()
+reply, err := responses.Majority()
 ```
+
+`Async` starts no goroutine.
+The terminal method collects the replies on the goroutine that calls it.
+Every terminal method works after `Async`, including `Aggregate`, `Reduce`, and `Matching`.
+A call that you dispatch with `Async` accepts no interceptors: register them with `Intercept` before you call `Async`.
+`Async` panics if the call was already dispatched.
+
+A call buffers one reply per node, and a streaming call buffers ten.
+When a streaming call gets more replies than its buffer holds, the node's receive path waits until the caller reads them or the context ends.
+So read the replies of a streaming call soon after `Async`, or use `Correctable`.
 
 **Correctable variant** provides progressive updates as more responses arrive:
 
@@ -699,8 +701,8 @@ reply, level, err := corr.Get()
 reply, level, err = corr.Get()
 ```
 
-`AsyncThreshold(n)` and `Correctable(n)` panic if `n` is not positive.
-They panic before they send any request.
+`Correctable(n)` panics if `n` is not positive.
+It panics before it sends any request.
 
 ### Send-Timing Model
 
@@ -709,16 +711,18 @@ Understanding when messages are actually sent matters for ordering and for reaso
 **Quorum calls are lazy.** Messages are not sent to nodes until the caller consumes the `*Responses[T]` object by calling a terminal method (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`, `MatchingAgreement`) or by calling `.Results()` to begin iterating.
 This gives interceptors a chance to register per-node request transformations before any bytes go on the wire.
 
-**Async variants send immediately.** `AsyncFirst`, `AsyncMajority`, `AsyncAll`, and `AsyncThreshold` call `sendNow` synchronously before spawning the goroutine that awaits the threshold.
-This preserves message ordering when multiple async calls are issued in sequence:
+**Async sends immediately.** `Async()` sends the requests before it returns.
+This preserves message ordering when one goroutine issues several calls in sequence:
 
 ```go
-// Messages for both calls are enqueued in order before either goroutine runs.
-futA := WriteQC(cfgCtx, reqA).AsyncMajority()
-futB := WriteQC(cfgCtx, reqB).AsyncMajority()
-_, _ = futA.Get()
-_, _ = futB.Get()
+// Messages for both calls are enqueued in order before either reply is read.
+a := WriteQC(cfgCtx, reqA).Async()
+b := WriteQC(cfgCtx, reqB).Async()
+_, _ = a.Majority()
+_, _ = b.Majority()
 ```
+
+Collecting the replies one call after the other takes about as long as the slowest call, because the replies of both calls arrive in their buffers at the same time.
 
 **Multicast and unicast are lazy too.** A one-way call returns an `OnewayCall` handle instead of a `*Responses[T]`, but the request is not enqueued until the caller consumes that handle with `.Send()` or `.Async()`.
 A handle that is dropped without consuming it never dispatches.
@@ -746,11 +750,11 @@ for _, h := range handles {
 
 Summary:
 
-| Call type           | When messages are sent            |
-| ------------------- | --------------------------------- |
-| Quorum call (sync)  | On first consumption (lazy)       |
-| Quorum call (async) | Immediately, before goroutine     |
-| Multicast / unicast | On `.Send()` or `.Async()` (lazy) |
+| Call type            | When messages are sent              |
+| -------------------- | ----------------------------------- |
+| Quorum call          | On first consumption (lazy)         |
+| Quorum call, `Async` | Immediately, before `Async` returns |
+| Multicast / unicast  | On `.Send()` or `.Async()` (lazy)   |
 
 **A cancelled call leaves the node's stream intact.**
 When a call's context ends, the call returns, but the request may still be sent if it was already queued or in flight, and a late reply is discarded.

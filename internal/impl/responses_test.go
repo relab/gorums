@@ -350,7 +350,6 @@ func TestResponsesThresholdPanics(t *testing.T) {
 	}{
 		{"Threshold0", func(r *Responses[*pb.StringValue]) { _, _ = r.Threshold(0) }, "gorums: Threshold called with non-positive threshold 0"},
 		{"ThresholdNegative", func(r *Responses[*pb.StringValue]) { _, _ = r.Threshold(-1) }, "gorums: Threshold called with non-positive threshold -1"},
-		{"AsyncThreshold0", func(r *Responses[*pb.StringValue]) { r.AsyncThreshold(0) }, "gorums: AsyncThreshold called with non-positive threshold 0"},
 		{"Correctable0", func(r *Responses[*pb.StringValue]) { r.Correctable(0) }, "gorums: Correctable called with non-positive threshold 0"},
 	}
 	for _, tt := range tests {

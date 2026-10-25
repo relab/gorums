@@ -110,8 +110,8 @@ type starter interface {
 }
 
 // markDispatched marks the underlying call as dispatched without sending, so a
-// later Intercept panics. Async and correctable calls use this before starting
-// their goroutine.
+// later Intercept panics. A correctable call uses this before it starts its
+// goroutine.
 func (r *Responses[Resp]) markDispatched() {
 	r.start.markDispatched()
 }

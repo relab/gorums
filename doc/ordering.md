@@ -94,7 +94,7 @@ Hence, to preserve message ordering, the following rules must be adhered to:
 
 * (Client-side) Quorum calls cannot be started in separate goroutines, as the scheduling of goroutines is non-deterministic.
 
-* (Client-side) To process replies from different quorum calls concurrently, use the `Async*` terminal methods.
+* (Client-side) To process replies from different quorum calls concurrently, dispatch each call with `Call.Async()` on one goroutine, then collect its replies with a terminal method on any goroutine.
 
 * (Server-side) If the server must return replies in the same order as the client sent them, the server-side handler must also preserve ordering.
 

@@ -410,8 +410,8 @@ func (ctx *ServerContext) SenderID() ID {
 // releases when it returns.
 //
 // To keep a nested call in FIFO order, dispatch it before Release and wait for
-// it after Release, for example with [OnewayCall.Async] or
-// [Responses.AsyncMajority]; both send before they return. A call dispatched
+// it after Release, for example with [OnewayCall.Async] or [Call.Async];
+// both send before they return. A call dispatched
 // after Release may overtake the same call from the next request's handler. A
 // reply that the handler waits for before Release arrives only while the
 // stream's dispatch queue has room (see [WithBufferSizes]). It is safe to call
