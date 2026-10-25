@@ -3,6 +3,7 @@ package gengorums
 
 import (
 	"fmt"
+	"iter"
 	"slices"
 	"strings"
 
@@ -26,13 +27,44 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) error {
 	g.P("package ", file.GoPackageName)
 	g.P()
 	genVersionCheck(g)
-	g.P(staticCode)
-	g.P()
-	for path, ident := range pkgIdentMap {
-		addImport(path, ident, g)
+	if isStaticCodeFile(gen, file) {
+		g.P(staticCode)
+		g.P()
+		for path, ident := range pkgIdentMap {
+			addImport(path, ident, g)
+		}
 	}
 	generateFileContent(file, g)
 	return nil
+}
+
+// isStaticCodeFile reports whether the file's generated Gorums file holds the
+// static code of its Go package. The static code declares package-level
+// names, so exactly one generated file per Go package and protoc run holds
+// it: the file of the first proto file of the package, in protoc's file
+// order, that this run generates Gorums code for. In protoc's file order,
+// imported files come first.
+func isStaticCodeFile(gen *protogen.Plugin, file *protogen.File) bool {
+	for f := range gorumsPackageFiles(gen, file.GoImportPath) {
+		return f == file
+	}
+	return false
+}
+
+// gorumsPackageFiles returns the files of the Go package with the given
+// import path that this run generates Gorums code for, in the order of
+// gen.Files.
+func gorumsPackageFiles(gen *protogen.Plugin, importPath protogen.GoImportPath) iter.Seq[*protogen.File] {
+	return func(yield func(*protogen.File) bool) {
+		for _, f := range gen.Files {
+			if !f.Generate || f.GoImportPath != importPath || !hasGorumsMethods(f.Services) {
+				continue
+			}
+			if !yield(f) {
+				return
+			}
+		}
+	}
 }
 
 func genGeneratedHeader(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile) {
@@ -173,10 +205,7 @@ func checkTypes(msgs []*protogen.Message, enums []*protogen.Enum, check func(kin
 // of the second if it differs.
 func packageIdents(gen *protogen.Plugin, importPath protogen.GoImportPath) (map[string]*protogen.Service, error) {
 	idents := make(map[string]*protogen.Service)
-	for _, f := range gen.Files {
-		if !f.Generate || f.GoImportPath != importPath || !hasGorumsMethods(f.Services) {
-			continue
-		}
+	for f := range gorumsPackageFiles(gen, importPath) {
 		for _, service := range f.Services {
 			for _, name := range slices.Concat(clientIdents(service), serverIdents(service)) {
 				first, ok := idents[name]

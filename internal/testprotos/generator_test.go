@@ -1,11 +1,15 @@
 package testprotos_test
 
 import (
+	"cmp"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -89,6 +93,189 @@ func gorumsFile(files map[string]string, base string) string {
 		}
 	}
 	return ""
+}
+
+// protoFrame returns the frame of an input file of [TestGeneratePackageFiles]
+// in the Go package pkg under this package.
+func protoFrame(pkg string) string {
+	return `
+edition = "2023";
+
+package gorums.testprotos.` + pkg + `;
+option go_package = "github.com/relab/gorums/internal/testprotos/` + pkg + `";
+
+import "gorums.proto";
+`
+}
+
+// aliasDecl matches the Config alias of the alias block that the generator
+// emits once per Go package.
+var aliasDecl = regexp.MustCompile(`Config\s*=\s*gorums\.Config\b`)
+
+// TestGeneratePackageFiles checks that the code generated for several proto
+// files of one Go package compiles as one package. In each Go package, only
+// the Gorums file of the first proto file with Gorums methods in protoc's
+// file order declares the static aliases (Config, ID, and Node). Imported
+// files come first in that order.
+func TestGeneratePackageFiles(t *testing.T) {
+	tests := []struct {
+		name     string
+		sources  map[string]string // declarations, keyed by proto file name
+		packages map[string]string // Go package of a proto file, if not pkgfiles
+		aliases  []string          // proto files whose Gorums file declares the aliases
+	}{
+		{
+			name: "OneServicePerFile",
+			sources: map[string]string{
+				"alpha.proto": `
+service Alpha {
+	rpc Read(AlphaRequest) returns (AlphaResponse) {
+		option (gorums.quorumcall) = true;
+	}
+}
+message AlphaRequest {
+	string value = 1;
+}
+message AlphaResponse {
+	string value = 1;
+}`,
+				"beta.proto": `
+service Beta {
+	rpc Write(BetaRequest) returns (BetaResponse) {
+		option (gorums.quorumcall) = true;
+	}
+	rpc Get(BetaRequest) returns (BetaResponse) {}
+}
+message BetaRequest {
+	string value = 1;
+}
+message BetaResponse {
+	string value = 1;
+}`,
+			},
+			aliases: []string{"alpha.proto"},
+		},
+		{
+			// The first file has no Gorums methods and gets no Gorums file.
+			name: "MessagesOnlyFirstFile",
+			sources: map[string]string{
+				"a.proto": `
+message Request {
+	string value = 1;
+}
+message Response {
+	string value = 1;
+}`,
+				"b.proto": `
+import "a.proto";
+
+service Beta {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			},
+			aliases: []string{"b.proto"},
+		},
+		{
+			// protoc places the imported b.proto before a.proto.
+			name: "ImportedFileFirst",
+			sources: map[string]string{
+				"a.proto": `
+import "b.proto";
+
+service Alpha {
+	rpc Read(Request) returns (AlphaResponse) {
+		option (gorums.quorumcall) = true;
+	}
+}
+message AlphaResponse {
+	string value = 1;
+}`,
+				"b.proto": `
+service Beta {
+	rpc Read(Request) returns (BetaResponse) {
+		option (gorums.quorumcall) = true;
+	}
+}
+message Request {
+	string value = 1;
+}
+message BetaResponse {
+	string value = 1;
+}`,
+			},
+			aliases: []string{"b.proto"},
+		},
+		{
+			name: "TwoGoPackages",
+			sources: map[string]string{
+				"alpha.proto": `
+service Alpha {
+	rpc Read(AlphaRequest) returns (AlphaResponse) {
+		option (gorums.quorumcall) = true;
+	}
+}
+message AlphaRequest {
+	string value = 1;
+}
+message AlphaResponse {
+	string value = 1;
+}`,
+				"beta.proto": `
+service Beta {
+	rpc Read(BetaRequest) returns (BetaResponse) {
+		option (gorums.quorumcall) = true;
+	}
+}
+message BetaRequest {
+	string value = 1;
+}
+message BetaResponse {
+	string value = 1;
+}`,
+			},
+			packages: map[string]string{"beta.proto": "pkgother"},
+			aliases:  []string{"alpha.proto", "beta.proto"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sources := make(map[string]string, len(tt.sources))
+			for name, decl := range tt.sources {
+				pkg := cmp.Or(tt.packages[name], "pkgfiles")
+				sources[name] = protoFrame(pkg) + decl
+			}
+			dir := gentest.Inline(t, sources)
+			protos := slices.Sorted(maps.Keys(sources))
+			files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, protos...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gentest.Compile(t, files)
+			checkAliasFiles(t, files, tt.aliases)
+		})
+	}
+}
+
+// checkAliasFiles checks that the Gorums files generated for the given proto
+// files are the only generated files that declare the static aliases.
+func checkAliasFiles(t *testing.T, files map[string]string, protos []string) {
+	t.Helper()
+	var want []string
+	for _, proto := range protos {
+		want = append(want, gorumsFile(files, strings.TrimSuffix(proto, ".proto")))
+	}
+	slices.Sort(want)
+	var got []string
+	for _, name := range slices.Sorted(maps.Keys(files)) {
+		if aliasDecl.MatchString(files[name]) {
+			got = append(got, name)
+		}
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("files with the static aliases: %v, want %v", got, want)
+	}
 }
 
 // TestGenerateImportedPackageNames checks that the generated code compiles

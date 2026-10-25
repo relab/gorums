@@ -10,13 +10,15 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// wantReservedIdents is the set of reserved identifiers the dev package exports.
+// wantReservedIdents is the set of reserved identifiers that the static code
+// of the dev package exports.
 var wantReservedIdents = []string{"Config", "ID", "Node"}
 
 // TestBundleReservedIdentifiers pins the set of identifiers that the bundler
-// will mark as reserved and inject as type aliases into every generated
-// _gorums.pb.go file. If this test fails, update aliases.go intentionally and
-// then update wantReservedIdents to match.
+// marks as reserved. The generator emits the static code that declares them
+// in one generated _gorums.pb.go file per Go package and protoc run. If this
+// test fails, update the static code intentionally and then update
+// wantReservedIdents to match.
 func TestBundleReservedIdentifiers(t *testing.T) {
 	pkg, err := loadPackage(devDir(t), nil)
 	if err != nil {
@@ -24,7 +26,11 @@ func TestBundleReservedIdentifiers(t *testing.T) {
 	}
 	_, got := findIdentifiers(pkg)
 	if !slices.Equal(got, wantReservedIdents) {
-		t.Errorf("generated static surface changed:\ngot:  %v\nwant: %v\nIf intentional, update aliases.go and wantReservedIdents.", got, wantReservedIdents)
+		t.Errorf("reserved identifiers of the static code changed:\ngot:  %v\nwant: %v\n"+
+			"The generator emits the static code once per Go package and protoc run, "+
+			"and each exported name becomes a reserved identifier. "+
+			"If intentional, update wantReservedIdents.",
+			got, wantReservedIdents)
 	}
 }
 
