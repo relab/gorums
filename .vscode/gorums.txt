@@ -82,8 +82,10 @@ forcetypeassert
 Frausing's
 fset
 GCFLAGS
+gengo
 gengorums
 genproto
+gentest
 GOARCH
 GOAWAY
 GOBIN
@@ -116,6 +118,7 @@ ICDCS
 Idents
 Idxs
 Iface
+importmsgs
 infocmp
 Ingve
 Inspectable
