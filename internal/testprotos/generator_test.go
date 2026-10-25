@@ -324,6 +324,82 @@ message Response {
 	}
 }
 
+// TestGeneratePackageFilesSeparateRuns checks that the code generated for two
+// proto files of one Go package in separate protoc runs compiles as one
+// package if one file imports the other. Each run generates one file; the
+// other file is only an import of the run that generates the importing file.
+// The run of the importing file leaves out the aliases that the imported file
+// owns, because the run of the imported file declares them.
+func TestGeneratePackageFilesSeparateRuns(t *testing.T) {
+	// imported declares the static aliases and the Correctable alias of
+	// Response; importing declares only the Correctable alias of
+	// OtherResponse.
+	const imported = `
+service Imported {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}
+message Request {
+	string value = 1;
+}
+message Response {
+	string value = 1;
+}`
+	const importing = `
+service Importing {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+	rpc Write(Request) returns (OtherResponse) {
+		option (gorums.quorumcall) = true;
+	}
+}
+message OtherResponse {
+	string value = 1;
+}`
+	tests := []struct {
+		name      string
+		imported  string // the proto file that the other file imports
+		importing string // the proto file that imports the other file
+	}{
+		// The imported file sorts first.
+		{name: "ImportedFileFirst", imported: "a.proto", importing: "b.proto"},
+		// The importing file sorts first.
+		{name: "ImportingFileFirst", imported: "b.proto", importing: "a.proto"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := gentest.Inline(t, map[string]string{
+				tt.imported:  protoFrame("pkgfiles") + imported,
+				tt.importing: protoFrame("pkgfiles") + `import "` + tt.imported + `";` + importing,
+			})
+			opts := gentest.Options{ImportPaths: []string{dir}}
+			files := make(map[string]string)
+			// Each run generates one file; the run of the importing file
+			// parses the imported file only as an import.
+			for _, proto := range []string{tt.imported, tt.importing} {
+				out, err := gentest.Generate(t, opts, proto)
+				if err != nil {
+					t.Fatalf("%s: %v", proto, err)
+				}
+				for name := range out {
+					if _, ok := files[name]; ok {
+						t.Fatalf("%s: both runs generate %s", proto, name)
+					}
+				}
+				maps.Copy(files, out)
+			}
+			gentest.Compile(t, files)
+			checkAliasFiles(t, files, []string{tt.imported})
+			checkTypeAliases(t, files, map[string][]string{
+				tt.imported:  {"CorrectableResponse"},
+				tt.importing: {"CorrectableOtherResponse"},
+			})
+		})
+	}
+}
+
 // checkTypeAliases checks that each generated Gorums file declares exactly
 // the Correctable aliases listed for its proto file in want.
 func checkTypeAliases(t *testing.T, files map[string]string, want map[string][]string) {

@@ -18,9 +18,11 @@ The repository contains two main components located in `cmd/protoc-gen-gorums`:
 
 ### Generated Static Code and Reserved Identifiers
 
-The generator embeds the static code of the `dev/` package verbatim in one generated `_gorums.pb.go` file per Go package and `protoc` run.
+The generator embeds the static code of the `dev/` package verbatim in one generated `_gorums.pb.go` file per Go package.
 That file belongs to the first `.proto` file of the package with Gorums services in `protoc`'s file order.
 In that order, imported files come first.
+The generator picks this owner among all files of the `protoc` request, including the files that are only imports of the run (`Generate` is false).
+If the owner is only an import, the run emits no static code; the run that generates the owner emits it.
 The static code currently consists of three type aliases from `dev/aliases.go`:
 
 ```go
@@ -32,12 +34,13 @@ type (
 ```
 
 These aliases make the most commonly used Gorums types available as `pb.Config`, `pb.ID`, and `*pb.Node`.
-The other generated files of the package use the same aliases.
+They exist for application code; the generated code itself refers to the `gorums` types, such as `gorums.Config` and `*gorums.Node`.
 
 The `types` template (`gengorums/template_datatypes.go`) declares the alias `CorrectableX` for each response type `X` of a quorum call.
 Several services and files of a Go package may return the same `X`.
-Thus, the generator declares each such alias once per Go package and `protoc` run.
+Thus, the generator declares each such alias once per Go package.
 The alias goes in the generated file of the first `.proto` file, in the same order as above, whose quorum calls return `X`.
+As for the static code, this owner may be a file that is only an import of the run; the run then skips the alias.
 
 Because the static code appears once per Go package, it may declare package-level names.
 Each exported package-level name of the static code becomes a **reserved identifier**.
@@ -48,7 +51,11 @@ Such a name collides with the generated alias.
 The check includes nested messages and enums, and every file of the Go package.
 RPC methods are methods of the generated client interfaces, so they do not collide with the aliases; [Generated Client Interfaces](#generated-client-interfaces) describes the name checks for the generated client and server names.
 
-All `.proto` files of a Go package must be compiled in one `protoc` run.
+Compile all `.proto` files of a Go package in one `protoc` run.
+Two files may also be compiled in separate runs where one file imports the other, directly or indirectly.
+If `b.proto` imports `a.proto` from the same Go package, the run for `b.proto` sees `a.proto` as an import.
+That run skips the static code and the aliases that `a.proto` owns, because the run for `a.proto` emits them.
+Two files where neither imports the other, directly or indirectly, must be compiled in one run.
 Otherwise, each run emits the static code, so the package declares `Config`, `ID`, and `Node` twice.
 The package also declares twice any `Correctable` alias that both runs produce.
 
