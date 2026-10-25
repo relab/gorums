@@ -54,7 +54,7 @@ type CorrectableResponse = *gorums.Correctable[*msgs.Response]
 //	resp, err := QuorumCall(ctx, in).Majority()
 func QuorumCall(ctx *ConfigContext, in *msgs.Request) *gorums.Call[*msgs.Request, *msgs.Response] {
 	return gorumsimpl.QuorumCall[*msgs.Request, *msgs.Response](
-		ctx, in, "gorums.testprotos.calltypes.importmsgs.QuorumCall.QuorumCall",
+		ctx, in, "internal.testprotos.calltypes.importmsgs.QuorumCall.QuorumCall",
 	)
 }
 
@@ -64,7 +64,7 @@ type QuorumCallServer interface {
 }
 
 func RegisterQuorumCallServer(srv *gorums.Server, impl QuorumCallServer) {
-	srv.RegisterHandler("gorums.testprotos.calltypes.importmsgs.QuorumCall.QuorumCall", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.importmsgs.QuorumCall.QuorumCall", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*msgs.Request](in)
 		resp, err := impl.QuorumCall(ctx, req)
 		if err != nil {

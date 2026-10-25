@@ -1,6 +1,6 @@
 edition = "2023";
 
-package gorums.testprotos.msgs;
+package internal.testprotos.msgs;
 option go_package = "github.com/relab/gorums/internal/testprotos/msgs";
 
 option features.field_presence = IMPLICIT;

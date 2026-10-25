@@ -52,7 +52,7 @@ var _ emptypb.Empty
 //	err := Multicast(ctx, in).Send()
 //	h := Multicast(ctx, in).Async(); err := h.Wait()
 func Multicast(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, in, "gorums.testprotos.calltypes.multicast.Multicast.Multicast")
+	return gorumsimpl.Multicast(ctx, in, "internal.testprotos.calltypes.multicast.Multicast.Multicast")
 }
 
 // MulticastEmpty is testing imported message type.
@@ -62,7 +62,7 @@ func Multicast(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
 //	err := MulticastEmpty(ctx, in).Send()
 //	h := MulticastEmpty(ctx, in).Async(); err := h.Wait()
 func MulticastEmpty(ctx *ConfigContext, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, in, "gorums.testprotos.calltypes.multicast.Multicast.MulticastEmpty")
+	return gorumsimpl.Multicast(ctx, in, "internal.testprotos.calltypes.multicast.Multicast.MulticastEmpty")
 }
 
 // Multicast is the server-side API for the Multicast Service
@@ -72,12 +72,12 @@ type MulticastServer interface {
 }
 
 func RegisterMulticastServer(srv *gorums.Server, impl MulticastServer) {
-	srv.RegisterHandler("gorums.testprotos.calltypes.multicast.Multicast.Multicast", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.multicast.Multicast.Multicast", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.Multicast(ctx, req)
 		return nil, nil
 	})
-	srv.RegisterHandler("gorums.testprotos.calltypes.multicast.Multicast.MulticastEmpty", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.multicast.Multicast.MulticastEmpty", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.MulticastEmpty(ctx, req)
 		return nil, nil
