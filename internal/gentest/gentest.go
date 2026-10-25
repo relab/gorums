@@ -16,7 +16,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -85,7 +84,7 @@ func request(t testing.TB, importPaths, files []string) *pluginpb.CodeGeneratorR
 	t.Helper()
 	set := filepath.Join(t.TempDir(), "descriptors.pb")
 	args := []string{
-		"-I" + strings.Join(slices.Concat(importPaths, []string{RootDir()}), string(os.PathListSeparator)),
+		"-I" + strings.Join(slices.Concat(importPaths, []string{RootDir(t)}), string(os.PathListSeparator)),
 		"--descriptor_set_out=" + set,
 		"--include_imports",
 		"--include_source_info",
@@ -158,7 +157,7 @@ func Inline(t testing.TB, sources map[string]string) string {
 // directories need not exist. Compile fails the test on any error.
 func Compile(t testing.TB, files map[string]string) {
 	t.Helper()
-	root := RootDir()
+	root := RootDir(t)
 	overlay := make(map[string][]byte)
 	dirs := make(map[string]bool)
 	for name, content := range files {
@@ -220,8 +219,33 @@ func Golden(t testing.TB, path, got string) {
 	}
 }
 
-// RootDir returns the absolute path of the repository root.
-func RootDir() string {
-	_, file, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(file), "..", "..")
+// RootDir returns the absolute path of the repository root: the nearest
+// directory, from the working directory upward, whose go.mod declares the
+// gorums module. RootDir fails the test if there is no such directory.
+func RootDir(t testing.TB) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if data, err := os.ReadFile(filepath.Join(dir, "go.mod")); err == nil && declaresModule(data) {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("no go.mod for module %s in the working directory or its parents", modulePath)
+		}
+		dir = parent
+	}
+}
+
+// declaresModule reports whether the go.mod contents declare [modulePath].
+func declaresModule(gomod []byte) bool {
+	for line := range strings.Lines(string(gomod)) {
+		if name, ok := strings.CutPrefix(strings.TrimSpace(line), "module "); ok {
+			return strings.Trim(strings.TrimSpace(name), `"`) == modulePath
+		}
+	}
+	return false
 }

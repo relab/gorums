@@ -20,7 +20,7 @@ const devDir = "cmd/protoc-gen-gorums/dev"
 // make dev uses.
 func generateZorums(t *testing.T, dev bool) map[string]string {
 	t.Helper()
-	root := gentest.RootDir()
+	root := gentest.RootDir(t)
 	opts := gentest.Options{
 		ImportPaths: []string{filepath.Join(root, devDir), filepath.Join(root, "third_party")},
 		Dev:         dev,
@@ -49,7 +49,7 @@ func TestStabilityZorums(t *testing.T) {
 // files match what the generator in this tree produces. Run make dev to
 // regenerate them.
 func TestStabilityDevFilesUpToDate(t *testing.T) {
-	root := gentest.RootDir()
+	root := gentest.RootDir(t)
 	files := generateZorums(t, true)
 	for _, name := range slices.Sorted(maps.Keys(files)) {
 		t.Run(filepath.Base(name), func(t *testing.T) {
