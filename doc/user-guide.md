@@ -175,11 +175,13 @@ message WriteRequest {
 
 For the `unicast` and `multicast` call types, the response message type will be unused by Gorums.
 
-> **Reserved names:** Gorums reserves the names `Config`, `ID`, and `Node`.
+> **Generated names:** Gorums reserves the names `Config`, `ID`, and `Node`.
 > A message field named `ID` is fine; only type names are reserved.
-> Gorums injects type aliases with these names into every generated `_gorums.pb.go` file, so messages, enums, and enum values in any `.proto` file of the same Go package cannot use them.
-> For a service `S`, Gorums also generates the client names `SClient`, `NewSClient`, and `sClient`, and the node client names `SNodeClient`, `NewSNodeClient`, and `sNodeClient`.
-> Messages, enums, enum values, and oneof wrapper types cannot use the names of a client that the service has.
+> Gorums declares type aliases with these names in one generated `_gorums.pb.go` file of each Go package.
+> For a service `S`, Gorums also generates the client names `SClient`, `NewSClient`, and `sClient`, and the node client names `SNodeClient`, `NewSNodeClient`, and `sNodeClient`, but only for a client that the service has.
+> It also generates the server names `SServer` and `RegisterSServer`.
+> For each response type `X` of a quorum call, Gorums generates the type alias `CorrectableX`.
+> Messages, enums, enum values, and oneof wrapper types in any `.proto` file of the same Go package cannot use these names.
 > An RPC method may have any name, also `Config` or `Node`, because the clients have no helper methods.
 > The generator reports an error for a `.proto` file that uses one of these names.
 
@@ -784,6 +786,14 @@ reply, level, err = corr.Get()
 `Correctable(n)` panics if `n` is not positive.
 It panics before it sends any request.
 
+For each response type `X` of a quorum call, Gorums generates the type alias `CorrectableX` for `*gorums.Correctable[*X]`.
+Type inference covers most uses, as above.
+To declare a variable or field that holds a correctable result, use the alias:
+
+```go
+var corr CorrectableReadResponse
+```
+
 ### Send-Timing Model
 
 Understanding when messages are actually sent matters for ordering and for reasoning about concurrent calls.
@@ -1046,6 +1056,72 @@ func requireAllSuccess(seq gorums.ResponseSeq[*Response]) (*Response, error) {
   return first, nil
 }
 ```
+
+## Several Services
+
+A `.proto` file may declare several services.
+Several `.proto` files of one Go package may each declare services, too.
+For each service, Gorums generates its own client interfaces, server interface, and register function.
+All services can share one `gorums.Config` and one `gorums.Server`:
+
+```mermaid
+flowchart LR
+    subgraph clientSide["client side"]
+        cfg["gorums.Config"] -- "NewStorageClient(cfg)" --> storageClient["StorageClient"]
+        cfg -- "NewAdminClient(cfg)" --> adminClient["AdminClient"]
+    end
+    subgraph serverSide["server side"]
+        srv["gorums.Server"]
+        storageSrv["StorageServer"] -- "RegisterStorageServer" --> srv
+        adminSrv["AdminServer"] -- "RegisterAdminServer" --> srv
+    end
+    storageClient -- "proto.Storage.ReadQC" --> srv
+    adminClient -- "proto.Admin.StatusQC" --> srv
+```
+
+For example, add an `Admin` service next to the `Storage` service:
+
+```proto
+service Admin {
+  rpc StatusQC(StatusRequest) returns (StatusResponse) {
+    option (gorums.quorumcall) = true;
+  }
+}
+```
+
+Register every service on the same server:
+
+```go
+srv := gorums.NewServer()
+pb.RegisterStorageServer(srv, &storageSrv{})
+pb.RegisterAdminServer(srv, &adminSrv{})
+```
+
+Bind a client of each service to the same configuration:
+
+```go
+storageClient := pb.NewStorageClient(cfg)
+adminClient := pb.NewAdminClient(cfg)
+reply, err := storageClient.ReadQC(ctx, &pb.ReadRequest{Key: "x"}).Majority()
+status, err := adminClient.StatusQC(ctx, &pb.StatusRequest{}).Majority()
+```
+
+The clients use the connections of `cfg`; they open no connections of their own.
+Each server in the configuration must register every service that a client calls.
+
+Two services may declare methods with the same name.
+Gorums sends each call with the full method name `package.Service.Method`, for example `proto.Storage.ReadQC`.
+Thus, a call reaches the handler of the service that declares the method.
+
+Two services in a Go package must not generate the same name.
+For example, service `NewS` generates the interface `NewSClient`, and service `S` generates the constructor `NewSClient`.
+The generator reports such a collision with the names of both services.
+
+Gorums declares the `Config`, `ID`, and `Node` aliases in only one generated file per Go package.
+Gorums also declares each `CorrectableX` alias in only one generated file per Go package, even if the quorum calls of several files return `X`.
+Thus, compile all `.proto` files of a Go package in one `protoc` run.
+The generator then emits the aliases once and checks the generated names across all files of the package.
+If you compile the files in separate runs, each run declares the aliases, and the package does not compile.
 
 ## Interceptors for Request/Response Transformation
 
