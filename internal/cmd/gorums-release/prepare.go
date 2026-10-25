@@ -85,6 +85,10 @@ func (t *tool) prepare(o prepareOptions) error {
 	if err := t.exec("make", "genproto"); err != nil {
 		return err
 	}
+	// The golden files embed the runtime versions that genproto just wrote.
+	if err := t.exec("go", "test", "./internal/testprotos", "-update"); err != nil {
+		return err
+	}
 	// Each module replaces gorums with the local checkout, so the unreleased
 	// version resolves.
 	for _, m := range modules {
