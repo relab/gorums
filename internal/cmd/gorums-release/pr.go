@@ -137,9 +137,11 @@ func releaseGroup(p string) string {
 	return ""
 }
 
-// isGenerated reports whether p is produced by make genproto.
+// isGenerated reports whether p is produced by make genproto or is a golden
+// copy of generated code that embeds the runtime versions.
 func isGenerated(p string) bool {
 	return strings.HasSuffix(p, ".pb.go") ||
+		strings.HasSuffix(p, ".pb.go.golden") ||
 		p == "cmd/protoc-gen-gorums/gengorums/template_static.go"
 }
 
