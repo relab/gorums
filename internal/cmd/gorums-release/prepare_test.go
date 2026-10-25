@@ -55,6 +55,7 @@ func TestPrepare(t *testing.T) {
 		"exec (examples) go mod edit -require=github.com/relab/gorums@v0.12.0",
 		"exec (benchkit) go mod edit -require=github.com/relab/gorums@v0.12.0",
 		"exec make genproto",
+		"exec go test ./internal/testprotos -update",
 		"exec go mod tidy",
 		"exec (examples) go mod tidy",
 		"exec (benchkit) go mod tidy",
@@ -221,6 +222,7 @@ func TestPrepareDryRun(t *testing.T) {
 		"? gorelease",
 		"+ git fetch origin master",
 		"+ make genproto",
+		"+ go test ./internal/testprotos -update",
 		"+ write internal/version/version.go",
 	} {
 		if !strings.Contains(out.String(), want) {
@@ -245,6 +247,16 @@ func TestPrepareDryRunWarns(t *testing.T) {
 func TestPrepareFailureStops(t *testing.T) {
 	f := readyRunner()
 	f.fail["make genproto"] = errBoom
+	tl, _ := newTestTool(t, f)
+	if err := tl.prepare(prepareOptions{}); err == nil {
+		t.Fatal("expected an error")
+	}
+	assertAbsent(t, f.calls, "exec make test")
+}
+
+func TestPrepareGoldenUpdateFailureStops(t *testing.T) {
+	f := readyRunner()
+	f.fail["go test ./internal/testprotos -update"] = errBoom
 	tl, _ := newTestTool(t, f)
 	if err := tl.prepare(prepareOptions{}); err == nil {
 		t.Fatal("expected an error")

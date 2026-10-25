@@ -61,7 +61,8 @@ Then it does the following:
      runtime/gorumsimpl/version.go.
   6. Requires the new gorums version in examples/go.mod and benchkit/go.mod.
   7. Runs make genproto, so that the generated code carries the new version.
-  8. Runs make test and make testrace.
+  8. Updates the golden files in internal/testprotos to match.
+  9. Runs make test and make testrace.
 
 A version with a suffix, such as v0.12.0-rc.1, is a pre-release.
 A version without one is a release, also for v0.X.Y.
