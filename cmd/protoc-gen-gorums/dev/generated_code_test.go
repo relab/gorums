@@ -2,8 +2,8 @@
 // These tests validate that the protoc-gen-gorums code generator produces
 // correct and functional code. They exercise the generated server
 // registration, the generated QuorumCall method, and its terminal methods
-// (Majority, All, Threshold) along with custom aggregation patterns using
-// CollectAll.
+// (Majority, All, Threshold) along with custom aggregation that ranges over
+// the response sequence.
 //
 // NOTE: These tests are intentionally separate from the core library tests
 // in the repository root. While they test similar functionality, they serve
@@ -74,12 +74,12 @@ func TestGeneratedCodeQuorumCall(t *testing.T) {
 		},
 		{
 			// Each of the 3 servers returns len("hello"), so the sum is 15.
-			name:  "CollectAllSum",
+			name:  "ResultsSum",
 			value: "hello",
 			call: func(ctx *dev.ConfigContext, req *dev.Request) (int64, error) {
 				var total int64
-				for _, resp := range dev.QuorumCall(ctx, req).Results().CollectAll() {
-					total += resp.GetResult()
+				for resp := range dev.QuorumCall(ctx, req).Results().IgnoreErrors() {
+					total += resp.Value.GetResult()
 				}
 				return total, nil
 			},
@@ -139,11 +139,11 @@ func TestGeneratedCodeDerivedConfig(t *testing.T) {
 			}
 
 			replies := 0
-			for range dev.QuorumCall(ctx, req).Results().CollectAll() {
+			for range dev.QuorumCall(ctx, req).Results() {
 				replies++
 			}
 			if replies != tt.wantSize {
-				t.Errorf("CollectAll got %d replies, want %d", replies, tt.wantSize)
+				t.Errorf("Results yielded %d replies, want %d", replies, tt.wantSize)
 			}
 		})
 	}

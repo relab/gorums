@@ -321,7 +321,7 @@ func (repl) readQC(args []string, config pb.Config) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	cfgCtx := config.Context(ctx)
 	// Use the responses iterator to find the newest value
-	resp, err := newestValue(pb.ReadQC(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build()))
+	resp, err := pb.ReadQC(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build()).Aggregate(newestValue)
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -343,7 +343,7 @@ func (repl) creadQC(args []string, config pb.Config) {
 	cfgCtx := config.Context(ctx)
 
 	// Create a correctable call expecting at least majority
-	majority := (config.Size() + 1) / 2
+	majority := config.Size()/2 + 1
 	corr := pb.ReadCorrectable(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build()).Correctable(majority)
 
 	// Process updates as they arrive
@@ -373,9 +373,9 @@ func (repl) writeQC(args []string, config pb.Config) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	cfgCtx := config.Context(ctx)
 	// Use the responses iterator to count successful updates
-	resp, err := numUpdated(pb.WriteQC(cfgCtx, pb.WriteRequest_builder{
+	resp, err := pb.WriteQC(cfgCtx, pb.WriteRequest_builder{
 		Key: args[0], Value: args[1], Time: timestamppb.Now(),
-	}.Build()))
+	}.Build()).Aggregate(numUpdated(config.Size()))
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)
@@ -395,7 +395,7 @@ func (repl) readNestedQC(args []string, config pb.Config) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	cfgCtx := config.Context(ctx)
-	resp, err := newestValue(pb.ReadNestedQC(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build()))
+	resp, err := pb.ReadNestedQC(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build()).Aggregate(newestValue)
 	cancel()
 	if err != nil {
 		fmt.Printf("Nested read quorum call finished with error: %v\n", err)

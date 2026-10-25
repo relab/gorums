@@ -229,23 +229,6 @@ func TestQuorumCallCustomAggregation(t *testing.T) {
 	}
 }
 
-// TestQuorumCallCollectAll tests collecting all responses
-func TestQuorumCallCollectAll(t *testing.T) {
-	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
-
-	ctx := gorumstest.Context(t, 2*time.Second)
-	responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-		config.Context(ctx),
-		pb.String("test"),
-		mock.TestMethod,
-	)
-
-	collected := responses.Results().CollectAll()
-	if len(collected) != 3 {
-		t.Errorf("Expected 3 responses, got %d", len(collected))
-	}
-}
-
 func TestQuorumCallSynctest(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		// Create configuration inside synctest bubble for controlled time
@@ -386,50 +369,6 @@ func BenchmarkQuorumCall(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9, 13, 17, 19} {
 		config := gorumstest.Config(b, numNodes, gorumstest.EchoServer)
 		cfgCtx := config.Context(b.Context())
-
-		// Using CollectAll and then checking quorum
-		b.Run(fmt.Sprintf("CollectAllThenCheck/%d", numNodes), func(b *testing.B) {
-			b.ReportAllocs()
-			quorum := numNodes/2 + 1
-			for b.Loop() {
-				responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-					cfgCtx,
-					pb.String("test"),
-					mock.TestMethod,
-				)
-				replies := responses.Results().CollectAll()
-				if len(replies) < quorum {
-					b.Fatalf("not enough replies: %d < %d", len(replies), quorum)
-				}
-				// Return first reply
-				for _, r := range replies {
-					_ = r.GetValue()
-					break
-				}
-			}
-		})
-
-		// Using CollectN for early termination
-		b.Run(fmt.Sprintf("CollectN/%d", numNodes), func(b *testing.B) {
-			b.ReportAllocs()
-			quorum := numNodes/2 + 1
-			for b.Loop() {
-				responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-					cfgCtx,
-					pb.String("test"),
-					mock.TestMethod,
-				)
-				replies := responses.Results().CollectN(quorum)
-				if len(replies) < quorum {
-					b.Fatalf("not enough replies: %d < %d", len(replies), quorum)
-				}
-				// Return first reply
-				for _, r := range replies {
-					_ = r.GetValue()
-					break
-				}
-			}
-		})
 
 		// Using manual iteration with early return
 		b.Run(fmt.Sprintf("Iterator/%d", numNodes), func(b *testing.B) {

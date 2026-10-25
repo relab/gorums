@@ -480,18 +480,21 @@ The handle embeds `*gorums.Responses[*ReadResponse]`, so it offers the same ways
 
 The `*gorums.Responses[T]` type provides built-in *terminal methods* for common aggregation patterns:
 
-| Method                         | Description                   | Returns When                           |
-| ------------------------------ | ----------------------------- | -------------------------------------- |
-| `.First()`                     | First successful response     | Any node responds successfully         |
-| `.Majority()`                  | Majority of responses         | ⌈(n+1)/2⌉ nodes respond successfully   |
-| `.All()`                       | All responses                 | All n nodes respond                    |
-| `.Threshold(n)`                | At least n responses          | n nodes respond successfully           |
-| `.Aggregate(fn)`               | Result of your function `fn`  | `fn` returns                           |
-| `.Reduce(n, initial, add)`     | Accumulator built by `add`    | n nodes respond successfully           |
-| `.Matching(n, key)`            | Agreed response and its nodes | n nodes send responses with equal keys |
+| Method                     | Returns                                    | Returns When                           |
+| -------------------------- | ------------------------------------------ | -------------------------------------- |
+| `.First()`                 | The first successful response              | One node responds successfully         |
+| `.Majority()`              | The first successful response              | ⌈(n+1)/2⌉ nodes respond successfully   |
+| `.All()`                   | The first successful response              | All n nodes respond successfully       |
+| `.Threshold(k)`            | The first successful response              | k nodes respond successfully           |
+| `.Aggregate(fn)`           | The result of your function `fn`           | `fn` returns                           |
+| `.Reduce(k, initial, add)` | The accumulator that `add` builds          | k nodes respond successfully           |
+| `.Matching(k, key)`        | An agreement: agreed response and evidence | k nodes send responses with equal keys |
 
-Each terminal method blocks until its condition is met or the context is canceled, then returns a single aggregated result and an error.
-`Threshold(n)` panics if `n` is not positive.
+Each terminal method blocks until its condition is met or the context is canceled, then returns a single result and an error.
+`First`, `Majority`, `All`, and `Threshold` count replies; they do not compare them.
+Each returns one response, the first successful one to arrive.
+For a read that must return the newest value, use `Aggregate` or `Reduce`.
+`Threshold(k)` panics if `k` is not positive.
 
 ### Using Terminal Methods
 
@@ -757,182 +760,26 @@ gRPC keepalive, enabled with `gorums.WithGRPCDialOptions(grpc.WithKeepaliveParam
 
 ## Iterator-Based Custom Aggregation
 
-For complex aggregation logic beyond the built-in terminal methods, write a function that ranges over the response sequence.
-The sequence yields responses progressively as they arrive, allowing custom decision-making logic.
-A function that takes `gorums.ResponseSeq[Resp]` reads left to right with `.Aggregate(fn)`, as shown in [Aggregate](#aggregate-custom-aggregation-functions).
-A function that takes `*gorums.Responses[Resp]` still works; pass it the call's `Responses` field, and call `Results()` in the function.
-The examples in this section use the second form.
+For aggregation logic beyond the built-in terminal methods, write a function that ranges over the response sequence, and pass it to `.Aggregate(fn)`.
+The function takes a `gorums.ResponseSeq[Resp]` and may return any type.
+The sequence yields each node's response as it arrives, so the function can decide when it has enough.
+Each item holds three fields:
+
+* `Value` is the response message; it is the zero value when `Err` is set.
+* `Err` is the error from that node, or nil.
+* `NodeID` identifies the node.
+
+If the function stops after a fixed number of successful responses, `Reduce` is often simpler; see [Reduce](#reduce-folding-responses-into-state).
 
 ### Basic Iterator Pattern
 
 ```go
-func newestValue(responses *gorums.Responses[*ReadResponse]) (*ReadResponse, error) {
+// newestValue returns the response with the most recent timestamp.
+func newestValue(seq gorums.ResponseSeq[*ReadResponse]) (*ReadResponse, error) {
   var newest *ReadResponse
-  for resp := range responses.Results() {
-    // resp.Value contains the response message (may be nil if resp.Err is set)
-    // resp.Err contains any error from that node (nil if successful)
-    // resp.NodeID contains the node identifier
-
+  for resp := range seq {
     if resp.Err != nil {
-      continue  // Skip failed responses
-    }
-
-    if newest == nil || resp.Value.GetTime().AsTime().After(newest.GetTime().AsTime()) {
-      newest = resp.Value
-    }
-  }
-
-  if newest == nil {
-    return nil, gorums.ErrIncomplete
-  }
-  return newest, nil
-}
-
-// Usage
-cfgCtx := config.Context(ctx)
-reply, err := newestValue(ReadQC(cfgCtx, &ReadRequest{}).Responses)
-```
-
-A quorum-call function returns a `*gorums.Call[Req, Resp]`, which embeds `*gorums.Responses[Resp]`.
-Pass its `Responses` field to a helper that takes `*gorums.Responses[Resp]`; the call is dispatched, with any registered interceptors, when the helper consumes the responses.
-A helper may instead take the `*gorums.Call[Req, Resp]` itself, as the storage example does.
-
-### Iterator Helper Methods
-
-The iterator returned by `.Results()` provides helper methods that can be chained before consuming the sequence:
-
-#### `IgnoreErrors()` - Skip Failed Responses
-
-```go
-func countSuccessful(responses *gorums.Responses[*Response]) int {
-  count := 0
-  for resp := range responses.Results().IgnoreErrors() {
-    count++
-    // resp.Value is guaranteed to be non-nil
-    // resp.Err is guaranteed to be nil
-  }
-  return count
-}
-```
-
-#### `Filter()` - Custom Filtering
-
-```go
-func validResponses(responses *gorums.Responses[*Response]) []*Response {
-  var valid []*Response
-
-  // Only include responses that pass validation
-  filtered := responses.Results().Filter(func(nr gorums.NodeResponse[*Response]) bool {
-    return nr.Err == nil && isValid(nr.Value)
-  })
-
-  for resp := range filtered {
-    valid = append(valid, resp.Value)
-  }
-  return valid
-}
-```
-
-#### `CollectN()` and `CollectAll()` - Collect Multiple Responses
-
-```go
-func majorityWrite(responses *gorums.Responses[*WriteResponse]) (*WriteResponse, error) {
-  majority := (responses.Size() + 1) / 2
-
-  // Collect first 'majority' successful responses
-  replies := responses.Results().IgnoreErrors().CollectN(majority)
-
-  if len(replies) < majority {
-    return nil, gorums.ErrIncomplete
-  }
-
-  // Process the map[gorums.ID]*WriteResponse
-  return aggregateWrites(replies), nil
-}
-
-// allSuccessful collects all successful responses; errored nodes are skipped.
-func allSuccessful(responses *gorums.Responses[*Response]) map[gorums.ID]*Response {
-  return responses.Results().IgnoreErrors().CollectAll()
-}
-
-// allResponses collects all responses; errored nodes are included with a zero value.
-// Only use this when you know all nodes will succeed or you handle zero values.
-func allResponses(responses *gorums.Responses[*Response]) map[gorums.ID]*Response {
-  return responses.Results().CollectAll()
-}
-```
-
-#### Per-Node Error Inspection
-
-`CollectN` and `CollectAll` return `map[gorums.ID]Resp` and do not preserve errors.
-When you need the actual error from a specific node, range over the results sequence directly:
-
-```go
-func inspectPerNodeErrors(responses *gorums.Responses[*Response]) {
-  var errs []error
-  replies := make(map[gorums.ID]*Response)
-
-  for result := range responses.Results() {
-    if result.Err != nil {
-      // result.NodeID identifies which node failed
-      errs = append(errs, fmt.Errorf("node %d: %w", result.NodeID, result.Err))
-      continue
-    }
-    replies[result.NodeID] = result.Value
-  }
-
-  // errs holds per-node failures; replies holds successful values
-}
-```
-
-Use `Results().IgnoreErrors()` or `Results().CollectAll()` when you do not need per-node error details.
-
-### Complete Example: Storage Client with Custom Aggregation
-
-```go
-func ExampleStorageClient() {
-  addrs := []string{
-    "127.0.0.1:8080",
-    "127.0.0.1:8081",
-    "127.0.0.1:8082",
-  }
-
-  // Create a configuration with all nodes
-  config, closeFn, err := gorums.NewConfig(
-    gorums.WithNodeList(addrs),
-    gorums.WithGRPCDialOptions(
-      grpc.WithTransportCredentials(insecure.NewCredentials()),
-    ),
-  )
-  if err != nil {
-    log.Fatalln("error creating configuration:", err)
-  }
-  defer closeFn()
-
-  ctx := context.Background()
-  cfgCtx := config.Context(ctx)
-
-  // Option 1: Use custom aggregation function
-  reply, err := newestValue(ReadQC(cfgCtx, &ReadRequest{Key: "x"}).Responses)
-  if err != nil {
-    log.Fatalln("read quorum call returned error:", err)
-  }
-  fmt.Printf("Read value: %v\n", reply.GetValue())
-
-  // Option 2: Use built-in terminal method
-  reply, err = ReadQC(cfgCtx, &ReadRequest{Key: "x"}).Majority()
-  if err != nil {
-    log.Fatalln("read quorum call returned error:", err)
-  }
-  fmt.Printf("Read value: %v\n", reply.GetValue())
-}
-
-// newestValue returns the response with the most recent timestamp
-func newestValue(responses *gorums.Responses[*ReadResponse]) (*ReadResponse, error) {
-  var newest *ReadResponse
-  for resp := range responses.Results() {
-    if resp.Err != nil {
-      continue
+      continue // skip failed responses
     }
     if newest == nil || resp.Value.GetTime().AsTime().After(newest.GetTime().AsTime()) {
       newest = resp.Value
@@ -943,161 +790,148 @@ func newestValue(responses *gorums.Responses[*ReadResponse]) (*ReadResponse, err
   }
   return newest, nil
 }
-```
 
-### Early Termination with Iterators
-
-Iterators allow early termination once a condition is met:
-
-```go
-func fastQuorum(responses *gorums.Responses[*Response]) (*Response, error) {
-  const threshold = 2
-  count := 0
-
-  for resp := range responses.Results().IgnoreErrors() {
-    count++
-    if count >= threshold {
-      return resp.Value, nil  // Return immediately after threshold
-    }
-  }
-
-  return nil, gorums.ErrIncomplete
-}
-```
-
-## Custom Return Types
-
-Gorums supports custom aggregation functions that return types different from the proto response type.
-This is useful when you need to aggregate multiple responses into a summary, statistics object, or any other custom type.
-
-### Functions Taking `*Responses[Resp]`
-
-A function that takes `gorums.ResponseSeq[Resp]` reads left to right with `.Aggregate(fn)`, and it can return any type.
-A function that takes `*Responses[Resp]` still works; pass it the call's `Responses` field.
-Such a function can call `Size()` and all iterator methods (`IgnoreErrors()`, `Filter()`, `CollectN()`, `CollectAll()`), and it can return any type.
-
-```go
-// Custom aggregation function that returns a different type
-// Input: *Responses[*MemoryStat], Output: *MemoryStatList
-func CollectStats(resp *gorums.Responses[*MemoryStat]) (*MemoryStatList, error) {
-  replies := resp.Results().IgnoreErrors().CollectAll()
-  if len(replies) == 0 {
-    return nil, gorums.ErrIncomplete
-  }
-  return &MemoryStatList{
-    MemoryStats: slices.Collect(maps.Values(replies)),
-  }, nil
-}
-
-// Usage: Call the function directly, passing the call's Responses
 cfgCtx := config.Context(ctx)
-memStats, err := CollectStats(StopBenchmark(cfgCtx, &StopRequest{}).Responses)
+reply, err := ReadQC(cfgCtx, &ReadRequest{Key: "x"}).Aggregate(newestValue)
+
+// The same function works after Async.
+reply, err = ReadQC(cfgCtx, &ReadRequest{Key: "x"}).Async().Aggregate(newestValue)
 ```
 
-### Example: Same Type Aggregation
+`Aggregate` comes after `Intercept` in the chain, so the function sees the responses that the interceptors produce.
 
-When the return type matches the response type, you can still use this pattern for custom quorum logic:
+### Skipping Failed Responses
 
-```go
-// Custom majority quorum with validation
-func ValidatedMajority(resp *gorums.Responses[*ReadResponse]) (*ReadResponse, error) {
-  replies := resp.Results().IgnoreErrors().CollectN(resp.Size()/2 + 1)
-  if len(replies) < resp.Size()/2+1 {
-    return nil, gorums.ErrIncomplete
-  }
-  // Return the first valid reply
-  for _, r := range replies {
-    if isValid(r) {
-      return r, nil
-    }
-  }
-  return nil, gorums.ErrIncomplete
-}
-
-// Usage
-cfgCtx := config.Context(ctx)
-state, err := ValidatedMajority(ReadQC(cfgCtx, &ReadRequest{}).Responses)
-```
-
-### Example: Custom Return Type (Slice)
+`IgnoreErrors()` returns a sequence that holds only the successful responses:
 
 ```go
-// Collect all string values from responses
-func CollectAllValues(resp *gorums.Responses[*StringValue]) ([]string, error) {
-  replies := resp.Results().IgnoreErrors().CollectAll()
-  if len(replies) == 0 {
-    return nil, gorums.ErrIncomplete
-  }
-  result := make([]string, 0, len(replies))
-  for _, v := range replies {
-    result = append(result, v.GetValue())
-  }
-  return result, nil
-}
-
-// Usage: Returns []string instead of *StringValue
-values, err := CollectAllValues(GetValues(cfgCtx, &Request{}).Responses)
-```
-
-### Example: Computing Aggregate Statistics
-
-```go
-// Aggregate results from multiple nodes into a summary
-func AggregateResults(resp *gorums.Responses[*Result]) (*Result, error) {
-  replies := resp.Results().IgnoreErrors().CollectAll()
-  if len(replies) == 0 {
-    return nil, gorums.ErrIncomplete
-  }
-
-  summary := &Result{}
-  for _, reply := range replies {
-    summary.TotalOps += reply.TotalOps
-    summary.TotalTime += reply.TotalTime
-    summary.Throughput += reply.Throughput
-  }
-
-  // Calculate averages
-  n := uint64(len(replies))
-  summary.TotalOps /= n
-  summary.TotalTime /= int64(n)
-  summary.Throughput /= float64(n)
-
-  return summary, nil
-}
-```
-
-### Example: Returning a Primitive Type
-
-```go
-// Count responses from specific nodes
-func CountFromPrimaryNodes(resp *gorums.Responses[*Response]) (int, error) {
+func countSuccessful(seq gorums.ResponseSeq[*Response]) (int, error) {
   count := 0
-  for r := range resp.Results().IgnoreErrors().Filter(func(nr gorums.NodeResponse[*Response]) bool {
-    return isPrimaryNode(nr.NodeID)
-  }) {
+  for range seq.IgnoreErrors() {
     count++
-  }
-  if count == 0 {
-    return 0, gorums.ErrIncomplete
   }
   return count, nil
 }
 ```
 
-### Example: Explicit Error Handling
+To drop responses on other conditions, use an `if` statement in the loop.
+To drop or change responses before a built-in terminal method sees them, use an interceptor; see [Interceptors for Request/Response Transformation](#interceptors-for-requestresponse-transformation).
 
-When you need to handle errors from individual nodes explicitly:
+### Per-Node Error Inspection
+
+Range over the sequence directly when you need the error from each node:
 
 ```go
-// Require all nodes to succeed
-func RequireAllSuccess(resp *gorums.Responses[*Response]) (*Response, error) {
+func repliesAndErrors(seq gorums.ResponseSeq[*Response]) (map[gorums.ID]*Response, error) {
+  var errs []error
+  replies := make(map[gorums.ID]*Response)
+  for resp := range seq {
+    if resp.Err != nil {
+      errs = append(errs, fmt.Errorf("node %d: %w", resp.NodeID, resp.Err))
+      continue
+    }
+    replies[resp.NodeID] = resp.Value
+  }
+  return replies, errors.Join(errs...)
+}
+```
+
+### Early Termination
+
+Return from the loop as soon as you have enough responses.
+The call discards the replies that arrive later.
+
+```go
+func firstTwo(seq gorums.ResponseSeq[*Response]) (*Response, error) {
+  count := 0
+  for resp := range seq.IgnoreErrors() {
+    count++
+    if count == 2 {
+      return resp.Value, nil
+    }
+  }
+  return nil, gorums.ErrIncomplete
+}
+```
+
+### Functions That Need the Configuration Size
+
+The sequence does not know the size of the configuration.
+When the function needs it, for example to compute a quorum, return the function from a constructor that takes the size:
+
+```go
+// validatedMajority returns the first valid response once a majority of
+// the nodes have sent valid responses. Invalid responses do not count.
+func validatedMajority(size int) func(gorums.ResponseSeq[*ReadResponse]) (*ReadResponse, error) {
+  quorum := size/2 + 1
+  return func(seq gorums.ResponseSeq[*ReadResponse]) (*ReadResponse, error) {
+    var first *ReadResponse
+    valid := 0
+    for resp := range seq.IgnoreErrors() {
+      if !isValid(resp.Value) {
+        continue
+      }
+      if first == nil {
+        first = resp.Value
+      }
+      valid++
+      if valid >= quorum {
+        return first, nil
+      }
+    }
+    return nil, gorums.ErrIncomplete
+  }
+}
+
+reply, err := ReadQC(cfgCtx, &ReadRequest{}).Aggregate(validatedMajority(config.Size()))
+```
+
+### Custom Return Types
+
+The function may return a type that differs from the response type, such as a summary, a slice, or a number.
+
+```go
+// collectStats gathers the memory statistics from every node that replies.
+func collectStats(seq gorums.ResponseSeq[*MemoryStat]) (*MemoryStatList, error) {
+  var stats []*MemoryStat
+  for resp := range seq.IgnoreErrors() {
+    stats = append(stats, resp.Value)
+  }
+  if len(stats) == 0 {
+    return nil, gorums.ErrIncomplete
+  }
+  return &MemoryStatList{MemoryStats: stats}, nil
+}
+
+memStats, err := StopBenchmark(cfgCtx, &StopRequest{}).Aggregate(collectStats)
+```
+
+```go
+// meanThroughput returns the mean throughput of the nodes that reply.
+func meanThroughput(seq gorums.ResponseSeq[*Result]) (float64, error) {
+  var sum float64
+  n := 0
+  for resp := range seq.IgnoreErrors() {
+    sum += resp.Value.GetThroughput()
+    n++
+  }
+  if n == 0 {
+    return 0, gorums.ErrIncomplete
+  }
+  return sum / float64(n), nil
+}
+```
+
+```go
+// requireAllSuccess fails at the first node error.
+func requireAllSuccess(seq gorums.ResponseSeq[*Response]) (*Response, error) {
   var first *Response
-  for r := range resp.Results() {
-    if r.Err != nil {
-      return nil, r.Err  // Fail fast on any error
+  for resp := range seq {
+    if resp.Err != nil {
+      return nil, resp.Err
     }
     if first == nil {
-      first = r.Value
+      first = resp.Value
     }
   }
   if first == nil {
@@ -2224,7 +2058,7 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadReque
     }
     // Let the next request start while the nested calls are in flight.
     ctx.Release()
-    return newestValue(pb.ReadQC(config.Context(ctx), req).Responses)
+    return pb.ReadQC(config.Context(ctx), req).Aggregate(newestValue)
 }
 ```
 
@@ -2373,7 +2207,7 @@ func (s *storageServer) ReadNestedQC(ctx gorums.ServerContext, req *pb.ReadReque
         return nil, fmt.Errorf("read_nested_qc: no client peers connected")
     }
     ctx.Release()
-    return newestValue(pb.ReadQC(config.Context(ctx), req).Responses)
+    return pb.ReadQC(config.Context(ctx), req).Aggregate(newestValue)
 }
 ```
 
@@ -2501,7 +2335,7 @@ func (s *storageServer) ReadQC(ctx gorums.ServerContext, req *pb.ReadRequest) (*
         return local, nil
     }
     ctx.Release()
-    remote, err := newestValue(pb.ReadQC(children.Context(ctx), req).Responses)
+    remote, err := pb.ReadQC(children.Context(ctx), req).Aggregate(newestValue)
     if err != nil {
         return nil, fmt.Errorf("read_qc: %w", err)
     }

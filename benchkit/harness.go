@@ -199,8 +199,8 @@ func BenchContext(opts Options) (context.Context, context.CancelFunc) {
 
 // CollectReplies drains a ResponseSeq into a map keyed by node ID. It returns
 // the joined errors observed from any node so that a single failing server is
-// not silently dropped (as CollectAll does by storing the zero value) and so
-// the caller sees every failure, not just the first.
+// not silently dropped and so the caller sees every failure, not just the
+// first.
 func CollectReplies[T proto.Message](seq gorums.ResponseSeq[T]) (map[uint32]T, error) {
 	replies := make(map[uint32]T)
 	var errs []error
