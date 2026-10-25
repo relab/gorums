@@ -489,7 +489,7 @@ The `*gorums.Responses[T]` type provides built-in *terminal methods* for common 
 | `.Aggregate(fn)`               | Result of your function `fn`  | `fn` returns                           |
 | `.Reduce(n, initial, add)`     | Accumulator built by `add`    | n nodes respond successfully           |
 | `.Matching(n, key)`            | Response with an agreed key   | n nodes send responses with equal keys |
-| `.MatchingCertificate(n, key)` | Agreed response and its nodes | n nodes send responses with equal keys |
+| `.MatchingAgreement(n, key)`   | Agreed response and its nodes | n nodes send responses with equal keys |
 
 Each terminal method blocks until its condition is met or the context is canceled, then returns a single aggregated result and an error.
 `Threshold(n)` panics if `n` is not positive.
@@ -624,8 +624,8 @@ A key of type `any` that holds a slice compiles, but `Matching` panics when it p
 `Matching` puts each successful response in a bucket for its key.
 It returns the first response in the first bucket that gets `n` responses.
 
-`MatchingCertificate(n, key)` works in the same way, but it also returns the evidence.
-It returns a `gorums.Certificate[T]` with two fields:
+`MatchingAgreement(n, key)` works in the same way, but it also returns the evidence.
+It returns a `gorums.Agreement[T]` with two fields:
 
 * `Value` is the first response in the bucket that got `n` responses.
 * `Responses` holds the `n` responses in that bucket, in arrival order, each with its `NodeID`.
@@ -647,13 +647,14 @@ func digestKey(resp *PrepareResponse) string {
 }
 
 quorum := 2*f + 1
-cert, err := PrepareQC(cfgCtx, &PrepareRequest{View: view, Sequence: seq, Digest: digest}).
-  MatchingCertificate(quorum, digestKey)
+agreement, err := PrepareQC(cfgCtx, &PrepareRequest{View: view, Sequence: seq, Digest: digest}).
+  MatchingAgreement(quorum, digestKey)
 if err != nil {
   return err
 }
-// cert.Value is a prepare response with the agreed digest.
-// cert.Responses shows which nodes sent a matching response.
+// agreement.Value is a prepare response with the agreed digest.
+// agreement.Responses shows which nodes sent a matching response, so it
+// serves as the prepared certificate.
 ```
 
 Use `Matching` when you need only the value and not the evidence:
@@ -664,7 +665,7 @@ reply, err := PrepareQC(cfgCtx, req).Matching(quorum, digestKey)
 
 If no key gets `n` responses, both methods return the zero value and an error that matches `gorums.ErrIncomplete`.
 This error also holds the node errors, but not the nodes that a request transform skipped.
-`Matching` and `MatchingCertificate` panic if `n` is not positive or if `key` is nil.
+`Matching` and `MatchingAgreement` panic if `n` is not positive or if `key` is nil.
 
 ### Async and Correctable Variants
 
@@ -705,7 +706,7 @@ They panic before they send any request.
 
 Understanding when messages are actually sent matters for ordering and for reasoning about concurrent calls.
 
-**Quorum calls are lazy.** Messages are not sent to nodes until the caller consumes the `*Responses[T]` object by calling a terminal method (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`, `MatchingCertificate`) or by calling `.Results()` to begin iterating.
+**Quorum calls are lazy.** Messages are not sent to nodes until the caller consumes the `*Responses[T]` object by calling a terminal method (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`, `MatchingAgreement`) or by calling `.Results()` to begin iterating.
 This gives interceptors a chance to register per-node request transformations before any bytes go on the wire.
 
 **Async variants send immediately.** `AsyncFirst`, `AsyncMajority`, `AsyncAll`, and `AsyncThreshold` call `sendNow` synchronously before spawning the goroutine that awaits the threshold.

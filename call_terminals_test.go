@@ -23,10 +23,10 @@ func prefixKey(resp *pb.StringValue) string {
 	return prefix
 }
 
-// certificateIDs returns the node IDs of the responses in cert.
-func certificateIDs(cert gorums.Certificate[*pb.StringValue]) []gorums.ID {
+// agreementIDs returns the node IDs of the responses in agreement.
+func agreementIDs(agreement gorums.Agreement[*pb.StringValue]) []gorums.ID {
 	var ids []gorums.ID
-	for _, resp := range cert.Responses {
+	for _, resp := range agreement.Responses {
 		ids = append(ids, resp.NodeID)
 	}
 	return ids
@@ -67,20 +67,20 @@ func TestCallTerminalsStream(t *testing.T) {
 			wantErr:  gorums.ErrIncomplete,
 		},
 		{
-			name:    "MatchingCertificate/CountsEachNodeOnce",
+			name:    "MatchingAgreement/CountsEachNodeOnce",
 			timeout: 2 * time.Second,
 			run: func(call *streamCall) ([]gorums.ID, error) {
-				cert, err := call.MatchingCertificate(3, prefixKey)
-				return certificateIDs(cert), err
+				agreement, err := call.MatchingAgreement(3, prefixKey)
+				return agreementIDs(agreement), err
 			},
 			allNodes: true,
 		},
 		{
-			name:    "MatchingCertificate/IncompleteWhenContextEnds",
+			name:    "MatchingAgreement/IncompleteWhenContextEnds",
 			timeout: 100 * time.Millisecond,
 			run: func(call *streamCall) ([]gorums.ID, error) {
-				cert, err := call.MatchingCertificate(4, prefixKey)
-				return certificateIDs(cert), err
+				agreement, err := call.MatchingAgreement(4, prefixKey)
+				return agreementIDs(agreement), err
 			},
 			wantErr: gorums.ErrIncomplete,
 		},

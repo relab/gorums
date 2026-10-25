@@ -113,9 +113,9 @@ func (r *Responses[Resp]) Reduce[Acc any](
 	return acc, tally.incomplete()
 }
 
-// Certificate contains a representative value and the successful node
+// Agreement contains a representative value and the successful node
 // responses that established it. Responses are retained in arrival order.
-type Certificate[Resp proto.Message] struct {
+type Agreement[Resp proto.Message] struct {
 	Value     Resp
 	Responses []NodeResponse[Resp]
 }
@@ -139,30 +139,30 @@ func (r *Responses[Resp]) Matching[Key comparable](
 	if key == nil {
 		panic("gorums: Matching called with nil key function")
 	}
-	cert, err := r.MatchingCertificate(n, key)
-	return cert.Value, err
+	agreement, err := r.MatchingAgreement(n, key)
+	return agreement.Value, err
 }
 
-// MatchingCertificate waits for successful responses from n distinct nodes
+// MatchingAgreement waits for successful responses from n distinct nodes
 // that produce the same comparable key. It returns the representative value
-// and the responses that established the first matching certificate.
+// and the responses that established the first matching agreement.
 //
-// The certificate contains only successful responses, ordered by arrival.
-// MatchingCertificate ignores repeated responses from an already-counted
+// The agreement contains only successful responses, ordered by arrival.
+// MatchingAgreement ignores repeated responses from an already-counted
 // node. It returns a QuorumCallError caused by ErrIncomplete if no key reaches
 // n responses.
 //
 // Keys compare by value: a pointer key, such as the response itself, never
 // matches another response, and an interface key holding a slice panics.
 //
-// MatchingCertificate panics if n is not positive or key is nil.
-func (r *Responses[Resp]) MatchingCertificate[Key comparable](
+// MatchingAgreement panics if n is not positive or key is nil.
+func (r *Responses[Resp]) MatchingAgreement[Key comparable](
 	n int,
 	key func(Resp) Key,
-) (Certificate[Resp], error) {
-	checkThreshold("MatchingCertificate", n)
+) (Agreement[Resp], error) {
+	checkThreshold("MatchingAgreement", n)
 	if key == nil {
-		panic("gorums: MatchingCertificate called with nil key function")
+		panic("gorums: MatchingAgreement called with nil key function")
 	}
 	var (
 		tally   = nodeTally{counted: make([]ID, 0, r.size)}
@@ -178,8 +178,8 @@ func (r *Responses[Resp]) MatchingCertificate[Key comparable](
 		k := key(result.Value)
 		buckets[k] = append(buckets[k], result)
 		if bucket := buckets[k]; len(bucket) >= n {
-			return Certificate[Resp]{Value: bucket[0].Value, Responses: bucket}, nil
+			return Agreement[Resp]{Value: bucket[0].Value, Responses: bucket}, nil
 		}
 	}
-	return Certificate[Resp]{}, tally.incomplete()
+	return Agreement[Resp]{}, tally.incomplete()
 }
