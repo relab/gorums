@@ -2,7 +2,7 @@
 
 edition = "2023";
 
-package gorums.testprotos.calltypes.multicast;
+package internal.testprotos.calltypes.multicast;
 option go_package = "github.com/relab/gorums/internal/testprotos/calltypes/multicast";
 
 option features.field_presence = IMPLICIT;

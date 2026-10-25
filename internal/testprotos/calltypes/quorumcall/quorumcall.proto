@@ -2,7 +2,7 @@
 
 edition = "2023";
 
-package gorums.testprotos.calltypes.quorumcall;
+package internal.testprotos.calltypes.quorumcall;
 option go_package = "github.com/relab/gorums/internal/testprotos/calltypes/quorumcall";
 
 option features.field_presence = IMPLICIT;
