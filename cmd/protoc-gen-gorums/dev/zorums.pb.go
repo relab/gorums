@@ -25,6 +25,7 @@ const (
 type Request struct {
 	state            protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Value string                 `protobuf:"bytes,1,opt,name=Value"`
+	xxx_hidden_ID    uint32                 `protobuf:"varint,2,opt,name=ID"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -61,14 +62,26 @@ func (x *Request) GetValue() string {
 	return ""
 }
 
+func (x *Request) GetID() uint32 {
+	if x != nil {
+		return x.xxx_hidden_ID
+	}
+	return 0
+}
+
 func (x *Request) SetValue(v string) {
 	x.xxx_hidden_Value = v
+}
+
+func (x *Request) SetID(v uint32) {
+	x.xxx_hidden_ID = v
 }
 
 type Request_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	Value string
+	ID    uint32
 }
 
 func (b0 Request_builder) Build() *Request {
@@ -76,6 +89,7 @@ func (b0 Request_builder) Build() *Request {
 	b, x := &b0, m0
 	_, _ = b, x
 	x.xxx_hidden_Value = b.Value
+	x.xxx_hidden_ID = b.ID
 	return m0
 }
 
@@ -197,9 +211,10 @@ var File_zorums_proto protoreflect.FileDescriptor
 
 const file_zorums_proto_rawDesc = "" +
 	"\n" +
-	"\fzorums.proto\x12\x03dev\x1a\fgorums.proto\x1a\x1bgoogle/protobuf/empty.proto\"\x1f\n" +
+	"\fzorums.proto\x12\x03dev\x1a\fgorums.proto\x1a\x1bgoogle/protobuf/empty.proto\"/\n" +
 	"\aRequest\x12\x14\n" +
-	"\x05Value\x18\x01 \x01(\tR\x05Value\"\"\n" +
+	"\x05Value\x18\x01 \x01(\tR\x05Value\x12\x0e\n" +
+	"\x02ID\x18\x02 \x01(\rR\x02ID\"\"\n" +
 	"\bResponse\x12\x16\n" +
 	"\x06Result\x18\x01 \x01(\x03R\x06Result\"\"\n" +
 	"\n" +
