@@ -47,17 +47,23 @@ func (t *nodeTally) incomplete() error {
 	return conn.NewQuorumCallError(ErrIncomplete, t.errs)
 }
 
+// AggregateFunc aggregates the responses of a quorum call into a result of
+// type Out, which may differ from the response type. It receives the call's
+// single-use response sequence, decides how to handle each node error, and
+// decides when to stop. [Responses.Aggregate] runs an AggregateFunc.
+type AggregateFunc[Resp proto.Message, Out any] func(ResponseSeq[Resp]) (Out, error)
+
 // Aggregate applies fn to the single-use response sequence and returns its
 // result. It supports reusable aggregation functions whose result type differs
 // from the response type.
 //
-// Consuming the sequence passed to fn triggers dispatch. The aggregation
+// Ranging over the sequence passed to fn dispatches the call. The aggregation
 // function is responsible for interpreting individual response errors and
-// deciding when to stop consuming responses.
+// deciding when to stop ranging over the responses.
 //
 // Aggregate panics if fn is nil.
 func (r *Responses[Resp]) Aggregate[Out any](
-	fn func(ResponseSeq[Resp]) (Out, error),
+	fn AggregateFunc[Resp, Out],
 ) (Out, error) {
 	if fn == nil {
 		panic("gorums: Aggregate called with nil function")

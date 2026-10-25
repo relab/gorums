@@ -768,7 +768,8 @@ gRPC keepalive, enabled with `gorums.WithGRPCDialOptions(grpc.WithKeepaliveParam
 ## Iterator-Based Custom Aggregation
 
 For aggregation logic beyond the built-in terminal methods, write a function that ranges over the response sequence, and pass it to `.Aggregate(fn)`.
-The function takes a `gorums.ResponseSeq[Resp]` and may return any type.
+The function takes a `gorums.ResponseSeq[Resp]` and may return any type `Out`.
+Its type is `gorums.AggregateFunc[Resp, Out]`, which also serves as the return type of a function that builds one.
 The sequence yields each node's response as it arrives, so the function can decide when it has enough.
 Each item holds three fields:
 
@@ -884,7 +885,7 @@ When the function needs it, for example to compute a quorum, return the function
 ```go
 // validatedMajority returns the first valid response once a majority of
 // the nodes have sent valid responses. Invalid responses do not count.
-func validatedMajority(size int) func(gorums.ResponseSeq[*ReadResponse]) (*ReadResponse, error) {
+func validatedMajority(size int) gorums.AggregateFunc[*ReadResponse, *ReadResponse] {
   quorum := size/2 + 1
   return func(seq gorums.ResponseSeq[*ReadResponse]) (*ReadResponse, error) {
     var first *ReadResponse
