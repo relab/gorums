@@ -160,6 +160,7 @@ func TestReleaseGroup(t *testing.T) {
 		{"gorums.pb.go", groupGenerated},
 		{"internal/tests/ordering/order_gorums.pb.go", groupGenerated},
 		{"benchkit/control_gorums.pb.go", groupGenerated},
+		{"internal/testprotos/testdata/calltypes/quorumcall/quorumcall_gorums.pb.go.golden", groupGenerated},
 		{"cmd/protoc-gen-gorums/gengorums/template_static.go", groupGenerated},
 		{"README.md", ""},
 		{"go.work.sum", ""},
