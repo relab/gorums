@@ -101,7 +101,8 @@ make genproto
 
 This generates new `*_gorums.pb.go` files with:
 
-- Type aliases for `Manager`, `Configuration`, `Node`
+- Type aliases `Config`, `ID`, and `Node` for `gorums.Config`, `gorums.ID`, and `gorums.Node`
+- Type aliases `CorrectableX` for the correctable results of each quorum call response type `X`
 - Service client types with a method for each call (e.g., `client.ReadQC`, `client.WriteQC`)
 - Terminal methods on `*gorums.Responses[T]`
 
@@ -898,8 +899,17 @@ A remote call or unicast on a nil node no longer panics.
 It returns `gorums.ErrNoNode`, a gRPC status error with the `InvalidArgument` code.
 Thus, `pb.NewStorageNodeClient(cfg.Node(id))` is safe when `cfg` has no node with that ID.
 
-Regeneration reports an error for a message, enum, enum value, or oneof wrapper type, including a nested one, whose Go name is the name of a generated client interface, constructor, or struct.
-These names are `SClient`, `NewSClient`, and `sClient` if the service has quorum calls or multicasts, and `SNodeClient`, `NewSNodeClient`, and `sNodeClient` if it has remote calls or unicasts.
+A `.proto` file may now declare several services, and several `.proto` files of one Go package may each declare services.
+Each service gets its own client interfaces, and all services share one `gorums.Config` and one `gorums.Server`.
+See [Several Services](user-guide.md#several-services) in the user guide.
+
+Regeneration reports an error for names that collide with the generated code:
+
+- a message, enum, enum value, or oneof wrapper type, including a nested one, whose Go name is the name of a generated client interface, constructor, or struct, or `SServer` or `RegisterSServer`;
+  the client names are `SClient`, `NewSClient`, and `sClient` if the service has quorum calls or multicasts, and `SNodeClient`, `NewSNodeClient`, and `sNodeClient` if it has remote calls or unicasts;
+- a message or enum named `CorrectableX`, where `X` is the response type of a quorum call;
+- two services of one Go package that generate the same name, such as services `NewS` and `S` with quorum calls, which both generate `NewSClient`.
+
 An RPC method may have any name.
 
 Hand-written Go code in the generated package that declares one of these names, such as your own `StorageClient` wrapper, now fails to compile.

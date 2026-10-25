@@ -14,12 +14,14 @@ The repository contains two main components located in `cmd/protoc-gen-gorums`:
    Note that there is not a one-to-one correspondence for all files.
 
 2. **Static Code File Changes:** Any `.go` file in `dev/` that is not prefixed by `zorums_` and does not end in `_test.go` is treated as static code and bundled into `template_static.go`.
-   Currently, `aliases.go` is the only such file, but additional files can be added to the `dev/` directory and they will be included automatically.
+   Currently, `aliases.go` holds the only static declarations, but additional files can be added to the `dev/` directory and they will be included automatically.
 
-### Generated Static Surface and Reserved Identifiers
+### Generated Static Code and Reserved Identifiers
 
-Every generated `_gorums.pb.go` file embeds a small block of static code taken verbatim from `dev/aliases.go`.
-That block currently consists of three type aliases:
+The generator embeds the static code of the `dev/` package verbatim in one generated `_gorums.pb.go` file per Go package and `protoc` run.
+That file belongs to the first `.proto` file of the package with Gorums services in `protoc`'s file order.
+In that order, imported files come first.
+The static code currently consists of three type aliases from `dev/aliases.go`:
 
 ```go
 type (
@@ -29,22 +31,33 @@ type (
 )
 ```
 
-These aliases make the most commonly used Gorums types available without requiring an explicit `gorums` import in user code.
+These aliases make the most commonly used Gorums types available as `pb.Config`, `pb.ID`, and `*pb.Node`.
+The other generated files of the package use the same aliases.
 
-Each name declared in `aliases.go` (and any other non-ignored file in `dev/`) is also added to the **reserved identifier list**.
+The `types` template (`gengorums/template_datatypes.go`) declares the alias `CorrectableX` for each response type `X` of a quorum call.
+Several services and files of a Go package may return the same `X`.
+Thus, the generator declares each such alias once per Go package and `protoc` run.
+The alias goes in the generated file of the first `.proto` file, in the same order as above, whose quorum calls return `X`.
+
+Because the static code appears once per Go package, it may declare package-level names.
+Each exported package-level name of the static code becomes a **reserved identifier**.
+The bundler (`gengorums/bundle.go`) discovers these names by inspecting `TypesInfo.Defs` for all exported, package-scope declarations in the dev package.
+Thus, declaring an exported top-level name in `aliases.go` is sufficient to reserve that name.
 The Gorums generator rejects a proto file whose messages, enums, or enum values use a reserved identifier as their Go name.
 Such a name collides with the generated alias.
-The check includes nested messages and enums, and every file of the service's Go package.
-RPC methods are methods of the generated client interfaces, so they do not collide with the aliases; [Generated Client Interfaces](#generated-client-interfaces) describes the name checks of the clients.
+The check includes nested messages and enums, and every file of the Go package.
+RPC methods are methods of the generated client interfaces, so they do not collide with the aliases; [Generated Client Interfaces](#generated-client-interfaces) describes the name checks for the generated client and server names.
 
-The bundler (`gengorums/bundle.go`) discovers reserved identifiers by inspecting `TypesInfo.Defs` for all exported, package-scope declarations in the dev package.
-This means that simply declaring a type alias (or any other exported top-level name) in `aliases.go` is sufficient to reserve that name — no extra annotation is needed.
+All `.proto` files of a Go package must be compiled in one `protoc` run.
+Otherwise, each run emits the static code, so the package declares `Config`, `ID`, and `Node` twice.
+The package also declares twice any `Correctable` alias that both runs produce.
 
 The `TestBundleReservedIdentifiers` test in `gengorums/bundle_test.go` pins the expected set.
-If you add or remove an alias, update that test to match.
+If you add or remove a static declaration, update that test to match.
 
 ### Generated Client Interfaces
 
+A Go package may hold several services, in one `.proto` file or in several.
 For each service `S`, the generator emits up to two client interfaces, as gRPC does.
 The call type of each RPC method decides which client the method belongs to:
 
@@ -77,6 +90,8 @@ flowchart LR
 
 A method signature is written once, for both the interface and the struct.
 godoc shows the doc comments of the interface methods.
+
+The server interface `SServer` and the function `RegisterSServer` come from `gengorums/template_server.go`.
 
 In dev mode, the generator writes one `dev/zorums_{name}_gorums.pb.go` file for each entry of `gorumsCallTypesInfo` in `gengorums/generate.go`:
 
