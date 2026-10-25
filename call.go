@@ -7,13 +7,13 @@ import (
 )
 
 // Call represents a lazily dispatched quorum call.
-// Register interceptors with [Call.Intercept] before consuming its responses.
-// A Call may be consumed once.
+// Register interceptors with [Call.Intercept] before the call is dispatched.
+// A Call may be dispatched once.
 type Call[Req, Resp proto.Message] = impl.Call[Req, Resp]
 
 // OnewayCall represents a lazily dispatched multicast or unicast call.
-// [OnewayCall.Send] and [OnewayCall.Async] each consume the call; invoking
-// either after the call has been consumed panics. A server handler that must
+// [OnewayCall.Send] and [OnewayCall.Async] each dispatch the call; invoking
+// either after the call was dispatched panics. A server handler that must
 // keep its one-way calls in FIFO order dispatches them with [OnewayCall.Async]
 // before [ServerContext.Release] and waits with [OnewayAsync.Wait] after it.
 // A call dispatched after Release may overtake the next request's call.
