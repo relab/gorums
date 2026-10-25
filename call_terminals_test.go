@@ -104,3 +104,41 @@ func TestCallTerminalsStream(t *testing.T) {
 		})
 	}
 }
+
+// countAtLeast returns an AggregateFunc that reports whether at least n nodes
+// sent a successful response.
+func countAtLeast(n int) gorums.AggregateFunc[*pb.StringValue, bool] {
+	return func(seq gorums.ResponseSeq[*pb.StringValue]) (bool, error) {
+		count := 0
+		for range seq.IgnoreErrors() {
+			count++
+			if count >= n {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+}
+
+// TestCallTerminalsAggregateFunc verifies that Aggregate accepts both an
+// AggregateFunc value and a plain function, and infers the result type.
+func TestCallTerminalsAggregateFunc(t *testing.T) {
+	config := gorumstest.Config(t, 3, gorumstest.EchoServer)
+	ctx := gorumstest.Context(t, 2*time.Second)
+
+	ok, err := mockcall.QuorumCall(config.Context(ctx), "test").Aggregate(countAtLeast(2))
+	if err != nil || !ok {
+		t.Errorf("Aggregate(countAtLeast(2)) = %v, %v, want true, nil", ok, err)
+	}
+
+	value, err := mockcall.QuorumCall(config.Context(ctx), "test").Aggregate(
+		func(seq gorums.ResponseSeq[*pb.StringValue]) (string, error) {
+			for resp := range seq.IgnoreErrors() {
+				return resp.Value.GetValue(), nil
+			}
+			return "", gorums.ErrIncomplete
+		})
+	if err != nil || value != "echo: test" {
+		t.Errorf("Aggregate(func) = %q, %v, want %q, nil", value, err, "echo: test")
+	}
+}

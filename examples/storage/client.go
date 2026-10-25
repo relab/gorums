@@ -42,10 +42,9 @@ func newestValue(seq gorums.ResponseSeq[*proto.ReadResponse]) (*proto.ReadRespon
 	return newest, nil
 }
 
-// numUpdated returns a function for [gorums.Responses.Aggregate] that
-// reports, for a WriteQC call to size nodes, whether a majority of the nodes
-// updated their value.
-func numUpdated(size int) func(gorums.ResponseSeq[*proto.WriteResponse]) (*proto.WriteResponse, error) {
+// numUpdated returns an aggregation function that reports, for a WriteQC call
+// to size nodes, whether a majority of the nodes updated their value.
+func numUpdated(size int) gorums.AggregateFunc[*proto.WriteResponse, *proto.WriteResponse] {
 	return func(seq gorums.ResponseSeq[*proto.WriteResponse]) (*proto.WriteResponse, error) {
 		var count int
 		for resp := range seq.IgnoreErrors() {
