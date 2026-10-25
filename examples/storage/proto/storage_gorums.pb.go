@@ -39,12 +39,6 @@ type (
 	ConfigContext = gorums.ConfigContext
 )
 
-// AsyncReadResponse is a future for async quorum calls returning *ReadResponse.
-type AsyncReadResponse = *gorums.Async[*ReadResponse]
-
-// AsyncWriteResponse is a future for async quorum calls returning *WriteResponse.
-type AsyncWriteResponse = *gorums.Async[*WriteResponse]
-
 // CorrectableReadResponse is a correctable object for quorum calls returning *ReadResponse.
 type CorrectableReadResponse = *gorums.Correctable[*ReadResponse]
 

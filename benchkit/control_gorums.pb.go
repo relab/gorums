@@ -38,15 +38,6 @@ type (
 	ConfigContext = gorums.ConfigContext
 )
 
-// AsyncClockSyncResponse is a future for async quorum calls returning *ClockSyncResponse.
-type AsyncClockSyncResponse = *gorums.Async[*ClockSyncResponse]
-
-// AsyncResult is a future for async quorum calls returning *Result.
-type AsyncResult = *gorums.Async[*Result]
-
-// AsyncStartResponse is a future for async quorum calls returning *StartResponse.
-type AsyncStartResponse = *gorums.Async[*StartResponse]
-
 // CorrectableClockSyncResponse is a correctable object for quorum calls returning *ClockSyncResponse.
 type CorrectableClockSyncResponse = *gorums.Correctable[*ClockSyncResponse]
 
