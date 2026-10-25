@@ -8,10 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/relab/gorums/internal/testutils/mockcall"
+
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
-	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/keepalive"
@@ -69,7 +70,7 @@ func peerGroup(t *testing.T, ca *testCA, n int, certIDs []gorums.ID, opts ...gor
 func remoteCall(t *testing.T, node *gorums.Node, timeout time.Duration) (string, error) {
 	t.Helper()
 	ctx := gorumstest.Context(t, timeout)
-	resp, err := gorumsimpl.RemoteCall[*pb.StringValue, *pb.StringValue](node.Context(ctx), pb.String("hello"), mock.TestMethod)
+	resp, err := mockcall.RemoteCall(node.Context(ctx), "hello")
 	return resp.GetValue(), err
 }
 
