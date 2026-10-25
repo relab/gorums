@@ -11,6 +11,7 @@ import "google/protobuf/empty.proto";
 
 message Request {
     string Value = 1;
+    uint32 ID = 2;
 }
 message Response {
     int64 Result = 1;

@@ -19,11 +19,12 @@ The repository contains two main components located in `cmd/protoc-gen-gorums`:
 ### Generated Static Surface and Reserved Identifiers
 
 Every generated `_gorums.pb.go` file embeds a small block of static code taken verbatim from `dev/aliases.go`.
-That block currently consists of four type aliases:
+That block currently consists of five type aliases:
 
 ```go
 type (
     Config        = gorums.Config
+    ID            = gorums.ID
     Node          = gorums.Node
     NodeContext   = gorums.NodeContext
     ConfigContext = gorums.ConfigContext

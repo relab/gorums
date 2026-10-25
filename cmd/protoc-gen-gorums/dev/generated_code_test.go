@@ -148,3 +148,14 @@ func TestGeneratedCodeDerivedConfig(t *testing.T) {
 		})
 	}
 }
+
+// TestGeneratedCodeIDField verifies that a proto message can have a field
+// named ID, even though ID is a reserved identifier in the generated package.
+func TestGeneratedCodeIDField(t *testing.T) {
+	req := &dev.Request{}
+	req.SetID(42)
+	if got := req.GetID(); got != 42 {
+		t.Errorf("GetID() = %d, want 42", got)
+	}
+	var _ dev.ID // the reserved alias must remain usable alongside the field
+}
