@@ -32,7 +32,7 @@ func certificateIDs(cert gorums.Certificate[*pb.StringValue]) []gorums.ID {
 	return ids
 }
 
-// addNodeID is a Reduce step function that records the node ID of each
+// addNodeID is a Reduce add function that records the node ID of each
 // folded response.
 func addNodeID(ids []gorums.ID, resp gorums.NodeResponse[*pb.StringValue]) ([]gorums.ID, error) {
 	return append(ids, resp.NodeID), nil

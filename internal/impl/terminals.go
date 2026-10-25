@@ -71,28 +71,30 @@ func (r *Responses[Resp]) Aggregate[Out any](
 // Acc is caller-defined aggregation state and is independent of Resp. It may,
 // for example, be a response selected so far, a scalar counter, a protocol
 // state struct, a map, or a certificate builder. The initial value is passed
-// to the first invocation of step, and the accumulator returned by each
-// invocation is passed to the next.
+// to the first invocation of add, and the accumulator returned by each
+// invocation is passed to the next. The initial value may be nil, for example
+// a nil map or pointer; add must then allocate the accumulator before it
+// writes to it.
 //
-// The NodeResponse passed to step is always successful, but retains its NodeID
+// The NodeResponse passed to add is always successful, but retains its NodeID
 // so the accumulator can record evidence. Responses containing errors and
-// repeated responses from an already-counted node are not passed to step.
+// repeated responses from an already-counted node are not passed to add.
 // Non-skip node errors are retained for a possible ErrIncomplete result.
 //
-// Reduce stops after folding n successful responses. If step returns an error,
+// Reduce stops after folding n successful responses. If add returns an error,
 // Reduce returns the accumulator returned by that invocation and the same
 // error. If fewer than n successful responses are available, Reduce returns
 // the latest accumulator and a QuorumCallError caused by ErrIncomplete.
 //
-// Reduce panics if n is not positive or step is nil.
+// Reduce panics if n is not positive or add is nil.
 func (r *Responses[Resp]) Reduce[Acc any](
 	n int,
 	initial Acc,
-	step func(Acc, NodeResponse[Resp]) (Acc, error),
+	add func(Acc, NodeResponse[Resp]) (Acc, error),
 ) (Acc, error) {
 	checkThreshold("Reduce", n)
-	if step == nil {
-		panic("gorums: Reduce called with nil step function")
+	if add == nil {
+		panic("gorums: Reduce called with nil add function")
 	}
 	acc := initial
 	tally := nodeTally{counted: make([]ID, 0, min(n, r.size))}
@@ -101,7 +103,7 @@ func (r *Responses[Resp]) Reduce[Acc any](
 			continue
 		}
 		var err error
-		if acc, err = step(acc, result); err != nil {
+		if acc, err = add(acc, result); err != nil {
 			return acc, err
 		}
 		if len(tally.counted) >= n {

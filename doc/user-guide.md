@@ -487,7 +487,7 @@ The `*gorums.Responses[T]` type provides built-in *terminal methods* for common 
 | `.All()`                       | All responses                 | All n nodes respond                    |
 | `.Threshold(n)`                | At least n responses          | n nodes respond successfully           |
 | `.Aggregate(fn)`               | Result of your function `fn`  | `fn` returns                           |
-| `.Reduce(n, initial, step)`    | Accumulator built by `step`   | n nodes respond successfully           |
+| `.Reduce(n, initial, add)`     | Accumulator built by `add`    | n nodes respond successfully           |
 | `.Matching(n, key)`            | Response with an agreed key   | n nodes send responses with equal keys |
 | `.MatchingCertificate(n, key)` | Agreed response and its nodes | n nodes send responses with equal keys |
 
@@ -560,17 +560,18 @@ For example, use it for correctable streams, for many updates from one node, or 
 
 ### Reduce: Folding Responses into State
 
-`Reduce(n, initial, step)` folds the successful responses from up to `n` different nodes into an *accumulator*.
+`Reduce(n, initial, add)` folds the successful responses from up to `n` different nodes into an *accumulator*.
 You choose the accumulator type.
 It can be a counter, a selected response, a protocol struct, a map, or a certificate builder.
 
-`Reduce` calls `step` once for each successful response:
+`Reduce` calls `add` once for each successful response:
 
 * The first call gets `initial`.
+  It may be nil, for example a nil map or pointer; `add` must then allocate the accumulator before it writes to it.
 * Each later call gets the accumulator that the previous call returned.
 * Each call gets a successful response with its `NodeID`, so the accumulator can record which nodes contributed.
 
-`Reduce` does not pass responses with errors to `step`.
+`Reduce` does not pass responses with errors to `add`.
 It also counts only the first successful response from each node; it ignores later responses from the same node.
 `Reduce` stops after `n` successful responses and returns the accumulator.
 
@@ -605,12 +606,12 @@ acc, err := PromiseQC(cfgCtx, &PromiseRequest{Round: round}).
 
 `Reduce` returns an error in these cases:
 
-* If `step` returns an error, `Reduce` returns the accumulator from that call and the same error.
+* If `add` returns an error, `Reduce` returns the accumulator from that call and the same error.
 * If fewer than `n` nodes respond successfully, `Reduce` returns the latest accumulator and an error that matches `gorums.ErrIncomplete`.
   This error also holds the node errors, but not the nodes that a request transform skipped.
 
 In both cases, you can inspect the partial accumulator.
-`Reduce` panics if `n` is not positive or if `step` is nil.
+`Reduce` panics if `n` is not positive or if `add` is nil.
 
 ### Matching: Waiting for Responses That Agree
 
