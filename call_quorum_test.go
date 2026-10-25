@@ -10,6 +10,7 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
+	"github.com/relab/gorums/internal/testutils/mockcall"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -262,17 +263,8 @@ func TestQuorumCallAsyncSynctest(t *testing.T) {
 		cfgCtx := config.Context(ctx)
 
 		// Async sends both calls before either reply is collected.
-		responses1 := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-			cfgCtx,
-			pb.String("async1"),
-			mock.TestMethod,
-		).Async()
-
-		responses2 := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
-			cfgCtx,
-			pb.String("async2"),
-			mock.TestMethod,
-		).Async()
+		responses1 := mockcall.QuorumCall(cfgCtx, "async1").Async()
+		responses2 := mockcall.QuorumCall(cfgCtx, "async2").Async()
 
 		reply1, err1 := responses1.Majority()
 		reply2, err2 := responses2.Majority()
