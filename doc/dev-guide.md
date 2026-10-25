@@ -108,7 +108,7 @@ To add a fixture, add a `.proto` file in a new directory under `internal/testpro
 After an intended change to a template, refresh the golden files and the dev files, and review both diffs:
 
 ```sh
-go test ./internal/testprotos -run TestGoldenProtoFiles -update
+make golden
 make dev
 ```
 
@@ -156,6 +156,7 @@ The `Makefile` itself also serves as documentation; inspect it for details.
 | `testrace`        | Runs tests with the race detector enabled.                                                             |
 | `benchtest`       | Validates that benchmarks compile and run without error (short runs).                                  |
 | `bench`           | Runs benchmarks with proper measurement for performance analysis.                                      |
+| `golden`          | Rewrites the generator golden files in `internal/testprotos/testdata` after a template change.         |
 | `stresstest`      | Runs the ordering tests for a fixed duration (test flag: `-stress`) for thorough testing.              |
 | `modernize`       | Applies `go fix` and `x/tools/modernize@latest` across all workspace modules.                          |
 | `goplscheck`      | Fails on gopls diagnostics, including hint-level suggestions, in non-generated Go source.              |

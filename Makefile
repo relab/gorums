@@ -19,7 +19,7 @@ runtime_deps			:= internal/stream/stream.pb.go internal/stream/stream_grpc.pb.go
 benchkit_deps			:= benchkit/benchkit.pb.go benchkit/control.pb.go benchkit/control_gorums.pb.go
 benchmark_deps			:= $(benchkit_deps) benchkit/benchmark/benchmark.pb.go benchkit/benchmark/benchmark_gorums.pb.go
 
-.PHONY: all dev tools bootstrapgorums installgorums benchmark sweep test compiletests genproto benchtest bench lint deadcode modernize goplscheck
+.PHONY: all dev tools bootstrapgorums installgorums benchmark sweep test compiletests golden genproto benchtest bench lint deadcode modernize goplscheck
 
 all: dev benchmark compiletests
 
@@ -125,6 +125,11 @@ bench: compiletests
 # iterations. The -stress test flag is defined only in internal/tests/ordering.
 stresstest: compiletests
 	go test -count=1 ./internal/tests/ordering -stress
+
+# Rewrite the generator golden files in internal/testprotos/testdata after an
+# intended change to a template. Review the diff before committing it.
+golden:
+	go test ./internal/testprotos -run TestGoldenProtoFiles -count=1 -update
 
 # Warning: will probably run for 10 minutes; the timeout does not work
 stressdev: tools
