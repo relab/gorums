@@ -48,9 +48,6 @@ type Responses[Resp proto.Message] = impl.Responses[Resp]
 // [Responses.MatchingAgreement] returns an Agreement.
 type Agreement[Resp proto.Message] = impl.Agreement[Resp]
 
-// Async represents the eventual result of an asynchronous quorum call.
-type Async[Resp any] = impl.Async[Resp]
-
 // LevelNotSet is the zero value level used to indicate that no level
 // (and thereby no reply) has been set for a correctable quorum call.
 const LevelNotSet = impl.LevelNotSet

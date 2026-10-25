@@ -131,7 +131,7 @@ func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
 
 // generateFileContent generates the Gorums service definitions, excluding the package statement.
 func generateFileContent(file *protogen.File, g *protogen.GeneratedFile) {
-	// 1. Data Types (Async/Correctable aliases)
+	// 1. Data Types (Correctable aliases)
 	genGorumsType(g, file.Services, "types")
 
 	// 2. Reference Imports

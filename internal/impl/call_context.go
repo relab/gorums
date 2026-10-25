@@ -38,9 +38,9 @@ type CallContext[Req, Resp proto.Message] struct {
 	sendOnce sync.Once
 
 	// dispatched is set once dispatch has been initiated (by sendNow or by
-	// marking an async/correctable call); after that, Intercept panics. It is
-	// atomic because the goroutine an async or correctable call spawns calls
-	// sendNow while the caller may check or set the flag.
+	// marking a correctable call); after that, Intercept panics. It is atomic
+	// because the goroutine a correctable call spawns calls sendNow while the
+	// caller may check or set the flag.
 	dispatched atomic.Bool
 }
 

@@ -141,19 +141,24 @@ func TestAsyncQCBoundsInFlight(t *testing.T) {
 	// such calls cannot exceed maxAsync, whatever the goroutine scheduling.
 	var (
 		mu          sync.Mutex
-		outstanding []AsyncEcho
+		outstanding int
 		peak        int
 	)
 	opts := benchkit.Options{Workers: 2, MaxAsync: maxAsync, Duration: 2 * time.Second, QuorumSize: 2}
 	res, err := runAsyncQCBenchmark(opts, target.servers[0].PeerConfig(),
-		func(cc *ConfigContext, in *Echo, quorumSize int) AsyncEcho {
-			fut := QuorumCall(cc, in).AsyncThreshold(quorumSize)
+		func(cc *ConfigContext, in *Echo, quorumSize int) func() error {
+			wait := asyncThreshold(cc, in, quorumSize)
 			mu.Lock()
-			defer mu.Unlock()
-			outstanding = slices.DeleteFunc(outstanding, AsyncEcho.Done)
-			outstanding = append(outstanding, fut)
-			peak = max(peak, len(outstanding))
-			return fut
+			outstanding++
+			peak = max(peak, outstanding)
+			mu.Unlock()
+			return func() error {
+				err := wait()
+				mu.Lock()
+				outstanding--
+				mu.Unlock()
+				return err
+			}
 		})
 	if err != nil {
 		t.Fatalf("run: %v", err)
@@ -230,7 +235,7 @@ func TestAsyncQCComplete(t *testing.T) {
 // touched.
 func TestRunAsyncQCBenchmarkRejectsRateRamp(t *testing.T) {
 	opts := benchkit.Options{Workers: 1, Duration: time.Second, RateStep: 10, RateStepMax: 100}
-	_, err := runAsyncQCBenchmark(opts, nil, func(*ConfigContext, *Echo, int) AsyncEcho {
+	_, err := runAsyncQCBenchmark(opts, nil, func(*ConfigContext, *Echo, int) func() error {
 		t.Fatal("asyncQCFunc invoked despite rejected rate-ramp options")
 		return nil
 	})
@@ -299,10 +304,7 @@ func TestRunAsyncQCBenchmarkCountsErrorsWithoutAborting(t *testing.T) {
 	t.Cleanup(closeFn)
 
 	opts := benchkit.Options{Workers: 1, Duration: 30 * time.Millisecond, MaxAsync: 10, QuorumSize: 1}
-	result, err := runAsyncQCBenchmark(opts, cfg,
-		func(ctx *ConfigContext, in *Echo, quorumSize int) AsyncEcho {
-			return QuorumCall(ctx, in).AsyncThreshold(quorumSize)
-		})
+	result, err := runAsyncQCBenchmark(opts, cfg, asyncThreshold)
 	if err != nil {
 		t.Fatalf("runAsyncQCBenchmark aborted on call error: %v", err)
 	}

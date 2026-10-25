@@ -157,10 +157,11 @@ func TestQuorumCallAsyncOrdering(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for i := range iterations() {
-		// QuorumCall returns Responses; use .AsyncMajority() to get an Async future
-		promise := QuorumCall(cfgCtx, Request_builder{Num: uint64(i)}.Build()).AsyncMajority()
+		// Async sends the request before it returns, so the calls go out in
+		// loop order although their replies are collected concurrently.
+		responses := QuorumCall(cfgCtx, Request_builder{Num: uint64(i)}.Build()).Async()
 		wg.Go(func() {
-			resp, err := promise.Get()
+			resp, err := responses.Majority()
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					return

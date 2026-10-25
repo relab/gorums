@@ -55,7 +55,6 @@ var funcMap = template.FuncMap{
 		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast)
 	},
 	"out":                   out,
-	"mapAsyncOutType":       mapAsyncOutType,
 	"mapCorrectableOutType": mapCorrectableOutType,
 	"unexport":              unexport,
 }
@@ -75,18 +74,6 @@ func mapType(g *protogen.GeneratedFile, services []*protogen.Service, mapFn mapF
 
 func out(g *protogen.GeneratedFile, method *protogen.Method) string {
 	return g.QualifiedGoIdent(method.Output.GoIdent)
-}
-
-func mapAsyncOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
-	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-		// Generate Async type aliases for quorumcall methods since
-		// users can call .AsyncMajority() on any quorum call result
-		if hasMethodOption(method, gorums.E_Quorumcall) {
-			o := out(g, method)
-			futOut := fmt.Sprintf("Async%s", field(o))
-			s[futOut] = o
-		}
-	})
 }
 
 func mapCorrectableOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {

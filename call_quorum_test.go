@@ -278,28 +278,27 @@ func TestQuorumCallAsyncSynctest(t *testing.T) {
 		ctx := gorumstest.Context(t, 3*time.Second)
 		cfgCtx := config.Context(ctx)
 
-		// Test async operations
-		future1 := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
+		// Async sends both calls before either reply is collected.
+		responses1 := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 			cfgCtx,
 			pb.String("async1"),
 			mock.TestMethod,
-		).AsyncMajority()
+		).Async()
 
-		future2 := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
+		responses2 := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 			cfgCtx,
 			pb.String("async2"),
 			mock.TestMethod,
-		).AsyncMajority()
+		).Async()
 
-		// Wait for both to complete
-		reply1, err1 := future1.Get()
-		reply2, err2 := future2.Get()
+		reply1, err1 := responses1.Majority()
+		reply2, err2 := responses2.Majority()
 
 		if err1 != nil {
-			t.Fatalf("Future1 error: %v", err1)
+			t.Fatalf("call 1 error: %v", err1)
 		}
 		if err2 != nil {
-			t.Fatalf("Future2 error: %v", err2)
+			t.Fatalf("call 2 error: %v", err2)
 		}
 
 		if reply1.GetValue() != "echo: async1" {

@@ -62,7 +62,7 @@ func MapResponse[Req, Resp proto.Message](fn func(Resp, *Node) Resp) ClientInter
 //	resp, err := storage.ReadQC(ctx, req).Intercept(logging, audit).Majority()
 //
 // Intercept must be called before any consuming method (a terminal method,
-// async terminal, correctable call, or ranging Results). Calling it after
+// [Call.Async], a correctable call, or ranging Results). Calling it after
 // dispatch has started panics. Nil interceptors are ignored.
 func (c *Call[Req, Resp]) Intercept(ics ...ClientInterceptor[Req, Resp]) *Call[Req, Resp] {
 	c.ctx.intercept(ics...)
@@ -70,6 +70,31 @@ func (c *Call[Req, Resp]) Intercept(ics ...ClientInterceptor[Req, Resp]) *Call[R
 	// embedded Responses so its terminal methods observe the wrapped sequence.
 	c.Responses.seq = c.ctx.responseSeq
 	return c
+}
+
+// Async sends the requests now and returns the dispatched responses, so a
+// single goroutine can keep several quorum calls in flight, in send order:
+//
+//	a := WriteQC(ctx, reqA).Async()
+//	b := WriteQC(ctx, reqB).Async()
+//	_, errA := a.Majority()
+//	_, errB := b.Majority()
+//
+// Any terminal method collects the replies later, on the caller's goroutine;
+// Async starts no goroutine. A call buffers one reply per node, and a
+// streaming call buffers ten. A streaming call whose nodes send more replies
+// holds up the node's receive path until the caller reads them or the context
+// ends, so read the replies of such a call soon, or use
+// [Responses.Correctable].
+//
+// Async consumes the call: calling Async or [Call.Intercept] after the call
+// was dispatched panics.
+func (c *Call[Req, Resp]) Async() *Responses[Resp] {
+	if c.ctx.dispatched.Swap(true) {
+		panic("gorums: Call.Async called after the call was dispatched")
+	}
+	c.ctx.sendOnce.Do(c.ctx.send)
+	return c.Responses
 }
 
 // OnewayCall represents a lazily dispatched multicast or unicast call.

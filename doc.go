@@ -19,10 +19,12 @@
 //   - unicast: a one-way call to a single node.
 //
 // Calls are dispatched lazily: the request is sent on the first consuming
-// operation, such as a terminal method or a range over the response sequence.
+// operation, such as a terminal method, [Call.Async], or a range over the
+// response sequence.
 // Lazy dispatch is what lets a call site attach client interceptors before the
-// request is sent and choose synchronous, asynchronous, or correctable aggregation
-// at the call site.
+// request is sent. [Call.Async] sends the request at once and leaves the
+// replies to a later terminal method, and [Responses.Correctable] reports
+// progressively better results.
 //
 // # Configurations and nodes
 //

@@ -2,10 +2,10 @@
 //
 // It holds the in-flight call handles and their aggregation logic: [Call] and
 // [OnewayCall], the [CallContext] passed to interceptors, the [Responses]
-// terminal methods, the [Async] and [Correctable] futures, and the client
-// interceptor API ([ClientInterceptor], [MapRequest], [MapResponse]). It also
-// provides the call constructors ([QuorumCall], [QuorumCallStream],
-// [Multicast], [Unicast], [RemoteCall]) that generated code reaches through
+// terminal methods, the [Correctable] future, and the client interceptor API
+// ([ClientInterceptor], [MapRequest], [MapResponse]). It also provides the
+// call constructors ([QuorumCall], [QuorumCallStream], [Multicast], [Unicast],
+// [RemoteCall]) that generated code reaches through
 // [github.com/relab/gorums/runtime/gorumsimpl].
 //
 // The engine operates on the connectivity types in
