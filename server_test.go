@@ -533,7 +533,7 @@ func TestServerSymmetricConfigurationRoutesMulticast(t *testing.T) {
 
 	// Register mock handler to each server
 	for _, srv := range servers {
-		srv.RegisterHandler(mock.StreamMethod, func(_ gorums.ServerContext, _ *gorums.Message) (*gorums.Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, _ *gorums.Message) (*gorums.Message, error) {
 			wg.Done()
 			return nil, nil
 		})
@@ -543,9 +543,7 @@ func TestServerSymmetricConfigurationRoutesMulticast(t *testing.T) {
 
 	cfg := servers[0].PeerConfig()
 	ctx := gorumstest.Context(t, 2*time.Second)
-	if err := gorumsimpl.Multicast(cfg.Context(ctx), pb.String("test"), mock.StreamMethod).Send(); err != nil {
-		t.Fatalf("multicast error: %v", err)
-	}
+	mockcall.MustMulticast(t, cfg.Context(ctx), "test")
 
 	waitWithTimeout(t, &wg)
 }
@@ -1153,15 +1151,6 @@ func senderRecorder(receiver gorums.ID, records chan<- senderRecord) gorums.Hand
 	}
 }
 
-// multicastString sends a one-way multicast to cfg and fails the test on error.
-func multicastString(t *testing.T, cfg gorums.Config, method string) {
-	t.Helper()
-	ctx := gorumstest.Context(t, 2*time.Second)
-	if err := gorumsimpl.Multicast(cfg.Context(ctx), pb.String("sender"), method).Send(); err != nil {
-		t.Fatalf("multicast error: %v", err)
-	}
-}
-
 // TestServerSenderID verifies that a handler observes the sender of a request
 // on every path a request can take to a server.
 func TestServerSenderID(t *testing.T) {
@@ -1172,11 +1161,11 @@ func TestServerSenderID(t *testing.T) {
 		servers := gorumstest.LocalServers(t, 3, opts...)
 		records := make(chan senderRecord, len(servers))
 		for _, srv := range servers {
-			srv.RegisterHandler(mock.StreamMethod, senderRecorder(srv.NodeID(), records))
+			srv.RegisterHandler(mock.TestMethod, senderRecorder(srv.NodeID(), records))
 		}
 		gorumstest.WaitForPeers(t, servers)
 		for _, srv := range servers {
-			multicastString(t, srv.PeerConfig(), mock.StreamMethod)
+			mockcall.MustMulticast(t, srv.PeerConfig().Context(gorumstest.Context(t, 2*time.Second)), "sender")
 			for _, r := range gorumstest.Collect(t, 2*time.Second, len(servers), records) {
 				if r.sender != srv.NodeID() {
 					t.Errorf("server %d: SenderID() = %d, want %d", r.receiver, r.sender, srv.NodeID())
@@ -1191,11 +1180,11 @@ func TestServerSenderID(t *testing.T) {
 		records := make(chan senderRecord, 1)
 		srvFn := func(int) gorumstest.ServerIface {
 			srv := gorums.NewServer()
-			srv.RegisterHandler(mock.StreamMethod, senderRecorder(0, records))
+			srv.RegisterHandler(mock.TestMethod, senderRecorder(0, records))
 			return srv
 		}
 		cfg := gorumstest.Config(t, 1, srvFn, opts...)
-		multicastString(t, cfg, mock.StreamMethod)
+		mockcall.MustMulticast(t, cfg.Context(gorumstest.Context(t, 2*time.Second)), "sender")
 		return gorumstest.Collect(t, 2*time.Second, 1, records)[0].sender
 	}
 
@@ -1219,9 +1208,9 @@ func TestServerSenderID(t *testing.T) {
 	t.Run("BackChannelClient", func(t *testing.T) {
 		srv, _, cfg := createServerAndClient(t)
 		records := make(chan senderRecord, 1)
-		srv.RegisterHandler(mock.StreamMethod, senderRecorder(0, records))
+		srv.RegisterHandler(mock.TestMethod, senderRecorder(0, records))
 		awaitClientReady(t, srv, 1)
-		multicastString(t, cfg, mock.StreamMethod)
+		mockcall.MustMulticast(t, cfg.Context(gorumstest.Context(t, 2*time.Second)), "sender")
 		got := gorumstest.Collect(t, 2*time.Second, 1, records)[0].sender
 		if want := srv.ConnectedClients().NodeIDs()[0]; got != want {
 			t.Errorf("SenderID() = %d, want %d (the client's assigned ID)", got, want)
@@ -1230,9 +1219,9 @@ func TestServerSenderID(t *testing.T) {
 	t.Run("BackChannelServer", func(t *testing.T) {
 		srv, clientSrv, cfg := createServerAndClient(t)
 		records := make(chan senderRecord, 1)
-		clientSrv.RegisterHandler(mock.StreamMethod, senderRecorder(0, records))
+		clientSrv.RegisterHandler(mock.TestMethod, senderRecorder(0, records))
 		awaitClientReady(t, srv, 1)
-		multicastString(t, srv.ConnectedClients(), mock.StreamMethod)
+		mockcall.MustMulticast(t, srv.ConnectedClients().Context(gorumstest.Context(t, 2*time.Second)), "sender")
 		got := gorumstest.Collect(t, 2*time.Second, 1, records)[0].sender
 		if want := cfg.NodeIDs()[0]; got != want {
 			t.Errorf("SenderID() = %d, want %d (the client's ID for the server)", got, want)
