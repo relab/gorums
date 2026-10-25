@@ -5,10 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/relab/gorums/internal/testutils/mockcall"
-
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
+	"github.com/relab/gorums/internal/testutils/mockcall"
 	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
