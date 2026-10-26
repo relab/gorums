@@ -482,18 +482,14 @@ func StopRemote(ctx context.Context, cfg gorums.Config, opts Options, result *Re
 // the SetupFunc, so it is not measured.
 type SetupFunc func(context.Context, gorums.Config, Options) func() error
 
-// MeasureLatency runs the client-measured measurement window over one or more
-// configurations and returns the Result built from the accumulated latency
-// samples. setup is invoked once per yielded configuration (outside the loop)
-// with the run's context and that configuration, to build the request message
-// and the client; the returned closure is the tight per-operation send, which
-// MeasureLatency times and records via [Stats.AddLatency]. Yielding a single configuration drives the coordinator
-// case (one send target); yielding one configuration per peer system drives
-// the symmetric case (every system sends concurrently in one shared phase).
-//
-// MeasureLatency owns only the measurement window; any control-plane
-// lifecycle ([StartRemote]/[StopRemote], local server resets) is the
-// caller's concern.
+// MeasureLatency runs one client-measured window and returns its Result.
+// It calls setup once for each configuration in configs and runs all the
+// returned operations concurrently, paced by opts. It measures the latency of
+// each successful operation and counts each failed operation. An operation
+// that returns [ErrRunOver] stops its worker and is not counted.
+// One configuration measures a single client; one configuration per peer
+// measures a symmetric system. MeasureLatency does not call [StartRemote] or
+// [StopRemote]; the caller does.
 func MeasureLatency(ctx context.Context, opts Options, configs iter.Seq[gorums.Config], setup SetupFunc) (*Result, error) {
 	m := StartMeasurement(opts)
 	var doOps []func() error
@@ -616,14 +612,11 @@ func WithVerify(f func(map[uint32]*Result) error) LifecycleOption {
 	return func(h *lifecycleHooks) { h.verify = f }
 }
 
-// ClientMeasured builds a [Bench].Run closure for the standard
-// client-measured lifecycle: (in remote mode) [Control.Start], a paced
-// measurement window timed on the client via [Stats] from t=0, and finally
-// [Control.Stop] to collect each server's memory stats. The protocol author
-// supplies setup, which receives the run's context and cfg and returns the
-// tight per-operation closure; building the request message and the client
-// happen once, outside the measurement loop. Optional lifecycle hooks (e.g.
-// [WithQuiesce]) run between the window and Control.Stop.
+// ClientMeasured returns a [Bench].Run function that measures, on the client,
+// the latency and throughput of the operation that setup builds for cfg.
+// In remote mode, the Result also holds each server's memory stats, collected
+// with [StartRemote] and [StopRemote]. The lifecycle options add hooks, such as
+// [WithQuiesce] and [WithVerify].
 func ClientMeasured(cfg gorums.Config, setup SetupFunc, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
 	hooks := newLifecycleHooks(lifecycleOpts)
 	return func(opts Options) (*Result, error) {
@@ -650,15 +643,12 @@ func ClientMeasured(cfg gorums.Config, setup SetupFunc, lifecycleOpts ...Lifecyc
 	}
 }
 
-// ServerMeasured builds a [Bench].Run closure for the standard
-// server-measured lifecycle: [Control.Start], a paced one-way send window
-// from t=0 with clock-offset correction around it, and [Control.Stop] to
-// collect each server's latency samples. The protocol author supplies setup,
-// which receives the run's context and cfg and returns the tight per-send
-// closure (it stamps and sends one one-way message). A failed send aborts the
-// run and is not counted as an operation, as in [ClientMeasured]. Optional lifecycle
-// hooks (e.g. [WithQuiesce]) run between the send window and Control.Stop,
-// where a drain ensures the servers observe every in-flight one-way send.
+// ServerMeasured returns a [Bench].Run function that measures, on the servers
+// in cfg, the one-way latency and throughput of the operation that setup
+// builds. The operation must stamp and send one one-way message. The Result
+// combines the servers' latency samples, each corrected for its clock offset
+// to the client. A failed send fails the run. The lifecycle options add hooks,
+// such as [WithQuiesce] and [WithVerify].
 func ServerMeasured(cfg gorums.Config, setup SetupFunc, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
 	hooks := newLifecycleHooks(lifecycleOpts)
 	return func(opts Options) (*Result, error) {
