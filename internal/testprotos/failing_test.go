@@ -131,6 +131,38 @@ service Reserved {
 			want: "contains enum NewReservedClientNode, which is a generated Gorums identifier",
 		},
 		{
+			name: "NestedGeneratedClientMessage",
+			decl: `
+message Outer {
+	message InnerClient {
+		string value = 1;
+	}
+}
+service Outer_Inner {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "contains message Outer_InnerClient, which is a generated Gorums identifier",
+		},
+		{
+			name: "NestedGeneratedClientNodeEnum",
+			decl: `
+message Outer {
+	message Middle {
+		enum InnerClientNode {
+			INNER_CLIENT_NODE_UNSPECIFIED = 0;
+		}
+	}
+}
+service Outer_Middle_Inner {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "contains enum Outer_Middle_InnerClientNode, which is a generated Gorums identifier",
+		},
+		{
 			name: "ReservedEnum",
 			decl: `
 enum Node {

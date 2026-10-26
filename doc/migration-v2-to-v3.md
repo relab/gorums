@@ -898,7 +898,7 @@ The panic now comes from the call method, not from `Config.Context` or `Node.Con
 
 Regeneration reports an error for names that collide with the generated client code:
 
-- a message or enum named `SClient`, `SClientNode`, `NewSClient`, or `NewSClientNode`;
+- a message or enum, including a nested one, whose Go name is `SClient`, `SClientNode`, `NewSClient`, or `NewSClientNode`;
 - a quorum call, streaming quorum call, or multicast named `Config`, `WithConfig`, or `ForNode`;
 - a remote call or unicast named `Node`.
 

@@ -95,10 +95,10 @@ func shouldGenerate(gen *protogen.Plugin, file *protogen.File) (bool, error) {
 
 // checkReservedIdents returns an error if a Go declaration of the file's Go
 // package collides with an identifier that Gorums declares in that package.
-// A message or enum of any file in the package must not take the name of a
-// Gorums type alias or of a client type or constructor generated for the
-// file's service. An RPC method of the file's service must not take the name
-// of a helper method of the client type that receives it.
+// A message or enum of any file in the package, nested or not, must not take
+// the name of a Gorums type alias or of a client type or constructor generated
+// for the file's service. An RPC method of the file's service must not take
+// the name of a helper method of the client type that receives it.
 // The call type of a method selects its receiver, so every method must
 // have valid call type options.
 func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
@@ -119,15 +119,8 @@ func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
 		if f.GoImportPath != file.GoImportPath {
 			continue
 		}
-		for _, msg := range f.Messages {
-			if err := check("message", msg.GoIdent.GoName); err != nil {
-				return err
-			}
-		}
-		for _, enum := range f.Enums {
-			if err := check("enum", enum.GoIdent.GoName); err != nil {
-				return err
-			}
+		if err := checkTypes(f.Messages, f.Enums, check); err != nil {
+			return err
 		}
 	}
 	for _, service := range file.Services {
@@ -135,6 +128,25 @@ func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
 			if err := checkClientMethod(method); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// checkTypes calls check with the Go name of each message and enum, including
+// nested ones, since protoc-gen-go declares every nested type at package level.
+func checkTypes(msgs []*protogen.Message, enums []*protogen.Enum, check func(kind, name string) error) error {
+	for _, enum := range enums {
+		if err := check("enum", enum.GoIdent.GoName); err != nil {
+			return err
+		}
+	}
+	for _, msg := range msgs {
+		if err := check("message", msg.GoIdent.GoName); err != nil {
+			return err
+		}
+		if err := checkTypes(msg.Messages, msg.Enums, check); err != nil {
+			return err
 		}
 	}
 	return nil
