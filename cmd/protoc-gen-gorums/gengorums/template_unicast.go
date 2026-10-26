@@ -11,10 +11,10 @@ var unicastComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-// {{$method}} starts the {{$service}}.{{$method}} one-way call
-// on the client's node; no reply is returned to the client. The request is
-// dispatched by Send, which blocks until the send completes and returns any
-// send error, or by Async, which does not wait.
+// {{$method}} starts a one-way call on the client's node; no reply is
+// returned. The request is dispatched by Send or Async. Send blocks until the
+// send completes and returns any send error. Async returns at once; call Wait
+// on the returned handle to get the send error.
 {{end -}}
 //
 // Example:
