@@ -1,6 +1,7 @@
 package testprotos_test
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
@@ -479,6 +480,103 @@ service Conflict {
 			}
 			dir := gentest.Inline(t, sources)
 			files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, protos...)
+			if err == nil {
+				t.Fatalf("Generate succeeded, want an error containing %q; generated %d files", tt.want, len(files))
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("Generate error = %q, want it to contain %q", err, tt.want)
+			}
+		})
+	}
+}
+
+// TestFailingProtoFilesAliasResponseTypes verifies that the generator rejects
+// a Go package whose quorum calls return two different response types with the
+// same Go name, since both types map to one Correctable alias name.
+func TestFailingProtoFilesAliasResponseTypes(t *testing.T) {
+	responseProto := func(pkg string) string {
+		return `
+edition = "2023";
+
+package gorums.testprotos.` + pkg + `;
+option go_package = "github.com/relab/gorums/internal/testprotos/` + pkg + `";
+
+message Request {
+	string value = 1;
+}
+message Response {
+	string value = 1;
+}
+`
+	}
+	serviceProto := func(decl string) string {
+		return `
+edition = "2023";
+
+package gorums.testprotos.aliases;
+option go_package = "github.com/relab/gorums/internal/testprotos/aliases";
+
+import "gorums.proto";
+import "left.proto";
+import "right.proto";
+` + decl
+	}
+	alpha := serviceProto(`
+service Alpha {
+	rpc Read(gorums.testprotos.left.Request) returns (gorums.testprotos.left.Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`)
+	beta := serviceProto(`
+service Beta {
+	rpc Read(gorums.testprotos.right.Request) returns (gorums.testprotos.right.Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`)
+	gamma := serviceProto(`
+service Gamma {
+	rpc ReadLeft(gorums.testprotos.left.Request) returns (gorums.testprotos.left.Response) {
+		option (gorums.quorumcall) = true;
+	}
+	rpc ReadRight(gorums.testprotos.right.Request) returns (gorums.testprotos.right.Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`)
+	const (
+		left  = "github.com/relab/gorums/internal/testprotos/left.Response"
+		right = "github.com/relab/gorums/internal/testprotos/right.Response"
+	)
+	tests := []struct {
+		name    string
+		sources map[string]string
+		protos  []string
+		want    string
+	}{
+		{
+			name:    "AlphaFirst",
+			sources: map[string]string{"alpha.proto": alpha, "beta.proto": beta},
+			protos:  []string{"alpha.proto", "beta.proto"},
+			want:    "alpha.proto: Alpha.Read returns " + left + " and Beta.Read (beta.proto) returns " + right + "; both map to the Gorums alias CorrectableResponse",
+		},
+		{
+			name:    "BetaFirst",
+			sources: map[string]string{"alpha.proto": alpha, "beta.proto": beta},
+			protos:  []string{"beta.proto", "alpha.proto"},
+			want:    "beta.proto: Beta.Read returns " + right + " and Alpha.Read (alpha.proto) returns " + left + "; both map to the Gorums alias CorrectableResponse",
+		},
+		{
+			name:    "OneService",
+			sources: map[string]string{"gamma.proto": gamma},
+			protos:  []string{"gamma.proto"},
+			want:    "gamma.proto: Gamma.ReadLeft returns " + left + " and Gamma.ReadRight returns " + right + "; both map to the Gorums alias CorrectableResponse",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sources := map[string]string{"left.proto": responseProto("left"), "right.proto": responseProto("right")}
+			maps.Copy(sources, tt.sources)
+			dir := gentest.Inline(t, sources)
+			files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, tt.protos...)
 			if err == nil {
 				t.Fatalf("Generate succeeded, want an error containing %q; generated %d files", tt.want, len(files))
 			}
