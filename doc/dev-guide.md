@@ -33,7 +33,7 @@ These aliases make the most commonly used Gorums types available without requiri
 
 Each name declared in `aliases.go` (and any other non-ignored file in `dev/`) is also added to the **reserved identifier list**.
 The Gorums generator rejects proto files whose messages or enums, nested or not, use a reserved identifier as their Go name, checking every file of the service's Go package, since such a name collides with the generated alias.
-RPC methods are methods of the generated client types, so they do not collide with the aliases; [Generated Client Types](#generated-client-types) describes their name checks.
+RPC methods are methods of a generated client type, so they do not collide with the aliases; [Generated Client Types](#generated-client-types) describes their name checks.
 
 The bundler (`gengorums/bundle.go`) discovers reserved identifiers by inspecting `TypesInfo.Defs` for all exported, package-scope declarations in the dev package.
 This means that simply declaring a type alias (or any other exported top-level name) in `aliases.go` is sufficient to reserve that name — no extra annotation is needed.
@@ -43,18 +43,18 @@ If you add or remove an alias, update that test to match.
 
 ### Generated Client Types
 
-For each service `S`, the generator emits two client types and their constructors.
-`SClient` holds a `gorums.Config`, and `SClientNode` holds a `*gorums.Node`.
-Neither type embeds its target, and neither type allocates when it is created, copied, or converted.
-The call type of each RPC method selects its receiver:
+For each service `S`, the generator emits one client type, `SClient`, and its constructor `NewSClient`.
+`SClient` holds a `gorums.Config`.
+It does not embed its configuration, and it does not allocate when it is created or copied.
+The call type of each RPC method selects the target of the call:
 
-| Call type                            | Receiver      | Runtime constructor                                      |
-| ------------------------------------ | ------------- | -------------------------------------------------------- |
-| quorum call                          | `SClient`     | `gorumsimpl.QuorumCall(ctx, c.config, in, method)`       |
-| quorum call with a `stream` response | `SClient`     | `gorumsimpl.QuorumCallStream(ctx, c.config, in, method)` |
-| multicast                            | `SClient`     | `gorumsimpl.Multicast(ctx, c.config, in, method)`        |
-| remote call                          | `SClientNode` | `gorumsimpl.RemoteCall(ctx, c.node, in, method)`         |
-| unicast                              | `SClientNode` | `gorumsimpl.Unicast(ctx, c.node, in, method)`            |
+| Call type                            | Signature                            | Runtime constructor                                      |
+| ------------------------------------ | ------------------------------------ | -------------------------------------------------------- |
+| quorum call                          | `(ctx, in) *gorums.Call`             | `gorumsimpl.QuorumCall(ctx, c.config, in, method)`       |
+| quorum call with a `stream` response | `(ctx, in) *gorums.Call`             | `gorumsimpl.QuorumCallStream(ctx, c.config, in, method)` |
+| multicast                            | `(ctx, in) *gorums.OnewayCall`       | `gorumsimpl.Multicast(ctx, c.config, in, method)`        |
+| remote call                          | `(ctx, node, in) (*Out, error)`      | `gorumsimpl.RemoteCall(ctx, node, in, method)`           |
+| unicast                              | `(ctx, node, in) *gorums.OnewayCall` | `gorumsimpl.Unicast(ctx, node, in, method)`              |
 
 ```mermaid
 flowchart LR
@@ -62,14 +62,17 @@ flowchart LR
     rt --> impl["internal/impl<br/>QuorumCall(ctx, config, in, method)"]
 ```
 
-Every service gets both types, even when a type has no RPC methods.
-The client types, constructors, and helper methods (`Config`, `WithConfig`, and `ForNode` on `SClient`; `Node` on `SClientNode`) come from `gengorums/template_client.go`.
+A remote call or unicast takes the node after the context and does not use `c.config`.
+Thus, the zero `SClient` is ready for node calls, and the type's doc comment says so.
+The signatures keep the two kinds of calls apart at compile time: a node call does not compile without a node.
+
+The client type, constructor, and helper methods (`Config` and `WithConfig`) come from `gengorums/template_client.go`.
 The generator checks the generated names for collisions:
 
-* A message or enum in the service's Go package must not be named `SClient`, `SClientNode`, `NewSClient`, or `NewSClientNode`.
+* A message or enum in the service's Go package must not be named `SClient` or `NewSClient`.
   The check includes nested messages and enums by their Go names, such as `Outer_InnerClient`, because protoc-gen-go declares them at package level.
-* An RPC method must not take the name of a helper method of its receiver.
-  A remote call named `Config` is valid, because `SClientNode` has no `Config` method.
+* An RPC method must not be named `Config` or `WithConfig`, whatever its call type, because `SClient` receives every call.
+  An RPC method named `Node` or `ForNode` is valid.
 
 In dev mode, the generator writes one `dev/zorums_{name}_gorums.pb.go` file for each entry of `gorumsCallTypesInfo` in `gengorums/generate.go`:
 
