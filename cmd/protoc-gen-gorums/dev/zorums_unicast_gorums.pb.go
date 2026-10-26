@@ -23,10 +23,10 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// Unicast starts the ZorumsService.Unicast one-way call
-// on the client's node; no reply is returned to the client. The request is
-// dispatched by Send, which blocks until the send completes and returns any
-// send error, or by Async, which does not wait.
+// Unicast starts a one-way call on the client's node; no reply is
+// returned. The request is dispatched by Send or Async. Send blocks until the
+// send completes and returns any send error. Async returns at once; call Wait
+// on the returned handle to get the send error.
 //
 // Example:
 //
@@ -36,10 +36,10 @@ func (c ZorumsServiceClientNode) Unicast(ctx context.Context, in *Request) *goru
 	return gorumsimpl.Unicast(ctx, c.node, in, "dev.ZorumsService.Unicast")
 }
 
-// Unicast2 starts the ZorumsService.Unicast2 one-way call
-// on the client's node; no reply is returned to the client. The request is
-// dispatched by Send, which blocks until the send completes and returns any
-// send error, or by Async, which does not wait.
+// Unicast2 starts a one-way call on the client's node; no reply is
+// returned. The request is dispatched by Send or Async. Send blocks until the
+// send completes and returns any send error. Async returns at once; call Wait
+// on the returned handle to get the send error.
 //
 // Example:
 //
