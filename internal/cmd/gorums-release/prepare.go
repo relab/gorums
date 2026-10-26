@@ -89,12 +89,10 @@ func (t *tool) prepare(o prepareOptions) error {
 	if err := t.exec("go", "test", "./internal/testprotos", "-update"); err != nil {
 		return err
 	}
-	// Each module replaces gorums with the local checkout, so the unreleased
-	// version resolves.
-	for _, m := range modules {
-		if err := t.execIn(m, "go", "mod", "tidy"); err != nil {
-			return err
-		}
+	// go mod tidy ignores go.work, so it needs a temporary replace to resolve
+	// the unreleased version.
+	if err := t.tidyUnreleased(); err != nil {
+		return err
 	}
 	if !o.skipTests {
 		if err := t.exec("make", "test"); err != nil {
@@ -179,6 +177,32 @@ func (t *tool) checkWorkTree() error {
 	}
 	if strings.TrimSpace(head) != strings.TrimSpace(remote) {
 		return errors.New("master differs from origin/master: pull or push first")
+	}
+	return nil
+}
+
+// tidyUnreleased tidies every module while the gorums version being released
+// does not exist on the proxy yet. go mod tidy ignores go.work and reads only
+// the module's own go.mod, so each module other than the root gets a replace
+// that points at the local checkout for the duration of the tidy.
+func (t *tool) tidyUnreleased() error {
+	for _, m := range modules {
+		if m == "" {
+			if err := t.execIn(m, "go", "mod", "tidy"); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := t.execIn(m, "go", "mod", "edit", "-replace="+gorumsModule+"=../"); err != nil {
+			return err
+		}
+		tidyErr := t.execIn(m, "go", "mod", "tidy")
+		if err := t.execIn(m, "go", "mod", "edit", "-dropreplace="+gorumsModule); err != nil {
+			return err
+		}
+		if tidyErr != nil {
+			return tidyErr
+		}
 	}
 	return nil
 }

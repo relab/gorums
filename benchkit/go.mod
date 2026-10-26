@@ -25,9 +25,3 @@ require (
 	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
 )
-
-// benchkit tracks the gorums source in this repository rather than a released
-// version, so that a change to the gorums API and its benchkit follow-up land
-// together. The target is inside this repository, so every clone resolves it.
-// Extracting benchkit to its own repository replaces this with a version pin.
-replace github.com/relab/gorums => ../
