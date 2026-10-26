@@ -5,3 +5,5 @@ use (
 	./benchkit
 	./examples
 )
+
+replace github.com/relab/gorums v0.12.1 => ./
