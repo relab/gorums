@@ -11,11 +11,11 @@ var multicastComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-// {{$method}} starts the {{$service}}.{{$method}} one-way call
-// on the client's configuration. The request is dispatched by Send, which
-// blocks until every send completes and returns any send errors, or by Async,
-// which does not wait. Use gorums.MapRequest to send different messages to
-// each node.
+// {{$method}} starts a one-way call on the client's configuration; no reply
+// is returned. The request is dispatched by Send or Async. Send blocks until
+// every send completes and returns any send errors. Async returns at once;
+// call Wait on the returned handle to get the send errors. Use
+// gorums.MapRequest to send a different message to each node.
 {{end -}}
 //
 // Example:
