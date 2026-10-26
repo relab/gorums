@@ -48,8 +48,13 @@ type CorrectableWriteResponse = *gorums.Correctable[*WriteResponse]
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// StorageClient invokes the configuration-side calls of the Storage service.
-// It is bound to a configuration.
+// StorageClient invokes the calls of the Storage service.
+// Quorum calls and multicasts run on the client's configuration.
+// Remote calls and unicasts run on the node given to each call; that node
+// need not belong to the client's configuration.
+// The zero value is ready for remote calls and unicasts.
+// Quorum calls and multicasts need a configuration, from
+// NewStorageClient or WithConfig; they panic on an empty configuration.
 type StorageClient struct {
 	config gorums.Config
 }
@@ -69,38 +74,16 @@ func (c StorageClient) WithConfig(config gorums.Config) StorageClient {
 	return StorageClient{config: config}
 }
 
-// ForNode returns a node client for the Storage service, bound to node.
-// The node need not belong to the configuration of c.
-func (c StorageClient) ForNode(node *gorums.Node) StorageClientNode {
-	return StorageClientNode{node: node}
-}
-
-// StorageClientNode invokes the node-side calls of the Storage service.
-// It is bound to a single node.
-type StorageClientNode struct {
-	node *gorums.Node
-}
-
-// NewStorageClientNode returns a node client for the Storage service, bound to node.
-func NewStorageClientNode(node *gorums.Node) StorageClientNode {
-	return StorageClientNode{node: node}
-}
-
-// Node returns the node to which c is bound.
-func (c StorageClientNode) Node() *gorums.Node {
-	return c.node
-}
-
 // ReadRPC executes a Read RPC on a single node and
 // returns the value for the provided key.
-func (c StorageClientNode) ReadRPC(ctx context.Context, in *ReadRequest) (*ReadResponse, error) {
-	return gorumsimpl.RemoteCall[*ReadRequest, *ReadResponse](ctx, c.node, in, "proto.Storage.ReadRPC")
+func (c StorageClient) ReadRPC(ctx context.Context, node *gorums.Node, in *ReadRequest) (*ReadResponse, error) {
+	return gorumsimpl.RemoteCall[*ReadRequest, *ReadResponse](ctx, node, in, "proto.Storage.ReadRPC")
 }
 
 // WriteRPC executes a Write RPC on a single node and
 // returns true if the value was updated.
-func (c StorageClientNode) WriteRPC(ctx context.Context, in *WriteRequest) (*WriteResponse, error) {
-	return gorumsimpl.RemoteCall[*WriteRequest, *WriteResponse](ctx, c.node, in, "proto.Storage.WriteRPC")
+func (c StorageClient) WriteRPC(ctx context.Context, node *gorums.Node, in *WriteRequest) (*WriteResponse, error) {
+	return gorumsimpl.RemoteCall[*WriteRequest, *WriteResponse](ctx, node, in, "proto.Storage.WriteRPC")
 }
 
 // WriteUnicast executes a one-way Write unicast call on a single node.
@@ -108,10 +91,10 @@ func (c StorageClientNode) WriteRPC(ctx context.Context, in *WriteRequest) (*Wri
 //
 // Example:
 //
-//	err := nodeClient.WriteUnicast(ctx, in).Send()
-//	h := nodeClient.WriteUnicast(ctx, in).Async(); err := h.Wait()
-func (c StorageClientNode) WriteUnicast(ctx context.Context, in *WriteRequest) *gorums.OnewayCall[*WriteRequest] {
-	return gorumsimpl.Unicast(ctx, c.node, in, "proto.Storage.WriteUnicast")
+//	err := client.WriteUnicast(ctx, node, in).Send()
+//	h := client.WriteUnicast(ctx, node, in).Async(); err := h.Wait()
+func (c StorageClient) WriteUnicast(ctx context.Context, node *gorums.Node, in *WriteRequest) *gorums.OnewayCall[*WriteRequest] {
+	return gorumsimpl.Unicast(ctx, node, in, "proto.Storage.WriteUnicast")
 }
 
 // WriteMulticast executes a Write multicast call on a configuration of nodes.

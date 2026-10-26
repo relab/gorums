@@ -18,8 +18,13 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// ZorumsServiceClient invokes the configuration-side calls of the ZorumsService service.
-// It is bound to a configuration.
+// ZorumsServiceClient invokes the calls of the ZorumsService service.
+// Quorum calls and multicasts run on the client's configuration.
+// Remote calls and unicasts run on the node given to each call; that node
+// need not belong to the client's configuration.
+// The zero value is ready for remote calls and unicasts.
+// Quorum calls and multicasts need a configuration, from
+// NewZorumsServiceClient or WithConfig; they panic on an empty configuration.
 type ZorumsServiceClient struct {
 	config gorums.Config
 }
@@ -37,26 +42,4 @@ func (c ZorumsServiceClient) Config() gorums.Config {
 // WithConfig returns a copy of c bound to config.
 func (c ZorumsServiceClient) WithConfig(config gorums.Config) ZorumsServiceClient {
 	return ZorumsServiceClient{config: config}
-}
-
-// ForNode returns a node client for the ZorumsService service, bound to node.
-// The node need not belong to the configuration of c.
-func (c ZorumsServiceClient) ForNode(node *gorums.Node) ZorumsServiceClientNode {
-	return ZorumsServiceClientNode{node: node}
-}
-
-// ZorumsServiceClientNode invokes the node-side calls of the ZorumsService service.
-// It is bound to a single node.
-type ZorumsServiceClientNode struct {
-	node *gorums.Node
-}
-
-// NewZorumsServiceClientNode returns a node client for the ZorumsService service, bound to node.
-func NewZorumsServiceClientNode(node *gorums.Node) ZorumsServiceClientNode {
-	return ZorumsServiceClientNode{node: node}
-}
-
-// Node returns the node to which c is bound.
-func (c ZorumsServiceClientNode) Node() *gorums.Node {
-	return c.node
 }

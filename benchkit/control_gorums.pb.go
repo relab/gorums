@@ -47,8 +47,13 @@ type CorrectableResult = *gorums.Correctable[*Result]
 // CorrectableStartResponse is a correctable object for quorum calls returning *StartResponse.
 type CorrectableStartResponse = *gorums.Correctable[*StartResponse]
 
-// ControlClient invokes the configuration-side calls of the Control service.
-// It is bound to a configuration.
+// ControlClient invokes the calls of the Control service.
+// Quorum calls and multicasts run on the client's configuration.
+// Remote calls and unicasts run on the node given to each call; that node
+// need not belong to the client's configuration.
+// The zero value is ready for remote calls and unicasts.
+// Quorum calls and multicasts need a configuration, from
+// NewControlClient or WithConfig; they panic on an empty configuration.
 type ControlClient struct {
 	config gorums.Config
 }
@@ -66,28 +71,6 @@ func (c ControlClient) Config() gorums.Config {
 // WithConfig returns a copy of c bound to config.
 func (c ControlClient) WithConfig(config gorums.Config) ControlClient {
 	return ControlClient{config: config}
-}
-
-// ForNode returns a node client for the Control service, bound to node.
-// The node need not belong to the configuration of c.
-func (c ControlClient) ForNode(node *gorums.Node) ControlClientNode {
-	return ControlClientNode{node: node}
-}
-
-// ControlClientNode invokes the node-side calls of the Control service.
-// It is bound to a single node.
-type ControlClientNode struct {
-	node *gorums.Node
-}
-
-// NewControlClientNode returns a node client for the Control service, bound to node.
-func NewControlClientNode(node *gorums.Node) ControlClientNode {
-	return ControlClientNode{node: node}
-}
-
-// Node returns the node to which c is bound.
-func (c ControlClientNode) Node() *gorums.Node {
-	return c.node
 }
 
 // Start resets the server-side op counter and Stats baseline.

@@ -41,8 +41,13 @@ type (
 // CorrectableResponse is a correctable object for quorum calls returning *Response.
 type CorrectableResponse = *gorums.Correctable[*Response]
 
-// CorrectableTestClient invokes the configuration-side calls of the CorrectableTest service.
-// It is bound to a configuration.
+// CorrectableTestClient invokes the calls of the CorrectableTest service.
+// Quorum calls and multicasts run on the client's configuration.
+// Remote calls and unicasts run on the node given to each call; that node
+// need not belong to the client's configuration.
+// The zero value is ready for remote calls and unicasts.
+// Quorum calls and multicasts need a configuration, from
+// NewCorrectableTestClient or WithConfig; they panic on an empty configuration.
 type CorrectableTestClient struct {
 	config gorums.Config
 }
@@ -60,28 +65,6 @@ func (c CorrectableTestClient) Config() gorums.Config {
 // WithConfig returns a copy of c bound to config.
 func (c CorrectableTestClient) WithConfig(config gorums.Config) CorrectableTestClient {
 	return CorrectableTestClient{config: config}
-}
-
-// ForNode returns a node client for the CorrectableTest service, bound to node.
-// The node need not belong to the configuration of c.
-func (c CorrectableTestClient) ForNode(node *gorums.Node) CorrectableTestClientNode {
-	return CorrectableTestClientNode{node: node}
-}
-
-// CorrectableTestClientNode invokes the node-side calls of the CorrectableTest service.
-// It is bound to a single node.
-type CorrectableTestClientNode struct {
-	node *gorums.Node
-}
-
-// NewCorrectableTestClientNode returns a node client for the CorrectableTest service, bound to node.
-func NewCorrectableTestClientNode(node *gorums.Node) CorrectableTestClientNode {
-	return CorrectableTestClientNode{node: node}
-}
-
-// Node returns the node to which c is bound.
-func (c CorrectableTestClientNode) Node() *gorums.Node {
-	return c.node
 }
 
 // Correctable executes the CorrectableTest.Correctable quorum call on the client's
