@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -81,6 +82,9 @@ func (t *tool) prepare(o prepareOptions) error {
 		if err := t.execIn(m, "go", "mod", "edit", "-require="+gorumsModule+"@"+v.String()); err != nil {
 			return err
 		}
+	}
+	if err := t.setWorkReplace(v); err != nil {
+		return err
 	}
 	if err := t.exec("make", "genproto"); err != nil {
 		return err
@@ -179,6 +183,40 @@ func (t *tool) checkWorkTree() error {
 		return errors.New("master differs from origin/master: pull or push first")
 	}
 	return nil
+}
+
+// setWorkReplace makes the workspace resolve gorums at version v to the local
+// checkout, and removes the replacements of earlier versions. The workspace
+// does not satisfy a requirement on a version that is not on the proxy yet,
+// and an unversioned replace conflicts with the root module in go.work. The
+// replace lives in go.work, not in a go.mod, because go install pkg@version
+// rejects a module whose go.mod has a replace.
+func (t *tool) setWorkReplace(v semver) error {
+	out, err := t.query("go", "work", "edit", "-json")
+	if err != nil {
+		return err
+	}
+	var work struct {
+		Replace []struct {
+			Old struct{ Path, Version string }
+		}
+	}
+	if err := json.Unmarshal([]byte(out), &work); err != nil {
+		return err
+	}
+	for _, r := range work.Replace {
+		if r.Old.Path != gorumsModule {
+			continue
+		}
+		old := r.Old.Path
+		if r.Old.Version != "" {
+			old += "@" + r.Old.Version
+		}
+		if err := t.exec("go", "work", "edit", "-dropreplace="+old); err != nil {
+			return err
+		}
+	}
+	return t.exec("go", "work", "edit", "-replace="+gorumsModule+"@"+v.String()+"=./")
 }
 
 // tidyUnreleased tidies every module while the gorums version being released

@@ -29,6 +29,7 @@ func readyRunner() *fakeRunner {
 	f.answers["git status"] = ""
 	f.answers["git rev-parse"] = "abc123\n"
 	f.answers["gorelease"] = goreleaseReport
+	f.answers["go work edit -json"] = `{"Replace":[{"Old":{"Path":"github.com/relab/gorums","Version":"v0.11.0"},"New":{"Path":"./"}}]}`
 	f.answers["go env GOBIN GOPATH"] = "\n/home/u/go\n"
 	return f
 }
@@ -54,11 +55,18 @@ func TestPrepare(t *testing.T) {
 		"exec make tools",
 		"exec (examples) go mod edit -require=github.com/relab/gorums@v0.12.0",
 		"exec (benchkit) go mod edit -require=github.com/relab/gorums@v0.12.0",
+		"query go work edit -json",
+		"exec go work edit -dropreplace=github.com/relab/gorums@v0.11.0",
+		"exec go work edit -replace=github.com/relab/gorums@v0.12.0=./",
 		"exec make genproto",
 		"exec go test ./internal/testprotos -update",
 		"exec go mod tidy",
+		"exec (examples) go mod edit -replace=github.com/relab/gorums=../",
 		"exec (examples) go mod tidy",
+		"exec (examples) go mod edit -dropreplace=github.com/relab/gorums",
+		"exec (benchkit) go mod edit -replace=github.com/relab/gorums=../",
 		"exec (benchkit) go mod tidy",
+		"exec (benchkit) go mod edit -dropreplace=github.com/relab/gorums",
 		"exec make test",
 		"exec make testrace",
 	)

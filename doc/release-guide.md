@@ -86,6 +86,8 @@ Install it again after the program changes.
    ```
 
    Afterward the working tree holds everything the release needs: the new version, the runtime versions, upgraded dependencies, and regenerated code.
+   It also adds `replace github.com/relab/gorums vX.Y.Z => ./` to `go.work`, because the workspace cannot resolve a version that is not tagged yet.
+   The replace is in `go.work`, not in a `go.mod`, because `go install pkg@version` rejects a module whose `go.mod` has a replace.
    The tests have passed.
    Nothing is committed.
 
