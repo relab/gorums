@@ -3,8 +3,8 @@ module github.com/relab/gorums/benchkit
 go 1.27.3
 
 require (
-	github.com/google/pprof v0.0.0-20261016150608-1facf8f91b50
-	github.com/relab/gorums v0.12.0
+	github.com/google/pprof v0.0.0-20261026192309-dbd0ed30aa88
+	github.com/relab/gorums v0.12.1
 	github.com/relab/iago v0.0.0-20260715045113-2b8915a614a8
 	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e
 	golang.org/x/sync v0.24.0
@@ -23,5 +23,5 @@ require (
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20261026165753-2ffab32bce7e // indirect
 )
