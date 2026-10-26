@@ -38,8 +38,13 @@ type (
 	Node   = gorums.Node
 )
 
-// TLSClient invokes the configuration-side calls of the TLS service.
-// It is bound to a configuration.
+// TLSClient invokes the calls of the TLS service.
+// Quorum calls and multicasts run on the client's configuration.
+// Remote calls and unicasts run on the node given to each call; that node
+// need not belong to the client's configuration.
+// The zero value is ready for remote calls and unicasts.
+// Quorum calls and multicasts need a configuration, from
+// NewTLSClient or WithConfig; they panic on an empty configuration.
 type TLSClient struct {
 	config gorums.Config
 }
@@ -59,35 +64,14 @@ func (c TLSClient) WithConfig(config gorums.Config) TLSClient {
 	return TLSClient{config: config}
 }
 
-// ForNode returns a node client for the TLS service, bound to node.
-// The node need not belong to the configuration of c.
-func (c TLSClient) ForNode(node *gorums.Node) TLSClientNode {
-	return TLSClientNode{node: node}
-}
-
-// TLSClientNode invokes the node-side calls of the TLS service.
-// It is bound to a single node.
-type TLSClientNode struct {
-	node *gorums.Node
-}
-
-// NewTLSClientNode returns a node client for the TLS service, bound to node.
-func NewTLSClientNode(node *gorums.Node) TLSClientNode {
-	return TLSClientNode{node: node}
-}
-
-// Node returns the node to which c is bound.
-func (c TLSClientNode) Node() *gorums.Node {
-	return c.node
-}
-
-// TestTLS executes the TLS.TestTLS remote call on the client's node.
+// TestTLS executes a remote call on the given node and returns its reply.
+// It does not use the client's configuration.
 //
 // Example:
 //
-//	resp, err := nodeClient.TestTLS(ctx, in)
-func (c TLSClientNode) TestTLS(ctx context.Context, in *Request) (*Response, error) {
-	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "tls.TLS.TestTLS")
+//	resp, err := client.TestTLS(ctx, node, in)
+func (c TLSClient) TestTLS(ctx context.Context, node *gorums.Node, in *Request) (*Response, error) {
+	return gorumsimpl.RemoteCall[*Request, *Response](ctx, node, in, "tls.TLS.TestTLS")
 }
 
 // TLS is the server-side API for the TLS Service

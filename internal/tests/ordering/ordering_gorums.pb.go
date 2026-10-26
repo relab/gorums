@@ -41,8 +41,13 @@ type (
 // CorrectableResponse is a correctable object for quorum calls returning *Response.
 type CorrectableResponse = *gorums.Correctable[*Response]
 
-// OrderingClient invokes the configuration-side calls of the Ordering service.
-// It is bound to a configuration.
+// OrderingClient invokes the calls of the Ordering service.
+// Quorum calls and multicasts run on the client's configuration.
+// Remote calls and unicasts run on the node given to each call; that node
+// need not belong to the client's configuration.
+// The zero value is ready for remote calls and unicasts.
+// Quorum calls and multicasts need a configuration, from
+// NewOrderingClient or WithConfig; they panic on an empty configuration.
 type OrderingClient struct {
 	config gorums.Config
 }
@@ -62,28 +67,6 @@ func (c OrderingClient) WithConfig(config gorums.Config) OrderingClient {
 	return OrderingClient{config: config}
 }
 
-// ForNode returns a node client for the Ordering service, bound to node.
-// The node need not belong to the configuration of c.
-func (c OrderingClient) ForNode(node *gorums.Node) OrderingClientNode {
-	return OrderingClientNode{node: node}
-}
-
-// OrderingClientNode invokes the node-side calls of the Ordering service.
-// It is bound to a single node.
-type OrderingClientNode struct {
-	node *gorums.Node
-}
-
-// NewOrderingClientNode returns a node client for the Ordering service, bound to node.
-func NewOrderingClientNode(node *gorums.Node) OrderingClientNode {
-	return OrderingClientNode{node: node}
-}
-
-// Node returns the node to which c is bound.
-func (c OrderingClientNode) Node() *gorums.Node {
-	return c.node
-}
-
 // QuorumCall executes the Ordering.QuorumCall quorum call on the client's
 // configuration. Use terminal methods like Majority(), First(), or
 // Threshold(n) to retrieve the aggregated result.
@@ -95,13 +78,14 @@ func (c OrderingClient) QuorumCall(ctx context.Context, in *Request) *gorums.Cal
 	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "ordering.Ordering.QuorumCall")
 }
 
-// UnaryRPC executes the Ordering.UnaryRPC remote call on the client's node.
+// UnaryRPC executes a remote call on the given node and returns its reply.
+// It does not use the client's configuration.
 //
 // Example:
 //
-//	resp, err := nodeClient.UnaryRPC(ctx, in)
-func (c OrderingClientNode) UnaryRPC(ctx context.Context, in *Request) (*Response, error) {
-	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "ordering.Ordering.UnaryRPC")
+//	resp, err := client.UnaryRPC(ctx, node, in)
+func (c OrderingClient) UnaryRPC(ctx context.Context, node *gorums.Node, in *Request) (*Response, error) {
+	return gorumsimpl.RemoteCall[*Request, *Response](ctx, node, in, "ordering.Ordering.UnaryRPC")
 }
 
 // Ordering is the server-side API for the Ordering Service

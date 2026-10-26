@@ -45,8 +45,13 @@ type CorrectableEcho = *gorums.Correctable[*Echo]
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// BenchmarkClient invokes the configuration-side calls of the Benchmark service.
-// It is bound to a configuration.
+// BenchmarkClient invokes the calls of the Benchmark service.
+// Quorum calls and multicasts run on the client's configuration.
+// Remote calls and unicasts run on the node given to each call; that node
+// need not belong to the client's configuration.
+// The zero value is ready for remote calls and unicasts.
+// Quorum calls and multicasts need a configuration, from
+// NewBenchmarkClient or WithConfig; they panic on an empty configuration.
 type BenchmarkClient struct {
 	config gorums.Config
 }
@@ -64,28 +69,6 @@ func (c BenchmarkClient) Config() gorums.Config {
 // WithConfig returns a copy of c bound to config.
 func (c BenchmarkClient) WithConfig(config gorums.Config) BenchmarkClient {
 	return BenchmarkClient{config: config}
-}
-
-// ForNode returns a node client for the Benchmark service, bound to node.
-// The node need not belong to the configuration of c.
-func (c BenchmarkClient) ForNode(node *gorums.Node) BenchmarkClientNode {
-	return BenchmarkClientNode{node: node}
-}
-
-// BenchmarkClientNode invokes the node-side calls of the Benchmark service.
-// It is bound to a single node.
-type BenchmarkClientNode struct {
-	node *gorums.Node
-}
-
-// NewBenchmarkClientNode returns a node client for the Benchmark service, bound to node.
-func NewBenchmarkClientNode(node *gorums.Node) BenchmarkClientNode {
-	return BenchmarkClientNode{node: node}
-}
-
-// Node returns the node to which c is bound.
-func (c BenchmarkClientNode) Node() *gorums.Node {
-	return c.node
 }
 
 // QuorumCall performs an echo quorum call on all servers.
