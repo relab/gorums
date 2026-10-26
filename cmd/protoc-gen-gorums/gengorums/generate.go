@@ -98,9 +98,7 @@ func shouldGenerate(gen *protogen.Plugin, file *protogen.File) (bool, error) {
 // A message or enum of any file in the package, nested or not, must not take
 // the name of a Gorums type alias or of a client type or constructor generated
 // for the file's service. An RPC method of the file's service must not take
-// the name of a helper method of the client type that receives it.
-// The call type of a method selects its receiver, so every method must
-// have valid call type options.
+// the name of a helper method of the generated client type.
 func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
 	var generated []string
 	for _, service := range file.Services {
@@ -153,16 +151,11 @@ func checkTypes(msgs []*protogen.Message, enums []*protogen.Enum, check func(kin
 }
 
 // checkClientMethod returns an error if the method's Go name equals a helper
-// method of the generated client type that receives it: SClientNode for
-// remote calls and unicasts, and SClient for the other call types.
+// method of the generated client type SClient, which receives every call.
 func checkClientMethod(method *protogen.Method) error {
-	receiver, helpers := method.Parent.GoName+"Client", clientHelpers
-	if _, info := callType(method); info != nil && (info.ext == gorums.E_Remotecall || info.ext == gorums.E_Unicast) {
-		receiver, helpers = receiver+"Node", clientNodeHelpers
-	}
-	if slices.Contains(helpers, method.GoName) {
-		return fmt.Errorf("%s.%s: RPC method collides with the generated %s.%s method",
-			method.Parent.Desc.Name(), method.Desc.Name(), receiver, method.GoName)
+	if slices.Contains(clientHelpers, method.GoName) {
+		return fmt.Errorf("%s.%s: RPC method collides with the generated %sClient.%s method",
+			method.Parent.Desc.Name(), method.Desc.Name(), method.Parent.GoName, method.GoName)
 	}
 	return nil
 }

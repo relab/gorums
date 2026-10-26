@@ -42,8 +42,13 @@ type (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// MulticastClient invokes the configuration-side calls of the Multicast service.
-// It is bound to a configuration.
+// MulticastClient invokes the calls of the Multicast service.
+// Quorum calls and multicasts run on the client's configuration.
+// Remote calls and unicasts run on the node given to each call; that node
+// need not belong to the client's configuration.
+// The zero value is ready for remote calls and unicasts.
+// Quorum calls and multicasts need a configuration, from
+// NewMulticastClient or WithConfig; they panic on an empty configuration.
 type MulticastClient struct {
 	config gorums.Config
 }
@@ -61,28 +66,6 @@ func (c MulticastClient) Config() gorums.Config {
 // WithConfig returns a copy of c bound to config.
 func (c MulticastClient) WithConfig(config gorums.Config) MulticastClient {
 	return MulticastClient{config: config}
-}
-
-// ForNode returns a node client for the Multicast service, bound to node.
-// The node need not belong to the configuration of c.
-func (c MulticastClient) ForNode(node *gorums.Node) MulticastClientNode {
-	return MulticastClientNode{node: node}
-}
-
-// MulticastClientNode invokes the node-side calls of the Multicast service.
-// It is bound to a single node.
-type MulticastClientNode struct {
-	node *gorums.Node
-}
-
-// NewMulticastClientNode returns a node client for the Multicast service, bound to node.
-func NewMulticastClientNode(node *gorums.Node) MulticastClientNode {
-	return MulticastClientNode{node: node}
-}
-
-// Node returns the node to which c is bound.
-func (c MulticastClientNode) Node() *gorums.Node {
-	return c.node
 }
 
 // Multicast starts a one-way call on the client's configuration; no reply

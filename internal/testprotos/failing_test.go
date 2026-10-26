@@ -57,22 +57,12 @@ service Reserved {
 			want: "Reserved.Config: RPC method collides with the generated ReservedClient.Config method",
 		},
 		{
-			name: "ReservedClientMethod",
+			name: "ReservedRemoteCallConfig",
 			decl: `
 service Reserved {
-	rpc ForNode(Request) returns (Response) {
-		option (gorums.quorumcall) = true;
-	}
+	rpc Config(Request) returns (Response) {}
 }`,
-			want: "Reserved.ForNode: RPC method collides with the generated ReservedClient.ForNode method",
-		},
-		{
-			name: "ReservedClientNodeMethod",
-			decl: `
-service Reserved {
-	rpc Node(Request) returns (Response) {}
-}`,
-			want: "Reserved.Node: RPC method collides with the generated ReservedClientNode.Node method",
+			want: "Reserved.Config: RPC method collides with the generated ReservedClient.Config method",
 		},
 		{
 			name: "ReservedQuorumCallWithConfig",
@@ -85,24 +75,24 @@ service Reserved {
 			want: "Reserved.WithConfig: RPC method collides with the generated ReservedClient.WithConfig method",
 		},
 		{
-			name: "ReservedUnicastNode",
+			name: "ReservedUnicastWithConfig",
 			decl: `
 service Reserved {
-	rpc Node(Request) returns (Response) {
+	rpc WithConfig(Request) returns (Response) {
 		option (gorums.unicast) = true;
 	}
 }`,
-			want: "Reserved.Node: RPC method collides with the generated ReservedClientNode.Node method",
+			want: "Reserved.WithConfig: RPC method collides with the generated ReservedClient.WithConfig method",
 		},
 		{
-			name: "ReservedMulticastForNode",
+			name: "ReservedMulticastConfig",
 			decl: `
 service Reserved {
-	rpc ForNode(Request) returns (Response) {
+	rpc Config(Request) returns (Response) {
 		option (gorums.multicast) = true;
 	}
 }`,
-			want: "Reserved.ForNode: RPC method collides with the generated ReservedClient.ForNode method",
+			want: "Reserved.Config: RPC method collides with the generated ReservedClient.Config method",
 		},
 		{
 			name: "GeneratedClientMessage",
@@ -118,17 +108,17 @@ service Reserved {
 			want: "contains message ReservedClient, which is a generated Gorums identifier",
 		},
 		{
-			name: "GeneratedClientNodeEnum",
+			name: "GeneratedConstructorEnum",
 			decl: `
-enum NewReservedClientNode {
-	NEW_RESERVED_CLIENT_NODE_UNSPECIFIED = 0;
+enum NewReservedClient {
+	NEW_RESERVED_CLIENT_UNSPECIFIED = 0;
 }
 service Reserved {
 	rpc Read(Request) returns (Response) {
 		option (gorums.quorumcall) = true;
 	}
 }`,
-			want: "contains enum NewReservedClientNode, which is a generated Gorums identifier",
+			want: "contains enum NewReservedClient, which is a generated Gorums identifier",
 		},
 		{
 			name: "NestedGeneratedClientMessage",
@@ -146,12 +136,12 @@ service Outer_Inner {
 			want: "contains message Outer_InnerClient, which is a generated Gorums identifier",
 		},
 		{
-			name: "NestedGeneratedClientNodeEnum",
+			name: "NestedGeneratedConstructorEnum",
 			decl: `
-message Outer {
+message NewOuter {
 	message Middle {
-		enum InnerClientNode {
-			INNER_CLIENT_NODE_UNSPECIFIED = 0;
+		enum InnerClient {
+			INNER_CLIENT_UNSPECIFIED = 0;
 		}
 	}
 }
@@ -160,7 +150,7 @@ service Outer_Middle_Inner {
 		option (gorums.quorumcall) = true;
 	}
 }`,
-			want: "contains enum Outer_Middle_InnerClientNode, which is a generated Gorums identifier",
+			want: "contains enum NewOuter_Middle_InnerClient, which is a generated Gorums identifier",
 		},
 		{
 			name: "ReservedEnum",
