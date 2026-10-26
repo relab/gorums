@@ -4,32 +4,32 @@ import "google.golang.org/protobuf/compiler/protogen"
 
 // clientHelpers lists the methods that [clientType] declares on SClient
 // besides the RPC methods.
-var clientHelpers = []string{"Config", "WithConfig", "ForNode"}
-
-// clientNodeHelpers lists the methods that [clientNodeType] declares on
-// SClientNode besides the RPC methods.
-var clientNodeHelpers = []string{"Node"}
+var clientHelpers = []string{"Config", "WithConfig"}
 
 // clientIdents returns the package-level identifiers that [client] declares
 // for the given service.
 func clientIdents(service *protogen.Service) []string {
 	client := service.GoName + "Client"
-	return []string{client, client + "Node", "New" + client, "New" + client + "Node"}
+	return []string{client, "New" + client}
 }
 
-// clientVariables qualifies the runtime types that the client types bind to.
+// clientVariables qualifies the runtime types that the client type binds to.
 var clientVariables = `
 {{$config := use "gorums.Config" .GenFile}}
-{{$node := use "gorums.Node" .GenFile}}
 `
 
 // clientType generates, for each service, the client type bound to a
-// configuration and its constructor and target access methods.
+// configuration and its constructor and configuration access methods.
 var clientType = `
 {{range .Services -}}
 {{$service := .GoName}}
-// {{$service}}Client invokes the configuration-side calls of the {{$service}} service.
-// It is bound to a configuration.
+// {{$service}}Client invokes the calls of the {{$service}} service.
+// Quorum calls and multicasts run on the client's configuration.
+// Remote calls and unicasts run on the node given to each call; that node
+// need not belong to the client's configuration.
+// The zero value is ready for remote calls and unicasts.
+// Quorum calls and multicasts need a configuration, from
+// New{{$service}}Client or WithConfig; they panic on an empty configuration.
 type {{$service}}Client struct {
 	config {{$config}}
 }
@@ -48,36 +48,7 @@ func (c {{$service}}Client) Config() {{$config}} {
 func (c {{$service}}Client) WithConfig(config {{$config}}) {{$service}}Client {
 	return {{$service}}Client{config: config}
 }
-
-// ForNode returns a node client for the {{$service}} service, bound to node.
-// The node need not belong to the configuration of c.
-func (c {{$service}}Client) ForNode(node *{{$node}}) {{$service}}ClientNode {
-	return {{$service}}ClientNode{node: node}
-}
 {{- end}}
 `
 
-// clientNodeType generates, for each service, the client type bound to a
-// single node and its constructor and target access method.
-var clientNodeType = `
-{{range .Services -}}
-{{$service := .GoName}}
-// {{$service}}ClientNode invokes the node-side calls of the {{$service}} service.
-// It is bound to a single node.
-type {{$service}}ClientNode struct {
-	node *{{$node}}
-}
-
-// New{{$service}}ClientNode returns a node client for the {{$service}} service, bound to node.
-func New{{$service}}ClientNode(node *{{$node}}) {{$service}}ClientNode {
-	return {{$service}}ClientNode{node: node}
-}
-
-// Node returns the node to which c is bound.
-func (c {{$service}}ClientNode) Node() *{{$node}} {
-	return c.node
-}
-{{- end}}
-`
-
-var client = clientVariables + clientType + clientNodeType
+var client = clientVariables + clientType

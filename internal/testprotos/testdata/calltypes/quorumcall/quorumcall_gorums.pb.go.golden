@@ -41,8 +41,13 @@ type (
 // CorrectableResponse is a correctable object for quorum calls returning *Response.
 type CorrectableResponse = *gorums.Correctable[*Response]
 
-// QuorumCallClient invokes the configuration-side calls of the QuorumCall service.
-// It is bound to a configuration.
+// QuorumCallClient invokes the calls of the QuorumCall service.
+// Quorum calls and multicasts run on the client's configuration.
+// Remote calls and unicasts run on the node given to each call; that node
+// need not belong to the client's configuration.
+// The zero value is ready for remote calls and unicasts.
+// Quorum calls and multicasts need a configuration, from
+// NewQuorumCallClient or WithConfig; they panic on an empty configuration.
 type QuorumCallClient struct {
 	config gorums.Config
 }
@@ -60,28 +65,6 @@ func (c QuorumCallClient) Config() gorums.Config {
 // WithConfig returns a copy of c bound to config.
 func (c QuorumCallClient) WithConfig(config gorums.Config) QuorumCallClient {
 	return QuorumCallClient{config: config}
-}
-
-// ForNode returns a node client for the QuorumCall service, bound to node.
-// The node need not belong to the configuration of c.
-func (c QuorumCallClient) ForNode(node *gorums.Node) QuorumCallClientNode {
-	return QuorumCallClientNode{node: node}
-}
-
-// QuorumCallClientNode invokes the node-side calls of the QuorumCall service.
-// It is bound to a single node.
-type QuorumCallClientNode struct {
-	node *gorums.Node
-}
-
-// NewQuorumCallClientNode returns a node client for the QuorumCall service, bound to node.
-func NewQuorumCallClientNode(node *gorums.Node) QuorumCallClientNode {
-	return QuorumCallClientNode{node: node}
-}
-
-// Node returns the node to which c is bound.
-func (c QuorumCallClientNode) Node() *gorums.Node {
-	return c.node
 }
 
 // QuorumCall executes the QuorumCall.QuorumCall quorum call on the client's
