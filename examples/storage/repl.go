@@ -194,7 +194,7 @@ func (r repl) unicast(args []string) {
 
 	node := r.cfg[index]
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	err = pb.NewStorageClientNode(node).WriteUnicast(ctx, pb.WriteRequest_builder{
+	err = pb.NewStorageClient(r.cfg).WriteUnicast(ctx, node, pb.WriteRequest_builder{
 		Key: args[1], Value: args[2], Time: timestamppb.Now(),
 	}.Build()).Send()
 	cancel()
@@ -275,7 +275,7 @@ func (repl) readRPC(args []string, node *pb.Node) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := pb.NewStorageClientNode(node).ReadRPC(ctx, pb.ReadRequest_builder{Key: args[0]}.Build())
+	resp, err := pb.StorageClient{}.ReadRPC(ctx, node, pb.ReadRequest_builder{Key: args[0]}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -294,7 +294,7 @@ func (repl) writeRPC(args []string, node *pb.Node) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := pb.NewStorageClientNode(node).WriteRPC(ctx, pb.WriteRequest_builder{
+	resp, err := pb.StorageClient{}.WriteRPC(ctx, node, pb.WriteRequest_builder{
 		Key: args[0], Value: args[1], Time: timestamppb.Now(),
 	}.Build())
 	cancel()

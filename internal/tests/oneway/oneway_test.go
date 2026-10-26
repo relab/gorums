@@ -157,7 +157,7 @@ func TestOnewayCalls(t *testing.T) {
 				in := oneway.Request_builder{Num: uint64(i)}.Build()
 				var err error
 				if test.unicast {
-					err = oneway.NewOnewayTestClientNode(c.cfg[0]).Unicast(context.Background(), in).Send()
+					err = oneway.OnewayTestClient{}.Unicast(context.Background(), c.cfg[0], in).Send()
 				} else {
 					err = oneway.NewOnewayTestClient(c.cfg).Multicast(context.Background(), in).Send()
 				}
@@ -251,11 +251,12 @@ func BenchmarkUnicast(b *testing.B) {
 	for _, srv := range srvs {
 		srv.benchmark = true
 	}
-	nodeClient := oneway.NewOnewayTestClientNode(cfg[0])
+	var client oneway.OnewayTestClient
+	node := cfg[0]
 	in := oneway.Request_builder{Num: 0}.Build()
 	for c := 1; c <= b.N; c++ {
 		in.SetNum(uint64(c))
-		if err := nodeClient.Unicast(context.Background(), in).Send(); err != nil {
+		if err := client.Unicast(context.Background(), node, in).Send(); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -180,8 +180,8 @@ func TestGeneratedCodeIDField(t *testing.T) {
 	var _ dev.ID // the reserved alias must remain usable alongside the field
 }
 
-// TestGeneratedCodeClient checks the target access methods of the generated
-// ZorumsServiceClient and ZorumsServiceClientNode types.
+// TestGeneratedCodeClient checks the configuration access methods and the
+// node calls of the generated ZorumsServiceClient type.
 func TestGeneratedCodeClient(t *testing.T) {
 	const numServers = 3
 	config := gorumstest.Config(t, numServers, newQuorumCallServer)
@@ -208,7 +208,17 @@ func TestGeneratedCodeClient(t *testing.T) {
 		t.Fatalf("node %v is in the client's configuration", otherNode)
 	}
 
-	tests := []struct {
+	// A node call runs on the given node and ignores the client's
+	// configuration, so a configuration client and a zero client reach the
+	// same server, also for a node outside the configuration.
+	clients := []struct {
+		name   string
+		client dev.ZorumsServiceClient
+	}{
+		{name: "ConfigClient", client: client},
+		{name: "ZeroClient", client: dev.ZorumsServiceClient{}},
+	}
+	nodes := []struct {
 		name    string
 		node    *gorums.Node
 		wantTag int64
@@ -217,31 +227,28 @@ func TestGeneratedCodeClient(t *testing.T) {
 		{name: "LastNode", node: config.Nodes()[numServers-1], wantTag: numServers - 1},
 		{name: "OtherConfigNode", node: otherNode, wantTag: 100},
 	}
-	for _, tt := range tests {
-		t.Run("ForNode/"+tt.name, func(t *testing.T) {
-			ctx := gorumstest.Context(t, 2*time.Second)
-			derived := client.ForNode(tt.node)
-			standalone := dev.NewZorumsServiceClientNode(tt.node)
-			if derived.Node() != tt.node {
-				t.Errorf("ForNode(node).Node() = %v, want %v", derived.Node(), tt.node)
-			}
-			if standalone.Node() != tt.node {
-				t.Errorf("NewZorumsServiceClientNode(node).Node() = %v, want %v", standalone.Node(), tt.node)
-			}
-			for name, nodeClient := range map[string]dev.ZorumsServiceClientNode{
-				"ForNode":                    derived,
-				"NewZorumsServiceClientNode": standalone,
-			} {
-				resp, err := nodeClient.GRPCCall(ctx, &dev.Request{})
+	for _, c := range clients {
+		for _, n := range nodes {
+			t.Run("NodeCall/"+c.name+"/"+n.name, func(t *testing.T) {
+				resp, err := c.client.GRPCCall(gorumstest.Context(t, 2*time.Second), n.node, &dev.Request{})
 				if err != nil {
-					t.Fatalf("%s: GRPCCall failed: %v", name, err)
+					t.Fatalf("GRPCCall failed: %v", err)
 				}
-				if got := resp.GetResult(); got != tt.wantTag {
-					t.Errorf("%s: GRPCCall result = %d, want %d", name, got, tt.wantTag)
+				if got := resp.GetResult(); got != n.wantTag {
+					t.Errorf("GRPCCall result = %d, want %d", got, n.wantTag)
 				}
-			}
-		})
+			})
+		}
 	}
+
+	t.Run("ZeroClientQuorumCall", func(t *testing.T) {
+		defer func() {
+			if recover() == nil {
+				t.Error("QuorumCall on a zero client did not panic")
+			}
+		}()
+		dev.ZorumsServiceClient{}.QuorumCall(t.Context(), &dev.Request{})
+	})
 
 	t.Run("WithConfig", func(t *testing.T) {
 		id := config.NodeIDs()[0]
@@ -261,20 +268,16 @@ func TestGeneratedCodeClient(t *testing.T) {
 // Sinks keep the compiler from eliding the operations measured in
 // TestGeneratedCodeClientAllocs.
 var (
-	clientSink     dev.ZorumsServiceClient
-	clientNodeSink dev.ZorumsServiceClientNode
-	configSink     gorums.Config
-	nodeSink       *gorums.Node
+	clientSink dev.ZorumsServiceClient
+	configSink gorums.Config
 )
 
-// TestGeneratedCodeClientAllocs checks that constructing and converting the
-// generated client types allocates nothing.
+// TestGeneratedCodeClientAllocs checks that constructing the generated client
+// type and accessing its configuration allocates nothing.
 func TestGeneratedCodeClientAllocs(t *testing.T) {
 	config := gorumstest.Config(t, 3, newQuorumCallServer)
 	smaller := config.Remove(config.NodeIDs()[0])
-	node := config.Nodes()[0]
 	client := dev.NewZorumsServiceClient(config)
-	nodeClient := dev.NewZorumsServiceClientNode(node)
 
 	tests := []struct {
 		name string
@@ -283,9 +286,6 @@ func TestGeneratedCodeClientAllocs(t *testing.T) {
 		{name: "NewZorumsServiceClient", fn: func() { clientSink = dev.NewZorumsServiceClient(config) }},
 		{name: "WithConfig", fn: func() { clientSink = client.WithConfig(smaller) }},
 		{name: "Config", fn: func() { configSink = client.Config() }},
-		{name: "ForNode", fn: func() { clientNodeSink = client.ForNode(node) }},
-		{name: "NewZorumsServiceClientNode", fn: func() { clientNodeSink = dev.NewZorumsServiceClientNode(node) }},
-		{name: "Node", fn: func() { nodeSink = nodeClient.Node() }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
