@@ -6,8 +6,6 @@ import (
 	"maps"
 	"slices"
 	"time"
-
-	"github.com/relab/gorums"
 )
 
 // clockSyncRounds is the number of NTP-style ClockSync exchanges performed per
@@ -39,7 +37,7 @@ func clockOffset(t1, serverTime, t4 int64) (offset, delay int64) {
 // (assuming a symmetric path). The offset from the round with the smallest delay
 // is kept for each peer. The returned offset of a node relative to itself
 // (loopback) is approximately zero.
-func EstimateOffsets(ctx context.Context, cfg gorums.Config) (map[uint32]int64, error) {
+func EstimateOffsets(ctx context.Context, cfg Config) (map[uint32]int64, error) {
 	control := NewControlClient(cfg)
 	n := cfg.Size()
 	bestDelay := make(map[uint32]int64, n)
