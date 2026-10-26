@@ -448,11 +448,10 @@ func runSchedule(ctx context.Context, ticker *Ticker, opts Options, levelDone fu
 	return nil
 }
 
-// StartRemote resets the op counters and Stats baselines of the remote servers
-// in cfg at the start of a client-measured run, so the Stop reply observes only
-// the work done in the measurement window. It is a no-op in local mode, where
-// the in-process servers share the client's heap and their memory stats cannot
-// be separated.
+// StartRemote resets the remote servers' op counters and Stats baselines at the
+// start of a client-measured run, so the Stop reply observes only the work done
+// in the measurement window. It is a no-op in local mode, where the in-process
+// servers share the client's heap and their memory stats cannot be separated.
 func StartRemote(ctx context.Context, cfg gorums.Config, opts Options) error {
 	if !opts.Remote {
 		return nil
@@ -461,7 +460,7 @@ func StartRemote(ctx context.Context, cfg gorums.Config, opts Options) error {
 	return err
 }
 
-// StopRemote collects the per-op memory stats of each remote server in cfg via
+// StopRemote collects each remote server's per-op memory stats via
 // [Control.Stop] and appends them to result. It returns the per-server Stop
 // replies keyed by node ID so callers can verify them (see [WithVerify]). It
 // is the counterpart to [StartRemote] and is likewise a no-op in local mode,
