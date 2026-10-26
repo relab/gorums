@@ -28,8 +28,8 @@ type Target struct {
 	Symmetric *SymmetricTarget
 }
 
-// asyncQCFunc dispatches one quorum call with client and returns a function
-// that waits for quorumSize replies and reports the call's error.
+// asyncQCFunc starts one QuorumCall on the configuration of client and returns
+// a function that waits for quorumSize replies and returns the call's error.
 type asyncQCFunc func(ctx context.Context, client BenchmarkClient, in *Echo, quorumSize int) (wait func() error)
 
 // asyncThreshold is the [asyncQCFunc] of the AsyncQuorumCall benchmark. It
