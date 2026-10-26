@@ -81,10 +81,10 @@ func (c OnewayTestClientNode) Node() *gorums.Node {
 	return c.node
 }
 
-// Unicast starts the OnewayTest.Unicast one-way call
-// on the client's node; no reply is returned to the client. The request is
-// dispatched by Send, which blocks until the send completes and returns any
-// send error, or by Async, which does not wait.
+// Unicast starts a one-way call on the client's node; no reply is
+// returned. The request is dispatched by Send or Async. Send blocks until the
+// send completes and returns any send error. Async returns at once; call Wait
+// on the returned handle to get the send error.
 //
 // Example:
 //
@@ -94,11 +94,11 @@ func (c OnewayTestClientNode) Unicast(ctx context.Context, in *Request) *gorums.
 	return gorumsimpl.Unicast(ctx, c.node, in, "oneway.OnewayTest.Unicast")
 }
 
-// Multicast starts the OnewayTest.Multicast one-way call
-// on the client's configuration. The request is dispatched by Send, which
-// blocks until every send completes and returns any send errors, or by Async,
-// which does not wait. Use gorums.MapRequest to send different messages to
-// each node.
+// Multicast starts a one-way call on the client's configuration; no reply
+// is returned. The request is dispatched by Send or Async. Send blocks until
+// every send completes and returns any send errors. Async returns at once;
+// call Wait on the returned handle to get the send errors. Use
+// gorums.MapRequest to send a different message to each node.
 //
 // Example:
 //
