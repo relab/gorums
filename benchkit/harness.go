@@ -477,6 +477,11 @@ func StopRemote(ctx context.Context, cfg gorums.Config, opts Options, result *Re
 	return replies, nil
 }
 
+// SetupFunc builds, once per run and configuration, the operation that the
+// harness measures. Work such as creating the client and request belongs in
+// the SetupFunc, so it is not measured.
+type SetupFunc func(context.Context, gorums.Config, Options) func() error
+
 // MeasureLatency runs the client-measured measurement window over one or more
 // configurations and returns the Result built from the accumulated latency
 // samples. setup is invoked once per yielded configuration (outside the loop)
@@ -489,7 +494,7 @@ func StopRemote(ctx context.Context, cfg gorums.Config, opts Options, result *Re
 // MeasureLatency owns only the measurement window; any control-plane
 // lifecycle ([StartRemote]/[StopRemote], local server resets) is the
 // caller's concern.
-func MeasureLatency(ctx context.Context, opts Options, configs iter.Seq[gorums.Config], setup func(ctx context.Context, cfg gorums.Config, opts Options) func() error) (*Result, error) {
+func MeasureLatency(ctx context.Context, opts Options, configs iter.Seq[gorums.Config], setup SetupFunc) (*Result, error) {
 	m := StartMeasurement(opts)
 	var doOps []func() error
 	for cfg := range configs {
@@ -619,7 +624,7 @@ func WithVerify(f func(map[uint32]*Result) error) LifecycleOption {
 // tight per-operation closure; building the request message and the client
 // happen once, outside the measurement loop. Optional lifecycle hooks (e.g.
 // [WithQuiesce]) run between the window and Control.Stop.
-func ClientMeasured(cfg gorums.Config, setup func(ctx context.Context, cfg gorums.Config, opts Options) func() error, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
+func ClientMeasured(cfg gorums.Config, setup SetupFunc, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
 	hooks := newLifecycleHooks(lifecycleOpts)
 	return func(opts Options) (*Result, error) {
 		ctx, cancel := BenchContext(opts)
@@ -654,7 +659,7 @@ func ClientMeasured(cfg gorums.Config, setup func(ctx context.Context, cfg gorum
 // run and is not counted as an operation, as in [ClientMeasured]. Optional lifecycle
 // hooks (e.g. [WithQuiesce]) run between the send window and Control.Stop,
 // where a drain ensures the servers observe every in-flight one-way send.
-func ServerMeasured(cfg gorums.Config, setup func(ctx context.Context, cfg gorums.Config, opts Options) func() error, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
+func ServerMeasured(cfg gorums.Config, setup SetupFunc, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
 	hooks := newLifecycleHooks(lifecycleOpts)
 	return func(opts Options) (*Result, error) {
 		ctx, cancel := BenchContext(opts)
