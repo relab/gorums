@@ -16,12 +16,22 @@ func correctableAlias(method *protogen.Method) string {
 // these aliases; [dataTypes] declares each one once per Go package.
 func typeAliasIdents(service *protogen.Service) []string {
 	var idents []string
-	for _, method := range service.Methods {
-		if hasMethodOption(method, gorums.E_Quorumcall) {
-			idents = append(idents, correctableAlias(method))
-		}
+	for _, method := range quorumCallMethods(service) {
+		idents = append(idents, correctableAlias(method))
 	}
 	return idents
+}
+
+// quorumCallMethods returns the quorum call methods of the given service;
+// each one produces the Correctable alias of its response type.
+func quorumCallMethods(service *protogen.Service) []*protogen.Method {
+	var methods []*protogen.Method
+	for _, method := range service.Methods {
+		if hasMethodOption(method, gorums.E_Quorumcall) {
+			methods = append(methods, method)
+		}
+	}
+	return methods
 }
 
 // This type alias is generated only once per return type for a correctable

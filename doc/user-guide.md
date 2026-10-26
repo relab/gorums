@@ -1123,6 +1123,7 @@ Such an alias belongs to the first `.proto` file of the package that needs it.
 Imported files come first.
 The simplest way is to compile all `.proto` files of a Go package in one `protoc` run.
 The generator then emits each alias once and checks the generated names across all files of the package.
+The quorum calls of a Go package must not return two types named `X` from different Go packages, since both map to `CorrectableX`; the generator reports this as an error.
 
 You can also compile two files of a package in separate runs if one file imports the other, directly or indirectly.
 For example, `b.proto` imports `a.proto`, and both files are in one Go package.
