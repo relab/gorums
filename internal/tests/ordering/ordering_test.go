@@ -115,10 +115,10 @@ func serverFn(_ int) gorumstest.ServerIface {
 }
 
 func TestUnaryRPCOrdering(t *testing.T) {
-	nodeClient := NewOrderingClientNode(gorumstest.Node(t, serverFn))
+	node := gorumstest.Node(t, serverFn)
 
 	for i := range iterations() {
-		resp, err := nodeClient.UnaryRPC(t.Context(), Request_builder{Num: uint64(i)}.Build())
+		resp, err := OrderingClient{}.UnaryRPC(t.Context(), node, Request_builder{Num: uint64(i)}.Build())
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
 		}
@@ -198,7 +198,7 @@ func TestMixedOrdering(t *testing.T) {
 		var wg sync.WaitGroup
 		for _, node := range config.Nodes() {
 			wg.Go(func() {
-				resp, err := client.ForNode(node).UnaryRPC(t.Context(), Request_builder{Num: uint64(2 * i)}.Build())
+				resp, err := client.UnaryRPC(t.Context(), node, Request_builder{Num: uint64(2 * i)}.Build())
 				if err != nil {
 					t.Errorf("RPC error: %v", err)
 					return
@@ -237,7 +237,7 @@ func TestDedupBackChannelOrdering(t *testing.T) {
 	}
 
 	call := func(num uint64, done chan<- error) {
-		resp, err := NewOrderingClientNode(target).UnaryRPC(ctx, Request_builder{Num: num}.Build())
+		resp, err := OrderingClient{}.UnaryRPC(ctx, target, Request_builder{Num: num}.Build())
 		if err == nil && !resp.GetInOrder() {
 			err = errors.New("handler reported an out-of-order request")
 		}
