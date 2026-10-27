@@ -101,7 +101,7 @@ func TestGenerateImportedPackageNames(t *testing.T) {
 			msgs := fmt.Sprintf(`
 edition = "2023";
 
-package gorums.testprotos.shadow.%[1]s;
+package internal.testprotos.shadow.%[1]s;
 option go_package = "github.com/relab/gorums/internal/testprotos/shadow/%[1]s";
 
 message Request {
@@ -114,7 +114,7 @@ message Response {
 			service := fmt.Sprintf(`
 edition = "2023";
 
-package gorums.testprotos.shadow.service;
+package internal.testprotos.shadow.service;
 option go_package = "github.com/relab/gorums/internal/testprotos/shadow/service";
 
 import "gorums.proto";
@@ -135,7 +135,7 @@ service Shadow {
 	}
 	rpc RemoteCall(%[2]s.Request) returns (%[2]s.Response) {}
 }
-`, pkg, "gorums.testprotos.shadow."+pkg)
+`, pkg, "internal.testprotos.shadow."+pkg)
 			dir := gentest.Inline(t, map[string]string{pkg + ".proto": msgs, "service.proto": service})
 			files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, pkg+".proto", "service.proto")
 			if err != nil {
