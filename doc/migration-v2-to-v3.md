@@ -99,9 +99,9 @@ Regenerate all `.proto` files with the new `protoc-gen-gorums` plugin:
 make genproto
 ```
 
-This generates new `*_gorums.pb.go` files with:
+This generates new `*_gorums.pb.go` files, and one `gorums.pb.go` file per Go package, with:
 
-- Type aliases `Config`, `ID`, and `Node` for `gorums.Config`, `gorums.ID`, and `gorums.Node`
+- Type aliases `Config`, `ID`, and `Node` for `gorums.Config`, `gorums.ID`, and `gorums.Node`, in `gorums.pb.go`
 - Type aliases `CorrectableX` for the correctable results of each quorum call response type `X`
 - Service client types with a method for each call (e.g., `client.ReadQC`, `client.WriteQC`)
 - Terminal methods on `*gorums.Responses[T]`
@@ -902,6 +902,14 @@ Thus, `pb.NewStorageNodeClient(cfg.Node(id))` is safe when `cfg` has no node wit
 A `.proto` file may now declare several services, and several `.proto` files of one Go package may each declare services.
 Each service gets its own client interfaces, and all services share one `gorums.Config` and one `gorums.Server`.
 See [Several Services](user-guide.md#several-services) in the user guide.
+
+The `Config`, `ID`, and `Node` aliases now live in a new generated file, `gorums.pb.go`, one per Go package.
+Regeneration removes them from the `X_gorums.pb.go` files and writes `gorums.pb.go` next to them.
+Commit `gorums.pb.go` with the other generated files.
+Every `protoc` run writes the same `gorums.pb.go`, so the files of a Go package may be compiled in separate runs.
+Separate runs need care only for `CorrectableX` aliases: two files that do not import each other, and whose quorum calls return the same type `X`, must be compiled in one run.
+A plain gRPC service may share the Go package with Gorums services if its `.proto` file is compiled without `--gorums_out`.
+Rename a `.proto` file named `gorums.proto` in a directory with Gorums output, because its `gorums.pb.go` file would collide with the Gorums package file.
 
 Regeneration reports an error for names that collide with the generated code:
 

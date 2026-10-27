@@ -177,13 +177,14 @@ For the `unicast` and `multicast` call types, the response message type will be 
 
 > **Generated names:** Gorums reserves the names `Config`, `ID`, and `Node`.
 > A message field named `ID` is fine; only type names are reserved.
-> Gorums declares type aliases with these names in one generated `_gorums.pb.go` file of each Go package.
+> Gorums declares type aliases with these names in the generated `gorums.pb.go` file of each Go package.
 > For a service `S`, Gorums also generates the client names `SClient`, `NewSClient`, and `sClient`, and the node client names `SNodeClient`, `NewSNodeClient`, and `sNodeClient`, but only for a client that the service has.
 > It also generates the server names `SServer` and `RegisterSServer`.
 > For each response type `X` of a quorum call, Gorums generates the type alias `CorrectableX`.
 > Messages, enums, enum values, and oneof wrapper types in any `.proto` file of the same Go package cannot use these names.
 > An RPC method may have any name, also `Config` or `Node`, because the clients have no helper methods.
 > The generator reports an error for a `.proto` file that uses one of these names.
+> Do not name a `.proto` file `gorums.proto` in a directory with Gorums output, since its `gorums.pb.go` file would collide with the Gorums package file.
 
 ### Compiling the Service Definition
 
@@ -201,9 +202,10 @@ protoc -I="$(go list -m -f {{.Dir}} github.com/relab/gorums):." \
   storage.proto
 ```
 
-The above step should produce two files named `storage.pb.go` and `storage_gorums.pb.go` in your package directory.
-The former contains the Protobuf definitions of our messages.
-The latter contains the Gorums generated client and server interfaces.
+The above step should produce three files named `storage.pb.go`, `storage_gorums.pb.go`, and `gorums.pb.go` in your package directory.
+The first contains the Protobuf definitions of our messages.
+The second contains the Gorums generated client and server interfaces.
+The third declares the `Config`, `ID`, and `Node` type aliases of the Go package.
 
 ### Examining the Gorums Generated Code
 
@@ -1118,28 +1120,30 @@ Two services in a Go package must not generate the same name.
 For example, service `NewS` generates the interface `NewSClient`, and service `S` generates the constructor `NewSClient`.
 The generator reports such a collision with the names of both services.
 
-Gorums declares the `Config`, `ID`, and `Node` aliases in only one generated file per Go package.
-Gorums also declares each `CorrectableX` alias in only one generated file per Go package, even if the quorum calls of several files return `X`.
+Gorums declares the `Config`, `ID`, and `Node` aliases in the `gorums.pb.go` file of each Go package.
+Every `protoc` run with `--gorums_out` writes this file with the same content, so you can compile the `.proto` files of a package in one run or in several.
+Gorums declares each `CorrectableX` alias in only one generated file per Go package, even if the quorum calls of several files return `X`.
 Such an alias belongs to the first `.proto` file of the package that needs it.
 Imported files come first.
 The simplest way is to compile all `.proto` files of a Go package in one `protoc` run.
 The generator then emits each alias once and checks the generated names across all files of the package.
 The quorum calls of a Go package must not return two types named `X` from different Go packages, since both map to `CorrectableX`; the generator reports this as an error.
 
-You can also compile two files of a package in separate runs if one file imports the other, directly or indirectly.
+You can also compile the files of a package in separate runs.
 For example, `b.proto` imports `a.proto`, and both files are in one Go package.
 The run for `b.proto` reads `a.proto` as an import.
-It then leaves out the aliases that `a.proto` owns, because the run for `a.proto` declares them.
+It then leaves out the `CorrectableX` aliases that `a.proto` owns, because the run for `a.proto` declares them.
 The order of the runs does not matter.
-Two files where neither imports the other, directly or indirectly, must be compiled in one run.
-If you compile them in separate runs, each run declares the aliases, and the package does not compile.
+If neither file imports the other, directly or indirectly, each run declares the `CorrectableX` aliases of its own quorum calls.
+Thus, compile two such files in one run if the quorum calls of both return the same type `X`.
+Otherwise, both runs declare `CorrectableX`, and the package does not compile.
 
-Gorums treats every service in a Go package that has Gorums code as a Gorums service.
-A method without a Gorums option is a remote call.
-Thus, put plain gRPC services, compiled only with `protoc-gen-go-grpc`, in another Go package.
-Otherwise, an imported file with such a service can own the aliases.
-No file then declares them, and the package does not compile (`undefined: pb.Config`).
-The names of such a service also take part in the collision check.
+A Go package may also hold plain gRPC services.
+Compile their `.proto` files with `protoc-gen-go-grpc` and without `--gorums_out`.
+Gorums treats a method without a Gorums option as a remote call, so a run with `--gorums_out` generates Gorums code for every service of the files that it compiles.
+A Gorums `.proto` file may import a plain gRPC file of the same Go package.
+The collision check covers the `SServer` and `RegisterSServer` names of a plain gRPC service in an imported file.
+It does not cover the client names `SClient` and `NewSClient` that `protoc-gen-go-grpc` generates; a collision with them shows when the package compiles.
 
 ## Interceptors for Request/Response Transformation
 

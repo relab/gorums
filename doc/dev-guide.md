@@ -18,11 +18,14 @@ The repository contains two main components located in `cmd/protoc-gen-gorums`:
 
 ### Generated Static Code and Reserved Identifiers
 
-The generator embeds the static code of the `dev/` package verbatim in one generated `_gorums.pb.go` file per Go package.
-That file belongs to the first `.proto` file of the package with Gorums services in `protoc`'s file order.
-In that order, imported files come first.
-The generator picks this owner among all files of the `protoc` request, including the files that are only imports of the run (`Generate` is false).
-If the owner is only an import, the run emits no static code; the run that generates the owner emits it.
+The generator writes the static code of the `dev/` package verbatim into one file per Go package, named `gorums.pb.go`.
+Every `protoc` run that generates Gorums code for a Go package writes this file.
+It goes in the output directory of the first file of the package that the run generates Gorums code for, in `protoc`'s file order.
+The path is `path.Dir(prefix) + "/gorums.pb.go"`, where `prefix` is that file's `GeneratedFilenamePrefix`, so the output options of `protoc`, such as `paths=source_relative` and `module=`, apply to it.
+The content depends only on the Go package name and the versions of `protoc-gen-gorums` and `protoc`.
+Thus, separate runs for the files of one Go package write the same file.
+The `_gorums.pb.go` files hold no static code.
+In dev mode, the generator writes no `gorums.pb.go` file, because `dev/aliases.go` declares the static code.
 The static code currently consists of three type aliases from `dev/aliases.go`:
 
 ```go
@@ -39,8 +42,11 @@ They exist for application code; the generated code itself refers to the `gorums
 The `types` template (`gengorums/template_datatypes.go`) declares the alias `CorrectableX` for each response type `X` of a quorum call.
 Several services and files of a Go package may return the same `X`.
 Thus, the generator declares each such alias once per Go package.
-The alias goes in the generated file of the first `.proto` file, in the same order as above, whose quorum calls return `X`.
-As for the static code, this owner may be a file that is only an import of the run; the run then skips the alias.
+The alias goes in the generated file of the first `.proto` file, in `protoc`'s file order, whose quorum calls return `X`.
+In that order, imported files come first.
+The generator picks this owner among all files of the `protoc` request, including the files that are only imports of the run (`Generate` is false).
+If the owner is only an import, the run skips the alias; the run that generates the owner declares it.
+Only a method with the `gorums.quorumcall` option produces an alias, so the owner always has a Gorums run.
 
 Because the static code appears once per Go package, it may declare package-level names.
 Each exported package-level name of the static code becomes a **reserved identifier**.
@@ -51,13 +57,13 @@ Such a name collides with the generated alias.
 The check includes nested messages and enums, and every file of the Go package.
 RPC methods are methods of the generated client interfaces, so they do not collide with the aliases; [Generated Client Interfaces](#generated-client-interfaces) describes the name checks for the generated client and server names.
 
-Compile all `.proto` files of a Go package in one `protoc` run.
-Two files may also be compiled in separate runs where one file imports the other, directly or indirectly.
+The `.proto` files of a Go package may be compiled in one `protoc` run or in separate runs.
+Separate runs write the same `gorums.pb.go`, so the static code is declared once.
+Only the `Correctable` aliases need care.
 If `b.proto` imports `a.proto` from the same Go package, the run for `b.proto` sees `a.proto` as an import.
-That run skips the static code and the aliases that `a.proto` owns, because the run for `a.proto` emits them.
-Two files where neither imports the other, directly or indirectly, must be compiled in one run.
-Otherwise, each run emits the static code, so the package declares `Config`, `ID`, and `Node` twice.
-The package also declares twice any `Correctable` alias that both runs produce.
+That run skips the `Correctable` aliases that `a.proto` owns, because the run for `a.proto` declares them.
+If neither file imports the other, directly or indirectly, each run declares the `Correctable` aliases of its own quorum calls.
+Thus, two such files must not both produce the same `CorrectableX` alias in separate runs.
 
 The `TestBundleReservedIdentifiers` test in `gengorums/bundle_test.go` pins the expected set.
 If you add or remove a static declaration, update that test to match.
@@ -115,7 +121,7 @@ In dev mode, the generator writes one `dev/zorums_{name}_gorums.pb.go` file for 
 The client file holds the interface declarations of all call types.
 Each call type file holds the implementing methods of that call type.
 
-Outside dev mode, all of this code goes into a single `_gorums.pb.go` file.
+Outside dev mode, all of this code goes into a single `_gorums.pb.go` file, and the static code goes into the package's `gorums.pb.go` file.
 
 ### Running the Generator
 
@@ -172,17 +178,20 @@ They test the generator in this tree, not a `protoc-gen-gorums` binary installed
 Only parsing uses `protoc`.
 The tests write nothing into the tree: `gentest.Compile` type-checks the generated code from memory.
 
-| Test                               | Checks                                                                           |
-| ---------------------------------- | -------------------------------------------------------------------------------- |
-| `TestFailingProtoFiles`            | Proto files written inline in the test fail with the expected generator error.   |
-| `TestGenerateProtoFiles`           | The code generated for each fixture under `internal/testprotos` compiles.        |
-| `TestGenerateImportedPackageNames` | Generated code compiles with message packages named `c`, `ctx`, `in`, or `node`. |
-| `TestGoldenProtoFiles`             | The Gorums code for each fixture equals its golden file in `testdata`.           |
-| `TestStabilityZorums`              | Two runs on `dev/zorums.proto` produce identical output.                         |
-| `TestStabilityDevFilesUpToDate`    | The committed `dev/zorums*.pb.go` files equal the output of the generator.       |
+| Test                                   | Checks                                                                           |
+| -------------------------------------- | -------------------------------------------------------------------------------- |
+| `TestFailingProtoFiles`                | Proto files written inline in the test fail with the expected generator error.   |
+| `TestGenerateProtoFiles`               | The code generated for each fixture under `internal/testprotos` compiles.        |
+| `TestGenerateImportedPackageNames`     | Generated code compiles with message packages named `c`, `ctx`, `in`, or `node`. |
+| `TestGoldenProtoFiles`                 | The Gorums code for each fixture equals its golden file in `testdata`.           |
+| `TestGeneratePackageFiles`             | Several files of one Go package compile, with one `gorums.pb.go` per package.    |
+| `TestGeneratePackageFilesSeparateRuns` | Separate runs for one Go package write the same `gorums.pb.go` and compile.      |
+| `TestStabilityZorums`                  | Two runs on `dev/zorums.proto` produce identical output.                         |
+| `TestStabilityDevFilesUpToDate`        | The committed `dev/zorums*.pb.go` files equal the output of the generator.       |
 
 To add a failing case, add a table entry to `TestFailingProtoFiles`.
-To add a fixture, add a `.proto` file in a new directory under `internal/testprotos`, with a `go_package` that matches the directory, and create its golden file as shown below.
+To add a fixture, add a `.proto` file in a new directory under `internal/testprotos`, with a `go_package` that matches the directory, and create its golden files as shown below.
+Each fixture directory with Gorums output has two golden files: `X_gorums.pb.go.golden` and `gorums.pb.go.golden`.
 
 After an intended change to a template, refresh the golden files and the dev files, and review both diffs:
 
