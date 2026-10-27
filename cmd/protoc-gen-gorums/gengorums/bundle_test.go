@@ -16,8 +16,7 @@ var wantReservedIdents = []string{"Config", "ID", "Node"}
 
 // TestBundleReservedIdentifiers pins the set of identifiers that the bundler
 // marks as reserved. The generator emits the static code that declares them
-// in one generated _gorums.pb.go file per Go package and protoc run. If this
-// test fails, update the static code intentionally and then update
+// in the one gorums.pb.go file of each Go package. If this test fails, update the static code intentionally and then update
 // wantReservedIdents to match.
 func TestBundleReservedIdentifiers(t *testing.T) {
 	pkg, err := loadPackage(devDir(t), nil)
@@ -27,7 +26,7 @@ func TestBundleReservedIdentifiers(t *testing.T) {
 	_, got := findIdentifiers(pkg)
 	if !slices.Equal(got, wantReservedIdents) {
 		t.Errorf("reserved identifiers of the static code changed:\ngot:  %v\nwant: %v\n"+
-			"The generator emits the static code once per Go package and protoc run, "+
+			"The generator emits the static code once per Go package, in gorums.pb.go, "+
 			"and each exported name becomes a reserved identifier. "+
 			"If intentional, update wantReservedIdents.",
 			got, wantReservedIdents)

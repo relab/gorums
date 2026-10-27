@@ -37,7 +37,8 @@ func TestGentestGenerate(t *testing.T) {
 		t.Fatal(err)
 	}
 	const prefix = "github.com/relab/gorums/internal/gentest/testdata/echo/echo"
-	for _, name := range []string{prefix + ".pb.go", prefix + "_gorums.pb.go"} {
+	const pkgFile = "github.com/relab/gorums/internal/gentest/testdata/echo/gorums.pb.go"
+	for _, name := range []string{prefix + ".pb.go", prefix + "_gorums.pb.go", pkgFile} {
 		if _, ok := files[name]; !ok {
 			t.Errorf("Generate did not return %s; got %v", name, slices.Sorted(maps.Keys(files)))
 		}
@@ -69,6 +70,11 @@ func TestGentestGenerateDev(t *testing.T) {
 	const name = "github.com/relab/gorums/internal/gentest/testdata/echo/echo_quorumcall_gorums.pb.go"
 	if _, ok := files[name]; !ok {
 		t.Errorf("Generate did not return %s; got %v", name, slices.Sorted(maps.Keys(files)))
+	}
+	// Dev mode declares the static aliases in dev/aliases.go instead.
+	const pkgFile = "github.com/relab/gorums/internal/gentest/testdata/echo/gorums.pb.go"
+	if _, ok := files[pkgFile]; ok {
+		t.Errorf("Generate returned %s in dev mode", pkgFile)
 	}
 }
 
