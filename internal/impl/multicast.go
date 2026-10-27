@@ -19,7 +19,7 @@ import (
 //
 // This function should be used by generated code only.
 func Multicast[Req proto.Message](ctx context.Context, config Config, req Req, method string) *OnewayCall[Req] {
-	requireConfig("Multicast", config)
+	requireConfig("Multicast", method, config)
 	callCtx := &CallContext[Req, *emptypb.Empty]{
 		Context: ctx,
 		config:  config,

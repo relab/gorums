@@ -25,42 +25,42 @@ func TestCallConstructorsPanic(t *testing.T) {
 		{
 			name:      "QuorumCall/NilConfig",
 			call:      func() { QuorumCall[*pb.StringValue, *pb.StringValue](t.Context(), nil, req, method) },
-			wantPanic: "gorums: QuorumCall called on an empty configuration",
+			wantPanic: `gorums: QuorumCall "test.Method" needs a non-empty configuration`,
 		},
 		{
 			name:      "QuorumCall/EmptyConfig",
 			call:      func() { QuorumCall[*pb.StringValue, *pb.StringValue](t.Context(), Config{}, req, method) },
-			wantPanic: "gorums: QuorumCall called on an empty configuration",
+			wantPanic: `gorums: QuorumCall "test.Method" needs a non-empty configuration`,
 		},
 		{
 			name:      "QuorumCallStream/NilConfig",
 			call:      func() { QuorumCallStream[*pb.StringValue, *pb.StringValue](t.Context(), nil, req, method) },
-			wantPanic: "gorums: QuorumCallStream called on an empty configuration",
+			wantPanic: `gorums: QuorumCallStream "test.Method" needs a non-empty configuration`,
 		},
 		{
 			name:      "QuorumCallStream/EmptyConfig",
 			call:      func() { QuorumCallStream[*pb.StringValue, *pb.StringValue](t.Context(), Config{}, req, method) },
-			wantPanic: "gorums: QuorumCallStream called on an empty configuration",
+			wantPanic: `gorums: QuorumCallStream "test.Method" needs a non-empty configuration`,
 		},
 		{
 			name:      "Multicast/NilConfig",
 			call:      func() { Multicast(t.Context(), nil, req, method) },
-			wantPanic: "gorums: Multicast called on an empty configuration",
+			wantPanic: `gorums: Multicast "test.Method" needs a non-empty configuration`,
 		},
 		{
 			name:      "Multicast/EmptyConfig",
 			call:      func() { Multicast(t.Context(), Config{}, req, method) },
-			wantPanic: "gorums: Multicast called on an empty configuration",
+			wantPanic: `gorums: Multicast "test.Method" needs a non-empty configuration`,
 		},
 		{
 			name:      "RemoteCall/NilNode",
 			call:      func() { _, _ = RemoteCall[*pb.StringValue, *pb.StringValue](t.Context(), nil, req, method) },
-			wantPanic: "gorums: RemoteCall called on a nil node",
+			wantPanic: `gorums: RemoteCall "test.Method" needs a non-nil node`,
 		},
 		{
 			name:      "Unicast/NilNode",
 			call:      func() { Unicast(t.Context(), nil, req, method) },
-			wantPanic: "gorums: Unicast called on a nil node",
+			wantPanic: `gorums: Unicast "test.Method" needs a non-nil node`,
 		},
 	}
 	for _, tt := range tests {

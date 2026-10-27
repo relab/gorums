@@ -18,7 +18,7 @@ import (
 //
 // This function should be used by generated code only.
 func Unicast[Req proto.Message](ctx context.Context, node *Node, req Req, method string) *OnewayCall[Req] {
-	requireNode("Unicast", node)
+	requireNode("Unicast", method, node)
 	callCtx := &CallContext[Req, *emptypb.Empty]{
 		Context: ctx,
 		config:  Config{node},

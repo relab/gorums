@@ -22,7 +22,7 @@ import (
 //
 // This function should only be used by generated code.
 func QuorumCall[Req, Resp proto.Message](ctx context.Context, config Config, req Req, method string) *Call[Req, Resp] {
-	requireConfig("QuorumCall", config)
+	requireConfig("QuorumCall", method, config)
 	return invokeQuorumCall[Req, Resp](ctx, config, req, method, false)
 }
 
@@ -35,7 +35,7 @@ func QuorumCall[Req, Resp proto.Message](ctx context.Context, config Config, req
 //
 // This function should only be used by generated code.
 func QuorumCallStream[Req, Resp proto.Message](ctx context.Context, config Config, req Req, method string) *Call[Req, Resp] {
-	requireConfig("QuorumCallStream", config)
+	requireConfig("QuorumCallStream", method, config)
 	return invokeQuorumCall[Req, Resp](ctx, config, req, method, true)
 }
 
