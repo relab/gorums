@@ -897,7 +897,7 @@ The panic now comes from the call method, not from `Config.Context` or `Node.Con
 
 Regeneration reports an error for names that collide with the generated client code:
 
-- a message or enum, including a nested one, whose Go name is `SClient` or `NewSClient`;
+- a message, enum, or enum value, including a nested one, whose Go name is `SClient` or `NewSClient`;
 - an RPC method of any call type named `Config` or `WithConfig`.
 
 Hand-written Go code in the generated package that declares `SClient` or `NewSClient`, such as your own `StorageClient` wrapper, now fails to compile.

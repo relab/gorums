@@ -177,8 +177,8 @@ For the `unicast` and `multicast` call types, the response message type will be 
 
 > **Reserved names:** Gorums reserves the names `Config`, `ID`, and `Node`.
 > A message field named `ID` is fine; only type names are reserved.
-> Gorums injects type aliases with these names into every generated `_gorums.pb.go` file, so messages and enums in any `.proto` file of the same Go package cannot use them.
-> For a service `S`, Gorums also generates the names `SClient` and `NewSClient`, so messages and enums cannot use these names either.
+> Gorums injects type aliases with these names into every generated `_gorums.pb.go` file, so messages, enums, and enum values in any `.proto` file of the same Go package cannot use them.
+> For a service `S`, Gorums also generates the names `SClient` and `NewSClient`, so messages, enums, and enum values cannot use these names either.
 > An RPC method cannot take the name of a helper method on the client type: `Config` or `WithConfig`.
 > The generator reports an error for a `.proto` file that uses one of these names.
 

@@ -95,10 +95,11 @@ func shouldGenerate(gen *protogen.Plugin, file *protogen.File) (bool, error) {
 
 // checkReservedIdents returns an error if a Go declaration of the file's Go
 // package collides with an identifier that Gorums declares in that package.
-// A message or enum of any file in the package, nested or not, must not take
-// the name of a Gorums type alias or of a client type or constructor generated
-// for the file's service. An RPC method of the file's service must not take
-// the name of a helper method of the generated client type.
+// A message, enum, or enum value of any file in the package, nested or not,
+// must not take the name of a Gorums type alias or of a client type or
+// constructor generated for the file's service. An RPC method of the file's
+// service must not take the name of a helper method of the generated client
+// type.
 func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
 	var generated []string
 	for _, service := range file.Services {
@@ -131,12 +132,18 @@ func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
 	return nil
 }
 
-// checkTypes calls check with the Go name of each message and enum, including
-// nested ones, since protoc-gen-go declares every nested type at package level.
+// checkTypes calls check with the Go name of each message, enum, and enum
+// value, including nested ones, since protoc-gen-go declares every nested type
+// and every enum value at package level.
 func checkTypes(msgs []*protogen.Message, enums []*protogen.Enum, check func(kind, name string) error) error {
 	for _, enum := range enums {
 		if err := check("enum", enum.GoIdent.GoName); err != nil {
 			return err
+		}
+		for _, value := range enum.Values {
+			if err := check("enum value", value.GoIdent.GoName); err != nil {
+				return err
+			}
 		}
 	}
 	for _, msg := range msgs {

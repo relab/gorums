@@ -32,7 +32,7 @@ type (
 These aliases make the most commonly used Gorums types available without requiring an explicit `gorums` import in user code.
 
 Each name declared in `aliases.go` (and any other non-ignored file in `dev/`) is also added to the **reserved identifier list**.
-The Gorums generator rejects proto files whose messages or enums, nested or not, use a reserved identifier as their Go name, checking every file of the service's Go package, since such a name collides with the generated alias.
+The Gorums generator rejects proto files whose messages, enums, or enum values, nested or not, use a reserved identifier as their Go name, checking every file of the service's Go package, since such a name collides with the generated alias.
 RPC methods are methods of a generated client type, so they do not collide with the aliases; [Generated Client Types](#generated-client-types) describes their name checks.
 
 The bundler (`gengorums/bundle.go`) discovers reserved identifiers by inspecting `TypesInfo.Defs` for all exported, package-scope declarations in the dev package.
@@ -69,8 +69,8 @@ The signatures keep the two kinds of calls apart at compile time: a node call do
 The client type, constructor, and helper methods (`Config` and `WithConfig`) come from `gengorums/template_client.go`.
 The generator checks the generated names for collisions:
 
-* A message or enum in the service's Go package must not be named `SClient` or `NewSClient`.
-  The check includes nested messages and enums by their Go names, such as `Outer_InnerClient`, because protoc-gen-go declares them at package level.
+* A message, enum, or enum value in the service's Go package must not be named `SClient` or `NewSClient`.
+  The check includes nested messages and enums, and all enum values, by their Go names, such as `Outer_InnerClient`, because protoc-gen-go declares them at package level.
 * An RPC method must not be named `Config` or `WithConfig`, whatever its call type, because `SClient` receives every call.
   An RPC method named `Node` or `ForNode` is valid.
 
