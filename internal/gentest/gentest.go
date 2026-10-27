@@ -46,10 +46,13 @@ type Options struct {
 	// Dev generates one file per call type, as protoc-gen-gorums does with
 	// the dev=true parameter.
 	Dev bool
+	// NoGorums runs only protoc-gen-go, as a protoc run without the Gorums
+	// plugin does.
+	NoGorums bool
 }
 
-// Generate parses the proto files with protoc and runs protoc-gen-go and
-// protoc-gen-gorums on them. Each file name must be relative to one of the
+// Generate parses the proto files with protoc and runs protoc-gen-go and,
+// unless [Options.NoGorums] is set, protoc-gen-gorums on them. Each file name must be relative to one of the
 // import paths. Generate returns the generated files keyed by output path.
 // The error is the one a generator reports for the input; Generate fails the
 // test if protoc cannot parse the input.
@@ -67,6 +70,9 @@ func Generate(t testing.TB, opts Options, files ...string) (map[string]string, e
 	})
 	if err != nil {
 		return nil, fmt.Errorf("protoc-gen-go: %w", err)
+	}
+	if opts.NoGorums {
+		return out, nil
 	}
 	generate := gengorums.GenerateFile
 	if opts.Dev {
