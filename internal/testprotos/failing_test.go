@@ -65,24 +65,14 @@ service Reserved {
 			want: "Reserved.Config: RPC method collides with the generated ReservedClient.Config method",
 		},
 		{
-			name: "ReservedQuorumCallWithConfig",
+			name: "ReservedUnicastConfig",
 			decl: `
 service Reserved {
-	rpc WithConfig(Request) returns (Response) {
-		option (gorums.quorumcall) = true;
-	}
-}`,
-			want: "Reserved.WithConfig: RPC method collides with the generated ReservedClient.WithConfig method",
-		},
-		{
-			name: "ReservedUnicastWithConfig",
-			decl: `
-service Reserved {
-	rpc WithConfig(Request) returns (Response) {
+	rpc Config(Request) returns (Response) {
 		option (gorums.unicast) = true;
 	}
 }`,
-			want: "Reserved.WithConfig: RPC method collides with the generated ReservedClient.WithConfig method",
+			want: "Reserved.Config: RPC method collides with the generated ReservedClient.Config method",
 		},
 		{
 			name: "ReservedMulticastConfig",

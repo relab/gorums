@@ -4,7 +4,7 @@ import "google.golang.org/protobuf/compiler/protogen"
 
 // clientHelpers lists the methods that [clientType] declares on SClient
 // besides the RPC methods.
-var clientHelpers = []string{"Config", "WithConfig"}
+var clientHelpers = []string{"Config"}
 
 // clientIdents returns the package-level identifiers that [client] declares
 // for the given service.
@@ -19,7 +19,7 @@ var clientVariables = `
 `
 
 // clientType generates, for each service, the client type bound to a
-// configuration and its constructor and configuration access methods.
+// configuration, its constructor, and its configuration access method.
 var clientType = `
 {{range .Services -}}
 {{$service := .GoName}}
@@ -28,9 +28,8 @@ var clientType = `
 // Remote calls and unicasts run on the node given to each call; that node
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration, from
-// [New{{$service}}Client] or [{{$service}}Client.WithConfig]; they panic on an
-// empty configuration.
+// Quorum calls and multicasts need a configuration from
+// [New{{$service}}Client]; they panic on an empty configuration.
 type {{$service}}Client struct {
 	config {{$config}}
 }
@@ -43,11 +42,6 @@ func New{{$service}}Client(config {{$config}}) {{$service}}Client {
 // Config returns the configuration to which c is bound.
 func (c {{$service}}Client) Config() {{$config}} {
 	return c.config
-}
-
-// WithConfig returns a copy of c bound to config.
-func (c {{$service}}Client) WithConfig(config {{$config}}) {{$service}}Client {
-	return {{$service}}Client{config: config}
 }
 {{- end}}
 `
