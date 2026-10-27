@@ -269,13 +269,13 @@ func (r repl) qcCfg(args []string) {
 	}
 }
 
-func (repl) readRPC(args []string, node *pb.Node) {
+func (r repl) readRPC(args []string, node *pb.Node) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := pb.StorageClient{}.ReadRPC(ctx, node, pb.ReadRequest_builder{Key: args[0]}.Build())
+	resp, err := pb.NewStorageClient(r.cfg).ReadRPC(ctx, node, pb.ReadRequest_builder{Key: args[0]}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -288,13 +288,13 @@ func (repl) readRPC(args []string, node *pb.Node) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (repl) writeRPC(args []string, node *pb.Node) {
+func (r repl) writeRPC(args []string, node *pb.Node) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := pb.StorageClient{}.WriteRPC(ctx, node, pb.WriteRequest_builder{
+	resp, err := pb.NewStorageClient(r.cfg).WriteRPC(ctx, node, pb.WriteRequest_builder{
 		Key: args[0], Value: args[1], Time: timestamppb.Now(),
 	}.Build())
 	cancel()
