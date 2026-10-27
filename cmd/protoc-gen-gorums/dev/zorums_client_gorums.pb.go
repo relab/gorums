@@ -24,7 +24,8 @@ const (
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
 // Quorum calls and multicasts need a configuration, from
-// NewZorumsServiceClient or WithConfig; they panic on an empty configuration.
+// [NewZorumsServiceClient] or [ZorumsServiceClient.WithConfig]; they panic on an
+// empty configuration.
 type ZorumsServiceClient struct {
 	config gorums.Config
 }
