@@ -30,14 +30,15 @@ var quorumCallVariables = `
 {{$quorumCall := use "gorumsimpl.QuorumCall" .GenFile}}
 {{$quorumCallStream := use "gorumsimpl.QuorumCallStream" .GenFile}}
 {{$call := use "gorums.Call" .GenFile}}
+{{$local := localNames "c ctx in" $in $out $context $quorumCall $quorumCallStream}}
 `
 
-var quorumCallSignature = `func (c {{$service}}Client) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}})` +
+var quorumCallSignature = `func ({{$local.c}} {{$service}}Client) {{$method}}(` +
+	`{{$local.ctx}} {{$context}}, {{$local.in}} *{{$in}})` +
 	` *{{$call}}[*{{$in}}, *{{$out}}] {
 `
 
-var quorumCallBody = `	return {{$quorumCall}}[*{{$in}}, *{{$out}}](ctx, c.config, in, "{{$fullName}}")
+var quorumCallBody = `	return {{$quorumCall}}[*{{$in}}, *{{$out}}]({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
 }
 `
 
@@ -64,7 +65,7 @@ var quorumCallStreamComment = `
 {{end -}}
 `
 
-var quorumCallStreamBody = `	return {{$quorumCallStream}}[*{{$in}}, *{{$out}}](ctx, c.config, in, "{{$fullName}}")
+var quorumCallStreamBody = `	return {{$quorumCallStream}}[*{{$in}}, *{{$out}}]({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
 }
 `
 

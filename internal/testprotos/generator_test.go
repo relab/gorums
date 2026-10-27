@@ -1,6 +1,7 @@
 package testprotos_test
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path"
@@ -88,4 +89,59 @@ func gorumsFile(files map[string]string, base string) string {
 		}
 	}
 	return ""
+}
+
+// TestGenerateImportedPackageNames checks that the generated code compiles
+// when its messages come from a Go package whose name equals a local name of
+// the generated code: the client method receiver c, the client method
+// parameters ctx, in, and node, or the server handler parameters ctx and in.
+func TestGenerateImportedPackageNames(t *testing.T) {
+	for _, pkg := range []string{"c", "ctx", "in", "node"} {
+		t.Run(pkg, func(t *testing.T) {
+			msgs := fmt.Sprintf(`
+edition = "2023";
+
+package gorums.testprotos.shadow.%[1]s;
+option go_package = "github.com/relab/gorums/internal/testprotos/shadow/%[1]s";
+
+message Request {
+	string value = 1;
+}
+message Response {
+	string value = 1;
+}
+`, pkg)
+			service := fmt.Sprintf(`
+edition = "2023";
+
+package gorums.testprotos.shadow.service;
+option go_package = "github.com/relab/gorums/internal/testprotos/shadow/service";
+
+import "gorums.proto";
+import "%[1]s.proto";
+
+service Shadow {
+	rpc QuorumCall(%[2]s.Request) returns (%[2]s.Response) {
+		option (gorums.quorumcall) = true;
+	}
+	rpc QuorumCallStream(%[2]s.Request) returns (stream %[2]s.Response) {
+		option (gorums.quorumcall) = true;
+	}
+	rpc Multicast(%[2]s.Request) returns (%[2]s.Response) {
+		option (gorums.multicast) = true;
+	}
+	rpc Unicast(%[2]s.Request) returns (%[2]s.Response) {
+		option (gorums.unicast) = true;
+	}
+	rpc RemoteCall(%[2]s.Request) returns (%[2]s.Response) {}
+}
+`, pkg, "gorums.testprotos.shadow."+pkg)
+			dir := gentest.Inline(t, map[string]string{pkg + ".proto": msgs, "service.proto": service})
+			files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, pkg+".proto", "service.proto")
+			if err != nil {
+				t.Fatal(err)
+			}
+			gentest.Compile(t, files)
+		})
+	}
 }

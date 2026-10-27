@@ -4,6 +4,7 @@ var mcVar = `
 {{$genFile := .GenFile}}
 {{$multicast := use "gorumsimpl.Multicast" .GenFile}}
 {{$onewayCall := use "gorums.OnewayCall" .GenFile}}
+{{$local := localNames "c ctx in" $in $context $multicast}}
 `
 
 var multicastComment = `
@@ -23,12 +24,12 @@ var multicastComment = `
 //   h := client.{{$method}}(ctx, in).Async(); err := h.Wait()
 `
 
-var multicastSignature = `func (c {{$service}}Client) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}})` +
+var multicastSignature = `func ({{$local.c}} {{$service}}Client) {{$method}}(` +
+	`{{$local.ctx}} {{$context}}, {{$local.in}} *{{$in}})` +
 	` *{{$onewayCall}}[*{{$in}}] {
 `
 
-var multicastBody = `	return {{$multicast}}(ctx, c.config, in, "{{$fullName}}")
+var multicastBody = `	return {{$multicast}}({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
 }
 `
 

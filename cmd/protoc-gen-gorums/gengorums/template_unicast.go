@@ -5,6 +5,7 @@ var unicastVar = `
 {{$unicast := use "gorumsimpl.Unicast" .GenFile}}
 {{$onewayCall := use "gorums.OnewayCall" .GenFile}}
 {{$node := use "gorums.Node" .GenFile}}
+{{$local := localNames "c ctx node in" $in $context $unicast}}
 `
 
 var unicastComment = `
@@ -24,12 +25,12 @@ var unicastComment = `
 //   h := client.{{$method}}(ctx, node, in).Async(); err := h.Wait()
 `
 
-var unicastSignature = `func (c {{$service}}Client) {{$method}}(` +
-	`ctx {{$context}}, node *{{$node}}, in *{{$in}})` +
+var unicastSignature = `func ({{$local.c}} {{$service}}Client) {{$method}}(` +
+	`{{$local.ctx}} {{$context}}, {{$local.node}} *{{$node}}, {{$local.in}} *{{$in}})` +
 	` *{{$onewayCall}}[*{{$in}}] {
 `
 
-var unicastBody = `	return {{$unicast}}(ctx, node, in, "{{$fullName}}")
+var unicastBody = `	return {{$unicast}}({{$local.ctx}}, {{$local.node}}, {{$local.in}}, "{{$fullName}}")
 }
 `
 
