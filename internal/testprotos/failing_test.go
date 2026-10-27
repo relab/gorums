@@ -47,7 +47,7 @@ service Reserved {
 			want: "contains message Config, which is a reserved Gorums identifier",
 		},
 		{
-			name: "ReservedRPCMethod",
+			name: "ReservedQuorumCallConfig",
 			decl: `
 service Reserved {
 	rpc Config(Request) returns (Response) {
