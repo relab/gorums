@@ -24,8 +24,8 @@ var clientType = `
 {{range .Services -}}
 {{$service := .GoName}}
 // {{$service}}Client invokes the calls of the {{$service}} service.
-// Quorum calls and multicasts run on the client's configuration.
-// Remote calls and unicasts run on the node given to each call; that node
+// Quorum calls and multicasts execute on the client's configuration.
+// Remote calls and unicasts execute on the node given to each call; that node
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
 // Quorum calls and multicasts need a configuration from
