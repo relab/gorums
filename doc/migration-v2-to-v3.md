@@ -906,10 +906,12 @@ See [Several Services](user-guide.md#several-services) in the user guide.
 The `Config`, `ID`, and `Node` aliases now live in a new generated file, `gorums.pb.go`, one per Go package.
 Regeneration removes them from the `X_gorums.pb.go` files and writes `gorums.pb.go` next to them.
 Commit `gorums.pb.go` with the other generated files.
-Every `protoc` run writes the same `gorums.pb.go`, so the files of a Go package may be compiled in separate runs.
+Every `protoc` run that generates Gorums code for the package writes the same `gorums.pb.go`, so the files of a Go package may be compiled in separate runs.
+If you remove the last Gorums `.proto` file of a package, delete its `gorums.pb.go` file too.
 Separate runs need care only for `CorrectableX` aliases: two files that do not import each other, and whose quorum calls return the same type `X`, must be compiled in one run.
 A plain gRPC service may share the Go package with Gorums services if its `.proto` file is compiled without `--gorums_out`.
 Rename a `.proto` file named `gorums.proto` in a directory with Gorums output, because its `gorums.pb.go` file would collide with the Gorums package file.
+The generator reports an error for such a file.
 
 Regeneration reports an error for names that collide with the generated code:
 

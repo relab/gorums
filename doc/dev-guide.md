@@ -20,6 +20,7 @@ The repository contains two main components located in `cmd/protoc-gen-gorums`:
 
 The generator writes the static code of the `dev/` package verbatim into one file per Go package, named `gorums.pb.go`.
 Every `protoc` run that generates Gorums code for a Go package writes this file.
+The generator reports an error if protoc-gen-go writes a file with the same path for a `.proto` file of the package, such as `gorums.proto` in the same directory.
 It goes in the output directory of the first file of the package that the run generates Gorums code for, in `protoc`'s file order.
 The path is `path.Dir(prefix) + "/gorums.pb.go"`, where `prefix` is that file's `GeneratedFilenamePrefix`, so the output options of `protoc`, such as `paths=source_relative` and `module=`, apply to it.
 The content depends only on the Go package name and the versions of `protoc-gen-gorums` and `protoc`.
