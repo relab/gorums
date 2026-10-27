@@ -42,13 +42,12 @@ type (
 type CorrectableResponse = *gorums.Correctable[*Response]
 
 // CorrectableTestClient invokes the calls of the CorrectableTest service.
-// Quorum calls and multicasts run on the client's configuration.
-// Remote calls and unicasts run on the node given to each call; that node
+// Quorum calls and multicasts execute on the client's configuration.
+// Remote calls and unicasts execute on the node given to each call; that node
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration, from
-// [NewCorrectableTestClient] or [CorrectableTestClient.WithConfig]; they panic on an
-// empty configuration.
+// Quorum calls and multicasts need a configuration from
+// [NewCorrectableTestClient]; they panic on an empty configuration.
 type CorrectableTestClient struct {
 	config gorums.Config
 }
@@ -61,11 +60,6 @@ func NewCorrectableTestClient(config gorums.Config) CorrectableTestClient {
 // Config returns the configuration to which c is bound.
 func (c CorrectableTestClient) Config() gorums.Config {
 	return c.config
-}
-
-// WithConfig returns a copy of c bound to config.
-func (c CorrectableTestClient) WithConfig(config gorums.Config) CorrectableTestClient {
-	return CorrectableTestClient{config: config}
 }
 
 // Correctable executes a quorum call on the client's configuration. Use

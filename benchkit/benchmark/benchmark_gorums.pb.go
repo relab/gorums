@@ -46,13 +46,12 @@ type CorrectableEcho = *gorums.Correctable[*Echo]
 var _ emptypb.Empty
 
 // BenchmarkClient invokes the calls of the Benchmark service.
-// Quorum calls and multicasts run on the client's configuration.
-// Remote calls and unicasts run on the node given to each call; that node
+// Quorum calls and multicasts execute on the client's configuration.
+// Remote calls and unicasts execute on the node given to each call; that node
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration, from
-// [NewBenchmarkClient] or [BenchmarkClient.WithConfig]; they panic on an
-// empty configuration.
+// Quorum calls and multicasts need a configuration from
+// [NewBenchmarkClient]; they panic on an empty configuration.
 type BenchmarkClient struct {
 	config gorums.Config
 }
@@ -65,11 +64,6 @@ func NewBenchmarkClient(config gorums.Config) BenchmarkClient {
 // Config returns the configuration to which c is bound.
 func (c BenchmarkClient) Config() gorums.Config {
 	return c.config
-}
-
-// WithConfig returns a copy of c bound to config.
-func (c BenchmarkClient) WithConfig(config gorums.Config) BenchmarkClient {
-	return BenchmarkClient{config: config}
 }
 
 // QuorumCall performs an echo quorum call on all servers.
@@ -87,7 +81,8 @@ func (c BenchmarkClient) SlowServer(ctx context.Context, in *Echo) *gorums.Call[
 // Example:
 //
 //	err := client.Multicast(ctx, in).Send()
-//	h := client.Multicast(ctx, in).Async(); err := h.Wait()
+//	h := client.Multicast(ctx, in).Async()
+//	err = h.Wait()
 func (c BenchmarkClient) Multicast(ctx context.Context, in *TimedMsg) *gorums.OnewayCall[*TimedMsg] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "benchmark.Benchmark.Multicast")
 }

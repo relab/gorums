@@ -49,13 +49,12 @@ type CorrectableWriteResponse = *gorums.Correctable[*WriteResponse]
 var _ emptypb.Empty
 
 // StorageClient invokes the calls of the Storage service.
-// Quorum calls and multicasts run on the client's configuration.
-// Remote calls and unicasts run on the node given to each call; that node
+// Quorum calls and multicasts execute on the client's configuration.
+// Remote calls and unicasts execute on the node given to each call; that node
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration, from
-// [NewStorageClient] or [StorageClient.WithConfig]; they panic on an
-// empty configuration.
+// Quorum calls and multicasts need a configuration from
+// [NewStorageClient]; they panic on an empty configuration.
 type StorageClient struct {
 	config gorums.Config
 }
@@ -68,11 +67,6 @@ func NewStorageClient(config gorums.Config) StorageClient {
 // Config returns the configuration to which c is bound.
 func (c StorageClient) Config() gorums.Config {
 	return c.config
-}
-
-// WithConfig returns a copy of c bound to config.
-func (c StorageClient) WithConfig(config gorums.Config) StorageClient {
-	return StorageClient{config: config}
 }
 
 // ReadRPC executes a Read RPC on a single node and
@@ -92,8 +86,9 @@ func (c StorageClient) WriteRPC(ctx context.Context, node *gorums.Node, in *Writ
 //
 // Example:
 //
-//	err := client.WriteUnicast(ctx, node, in).Send()
-//	h := client.WriteUnicast(ctx, node, in).Async(); err := h.Wait()
+//	err := proto.StorageClient{}.WriteUnicast(ctx, node, in).Send()
+//	h := proto.StorageClient{}.WriteUnicast(ctx, node, in).Async()
+//	err = h.Wait()
 func (c StorageClient) WriteUnicast(ctx context.Context, node *gorums.Node, in *WriteRequest) *gorums.OnewayCall[*WriteRequest] {
 	return gorumsimpl.Unicast(ctx, node, in, "proto.Storage.WriteUnicast")
 }
@@ -104,7 +99,8 @@ func (c StorageClient) WriteUnicast(ctx context.Context, node *gorums.Node, in *
 // Example:
 //
 //	err := client.WriteMulticast(ctx, in).Send()
-//	h := client.WriteMulticast(ctx, in).Async(); err := h.Wait()
+//	h := client.WriteMulticast(ctx, in).Async()
+//	err = h.Wait()
 func (c StorageClient) WriteMulticast(ctx context.Context, in *WriteRequest) *gorums.OnewayCall[*WriteRequest] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "proto.Storage.WriteMulticast")
 }

@@ -42,13 +42,12 @@ type (
 type CorrectableResponse = *gorums.Correctable[*Response]
 
 // OrderingClient invokes the calls of the Ordering service.
-// Quorum calls and multicasts run on the client's configuration.
-// Remote calls and unicasts run on the node given to each call; that node
+// Quorum calls and multicasts execute on the client's configuration.
+// Remote calls and unicasts execute on the node given to each call; that node
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration, from
-// [NewOrderingClient] or [OrderingClient.WithConfig]; they panic on an
-// empty configuration.
+// Quorum calls and multicasts need a configuration from
+// [NewOrderingClient]; they panic on an empty configuration.
 type OrderingClient struct {
 	config gorums.Config
 }
@@ -63,11 +62,6 @@ func (c OrderingClient) Config() gorums.Config {
 	return c.config
 }
 
-// WithConfig returns a copy of c bound to config.
-func (c OrderingClient) WithConfig(config gorums.Config) OrderingClient {
-	return OrderingClient{config: config}
-}
-
 // QuorumCall executes a quorum call on the client's configuration. Use
 // terminal methods like Majority(), First(), or Threshold(n) to retrieve the
 // aggregated result.
@@ -80,11 +74,13 @@ func (c OrderingClient) QuorumCall(ctx context.Context, in *Request) *gorums.Cal
 }
 
 // UnaryRPC executes a remote call on the given node and returns its reply.
-// It does not use the client's configuration.
+// It ignores the client's configuration. It is a method of OrderingClient
+// only to keep the service's calls together and avoid package-level name
+// conflicts.
 //
 // Example:
 //
-//	resp, err := client.UnaryRPC(ctx, node, in)
+//	resp, err := ordering.OrderingClient{}.UnaryRPC(ctx, node, in)
 func (c OrderingClient) UnaryRPC(ctx context.Context, node *gorums.Node, in *Request) (*Response, error) {
 	return gorumsimpl.RemoteCall[*Request, *Response](ctx, node, in, "ordering.Ordering.UnaryRPC")
 }
