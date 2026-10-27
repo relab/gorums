@@ -39,13 +39,12 @@ type (
 )
 
 // UnresponsiveClient invokes the calls of the Unresponsive service.
-// Quorum calls and multicasts run on the client's configuration.
-// Remote calls and unicasts run on the node given to each call; that node
+// Quorum calls and multicasts execute on the client's configuration.
+// Remote calls and unicasts execute on the node given to each call; that node
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration, from
-// [NewUnresponsiveClient] or [UnresponsiveClient.WithConfig]; they panic on an
-// empty configuration.
+// Quorum calls and multicasts need a configuration from
+// [NewUnresponsiveClient]; they panic on an empty configuration.
 type UnresponsiveClient struct {
 	config gorums.Config
 }
@@ -60,17 +59,14 @@ func (c UnresponsiveClient) Config() gorums.Config {
 	return c.config
 }
 
-// WithConfig returns a copy of c bound to config.
-func (c UnresponsiveClient) WithConfig(config gorums.Config) UnresponsiveClient {
-	return UnresponsiveClient{config: config}
-}
-
 // TestUnresponsive executes a remote call on the given node and returns its reply.
-// It does not use the client's configuration.
+// It ignores the client's configuration. It is a method of UnresponsiveClient
+// only to keep the service's calls together and avoid package-level name
+// conflicts.
 //
 // Example:
 //
-//	resp, err := client.TestUnresponsive(ctx, node, in)
+//	resp, err := unresponsive.UnresponsiveClient{}.TestUnresponsive(ctx, node, in)
 func (c UnresponsiveClient) TestUnresponsive(ctx context.Context, node *gorums.Node, in *Empty) (*Empty, error) {
 	return gorumsimpl.RemoteCall[*Empty, *Empty](ctx, node, in, "unresponsive.Unresponsive.TestUnresponsive")
 }

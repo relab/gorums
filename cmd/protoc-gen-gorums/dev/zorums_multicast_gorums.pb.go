@@ -28,7 +28,8 @@ var _ emptypb.Empty
 // Example:
 //
 //	err := client.Multicast(ctx, in).Send()
-//	h := client.Multicast(ctx, in).Async(); err := h.Wait()
+//	h := client.Multicast(ctx, in).Async()
+//	err = h.Wait()
 func (c ZorumsServiceClient) Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast")
 }
@@ -38,7 +39,8 @@ func (c ZorumsServiceClient) Multicast(ctx context.Context, in *Request) *gorums
 // Example:
 //
 //	err := client.Multicast2(ctx, in).Send()
-//	h := client.Multicast2(ctx, in).Async(); err := h.Wait()
+//	h := client.Multicast2(ctx, in).Async()
+//	err = h.Wait()
 func (c ZorumsServiceClient) Multicast2(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast2")
 }
@@ -48,7 +50,8 @@ func (c ZorumsServiceClient) Multicast2(ctx context.Context, in *Request) *gorum
 // Example:
 //
 //	err := client.Multicast3(ctx, in).Send()
-//	h := client.Multicast3(ctx, in).Async(); err := h.Wait()
+//	h := client.Multicast3(ctx, in).Async()
+//	err = h.Wait()
 func (c ZorumsServiceClient) Multicast3(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast3")
 }
@@ -58,7 +61,8 @@ func (c ZorumsServiceClient) Multicast3(ctx context.Context, in *Request) *gorum
 // Example:
 //
 //	err := client.Multicast4(ctx, in).Send()
-//	h := client.Multicast4(ctx, in).Async(); err := h.Wait()
+//	h := client.Multicast4(ctx, in).Async()
+//	err = h.Wait()
 func (c ZorumsServiceClient) Multicast4(ctx context.Context, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast4")
 }

@@ -40,13 +40,12 @@ type (
 )
 
 // MetadataTestClient invokes the calls of the MetadataTest service.
-// Quorum calls and multicasts run on the client's configuration.
-// Remote calls and unicasts run on the node given to each call; that node
+// Quorum calls and multicasts execute on the client's configuration.
+// Remote calls and unicasts execute on the node given to each call; that node
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration, from
-// [NewMetadataTestClient] or [MetadataTestClient.WithConfig]; they panic on an
-// empty configuration.
+// Quorum calls and multicasts need a configuration from
+// [NewMetadataTestClient]; they panic on an empty configuration.
 type MetadataTestClient struct {
 	config gorums.Config
 }
@@ -59,11 +58,6 @@ func NewMetadataTestClient(config gorums.Config) MetadataTestClient {
 // Config returns the configuration to which c is bound.
 func (c MetadataTestClient) Config() gorums.Config {
 	return c.config
-}
-
-// WithConfig returns a copy of c bound to config.
-func (c MetadataTestClient) WithConfig(config gorums.Config) MetadataTestClient {
-	return MetadataTestClient{config: config}
 }
 
 // IDFromMD returns the 'id' field from the metadata.

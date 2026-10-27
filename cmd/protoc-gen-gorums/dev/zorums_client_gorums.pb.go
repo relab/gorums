@@ -19,13 +19,12 @@ const (
 )
 
 // ZorumsServiceClient invokes the calls of the ZorumsService service.
-// Quorum calls and multicasts run on the client's configuration.
-// Remote calls and unicasts run on the node given to each call; that node
+// Quorum calls and multicasts execute on the client's configuration.
+// Remote calls and unicasts execute on the node given to each call; that node
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration, from
-// [NewZorumsServiceClient] or [ZorumsServiceClient.WithConfig]; they panic on an
-// empty configuration.
+// Quorum calls and multicasts need a configuration from
+// [NewZorumsServiceClient]; they panic on an empty configuration.
 type ZorumsServiceClient struct {
 	config gorums.Config
 }
@@ -38,9 +37,4 @@ func NewZorumsServiceClient(config gorums.Config) ZorumsServiceClient {
 // Config returns the configuration to which c is bound.
 func (c ZorumsServiceClient) Config() gorums.Config {
 	return c.config
-}
-
-// WithConfig returns a copy of c bound to config.
-func (c ZorumsServiceClient) WithConfig(config gorums.Config) ZorumsServiceClient {
-	return ZorumsServiceClient{config: config}
 }

@@ -48,13 +48,12 @@ type CorrectableResult = *gorums.Correctable[*Result]
 type CorrectableStartResponse = *gorums.Correctable[*StartResponse]
 
 // ControlClient invokes the calls of the Control service.
-// Quorum calls and multicasts run on the client's configuration.
-// Remote calls and unicasts run on the node given to each call; that node
+// Quorum calls and multicasts execute on the client's configuration.
+// Remote calls and unicasts execute on the node given to each call; that node
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration, from
-// [NewControlClient] or [ControlClient.WithConfig]; they panic on an
-// empty configuration.
+// Quorum calls and multicasts need a configuration from
+// [NewControlClient]; they panic on an empty configuration.
 type ControlClient struct {
 	config gorums.Config
 }
@@ -67,11 +66,6 @@ func NewControlClient(config gorums.Config) ControlClient {
 // Config returns the configuration to which c is bound.
 func (c ControlClient) Config() gorums.Config {
 	return c.config
-}
-
-// WithConfig returns a copy of c bound to config.
-func (c ControlClient) WithConfig(config gorums.Config) ControlClient {
-	return ControlClient{config: config}
 }
 
 // Start resets the server-side op counter and Stats baseline.
@@ -101,7 +95,8 @@ func (c ControlClient) ClockSync(ctx context.Context, in *ClockSyncRequest) *gor
 // Example:
 //
 //	err := client.Done(ctx, in).Send()
-//	h := client.Done(ctx, in).Async(); err := h.Wait()
+//	h := client.Done(ctx, in).Async()
+//	err = h.Wait()
 func (c ControlClient) Done(ctx context.Context, in *DoneRequest) *gorums.OnewayCall[*DoneRequest] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "benchkit.Control.Done")
 }
