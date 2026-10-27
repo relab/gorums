@@ -452,7 +452,7 @@ func runSchedule(ctx context.Context, ticker *Ticker, opts Options, levelDone fu
 // start of a client-measured run, so the Stop reply observes only the work done
 // in the measurement window. It is a no-op in local mode, where the in-process
 // servers share the client's heap and their memory stats cannot be separated.
-func StartRemote(ctx context.Context, cfg gorums.Config, opts Options) error {
+func StartRemote(ctx context.Context, cfg Config, opts Options) error {
 	if !opts.Remote {
 		return nil
 	}
@@ -465,7 +465,7 @@ func StartRemote(ctx context.Context, cfg gorums.Config, opts Options) error {
 // replies keyed by node ID so callers can verify them (see [WithVerify]). It
 // is the counterpart to [StartRemote] and is likewise a no-op in local mode,
 // where it returns a nil map.
-func StopRemote(ctx context.Context, cfg gorums.Config, opts Options, result *Result) (map[uint32]*Result, error) {
+func StopRemote(ctx context.Context, cfg Config, opts Options, result *Result) (map[uint32]*Result, error) {
 	if !opts.Remote {
 		return nil, nil
 	}
@@ -480,7 +480,7 @@ func StopRemote(ctx context.Context, cfg gorums.Config, opts Options, result *Re
 // SetupFunc builds, once per run and configuration, the operation that the
 // harness measures. Work such as creating the client and request belongs in
 // the SetupFunc, so it is not measured.
-type SetupFunc func(context.Context, gorums.Config, Options) func() error
+type SetupFunc func(context.Context, Config, Options) func() error
 
 // MeasureLatency runs one client-measured window and returns its Result.
 // It calls setup once for each configuration in configs and runs all the
@@ -490,7 +490,7 @@ type SetupFunc func(context.Context, gorums.Config, Options) func() error
 // One configuration measures a single client; one configuration per peer
 // measures a symmetric system. MeasureLatency does not call [StartRemote] or
 // [StopRemote]; the caller does.
-func MeasureLatency(ctx context.Context, opts Options, configs iter.Seq[gorums.Config], setup SetupFunc) (*Result, error) {
+func MeasureLatency(ctx context.Context, opts Options, configs iter.Seq[Config], setup SetupFunc) (*Result, error) {
 	m := StartMeasurement(opts)
 	var doOps []func() error
 	for cfg := range configs {
@@ -617,7 +617,7 @@ func WithVerify(f func(map[uint32]*Result) error) LifecycleOption {
 // In remote mode, the Result also holds each server's memory stats, collected
 // with [StartRemote] and [StopRemote]. The lifecycle options add hooks, such as
 // [WithQuiesce] and [WithVerify].
-func ClientMeasured(cfg gorums.Config, setup SetupFunc, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
+func ClientMeasured(cfg Config, setup SetupFunc, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
 	hooks := newLifecycleHooks(lifecycleOpts)
 	return func(opts Options) (*Result, error) {
 		ctx, cancel := BenchContext(opts)
@@ -625,7 +625,7 @@ func ClientMeasured(cfg gorums.Config, setup SetupFunc, lifecycleOpts ...Lifecyc
 		if err := StartRemote(ctx, cfg, opts); err != nil {
 			return nil, err
 		}
-		result, err := MeasureLatency(ctx, opts, slices.Values([]gorums.Config{cfg}), setup)
+		result, err := MeasureLatency(ctx, opts, slices.Values([]Config{cfg}), setup)
 		if err != nil {
 			return nil, err
 		}
@@ -649,7 +649,7 @@ func ClientMeasured(cfg gorums.Config, setup SetupFunc, lifecycleOpts ...Lifecyc
 // combines the servers' latency samples, each corrected for its clock offset
 // to the client. A failed send fails the run. The lifecycle options add hooks,
 // such as [WithQuiesce] and [WithVerify].
-func ServerMeasured(cfg gorums.Config, setup SetupFunc, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
+func ServerMeasured(cfg Config, setup SetupFunc, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
 	hooks := newLifecycleHooks(lifecycleOpts)
 	return func(opts Options) (*Result, error) {
 		ctx, cancel := BenchContext(opts)

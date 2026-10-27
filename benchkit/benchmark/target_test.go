@@ -87,8 +87,8 @@ func TestDualReconnectsDroppedIdleStream(t *testing.T) {
 
 	observer := servers[0]
 	const peerID = 2
-	hasPeer := func(cfg gorums.Config) bool { return cfg.Contains(peerID) }
-	missingPeer := func(cfg gorums.Config) bool { return !cfg.Contains(peerID) }
+	hasPeer := func(cfg Config) bool { return cfg.Contains(peerID) }
+	missingPeer := func(cfg Config) bool { return !cfg.Contains(peerID) }
 
 	ctx := gorumstest.Context(t, 10*time.Second)
 
