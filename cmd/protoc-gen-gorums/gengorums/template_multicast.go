@@ -13,15 +13,16 @@ var multicastComment = `
 {{$comments -}}
 {{else}}
 // {{$method}} starts a one-way call on the client's configuration; no reply
-// is returned. The request is dispatched by Send or Async. Send blocks until
-// every send completes and returns any send errors. Async returns at once;
-// call Wait on the returned handle to get the send errors. Use
-// gorums.MapRequest to send a different message to each node.
+// is returned. Use gorums.MapRequest to send a different message to each node.
+//
+// Send blocks until every send completes and returns any send errors.
+// Async returns a handle at once; Wait on the handle returns the send errors.
 {{end -}}
 //
 // Example:
 //   err := client.{{$method}}(ctx, in).Send()
-//   h := client.{{$method}}(ctx, in).Async(); err := h.Wait()
+//   h := client.{{$method}}(ctx, in).Async()
+//   err = h.Wait()
 `
 
 var multicastSignature = `func ({{$local.c}} {{$service}}Client) {{$method}}(` +
