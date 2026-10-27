@@ -32,7 +32,9 @@ type (
 These aliases make the most commonly used Gorums types available without requiring an explicit `gorums` import in user code.
 
 Each name declared in `aliases.go` (and any other non-ignored file in `dev/`) is also added to the **reserved identifier list**.
-The Gorums generator rejects proto files whose messages, enums, or enum values, nested or not, use a reserved identifier as their Go name, checking every file of the service's Go package, since such a name collides with the generated alias.
+The Gorums generator rejects a proto file whose messages, enums, or enum values use a reserved identifier as their Go name.
+Such a name collides with the generated alias.
+The check includes nested messages and enums, and every file of the service's Go package.
 RPC methods are methods of a generated client type, so they do not collide with the aliases; [Generated Client Types](#generated-client-types) describes their name checks.
 
 The bundler (`gengorums/bundle.go`) discovers reserved identifiers by inspecting `TypesInfo.Defs` for all exported, package-scope declarations in the dev package.
@@ -62,9 +64,12 @@ flowchart LR
     rt --> impl["internal/impl<br/>QuorumCall(ctx, config, in, method)"]
 ```
 
-A remote call or unicast takes the node after the context and does not use `c.config`.
-Thus, the zero `SClient` is ready for node calls, and the type's doc comment says so.
-The signatures keep the two kinds of calls apart at compile time: a node call does not compile without a node.
+A remote call or unicast requires a node argument after the context.
+A nil node compiles, but the call panics.
+A node call does not use `c.config`, so the zero `SClient` is ready for node calls.
+The doc comment of the client type states this.
+For a node call, the client type is a namespace for the service.
+It keeps the service's calls together and avoids package-level name conflicts.
 
 The client type, its constructor, and its helper method `Config` come from `gengorums/template_client.go`.
 The generator checks the generated names for collisions:
