@@ -180,8 +180,8 @@ func TestGeneratedCodeIDField(t *testing.T) {
 	var _ dev.ID // the reserved alias must remain usable alongside the field
 }
 
-// TestGeneratedCodeClient checks the configuration access methods and the
-// node calls of the generated ZorumsServiceClient type.
+// TestGeneratedCodeClient checks the quorum calls and the node calls of the
+// generated ZorumsServiceClient type.
 func TestGeneratedCodeClient(t *testing.T) {
 	const numServers = 3
 	config := gorumstest.Config(t, numServers, newQuorumCallServer)
@@ -249,20 +249,6 @@ func TestGeneratedCodeClient(t *testing.T) {
 		}()
 		dev.ZorumsServiceClient{}.QuorumCall(t.Context(), &dev.Request{})
 	})
-
-	t.Run("WithConfig", func(t *testing.T) {
-		id := config.NodeIDs()[0]
-		smaller := client.WithConfig(client.Config().Remove(id))
-		if got, want := smaller.Config().Size(), numServers-1; got != want {
-			t.Errorf("WithConfig(Remove(%d)).Config().Size() = %d, want %d", id, got, want)
-		}
-		if smaller.Config().Contains(id) {
-			t.Errorf("WithConfig(Remove(%d)).Config() contains node %d", id, id)
-		}
-		if got := client.Config().Size(); got != numServers {
-			t.Errorf("client.Config().Size() = %d after WithConfig, want %d", got, numServers)
-		}
-	})
 }
 
 // Sinks keep the compiler from eliding the operations measured in
@@ -276,7 +262,6 @@ var (
 // type and accessing its configuration allocates nothing.
 func TestGeneratedCodeClientAllocs(t *testing.T) {
 	config := gorumstest.Config(t, 3, newQuorumCallServer)
-	smaller := config.Remove(config.NodeIDs()[0])
 	client := dev.NewZorumsServiceClient(config)
 
 	tests := []struct {
@@ -284,7 +269,6 @@ func TestGeneratedCodeClientAllocs(t *testing.T) {
 		fn   func()
 	}{
 		{name: "NewZorumsServiceClient", fn: func() { clientSink = dev.NewZorumsServiceClient(config) }},
-		{name: "WithConfig", fn: func() { clientSink = client.WithConfig(smaller) }},
 		{name: "Config", fn: func() { configSink = client.Config() }},
 	}
 	for _, tt := range tests {

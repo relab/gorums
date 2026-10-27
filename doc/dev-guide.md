@@ -66,12 +66,12 @@ A remote call or unicast takes the node after the context and does not use `c.co
 Thus, the zero `SClient` is ready for node calls, and the type's doc comment says so.
 The signatures keep the two kinds of calls apart at compile time: a node call does not compile without a node.
 
-The client type, constructor, and helper methods (`Config` and `WithConfig`) come from `gengorums/template_client.go`.
+The client type, its constructor, and its helper method `Config` come from `gengorums/template_client.go`.
 The generator checks the generated names for collisions:
 
 * A message, enum, or enum value in the service's Go package must not be named `SClient` or `NewSClient`.
   The check includes nested messages and enums, and all enum values, by their Go names, such as `Outer_InnerClient`, because protoc-gen-go declares them at package level.
-* An RPC method must not be named `Config` or `WithConfig`, whatever its call type, because `SClient` receives every call.
+* An RPC method must not be named `Config`, whatever its call type, because `SClient` receives every call.
   An RPC method named `Node` or `ForNode` is valid.
 
 The generated methods name their receiver and parameters `c`, `ctx`, `node`, and `in`, and the handler registration uses `srv`, `impl`, `ctx`, `in`, `req`, `resp`, `err`, and `out`.

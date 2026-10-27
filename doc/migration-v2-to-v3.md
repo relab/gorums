@@ -551,7 +551,7 @@ if qcErr, ok := err.(gorums.QuorumCallError); ok {
     goodCfg, _ := gorums.NewConfiguration(mgr, config.WithoutErrors(qcErr))
 
     // Retry with good nodes only
-    reply, err = client.WithConfig(goodCfg).ReadQC(ctx, req).Majority()
+    reply, err = NewStorageClient(goodCfg).ReadQC(ctx, req).Majority()
 }
 ```
 
@@ -871,11 +871,12 @@ resp, err = pb.StorageClient{}.ReadRPC(ctx, node, req)
 A node call accepts any node, also a node that is not in the client's configuration.
 The zero value of `SClient` is ready for node calls.
 
-Configuration transformations remain on `gorums.Config`:
+Configuration transformations remain on `gorums.Config`.
+To call a smaller configuration, create a client for it:
 
 ```go
 smaller := client.Config().Remove(nodeID)
-smallerClient := client.WithConfig(smaller)
+smallerClient := pb.NewStorageClient(smaller)
 ```
 
 A nested call in a server handler binds the peer configuration to a client:
@@ -898,7 +899,7 @@ The panic now comes from the call method, not from `Config.Context` or `Node.Con
 Regeneration reports an error for names that collide with the generated client code:
 
 - a message, enum, or enum value, including a nested one, whose Go name is `SClient` or `NewSClient`;
-- an RPC method of any call type named `Config` or `WithConfig`.
+- an RPC method of any call type named `Config`.
 
 Hand-written Go code in the generated package that declares `SClient` or `NewSClient`, such as your own `StorageClient` wrapper, now fails to compile.
 The generator cannot detect this collision, so rename such code.

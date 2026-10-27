@@ -179,7 +179,7 @@ For the `unicast` and `multicast` call types, the response message type will be 
 > A message field named `ID` is fine; only type names are reserved.
 > Gorums injects type aliases with these names into every generated `_gorums.pb.go` file, so messages, enums, and enum values in any `.proto` file of the same Go package cannot use them.
 > For a service `S`, Gorums also generates the names `SClient` and `NewSClient`, so messages, enums, and enum values cannot use these names either.
-> An RPC method cannot take the name of a helper method on the client type: `Config` or `WithConfig`.
+> An RPC method cannot be named `Config`, because the client type has a helper method with that name.
 > The generator reports an error for a `.proto` file that uses one of these names.
 
 ### Compiling the Service Definition
@@ -211,7 +211,6 @@ It is bound to a configuration of nodes:
 ```go
 func NewStorageClient(config gorums.Config) StorageClient
 func (c StorageClient) Config() gorums.Config
-func (c StorageClient) WithConfig(config gorums.Config) StorageClient
 ```
 
 The call type in the Protobuf definition selects the target of each method.
@@ -253,11 +252,11 @@ A client holds only its configuration.
 Creating or copying a client allocates nothing, so a call site can create its own client.
 
 The configuration operations stay on `gorums.Config`.
-To call a different set of nodes, derive a new configuration and bind it with `WithConfig`:
+To call a different set of nodes, derive a new configuration and create a client for it:
 
 ```go
 smaller := client.Config().Remove(nodeID)
-smallerClient := client.WithConfig(smaller)
+smallerClient := pb.NewStorageClient(smaller)
 ```
 
 A client does not own its configuration or its nodes.
@@ -1555,7 +1554,7 @@ if err != nil {
     )
 
     // Retry the operation with the new configuration
-    state, err = client.WithConfig(newConfig).ReadQC(ctx, &ReadRequest{}).Majority()
+    state, err = NewStorageClient(newConfig).ReadQC(ctx, &ReadRequest{}).Majority()
   }
 }
 ```
