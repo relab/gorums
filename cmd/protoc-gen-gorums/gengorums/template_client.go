@@ -29,7 +29,8 @@ var clientType = `
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
 // Quorum calls and multicasts need a configuration, from
-// New{{$service}}Client or WithConfig; they panic on an empty configuration.
+// [New{{$service}}Client] or [{{$service}}Client.WithConfig]; they panic on an
+// empty configuration.
 type {{$service}}Client struct {
 	config {{$config}}
 }

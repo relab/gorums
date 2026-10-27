@@ -48,7 +48,8 @@ type CorrectableResponse = *gorums.Correctable[*msgs.Response]
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
 // Quorum calls and multicasts need a configuration, from
-// NewQuorumCallClient or WithConfig; they panic on an empty configuration.
+// [NewQuorumCallClient] or [QuorumCallClient.WithConfig]; they panic on an
+// empty configuration.
 type QuorumCallClient struct {
 	config gorums.Config
 }
