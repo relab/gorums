@@ -19,25 +19,6 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// The type aliases below are useful Gorums types that we make accessible
-// from generated code. These names therefore become reserved identifiers,
-// meaning that proto message types with these names would collide with the
-// generated aliases and cause a compile error.
-//
-// The protoc-gen-gorums bundler is responsible for discovering these
-// aliases and any other identifiers defined herein, and adding them to
-// the reserved identifiers list.
-//
-// If necessary, additional aliases and other identifiers should be added in
-// the generator's cmd/protoc-gen-gorums/dev directory, and the bundler will
-// automatically discover them and add them to the reserved identifiers list.
-
-type (
-	Config = gorums.Config
-	ID     = gorums.ID
-	Node   = gorums.Node
-)
-
 // UnresponsiveNodeClient is the client API for the remote calls and unicasts
 // of the Unresponsive service. Its calls execute on the node given to
 // [NewUnresponsiveNodeClient]. If that node is nil, every call returns
