@@ -12,7 +12,7 @@ import (
 //
 // This method should be used by generated code only.
 func RemoteCall[Req, Resp proto.Message](ctx context.Context, node *Node, req Req, method string) (Resp, error) {
-	requireNode("RemoteCall", node)
+	requireNode("RemoteCall", method, node)
 	responseChan := make(chan NodeResponse[*stream.Message], 1)
 	transport := conn.NodeTransport(node)
 	reqMsg, err := stream.NewMessage(ctx, transport.NextMsgID(), method, req)

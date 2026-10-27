@@ -3,6 +3,7 @@ package impl
 import (
 	"context"
 	"math/rand/v2"
+	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -71,19 +72,19 @@ func (c *CallContext[Req, Resp]) intercept(ics ...ClientInterceptor[Req, Resp]) 
 	}
 }
 
-// requireConfig panics if config is empty; name is the call constructor that
-// received config.
-func requireConfig(name string, config Config) {
+// requireConfig panics if config is empty. The panic message names the call
+// type callType and the full method name method of the call.
+func requireConfig(callType, method string, config Config) {
 	if len(config) == 0 {
-		panic("gorums: " + name + " called on an empty configuration")
+		panic("gorums: " + callType + " " + strconv.Quote(method) + " needs a non-empty configuration")
 	}
 }
 
-// requireNode panics if node is nil; name is the call constructor that
-// received node.
-func requireNode(name string, node *Node) {
+// requireNode panics if node is nil. The panic message names the call type
+// callType and the full method name method of the call.
+func requireNode(callType, method string, node *Node) {
 	if node == nil {
-		panic("gorums: " + name + " called on a nil node")
+		panic("gorums: " + callType + " " + strconv.Quote(method) + " needs a non-nil node")
 	}
 }
 
