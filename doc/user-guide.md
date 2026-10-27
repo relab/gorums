@@ -185,6 +185,7 @@ For the `unicast` and `multicast` call types, the response message type will be 
 > An RPC method may have any name, also `Config` or `Node`, because the clients have no helper methods.
 > The generator reports an error for a `.proto` file that uses one of these names.
 > Do not name a `.proto` file `gorums.proto` in a directory with Gorums output, since its `gorums.pb.go` file would collide with the Gorums package file.
+> The generator reports an error for such a file and asks you to rename it.
 
 ### Compiling the Service Definition
 
@@ -1121,7 +1122,8 @@ For example, service `NewS` generates the interface `NewSClient`, and service `S
 The generator reports such a collision with the names of both services.
 
 Gorums declares the `Config`, `ID`, and `Node` aliases in the `gorums.pb.go` file of each Go package.
-Every `protoc` run with `--gorums_out` writes this file with the same content, so you can compile the `.proto` files of a package in one run or in several.
+Every `protoc` run that generates Gorums code for the package writes this file with the same content, so you can compile the `.proto` files of a package in one run or in several.
+If you remove the last Gorums `.proto` file of a package, delete the package's `gorums.pb.go` file too; no run removes it.
 Gorums declares each `CorrectableX` alias in only one generated file per Go package, even if the quorum calls of several files return `X`.
 Such an alias belongs to the first `.proto` file of the package that needs it.
 Imported files come first.

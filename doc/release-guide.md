@@ -64,7 +64,8 @@ Install it again after the program changes.
 
       The generated code checks at compile time that it fits the runtime: `MinVersion ≤ GenVersion ≤ MaxVersion`.
       These constants are in `runtime/gorumsimpl/version.go`.
-      `GenVersion` is written into every generated file.
+      `GenVersion` is written into the version check of every generated `_gorums.pb.go` file.
+      The `gorums.pb.go` file of a package carries the version header lines but no version check.
       `MaxVersion` is the minor version of the release, so it rises by itself.
       `MinVersion` and `GenVersion` change only when the generated code and the runtime stop fitting together:
 
