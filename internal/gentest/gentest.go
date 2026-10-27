@@ -52,10 +52,10 @@ type Options struct {
 }
 
 // Generate parses the proto files with protoc and runs protoc-gen-go and,
-// unless [Options.NoGorums] is set, protoc-gen-gorums on them. Each file name must be relative to one of the
-// import paths. Generate returns the generated files keyed by output path.
-// The error is the one a generator reports for the input; Generate fails the
-// test if protoc cannot parse the input.
+// unless [Options.NoGorums] is set, protoc-gen-gorums on them. Each file name
+// must be relative to one of the import paths. Generate returns the generated
+// files keyed by output path. The error is the one a generator reports for
+// the input; Generate fails the test if protoc cannot parse the input.
 func Generate(t testing.TB, opts Options, files ...string) (map[string]string, error) {
 	t.Helper()
 	req := request(t, opts.ImportPaths, files)
