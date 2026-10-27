@@ -28,27 +28,30 @@ var registerInterface = `
 {{$gorumsMessage := use "gorums.Message" .GenFile}}
 {{$asProto := use "gorums.AsProto" .GenFile}}
 {{$newMessage := use "gorums.NewResponseMessage" $genFile}}
+{{$gorumsServer := use "gorums.Server" $genFile}}
 {{range .Services -}}
 {{$service := .GoName}}
-func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$service}}Server) {
+{{$reg := localNames "srv impl" $context $gorumsMessage $asProto $newMessage (methodTypes $genFile .)}}
+func Register{{$service}}Server({{$reg.srv}} *{{$gorumsServer}}, {{$reg.impl}} {{$service}}Server) {
 	{{- range .Methods}}
-	srv.RegisterHandler("{{.Desc.FullName}}", func(ctx {{$context}}, in *{{$gorumsMessage}}) (*{{$gorumsMessage}}, error) {
-		req := {{$asProto}}[*{{in $genFile .}}](in)
+	{{- $local := localNames "ctx in req resp err out" $context $gorumsMessage $asProto $newMessage (in $genFile .) (out $genFile .) $reg.impl}}
+	{{$reg.srv}}.RegisterHandler("{{.Desc.FullName}}", func({{$local.ctx}} {{$context}}, {{$local.in}} *{{$gorumsMessage}}) (*{{$gorumsMessage}}, error) {
+		{{$local.req}} := {{$asProto}}[*{{in $genFile .}}]({{$local.in}})
 		{{- if isOneway .}}
-		impl.{{.GoName}}(ctx, req)
+		{{$reg.impl}}.{{.GoName}}({{$local.ctx}}, {{$local.req}})
 		return nil, nil
 		{{- else if isStreamingServer .}}
-		impl.{{.GoName}}(ctx, req, func(resp *{{out $genFile .}}) {
-			out := {{$newMessage}}(in, resp)
-			ctx.SendMessage(out)
+		{{$reg.impl}}.{{.GoName}}({{$local.ctx}}, {{$local.req}}, func({{$local.resp}} *{{out $genFile .}}) {
+			{{$local.out}} := {{$newMessage}}({{$local.in}}, {{$local.resp}})
+			{{$local.ctx}}.SendMessage({{$local.out}})
 		})
 		return nil, nil
 		{{- else }}
-		resp, err := impl.{{.GoName}}(ctx, req)
-		if err != nil {
-			return nil, err
+		{{$local.resp}}, {{$local.err}} := {{$reg.impl}}.{{.GoName}}({{$local.ctx}}, {{$local.req}})
+		if {{$local.err}} != nil {
+			return nil, {{$local.err}}
 		}
-		return {{$newMessage}}(in, resp), nil
+		return {{$newMessage}}({{$local.in}}, {{$local.resp}}), nil
 		{{- end}}
 	})
 	{{- end}}

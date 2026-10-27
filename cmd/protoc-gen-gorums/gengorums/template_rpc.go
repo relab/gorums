@@ -17,12 +17,15 @@ var remoteCallVar = `
 {{$genFile := .GenFile}}
 {{$rpc := use "gorumsimpl.RemoteCall" .GenFile}}
 {{$node := use "gorums.Node" .GenFile}}
+{{$local := localNames "c ctx node in" $in $out $context $rpc}}
 `
 
-var remoteCallSignature = `func (c {{$service}}Client) {{$method}}(ctx {{$context}}, node *{{$node}}, in *{{$in}}) (*{{$out}}, error) {
+var remoteCallSignature = `func ({{$local.c}} {{$service}}Client) {{$method}}(` +
+	`{{$local.ctx}} {{$context}}, {{$local.node}} *{{$node}}, {{$local.in}} *{{$in}})` +
+	` (*{{$out}}, error) {
 `
 
-var remoteCallBody = ` return {{$rpc}}[*{{$in}}, *{{$out}}](ctx, node, in, "{{$fullName}}")
+var remoteCallBody = `	return {{$rpc}}[*{{$in}}, *{{$out}}]({{$local.ctx}}, {{$local.node}}, {{$local.in}}, "{{$fullName}}")
 }
 `
 

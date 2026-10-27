@@ -74,6 +74,13 @@ The generator checks the generated names for collisions:
 * An RPC method must not be named `Config` or `WithConfig`, whatever its call type, because `SClient` receives every call.
   An RPC method named `Node` or `ForNode` is valid.
 
+The generated methods name their receiver and parameters `c`, `ctx`, `node`, and `in`, and the handler registration uses `srv`, `impl`, `ctx`, `in`, `req`, `resp`, `err`, and `out`.
+An imported Go package can have one of these names, such as a message package named `node`.
+A local name with that name would hide the package in the method body.
+Thus, each template gets its local names from the `localNames` function in `gengorums/template_funcs.go`.
+The template passes the identifiers that the body refers to, such as `node.Request` or `gorumsimpl.RemoteCall`.
+`localNames` appends an underscore to a local name until it differs from each package name in these identifiers, for example `node_`.
+
 In dev mode, the generator writes one `dev/zorums_{name}_gorums.pb.go` file for each entry of `gorumsCallTypesInfo` in `gengorums/generate.go`:
 
 | Dev file                         | Template                 | Contents                                       |
@@ -143,13 +150,14 @@ They test the generator in this tree, not a `protoc-gen-gorums` binary installed
 Only parsing uses `protoc`.
 The tests write nothing into the tree: `gentest.Compile` type-checks the generated code from memory.
 
-| Test                            | Checks                                                                           |
-| ------------------------------- | -------------------------------------------------------------------------------- |
-| `TestFailingProtoFiles`         | Proto files written inline in the test fail with the expected generator error.   |
-| `TestGenerateProtoFiles`        | The code generated for each fixture under `internal/testprotos` compiles.        |
-| `TestGoldenProtoFiles`          | The Gorums code for each fixture equals its golden file in `testdata`.           |
-| `TestStabilityZorums`           | Two runs on `dev/zorums.proto` produce identical output.                         |
-| `TestStabilityDevFilesUpToDate` | The committed `dev/zorums*.pb.go` files equal the output of the generator.       |
+| Test                               | Checks                                                                           |
+| ---------------------------------- | -------------------------------------------------------------------------------- |
+| `TestFailingProtoFiles`            | Proto files written inline in the test fail with the expected generator error.   |
+| `TestGenerateProtoFiles`           | The code generated for each fixture under `internal/testprotos` compiles.        |
+| `TestGenerateImportedPackageNames` | Generated code compiles with message packages named `c`, `ctx`, `in`, or `node`. |
+| `TestGoldenProtoFiles`             | The Gorums code for each fixture equals its golden file in `testdata`.           |
+| `TestStabilityZorums`              | Two runs on `dev/zorums.proto` produce identical output.                         |
+| `TestStabilityDevFilesUpToDate`    | The committed `dev/zorums*.pb.go` files equal the output of the generator.       |
 
 To add a failing case, add a table entry to `TestFailingProtoFiles`.
 To add a fixture, add a `.proto` file in a new directory under `internal/testprotos`, with a `go_package` that matches the directory, and create its golden file as shown below.

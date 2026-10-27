@@ -56,8 +56,57 @@ var funcMap = template.FuncMap{
 		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast)
 	},
 	"out":                   out,
+	"methodTypes":           methodTypes,
+	"localNames":            localNames,
 	"mapCorrectableOutType": mapCorrectableOutType,
 	"unexport":              unexport,
+}
+
+// localNames maps each of the space-separated base names to a local name for
+// generated code. A local name is the base name, with an underscore appended
+// until it differs from each name that refs use at top level and from the
+// other local names. Each ref is a string or a []string. A qualified ref,
+// such as "node.Request", uses its package name, here node; an unqualified
+// ref uses itself. Pass every identifier that the code in the scope of the
+// local names refers to, so that no local name hides an imported package.
+func localNames(bases string, refs ...any) map[string]string {
+	taken := make(map[string]bool)
+	use := func(ref string) {
+		name, _, _ := strings.Cut(ref, ".")
+		taken[name] = true
+	}
+	for _, ref := range refs {
+		switch ref := ref.(type) {
+		case string:
+			use(ref)
+		case []string:
+			for _, r := range ref {
+				use(r)
+			}
+		default:
+			panic(fmt.Sprintf("localNames: unexpected ref type %T", ref))
+		}
+	}
+	names := make(map[string]string)
+	for base := range strings.FieldsSeq(bases) {
+		name := base
+		for taken[name] {
+			name += "_"
+		}
+		taken[name] = true
+		names[base] = name
+	}
+	return names
+}
+
+// methodTypes returns the qualified input and output types of the service's
+// methods.
+func methodTypes(g *protogen.GeneratedFile, service *protogen.Service) []string {
+	var types []string
+	for _, method := range service.Methods {
+		types = append(types, g.QualifiedGoIdent(method.Input.GoIdent), out(g, method))
+	}
+	return types
 }
 
 type mapFunc func(*protogen.GeneratedFile, *protogen.Method, map[string]string)
