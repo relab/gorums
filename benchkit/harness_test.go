@@ -137,21 +137,24 @@ func TestRunPhaseRunOverStopsWorker(t *testing.T) {
 	}
 }
 
+// setupOp returns a [SetupFunc] whose every worker runs op.
+func setupOp(op func() error) SetupFunc {
+	return func(context.Context, Config, Options) func() error { return op }
+}
+
 // TestMeasureLatencyRunOverNotRecorded verifies that ErrRunOver stops its
 // worker without changing the success or failure counts.
 func TestMeasureLatencyRunOverNotRecorded(t *testing.T) {
 	opts := Options{Workers: 2, Duration: 2 * time.Second}
 	var calls atomic.Int64
-	setup := func(context.Context, gorums.Config, Options) func() error {
-		return func() error {
-			if calls.Add(1) > 3 {
-				return ErrRunOver
-			}
-			return nil
+	setup := setupOp(func() error {
+		if calls.Add(1) > 3 {
+			return ErrRunOver
 		}
-	}
+		return nil
+	})
 	start := time.Now()
-	configs := slices.Values([]gorums.Config{gorumstest.UnreachableConfig(t)})
+	configs := slices.Values([]Config{gorumstest.UnreachableConfig(t)})
 	result, err := MeasureLatency(context.Background(), opts, configs, setup)
 	if err != nil {
 		t.Fatalf("MeasureLatency err = %v, want nil", err)
@@ -696,15 +699,13 @@ func TestRunStampsFullConfig(t *testing.T) {
 func TestClientMeasuredCountsErrorsWithoutAborting(t *testing.T) {
 	var calls atomic.Int64
 	run := ClientMeasured(gorumstest.UnreachableConfig(t),
-		func(context.Context, gorums.Config, Options) func() error {
-			return func() error {
-				// Fail every other op; persistent errors must not abort.
-				if calls.Add(1)%2 == 0 {
-					return errors.New("quorum call failed")
-				}
-				return nil
+		setupOp(func() error {
+			// Fail every other op; persistent errors must not abort.
+			if calls.Add(1)%2 == 0 {
+				return errors.New("quorum call failed")
 			}
-		})
+			return nil
+		}))
 	result, err := run(Options{Workers: 1, Duration: 30 * time.Millisecond})
 	if err != nil {
 		t.Fatalf("run aborted on op error: %v", err)
@@ -725,12 +726,10 @@ func TestClientMeasuredQuiesce(t *testing.T) {
 	var opsAtQuiesce int64
 	quiesceCalls := 0
 	run := ClientMeasured(gorumstest.UnreachableConfig(t),
-		func(context.Context, gorums.Config, Options) func() error {
-			return func() error {
-				opsDone.Add(1)
-				return nil
-			}
-		},
+		setupOp(func() error {
+			opsDone.Add(1)
+			return nil
+		}),
 		WithQuiesce(func(context.Context) error {
 			quiesceCalls++
 			opsAtQuiesce = opsDone.Load()
@@ -754,9 +753,7 @@ func TestClientMeasuredQuiesce(t *testing.T) {
 
 	errDrain := errors.New("drain failed")
 	failing := ClientMeasured(gorumstest.UnreachableConfig(t),
-		func(context.Context, gorums.Config, Options) func() error {
-			return func() error { return nil }
-		},
+		setupOp(func() error { return nil }),
 		WithQuiesce(func(context.Context) error { return errDrain }))
 	if _, err := failing(Options{Workers: 1, Duration: time.Millisecond}); !errors.Is(err, errDrain) {
 		t.Errorf("run with failing quiesce = %v, want %v", err, errDrain)
@@ -769,9 +766,7 @@ func TestClientMeasuredQuiesce(t *testing.T) {
 func TestClientMeasuredVerify(t *testing.T) {
 	verifyCalls := 0
 	var gotReplies map[uint32]*Result
-	setup := func(context.Context, gorums.Config, Options) func() error {
-		return func() error { return nil }
-	}
+	setup := setupOp(func() error { return nil })
 	run := ClientMeasured(gorumstest.UnreachableConfig(t), setup,
 		WithVerify(func(replies map[uint32]*Result) error {
 			verifyCalls++

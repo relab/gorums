@@ -305,7 +305,7 @@ func probeOutbound(ctx context.Context, srv *gorums.Server, label string) error 
 		var wg sync.WaitGroup
 		for _, node := range pending {
 			wg.Go(func() {
-				if _, err := NewBenchmarkClient(gorums.Config{node}).QuorumCall(attemptCtx, msg).Threshold(1); err == nil {
+				if _, err := NewBenchmarkClient(Config{node}).QuorumCall(attemptCtx, msg).Threshold(1); err == nil {
 					mu.Lock()
 					responded = append(responded, node.ID())
 					mu.Unlock()
@@ -335,7 +335,7 @@ func probeOutbound(ctx context.Context, srv *gorums.Server, label string) error 
 }
 
 // pendingPeerDetails names each peer still pending in the outbound probe.
-func pendingPeerDetails(pending gorums.Config) string {
+func pendingPeerDetails(pending Config) string {
 	details := make([]string, 0, len(pending))
 	for _, node := range pending {
 		details = append(details, node.Detail())
@@ -464,14 +464,14 @@ func runSymmetricQuorumCall(t *SymmetricTarget, opts benchkit.Options) (*benchki
 
 	// Yield each server's outbound configuration so MeasureLatency drives one
 	// concurrent send target per server in a single measurement phase.
-	configs := func(yield func(gorums.Config) bool) {
+	configs := func(yield func(Config) bool) {
 		for _, srv := range t.servers {
 			if !yield(srv.PeerConfig()) {
 				return
 			}
 		}
 	}
-	setup := func(ctx context.Context, cfg gorums.Config, opts benchkit.Options) func() error {
+	setup := func(ctx context.Context, cfg Config, opts benchkit.Options) func() error {
 		client := NewBenchmarkClient(cfg)
 		msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 		// Honor the configured quorum size, matching the coordinator QuorumCall
