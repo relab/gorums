@@ -31,5 +31,5 @@ func generateDevFile(gen *protogen.Plugin, file *protogen.File, gorumsType strin
 		genReferenceImports(g, file.Services)
 	}
 	genGorumsType(g, file.Services, gorumsType)
-	genGorumsMethods(g, file.Services, gorumsType)
+	genGorumsMethods(g, file, gorumsType)
 }

@@ -179,7 +179,7 @@ func generateFileContent(file *protogen.File, g *protogen.GeneratedFile) {
 	genGorumsType(g, file.Services, "client")
 
 	// 4. Client Methods (in proto order)
-	genGorumsMethods(g, file.Services, "")
+	genGorumsMethods(g, file, "")
 
 	// 5. Server Interface and Registration
 	genGorumsType(g, file.Services, "server")
@@ -232,20 +232,21 @@ func genGorumsType(g *protogen.GeneratedFile, services []*protogen.Service, name
 	}
 }
 
-// genGorumsMethods generates the Gorums methods of the given services whose
+// genGorumsMethods generates the Gorums methods of the services in file whose
 // call type is target. An empty target generates the methods of all call
 // types.
-func genGorumsMethods(g *protogen.GeneratedFile, services []*protogen.Service, target string) {
-	for _, service := range services {
+func genGorumsMethods(g *protogen.GeneratedFile, file *protogen.File, target string) {
+	for _, service := range file.Services {
 		for _, method := range service.Methods {
-			genMethod(g, method, target)
+			genMethod(g, file.GoPackageName, method, target)
 		}
 	}
 }
 
 // genMethod generates the Gorums method for the given method if its call
-// type is target. An empty target matches any call type.
-func genMethod(g *protogen.GeneratedFile, method *protogen.Method, target string) {
+// type is target. An empty target matches any call type. The package name pkg
+// qualifies the client type in the method's doc comment example.
+func genMethod(g *protogen.GeneratedFile, pkg protogen.GoPackageName, method *protogen.Method, target string) {
 	name, info := callType(method)
 	if info == nil {
 		return
@@ -254,10 +255,11 @@ func genMethod(g *protogen.GeneratedFile, method *protogen.Method, target string
 		return
 	}
 	type methodData struct {
-		GenFile *protogen.GeneratedFile
-		Method  *protogen.Method
+		GenFile       *protogen.GeneratedFile
+		GoPackageName protogen.GoPackageName
+		Method        *protogen.Method
 	}
-	g.P(mustExecute(parseTemplate(name, info.template), methodData{g, method}))
+	g.P(mustExecute(parseTemplate(name, info.template), methodData{g, pkg, method}))
 }
 
 // callType returns the name and information of the call type that matches

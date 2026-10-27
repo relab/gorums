@@ -14,15 +14,18 @@ var unicastComment = `
 {{$comments -}}
 {{else}}
 // {{$method}} starts a one-way call on the given node; no reply is returned.
-// It does not use the client's configuration. The request is dispatched by
-// Send or Async. Send blocks until the send completes and returns any send
-// error. Async returns at once; call Wait on the returned handle to get the
-// send error.
+// It ignores the client's configuration. It is a method of {{$service}}Client
+// only to keep the service's calls together and avoid package-level name
+// conflicts.
+//
+// Send blocks until the send completes and returns any send error.
+// Async returns a handle at once; Wait on the handle returns the send error.
 {{end -}}
 //
 // Example:
-//   err := client.{{$method}}(ctx, node, in).Send()
-//   h := client.{{$method}}(ctx, node, in).Async(); err := h.Wait()
+//   err := {{.GoPackageName}}.{{$service}}Client{}.{{$method}}(ctx, node, in).Send()
+//   h := {{.GoPackageName}}.{{$service}}Client{}.{{$method}}(ctx, node, in).Async()
+//   err = h.Wait()
 `
 
 var unicastSignature = `func ({{$local.c}} {{$service}}Client) {{$method}}(` +

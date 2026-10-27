@@ -6,10 +6,12 @@ var remoteCallComment = `
 {{$comments -}}
 {{else}}
 // {{$method}} executes a remote call on the given node and returns its reply.
-// It does not use the client's configuration.
+// It ignores the client's configuration. It is a method of {{$service}}Client
+// only to keep the service's calls together and avoid package-level name
+// conflicts.
 //
 // Example:
-//   resp, err := client.{{$method}}(ctx, node, in)
+//   resp, err := {{.GoPackageName}}.{{$service}}Client{}.{{$method}}(ctx, node, in)
 {{end -}}
 `
 
