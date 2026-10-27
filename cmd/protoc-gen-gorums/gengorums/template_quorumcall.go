@@ -16,9 +16,9 @@ var quorumCallComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-// {{$method}} executes the {{$service}}.{{$method}} quorum call on the client's
-// configuration. Use terminal methods like Majority(), First(), or
-// Threshold(n) to retrieve the aggregated result.
+// {{$method}} executes a quorum call on the client's configuration. Use
+// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
+// aggregated result.
 //
 // Example:
 //   resp, err := client.{{$method}}(ctx, in).Majority()
@@ -53,9 +53,9 @@ var quorumCallStreamComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-// {{$method}} executes the {{$service}}.{{$method}} streaming quorum call on the
-// client's configuration. The server can send multiple responses, and the
-// response iterator continues until the context is canceled.
+// {{$method}} executes a streaming quorum call on the client's configuration.
+// The server can send multiple responses, and the response iterator continues
+// until the context is canceled.
 //
 // Example:
 //   corr := client.{{$method}}(ctx, in).Correctable(2)
