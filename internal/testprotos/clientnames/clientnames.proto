@@ -3,7 +3,7 @@
 
 edition = "2023";
 
-package gorums.testprotos.clientnames;
+package internal.testprotos.clientnames;
 option go_package = "github.com/relab/gorums/internal/testprotos/clientnames";
 
 option features.field_presence = IMPLICIT;

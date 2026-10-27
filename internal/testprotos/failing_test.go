@@ -12,7 +12,7 @@ import (
 const failingProto = `
 edition = "2023";
 
-package gorums.testprotos.failing;
+package internal.testprotos.failing;
 option go_package = "github.com/relab/gorums/internal/testprotos/failing";
 
 import "gorums.proto";
