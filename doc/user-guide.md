@@ -223,8 +223,13 @@ func (c StorageClient) WriteUnicast(ctx context.Context, node *gorums.Node, in *
 ```
 
 The quorum call and multicast methods send a request to every node in the client's configuration.
-The quorum-call methods return a `*gorums.Call[*ReadRequest, *ReadResponse]`, which embeds `*gorums.Responses[*ReadResponse]` and adds `Intercept`.
-The one-way `WriteMulticast` returns a `*gorums.OnewayCall[*WriteRequest]`; call `.Send()` to block until every send completes and observe any send errors, or `.Async()` to dispatch without waiting.
+A quorum call method returns a `*gorums.Call[*ReadRequest, *ReadResponse]` handle.
+The handle embeds `*gorums.Responses[*ReadResponse]`, which provides the terminal methods.
+The `Call` type also has an `Intercept` method, which registers client interceptors before the call is sent.
+The one-way `WriteMulticast` method returns a `*gorums.OnewayCall[*WriteRequest]` handle.
+`Send` blocks until every send completes and returns any send errors.
+`Async` sends the request and returns a handle at once.
+`Wait` on that handle returns the send errors.
 
 ```go
 func (c StorageClient) WriteMulticast(ctx context.Context, in *WriteRequest) *gorums.OnewayCall[*WriteRequest]
@@ -241,7 +246,9 @@ flowchart LR
 
 A node call does not use the client's configuration.
 The node can be any node, also a node that is not in the client's configuration.
-The zero value `StorageClient{}` is ready for node calls:
+For a node call, the client type is a namespace for the service.
+It keeps the service's calls together and avoids package-level name conflicts.
+Thus, the zero value `StorageClient{}` is ready for node calls:
 
 ```go
 resp, err := client.ReadRPC(ctx, node, req)
@@ -277,7 +284,9 @@ type StorageServer interface {
 ```
 
 It is worth noting that unicast and multicast methods do not return a response or error, as they are one-way calls.
-On the client side, `Send`, or `Wait` on the handle that `Async` returns, reports an error if the request could not be sent, but does not report the success or failure of the request at the server side.
+On the client side, `Send` returns an error if the request could not be sent.
+`Async` returns a handle at once; `Wait` on that handle returns the same send errors.
+Neither reports the success or failure of the request at the server side.
 
 **Note:**
 You may decide to keep the `.proto` file and the generated `.pb.go` files in a separate directory/package and import that package (the generated Gorums API) into your application.
@@ -478,8 +487,9 @@ The `Config` type has several useful methods for combining and filtering configu
 Inspect the package documentation or source code for details.
 Configurations derived from `allNodesConfig` share its connection pool, and only `closeFn` closes it; see [Closing Configurations](#closing-configurations).
 
-We bind the configuration to a `StorageClient`, and pass each `node` in the configuration to the call.
-We can now invoke the WriteUnicast RPC on each node:
+A unicast call takes the target node as an argument.
+It does not use the client's configuration, so any `StorageClient` works, also the zero value `StorageClient{}`.
+We can now invoke the WriteUnicast RPC on each node in the configuration:
 
 ```go
   req := &WriteRequest{
@@ -520,7 +530,8 @@ func (c StorageClient) ReadQC(ctx context.Context, in *ReadRequest) *gorums.Call
 ```
 
 This method returns a `*gorums.Call[*ReadRequest, *ReadResponse]` handle.
-The handle embeds `*gorums.Responses[*ReadResponse]`, so it offers the same ways to aggregate and process responses, and adds `Intercept` for registering interceptors before the call is dispatched.
+The handle embeds `*gorums.Responses[*ReadResponse]`.
+Thus, the handle offers the same ways to aggregate and process responses.
 
 The short examples in the rest of this guide use a context named `ctx` and a client named `client`, created with `client := NewStorageClient(config)`.
 

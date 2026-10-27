@@ -29,19 +29,25 @@
 // # Service clients
 //
 // For each service S, protoc-gen-gorums generates one client type, SClient,
-// bound to a [Config]. The quorumcall and multicast methods take a
-// [context.Context] and the request, and run on the client's configuration.
-// The rpc and unicast methods also take the target [Node] after the context,
-// and run on that node:
+// bound to a [Config]. The client type is a namespace for the service: it
+// keeps the service's calls together and avoids package-level name conflicts.
+// The quorum call and multicast methods take a [context.Context] and the
+// request, and execute on the client's configuration. The remote call and
+// unicast methods also take the target [Node] after the context, and execute
+// on that node:
 //
 //	client := pb.NewStorageClient(cfg)
 //	reply, err := client.ReadQC(ctx, req).Majority()
 //	reply, err = client.ReadRPC(ctx, node, req)
 //
 // A node call does not use the client's configuration, so the zero SClient is
-// ready for node calls. A client holds only its configuration, so creating one
-// allocates nothing. A client does not own its configuration; the close
-// function returned by [NewConfig] closes the connections.
+// ready for node calls:
+//
+//	reply, err = pb.StorageClient{}.ReadRPC(ctx, node, req)
+//
+// A client holds only its configuration, so creating one allocates nothing. A
+// client does not own its configuration; the close function returned by
+// [NewConfig] closes the connections.
 //
 // # Configurations and nodes
 //
