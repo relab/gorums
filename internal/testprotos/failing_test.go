@@ -498,7 +498,7 @@ func TestFailingProtoFilesAliasResponseTypes(t *testing.T) {
 		return `
 edition = "2023";
 
-package gorums.testprotos.` + pkg + `;
+package internal.testprotos.` + pkg + `;
 option go_package = "github.com/relab/gorums/internal/testprotos/` + pkg + `";
 
 message Request {
@@ -513,7 +513,7 @@ message Response {
 		return `
 edition = "2023";
 
-package gorums.testprotos.aliases;
+package internal.testprotos.aliases;
 option go_package = "github.com/relab/gorums/internal/testprotos/aliases";
 
 import "gorums.proto";
@@ -523,22 +523,22 @@ import "right.proto";
 	}
 	alpha := serviceProto(`
 service Alpha {
-	rpc Read(gorums.testprotos.left.Request) returns (gorums.testprotos.left.Response) {
+	rpc Read(internal.testprotos.left.Request) returns (internal.testprotos.left.Response) {
 		option (gorums.quorumcall) = true;
 	}
 }`)
 	beta := serviceProto(`
 service Beta {
-	rpc Read(gorums.testprotos.right.Request) returns (gorums.testprotos.right.Response) {
+	rpc Read(internal.testprotos.right.Request) returns (internal.testprotos.right.Response) {
 		option (gorums.quorumcall) = true;
 	}
 }`)
 	gamma := serviceProto(`
 service Gamma {
-	rpc ReadLeft(gorums.testprotos.left.Request) returns (gorums.testprotos.left.Response) {
+	rpc ReadLeft(internal.testprotos.left.Request) returns (internal.testprotos.left.Response) {
 		option (gorums.quorumcall) = true;
 	}
-	rpc ReadRight(gorums.testprotos.right.Request) returns (gorums.testprotos.right.Response) {
+	rpc ReadRight(internal.testprotos.right.Request) returns (internal.testprotos.right.Response) {
 		option (gorums.quorumcall) = true;
 	}
 }`)
@@ -594,7 +594,7 @@ func TestFailingProtoFilesPackageFile(t *testing.T) {
 	const frame = `
 edition = "2023";
 
-package gorums.testprotos.pkgfile;
+package internal.testprotos.pkgfile;
 option go_package = "github.com/relab/gorums/internal/testprotos/pkgfile";
 
 import "gorums.proto";

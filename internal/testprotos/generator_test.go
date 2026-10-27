@@ -135,7 +135,7 @@ func protoFrame(pkg string) string {
 	return `
 edition = "2023";
 
-package gorums.testprotos.` + pkg + `;
+package internal.testprotos.` + pkg + `;
 option go_package = "github.com/relab/gorums/internal/testprotos/` + pkg + `";
 
 import "gorums.proto";

@@ -3,7 +3,7 @@
 
 edition = "2023";
 
-package gorums.testprotos.calltypes.multiservice;
+package internal.testprotos.calltypes.multiservice;
 option go_package = "github.com/relab/gorums/internal/testprotos/calltypes/multiservice";
 
 option features.field_presence = IMPLICIT;
