@@ -68,9 +68,9 @@ func (c QuorumCallClient) WithConfig(config gorums.Config) QuorumCallClient {
 	return QuorumCallClient{config: config}
 }
 
-// QuorumCall executes the QuorumCall.QuorumCall quorum call on the client's
-// configuration. Use terminal methods like Majority(), First(), or
-// Threshold(n) to retrieve the aggregated result.
+// QuorumCall executes a quorum call on the client's configuration. Use
+// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
+// aggregated result.
 //
 // Example:
 //
