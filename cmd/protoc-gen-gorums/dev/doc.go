@@ -6,10 +6,10 @@
 // of the other non-test Go files here (the static code, see aliases.go) into
 // the generator.
 //
-// The generator emits the static code in one generated file per Go package
-// and protoc run, so the static code may declare package-level names. Each
-// exported name becomes a reserved identifier: a proto message or enum of the
-// Go package must not take it. All proto files of a Go package must be
-// compiled in one protoc run; otherwise, two generated files declare the
-// static names.
+// The generator emits the static code into the gorums.pb.go file of each Go
+// package, so the static code may declare package-level names. Every protoc
+// run that generates Gorums code for the package writes the same gorums.pb.go
+// file. Each exported name becomes a reserved identifier: a proto message,
+// enum, or enum value of the Go package must not take it. In dev mode, the
+// generator writes no gorums.pb.go file; aliases.go declares the names.
 package dev

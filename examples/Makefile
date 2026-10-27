@@ -32,6 +32,8 @@ download:
 tools: download
 	@go install tool
 
+# protoc-gen-gorums also writes gorums.pb.go, which declares the Config, ID,
+# and Node aliases, next to the first _gorums.pb.go file of each Go package.
 %.pb.go %_gorums.pb.go : %.proto
 	@protoc -I="$(proto_include):." \
 		--go_out=paths=source_relative:. \

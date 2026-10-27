@@ -25,6 +25,8 @@ multiservice: multiservice/multiservice.pb.go multiservice/multiservice_gorums.p
 %_grpc.pb.go : %.proto
 	@protoc -I=../..:. --go-grpc_out=paths=source_relative:. $<
 
+# protoc-gen-gorums also writes gorums.pb.go, which declares the Config, ID,
+# and Node aliases, next to the first _gorums.pb.go file of each Go package.
 %_gorums.pb.go : %.proto
 	@protoc -I=../..:. --gorums_out=paths=source_relative:. $<
 
