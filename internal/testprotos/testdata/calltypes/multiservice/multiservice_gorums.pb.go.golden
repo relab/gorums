@@ -111,19 +111,19 @@ type betaClient struct {
 }
 
 func (c alphaClient) Heartbeat(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
-	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "gorums.testprotos.calltypes.multiservice.Alpha.Heartbeat")
+	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "internal.testprotos.calltypes.multiservice.Alpha.Heartbeat")
 }
 
 func (c alphaNodeClient) Read(ctx context.Context, in *Request) (*Response, error) {
-	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "gorums.testprotos.calltypes.multiservice.Alpha.Read")
+	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "internal.testprotos.calltypes.multiservice.Alpha.Read")
 }
 
 func (c betaClient) Heartbeat(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
-	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "gorums.testprotos.calltypes.multiservice.Beta.Heartbeat")
+	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "internal.testprotos.calltypes.multiservice.Beta.Heartbeat")
 }
 
 func (c betaClient) Write(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, c.config, in, "gorums.testprotos.calltypes.multiservice.Beta.Write")
+	return gorumsimpl.Multicast(ctx, c.config, in, "internal.testprotos.calltypes.multiservice.Beta.Write")
 }
 
 // Alpha is the server-side API for the Alpha Service
@@ -139,7 +139,7 @@ type BetaServer interface {
 }
 
 func RegisterAlphaServer(srv *gorums.Server, impl AlphaServer) {
-	srv.RegisterHandler("gorums.testprotos.calltypes.multiservice.Alpha.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.multiservice.Alpha.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		resp, err := impl.Heartbeat(ctx, req)
 		if err != nil {
@@ -147,7 +147,7 @@ func RegisterAlphaServer(srv *gorums.Server, impl AlphaServer) {
 		}
 		return gorums.NewResponseMessage(in, resp), nil
 	})
-	srv.RegisterHandler("gorums.testprotos.calltypes.multiservice.Alpha.Read", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.multiservice.Alpha.Read", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		resp, err := impl.Read(ctx, req)
 		if err != nil {
@@ -158,7 +158,7 @@ func RegisterAlphaServer(srv *gorums.Server, impl AlphaServer) {
 }
 
 func RegisterBetaServer(srv *gorums.Server, impl BetaServer) {
-	srv.RegisterHandler("gorums.testprotos.calltypes.multiservice.Beta.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.multiservice.Beta.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		resp, err := impl.Heartbeat(ctx, req)
 		if err != nil {
@@ -166,7 +166,7 @@ func RegisterBetaServer(srv *gorums.Server, impl BetaServer) {
 		}
 		return gorums.NewResponseMessage(in, resp), nil
 	})
-	srv.RegisterHandler("gorums.testprotos.calltypes.multiservice.Beta.Write", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.multiservice.Beta.Write", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.Write(ctx, req)
 		return nil, nil
