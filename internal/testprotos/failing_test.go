@@ -586,3 +586,62 @@ service Gamma {
 		})
 	}
 }
+
+// TestFailingProtoFilesPackageFile verifies that the generator rejects a Go
+// package with a proto file named gorums.proto in the output directory of the
+// package's gorums.pb.go file, since protoc-gen-go writes gorums.pb.go for it.
+func TestFailingProtoFilesPackageFile(t *testing.T) {
+	const frame = `
+edition = "2023";
+
+package gorums.testprotos.pkgfile;
+option go_package = "github.com/relab/gorums/internal/testprotos/pkgfile";
+
+import "gorums.proto";
+`
+	const messages = `
+message Request {
+	string value = 1;
+}
+message Response {
+	string value = 1;
+}`
+	const service = `
+service Storage {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`
+	const want = "pb/gorums.proto: protoc-gen-go writes gorums.pb.go, which Gorums uses for the package aliases; rename the proto file"
+	tests := []struct {
+		name    string
+		sources map[string]string
+		protos  []string
+	}{
+		{
+			name: "ImportedFile",
+			sources: map[string]string{
+				"pb/gorums.proto":  frame + messages,
+				"pb/service.proto": frame + `import "pb/gorums.proto";` + service,
+			},
+			protos: []string{"pb/service.proto"},
+		},
+		{
+			name:    "GorumsFile",
+			sources: map[string]string{"pb/gorums.proto": frame + messages + service},
+			protos:  []string{"pb/gorums.proto"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := gentest.Inline(t, tt.sources)
+			files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, tt.protos...)
+			if err == nil {
+				t.Fatalf("Generate succeeded, want an error containing %q; generated %d files", want, len(files))
+			}
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("Generate error = %q, want it to contain %q", err, want)
+			}
+		})
+	}
+}
