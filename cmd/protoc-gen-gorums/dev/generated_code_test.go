@@ -132,7 +132,7 @@ func TestGeneratedCodeDerivedConfig(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		config   gorums.Config
+		config   dev.Config
 		wantSize int
 	}{
 		{name: "Base", config: base, wantSize: 6},
@@ -220,7 +220,7 @@ func TestGeneratedCodeClient(t *testing.T) {
 	}
 	nodes := []struct {
 		name    string
-		node    *gorums.Node
+		node    *dev.Node
 		wantTag int64
 	}{
 		{name: "FirstNode", node: config.Nodes()[0], wantTag: 0},
@@ -269,7 +269,7 @@ func TestGeneratedCodeClient(t *testing.T) {
 // TestGeneratedCodeClientAllocs.
 var (
 	clientSink dev.ZorumsServiceClient
-	configSink gorums.Config
+	configSink dev.Config
 )
 
 // TestGeneratedCodeClientAllocs checks that constructing the generated client
