@@ -44,7 +44,8 @@ type (
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
 // Quorum calls and multicasts need a configuration, from
-// NewOnewayTestClient or WithConfig; they panic on an empty configuration.
+// [NewOnewayTestClient] or [OnewayTestClient.WithConfig]; they panic on an
+// empty configuration.
 type OnewayTestClient struct {
 	config gorums.Config
 }

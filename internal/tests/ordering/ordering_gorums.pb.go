@@ -47,7 +47,8 @@ type CorrectableResponse = *gorums.Correctable[*Response]
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
 // Quorum calls and multicasts need a configuration, from
-// NewOrderingClient or WithConfig; they panic on an empty configuration.
+// [NewOrderingClient] or [OrderingClient.WithConfig]; they panic on an
+// empty configuration.
 type OrderingClient struct {
 	config gorums.Config
 }
@@ -67,9 +68,9 @@ func (c OrderingClient) WithConfig(config gorums.Config) OrderingClient {
 	return OrderingClient{config: config}
 }
 
-// QuorumCall executes the Ordering.QuorumCall quorum call on the client's
-// configuration. Use terminal methods like Majority(), First(), or
-// Threshold(n) to retrieve the aggregated result.
+// QuorumCall executes a quorum call on the client's configuration. Use
+// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
+// aggregated result.
 //
 // Example:
 //

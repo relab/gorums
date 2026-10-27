@@ -54,7 +54,8 @@ var _ emptypb.Empty
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
 // Quorum calls and multicasts need a configuration, from
-// NewStorageClient or WithConfig; they panic on an empty configuration.
+// [NewStorageClient] or [StorageClient.WithConfig]; they panic on an
+// empty configuration.
 type StorageClient struct {
 	config gorums.Config
 }

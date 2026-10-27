@@ -47,7 +47,8 @@ type CorrectableResponse = *gorums.Correctable[*Response]
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
 // Quorum calls and multicasts need a configuration, from
-// NewCorrectableTestClient or WithConfig; they panic on an empty configuration.
+// [NewCorrectableTestClient] or [CorrectableTestClient.WithConfig]; they panic on an
+// empty configuration.
 type CorrectableTestClient struct {
 	config gorums.Config
 }
@@ -67,9 +68,9 @@ func (c CorrectableTestClient) WithConfig(config gorums.Config) CorrectableTestC
 	return CorrectableTestClient{config: config}
 }
 
-// Correctable executes the CorrectableTest.Correctable quorum call on the client's
-// configuration. Use terminal methods like Majority(), First(), or
-// Threshold(n) to retrieve the aggregated result.
+// Correctable executes a quorum call on the client's configuration. Use
+// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
+// aggregated result.
 //
 // Example:
 //
@@ -78,9 +79,9 @@ func (c CorrectableTestClient) Correctable(ctx context.Context, in *Request) *go
 	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "correctable.CorrectableTest.Correctable")
 }
 
-// CorrectableStream executes the CorrectableTest.CorrectableStream streaming quorum call on the
-// client's configuration. The server can send multiple responses, and the
-// response iterator continues until the context is canceled.
+// CorrectableStream executes a streaming quorum call on the client's configuration.
+// The server can send multiple responses, and the response iterator continues
+// until the context is canceled.
 //
 // Example:
 //

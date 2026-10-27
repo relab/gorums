@@ -44,7 +44,8 @@ type (
 // need not belong to the client's configuration.
 // The zero value is ready for remote calls and unicasts.
 // Quorum calls and multicasts need a configuration, from
-// NewUnresponsiveClient or WithConfig; they panic on an empty configuration.
+// [NewUnresponsiveClient] or [UnresponsiveClient.WithConfig]; they panic on an
+// empty configuration.
 type UnresponsiveClient struct {
 	config gorums.Config
 }
