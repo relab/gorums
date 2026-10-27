@@ -48,6 +48,18 @@ func TestGentestGenerate(t *testing.T) {
 	gentest.Compile(t, files)
 }
 
+func TestGentestGenerateNoGorums(t *testing.T) {
+	dir := gentest.Inline(t, map[string]string{"echo.proto": echoProto})
+	files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}, NoGorums: true}, "echo.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const name = "github.com/relab/gorums/internal/gentest/testdata/echo/echo.pb.go"
+	if got := slices.Sorted(maps.Keys(files)); !slices.Equal(got, []string{name}) {
+		t.Errorf("Generate returned %v, want only %s", got, name)
+	}
+}
+
 func TestGentestGenerateDev(t *testing.T) {
 	dir := gentest.Inline(t, map[string]string{"echo.proto": echoProto})
 	files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}, Dev: true}, "echo.proto")
