@@ -1107,6 +1107,7 @@ status, err := adminClient.StatusQC(ctx, &pb.StatusRequest{}).Majority()
 ```
 
 The clients use the connections of `cfg`; they open no connections of their own.
+A node client of each service reaches one node of `cfg`, for example `pb.NewStorageNodeClient(cfg.Nodes()[0]).ReadRPC(ctx, req)`.
 Each server in the configuration must register every service that a client calls.
 
 Two services may declare methods with the same name.
