@@ -104,6 +104,8 @@ func (c *Call[Req, Resp]) Async() *Responses[Resp] {
 type OnewayCall[Req proto.Message] struct {
 	ctx     *CallContext[Req, *emptypb.Empty]
 	unicast bool
+	// err, if set, is the error that the call reports instead of sending.
+	err error
 }
 
 // Intercept registers interceptors for this one-way call, applied in call-site
@@ -154,10 +156,14 @@ func (c *OnewayCall[Req]) Async() *OnewayAsync {
 }
 
 // dispatch installs the response channel and sends the request exactly once.
-// It panics if the handle was already dispatched.
+// A handle that holds an error sends nothing. It panics if the handle was
+// already dispatched.
 func (c *OnewayCall[Req]) dispatch() {
 	if c.ctx.dispatched.Swap(true) {
 		panic("gorums: OnewayCall.Send or OnewayCall.Async called more than once on the same handle")
+	}
+	if c.err != nil {
+		return
 	}
 	c.ctx.responseChan = make(chan NodeResponse[*stream.Message], c.ctx.config.Size())
 	c.ctx.sendOnce.Do(c.ctx.send)
@@ -168,7 +174,11 @@ func (c *OnewayCall[Req]) dispatch() {
 // unicast. A node skipped by a request transform ([ErrSkipNode]) is dropped
 // from the multicast aggregate, since the sends to the other nodes still went
 // out. A skipped unicast sent nothing at all, so its [ErrSkipNode] is returned.
+// A handle that holds an error returns that error.
 func (c *OnewayCall[Req]) collect() error {
+	if c.err != nil {
+		return c.err
+	}
 	if c.unicast {
 		r, err := c.receive()
 		if err != nil {

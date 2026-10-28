@@ -80,14 +80,6 @@ func requireConfig(callType, method string, config Config) {
 	}
 }
 
-// requireNode panics if node is nil. The panic message names the call type
-// callType and the full method name method of the call.
-func requireNode(callType, method string, node *Node) {
-	if node == nil {
-		panic("gorums: " + callType + " " + strconv.Quote(method) + " needs a non-nil node")
-	}
-}
-
 // newQuorumCallContext constructs a CallContext for quorum calls (two-way, always returns responses).
 // A response channel is always created; streaming controls both its buffer size and the response iterator type.
 func newQuorumCallContext[Req, Resp proto.Message](

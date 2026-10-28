@@ -27,6 +27,12 @@ var ErrStreamDown = stream.ErrStreamDown
 // is a gRPC status error with the Unavailable code; match it with [errors.Is].
 var ErrNodeClosed = stream.ErrNodeClosed
 
+// ErrNoNode is returned by a remote call or unicast on a nil node, such as
+// the node that [Config.Node] returns for an ID outside the configuration.
+// It is a gRPC status error with the Unavailable code; match it with
+// [errors.Is].
+var ErrNoNode = impl.ErrNoNode
+
 // ErrSendQueueFull is returned for a two-way call enqueued while the node's
 // send queue is full, so quorum logic counts the peer as failed; see
 // [WithSendBufferSize]. It is a gRPC status error with the Unavailable code;

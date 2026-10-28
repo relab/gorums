@@ -8,11 +8,15 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// RemoteCall executes a remote procedure call on node. It panics if node is nil.
+// RemoteCall executes a remote procedure call on node. It returns
+// [ErrNoNode] if node is nil.
 //
 // This method should be used by generated code only.
 func RemoteCall[Req, Resp proto.Message](ctx context.Context, node *Node, req Req, method string) (Resp, error) {
-	requireNode("RemoteCall", method, node)
+	if node == nil {
+		var zero Resp
+		return zero, ErrNoNode
+	}
 	responseChan := make(chan NodeResponse[*stream.Message], 1)
 	transport := conn.NodeTransport(node)
 	reqMsg, err := stream.NewMessage(ctx, transport.NextMsgID(), method, req)

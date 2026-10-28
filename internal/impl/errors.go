@@ -1,6 +1,11 @@
 package impl
 
-import "errors"
+import (
+	"errors"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
 
 // ErrIncomplete is the error returned by a quorum call when the call cannot be completed
 // due to insufficient non-error replies to form a quorum according to the quorum function.
@@ -15,3 +20,8 @@ var ErrSkipNode = errors.New("skip node")
 
 // ErrTypeMismatch is returned when a response cannot be cast to the expected type.
 var ErrTypeMismatch = errors.New("response type mismatch")
+
+// ErrNoNode is returned by a remote call or unicast on a nil node, such as
+// the node that [Config.Node] returns for an ID outside the configuration.
+// It is a gRPC status error with the Unavailable code.
+var ErrNoNode = status.Error(codes.Unavailable, "no such node")

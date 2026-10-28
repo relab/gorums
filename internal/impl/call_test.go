@@ -7,13 +7,14 @@ import (
 
 	"github.com/relab/gorums/internal/conn"
 	"github.com/relab/gorums/internal/stream"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// TestCallConstructorsPanic verifies that each call constructor panics when
-// it has no target: a multi-node constructor on a nil or empty configuration,
-// and a single-node constructor on a nil node.
+// TestCallConstructorsPanic verifies that each multi-node call constructor
+// panics on a nil or empty configuration.
 func TestCallConstructorsPanic(t *testing.T) {
 	const method = "test.Method"
 	req := pb.String("hello")
@@ -52,16 +53,6 @@ func TestCallConstructorsPanic(t *testing.T) {
 			call:      func() { Multicast(t.Context(), Config{}, req, method) },
 			wantPanic: `gorums: Multicast "test.Method" needs a non-empty configuration`,
 		},
-		{
-			name:      "RemoteCall/NilNode",
-			call:      func() { _, _ = RemoteCall[*pb.StringValue, *pb.StringValue](t.Context(), nil, req, method) },
-			wantPanic: `gorums: RemoteCall "test.Method" needs a non-nil node`,
-		},
-		{
-			name:      "Unicast/NilNode",
-			call:      func() { Unicast(t.Context(), nil, req, method) },
-			wantPanic: `gorums: Unicast "test.Method" needs a non-nil node`,
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -71,6 +62,55 @@ func TestCallConstructorsPanic(t *testing.T) {
 				}
 			}()
 			tt.call()
+		})
+	}
+}
+
+// TestCallNilNode verifies that a single-node call on a nil node does not
+// panic, but reports [ErrNoNode]: a remote call returns it, and a unicast
+// returns it from Send and from Wait after Async.
+func TestCallNilNode(t *testing.T) {
+	const method = "test.Method"
+	req := pb.String("hello")
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{
+			name: "RemoteCall",
+			call: func() error {
+				resp, err := RemoteCall[*pb.StringValue, *pb.StringValue](t.Context(), nil, req, method)
+				if resp != nil {
+					t.Errorf("RemoteCall() response = %v, want nil", resp)
+				}
+				return err
+			},
+		},
+		{
+			name: "Unicast/Send",
+			call: func() error { return Unicast(t.Context(), nil, req, method).Send() },
+		},
+		{
+			name: "Unicast/Async",
+			call: func() error { return Unicast(t.Context(), nil, req, method).Async().Wait() },
+		},
+		{
+			name: "Unicast/Intercept",
+			call: func() error {
+				skip := MapRequest[*pb.StringValue, *emptypb.Empty](func(*pb.StringValue, *Node) *pb.StringValue { return nil })
+				return Unicast(t.Context(), nil, req, method).Intercept(skip).Send()
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.call()
+			if !errors.Is(err, ErrNoNode) {
+				t.Errorf("call error = %v, want %v", err, ErrNoNode)
+			}
+			if got := status.Code(err); got != codes.Unavailable {
+				t.Errorf("status.Code(err) = %v, want %v", got, codes.Unavailable)
+			}
 		})
 	}
 }
