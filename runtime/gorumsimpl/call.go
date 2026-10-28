@@ -35,14 +35,15 @@ func Multicast[Req proto.Message](ctx context.Context, config gorums.Config, req
 
 // Unicast executes a one-way call on node. No reply is returned.
 // Send errors are reported by [gorums.OnewayCall.Send] or
-// [gorums.OnewayAsync.Wait]. It panics if node is nil.
+// [gorums.OnewayAsync.Wait]. If node is nil, they report [gorums.ErrNoNode].
 // It is used by generated code.
 func Unicast[Req proto.Message](ctx context.Context, node *gorums.Node, req Req, method string) *gorums.OnewayCall[Req] {
 	return impl.Unicast(ctx, node, req, method)
 }
 
 // RemoteCall executes a remote procedure call on node and returns the
-// response or an error. It panics if node is nil. It is used by generated code.
+// response or an error. It returns [gorums.ErrNoNode] if node is nil.
+// It is used by generated code.
 func RemoteCall[Req, Resp proto.Message](ctx context.Context, node *gorums.Node, req Req, method string) (Resp, error) {
 	return impl.RemoteCall[Req, Resp](ctx, node, req, method)
 }
