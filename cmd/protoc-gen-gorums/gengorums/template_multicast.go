@@ -4,10 +4,12 @@ var mcVar = `
 {{$genFile := .GenFile}}
 {{$multicast := use "gorumsimpl.Multicast" .GenFile}}
 {{$onewayCall := use "gorums.OnewayCall" .GenFile}}
+{{$impl := printf "%sClient" (unexport $service)}}
 {{$local := localNames "c ctx in" $in $context $multicast}}
 `
 
 var multicastComment = `
+{{- if .Decl}}
 {{$comments := .Method.Comments.Leading}}
 {{if ne $comments ""}}
 {{$comments -}}
@@ -20,19 +22,22 @@ var multicastComment = `
 {{end -}}
 //
 // Example:
-//   err := client.{{$method}}(ctx, in).Send()
-//   h := client.{{$method}}(ctx, in).Async()
-//   err = h.Wait()
+//
+//	err := client.{{$method}}(ctx, in).Send()
+//	h := client.{{$method}}(ctx, in).Async()
+//	err = h.Wait()
+{{end -}}
 `
 
-var multicastSignature = `func ({{$local.c}} {{$service}}Client) {{$method}}(` +
+var multicastSignature = `{{if not .Decl}}func ({{$local.c}} {{$impl}}) {{end}}{{$method}}(` +
 	`{{$local.ctx}} {{$context}}, {{$local.in}} *{{$in}})` +
-	` *{{$onewayCall}}[*{{$in}}] {
-`
+	` *{{$onewayCall}}[*{{$in}}]`
 
-var multicastBody = `	return {{$multicast}}({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
+var multicastBody = `{{if .Decl}}
+{{else}} {
+	return {{$multicast}}({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
 }
-`
+{{end}}`
 
 var multicastCall = commonVariables +
 	mcVar +

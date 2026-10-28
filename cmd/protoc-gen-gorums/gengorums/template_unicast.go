@@ -4,38 +4,40 @@ var unicastVar = `
 {{$genFile := .GenFile}}
 {{$unicast := use "gorumsimpl.Unicast" .GenFile}}
 {{$onewayCall := use "gorums.OnewayCall" .GenFile}}
-{{$node := use "gorums.Node" .GenFile}}
-{{$local := localNames "c ctx node in" $in $context $unicast}}
+{{$impl := printf "%sNodeClient" (unexport $service)}}
+{{$local := localNames "c ctx in" $in $context $unicast}}
 `
 
 var unicastComment = `
+{{- if .Decl}}
 {{$comments := .Method.Comments.Leading}}
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-// {{$method}} starts a one-way call on the given node; no reply is returned.
-// It ignores the client's configuration. It is a method of {{$service}}Client
-// only to keep the service's calls together and avoid package-level name
-// conflicts.
+// {{$method}} starts a one-way call on the client's node; no reply is
+// returned.
 //
 // Send blocks until the send completes and returns any send error.
 // Async returns a handle at once; Wait on the handle returns the send error.
 {{end -}}
 //
 // Example:
-//   err := {{.GoPackageName}}.{{$service}}Client{}.{{$method}}(ctx, node, in).Send()
-//   h := {{.GoPackageName}}.{{$service}}Client{}.{{$method}}(ctx, node, in).Async()
-//   err = h.Wait()
+//
+//	err := nodeClient.{{$method}}(ctx, in).Send()
+//	h := nodeClient.{{$method}}(ctx, in).Async()
+//	err = h.Wait()
+{{end -}}
 `
 
-var unicastSignature = `func ({{$local.c}} {{$service}}Client) {{$method}}(` +
-	`{{$local.ctx}} {{$context}}, {{$local.node}} *{{$node}}, {{$local.in}} *{{$in}})` +
-	` *{{$onewayCall}}[*{{$in}}] {
-`
+var unicastSignature = `{{if not .Decl}}func ({{$local.c}} {{$impl}}) {{end}}{{$method}}(` +
+	`{{$local.ctx}} {{$context}}, {{$local.in}} *{{$in}})` +
+	` *{{$onewayCall}}[*{{$in}}]`
 
-var unicastBody = `	return {{$unicast}}({{$local.ctx}}, {{$local.node}}, {{$local.in}}, "{{$fullName}}")
+var unicastBody = `{{if .Decl}}
+{{else}} {
+	return {{$unicast}}({{$local.ctx}}, {{$local.c}}.node, {{$local.in}}, "{{$fullName}}")
 }
-`
+{{end}}`
 
 var unicastCall = commonVariables +
 	unicastVar +

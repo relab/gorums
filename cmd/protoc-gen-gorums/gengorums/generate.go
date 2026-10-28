@@ -96,10 +96,8 @@ func shouldGenerate(gen *protogen.Plugin, file *protogen.File) (bool, error) {
 // checkReservedIdents returns an error if a Go declaration of the file's Go
 // package collides with an identifier that Gorums declares in that package.
 // A message, enum, or enum value of any file in the package, nested or not,
-// must not take the name of a Gorums type alias or of a client type or
-// constructor generated for the file's service. An RPC method of the file's
-// service must not take the name of a helper method of the generated client
-// type.
+// must not take the name of a Gorums type alias or of a client interface,
+// constructor, or implementing struct generated for the file's service.
 func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
 	var generated []string
 	for _, service := range file.Services {
@@ -120,13 +118,6 @@ func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
 		}
 		if err := checkTypes(f.Messages, f.Enums, check); err != nil {
 			return err
-		}
-	}
-	for _, service := range file.Services {
-		for _, method := range service.Methods {
-			if err := checkClientMethod(method); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
@@ -157,16 +148,6 @@ func checkTypes(msgs []*protogen.Message, enums []*protogen.Enum, check func(kin
 	return nil
 }
 
-// checkClientMethod returns an error if the method's Go name equals a helper
-// method of the generated client type SClient, which receives every call.
-func checkClientMethod(method *protogen.Method) error {
-	if slices.Contains(clientHelpers, method.GoName) {
-		return fmt.Errorf("%s.%s: RPC method collides with the generated %sClient.%s method",
-			method.Parent.Desc.Name(), method.Desc.Name(), method.Parent.GoName, method.GoName)
-	}
-	return nil
-}
-
 // generateFileContent generates the Gorums service definitions, excluding the package statement.
 func generateFileContent(file *protogen.File, g *protogen.GeneratedFile) {
 	// 1. Data Types (Correctable aliases)
@@ -175,10 +156,10 @@ func generateFileContent(file *protogen.File, g *protogen.GeneratedFile) {
 	// 2. Reference Imports
 	genReferenceImports(g, file.Services)
 
-	// 3. Client Types
+	// 3. Client Interfaces, Constructors, and Structs
 	genGorumsType(g, file.Services, "client")
 
-	// 4. Client Methods (in proto order)
+	// 4. Client Method Implementations (in proto order)
 	genGorumsMethods(g, file, "")
 
 	// 5. Server Interface and Registration
@@ -219,9 +200,17 @@ func genReferenceImports(g *protogen.GeneratedFile, services []*protogen.Service
 
 // genGorumsType generates the service-level code for the named entry in
 // [gorumsCallTypesInfo], such as "types", "client", or "server". It
-// generates nothing for an entry that belongs to a method option.
+// generates nothing for an entry that belongs to a method option. The client
+// entry has no template of its own; [genClients] generates its code from the
+// templates of the call types.
 func genGorumsType(g *protogen.GeneratedFile, services []*protogen.Service, name string) {
-	if info := gorumsCallTypesInfo[name]; info.ext == nil {
+	info := gorumsCallTypesInfo[name]
+	switch {
+	case info.ext != nil:
+		// A method option entry has no service-level code.
+	case name == clientEntry:
+		genClients(g, services)
+	default:
 		// servicesData hold the services to generate and a reference to the file in which
 		// the services should be generated. This is data to be used by template generator.
 		type servicesData struct {
@@ -232,34 +221,35 @@ func genGorumsType(g *protogen.GeneratedFile, services []*protogen.Service, name
 	}
 }
 
-// genGorumsMethods generates the Gorums methods of the services in file whose
-// call type is target. An empty target generates the methods of all call
-// types.
+// genGorumsMethods generates the client method implementations of the
+// services in file whose call type is target. An empty target generates the
+// methods of all call types.
 func genGorumsMethods(g *protogen.GeneratedFile, file *protogen.File, target string) {
 	for _, service := range file.Services {
 		for _, method := range service.Methods {
-			genMethod(g, file.GoPackageName, method, target)
+			if name, _ := callType(method); target == "" || target == name {
+				g.P(renderMethod(g, method, false))
+			}
 		}
 	}
 }
 
-// genMethod generates the Gorums method for the given method if its call
-// type is target. An empty target matches any call type. The package name pkg
-// qualifies the client type in the method's doc comment example.
-func genMethod(g *protogen.GeneratedFile, pkg protogen.GoPackageName, method *protogen.Method, target string) {
+// renderMethod renders the client method of the given method with the
+// template of its call type. If decl is true, it renders the documented
+// method declaration of the client interface; otherwise, it renders the method
+// of the implementing struct. It returns "" if the method has no Gorums call
+// type.
+func renderMethod(g *protogen.GeneratedFile, method *protogen.Method, decl bool) string {
 	name, info := callType(method)
 	if info == nil {
-		return
-	}
-	if target != "" && target != name {
-		return
+		return ""
 	}
 	type methodData struct {
-		GenFile       *protogen.GeneratedFile
-		GoPackageName protogen.GoPackageName
-		Method        *protogen.Method
+		GenFile *protogen.GeneratedFile
+		Method  *protogen.Method
+		Decl    bool
 	}
-	g.P(mustExecute(parseTemplate(name, info.template), methodData{g, pkg, method}))
+	return mustExecute(parseTemplate(name, info.template), methodData{g, method, decl})
 }
 
 // callType returns the name and information of the call type that matches
@@ -296,8 +286,9 @@ type callTypeInfo struct {
 	// and "server".
 	ext *protoimpl.ExtensionInfo
 	// template generates the code for this call type. For a method option,
-	// it generates one method; for a service-level entry, it generates the
-	// code for all services. It is empty if nested holds the templates.
+	// it generates one client method; for a service-level entry, it generates
+	// the code for all services. It is empty if nested holds the templates,
+	// and for the client entry.
 	template string
 	// match reports whether a method has this call type.
 	// It is nil for the service-level entries, which match no method.
@@ -335,14 +326,18 @@ func callTypeName(ext *protoimpl.ExtensionInfo) string {
 	return s[strings.LastIndex(s, ".")+1:]
 }
 
+// clientEntry is the key of the service-level entry in [gorumsCallTypesInfo]
+// for the client interfaces.
+const clientEntry = "client"
+
 // gorumsCallTypesInfo maps each Gorums call type name to its [callTypeInfo].
 // The method option entries are mutually exclusive: at most one matches a
 // given method. In dev mode, each key names a generated
 // zorums_{key}_gorums.pb.go file.
 var gorumsCallTypesInfo = map[string]*callTypeInfo{
-	"types":  {template: dataTypes},
-	"client": {template: client},
-	"server": {template: server},
+	"types":     {template: dataTypes},
+	clientEntry: {},
+	"server":    {template: server},
 
 	callTypeName(gorums.E_Remotecall): {
 		ext:      gorums.E_Remotecall,

@@ -42,8 +42,8 @@ func TestGentestGenerate(t *testing.T) {
 			t.Errorf("Generate did not return %s; got %v", name, slices.Sorted(maps.Keys(files)))
 		}
 	}
-	if got := files[prefix+"_gorums.pb.go"]; !strings.Contains(got, "func (c EchoClient) Echo(") {
-		t.Errorf("generated Gorums code has no EchoClient.Echo method:\n%s", got)
+	if got := files[prefix+"_gorums.pb.go"]; !strings.Contains(got, "func (c echoClient) Echo(") {
+		t.Errorf("generated Gorums code has no echoClient.Echo method:\n%s", got)
 	}
 	gentest.Compile(t, files)
 }
@@ -61,10 +61,11 @@ func TestGentestGenerateDev(t *testing.T) {
 }
 
 func TestGentestGenerateError(t *testing.T) {
-	src := strings.Replace(echoProto, "rpc Echo(Msg)", "rpc Config(Msg)", 1)
+	src := strings.Replace(echoProto, "message Msg {", "message EchoClient {", 1)
+	src = strings.ReplaceAll(src, "(Msg)", "(EchoClient)")
 	dir := gentest.Inline(t, map[string]string{"echo.proto": src})
 	_, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, "echo.proto")
-	const want = "Echo.Config: RPC method collides with the generated EchoClient.Config method"
+	const want = "contains message EchoClient, which is a generated Gorums identifier"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Generate error = %v, want it to contain %q", err, want)
 	}
