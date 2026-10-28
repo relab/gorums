@@ -48,7 +48,7 @@ func TestTLSConnection(t *testing.T) {
 		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
 	))
 
-	resp, err := TLSClient{}.TestTLS(context.Background(), node, &Request{})
+	resp, err := NewTLSNodeClient(node).TestTLS(context.Background(), &Request{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
 	}

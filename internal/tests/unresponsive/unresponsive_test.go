@@ -31,7 +31,7 @@ func TestUnresponsiveServer(t *testing.T) {
 	for range 100 {
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 		start := time.Now()
-		_, err := UnresponsiveClient{}.TestUnresponsive(ctx, node, &Empty{})
+		_, err := NewUnresponsiveNodeClient(node).TestUnresponsive(ctx, &Empty{})
 		cancel()
 		if !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatalf("TestUnresponsive() error = %v, want %v", err, context.DeadlineExceeded)

@@ -12,6 +12,7 @@ package dev_test
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -180,17 +181,17 @@ func TestGeneratedCodeIDField(t *testing.T) {
 	var _ dev.ID // the reserved alias must remain usable alongside the field
 }
 
-// TestGeneratedCodeClient checks the quorum calls and the node calls of the
-// generated ZorumsServiceClient type.
+// TestGeneratedCodeClient checks the quorum calls of the generated
+// ZorumsServiceClient and the node calls of the generated
+// ZorumsServiceNodeClient.
 func TestGeneratedCodeClient(t *testing.T) {
 	const numServers = 3
 	config := gorumstest.Config(t, numServers, newQuorumCallServer)
-	client := dev.NewZorumsServiceClient(config)
 
 	t.Run("QuorumCall", func(t *testing.T) {
 		req := &dev.Request{}
 		req.SetValue("test")
-		resp, err := client.QuorumCall(gorumstest.Context(t, 2*time.Second), req).Majority()
+		resp, err := dev.NewZorumsServiceClient(config).QuorumCall(gorumstest.Context(t, 2*time.Second), req).Majority()
 		if err != nil {
 			t.Fatalf("QuorumCall failed: %v", err)
 		}
@@ -204,20 +205,12 @@ func TestGeneratedCodeClient(t *testing.T) {
 	// covers both, so the second skips its own check, which would otherwise
 	// run while the first configuration is still open.
 	otherNode := gorumstest.Node(t, newTaggedServer(100), gorumstest.SkipGoleak())
-	if slices.Contains(client.Config().Nodes(), otherNode) {
-		t.Fatalf("node %v is in the client's configuration", otherNode)
+	if slices.Contains(config.Nodes(), otherNode) {
+		t.Fatalf("node %v is in the configuration", otherNode)
 	}
 
-	// A node call runs on the given node and ignores the client's
-	// configuration, so a configuration client and a zero client reach the
-	// same server, also for a node outside the configuration.
-	clients := []struct {
-		name   string
-		client dev.ZorumsServiceClient
-	}{
-		{name: "ConfigClient", client: client},
-		{name: "ZeroClient", client: dev.ZorumsServiceClient{}},
-	}
+	// A node client runs its calls on its node, which may belong to any
+	// configuration.
 	nodes := []struct {
 		name    string
 		node    *dev.Node
@@ -227,54 +220,87 @@ func TestGeneratedCodeClient(t *testing.T) {
 		{name: "LastNode", node: config.Nodes()[numServers-1], wantTag: numServers - 1},
 		{name: "OtherConfigNode", node: otherNode, wantTag: 100},
 	}
-	for _, c := range clients {
-		for _, n := range nodes {
-			t.Run("NodeCall/"+c.name+"/"+n.name, func(t *testing.T) {
-				resp, err := c.client.GRPCCall(gorumstest.Context(t, 2*time.Second), n.node, &dev.Request{})
-				if err != nil {
-					t.Fatalf("GRPCCall failed: %v", err)
-				}
-				if got := resp.GetResult(); got != n.wantTag {
-					t.Errorf("GRPCCall result = %d, want %d", got, n.wantTag)
-				}
-			})
-		}
+	for _, n := range nodes {
+		t.Run("NodeCall/"+n.name, func(t *testing.T) {
+			nodeClient := dev.NewZorumsServiceNodeClient(n.node)
+			resp, err := nodeClient.GRPCCall(gorumstest.Context(t, 2*time.Second), &dev.Request{})
+			if err != nil {
+				t.Fatalf("GRPCCall failed: %v", err)
+			}
+			if got := resp.GetResult(); got != n.wantTag {
+				t.Errorf("GRPCCall result = %d, want %d", got, n.wantTag)
+			}
+		})
 	}
 
-	t.Run("ZeroClientQuorumCall", func(t *testing.T) {
+	// A node client of a nil node, such as the node that Config.Node returns
+	// for an unknown ID, reports ErrNoNode from every call.
+	nilNodeClient := dev.NewZorumsServiceNodeClient(config.Node(numServers + 100))
+	nilNodeCalls := []struct {
+		name string
+		call func(context.Context) error
+	}{
+		{
+			name: "RemoteCall",
+			call: func(ctx context.Context) error {
+				_, err := nilNodeClient.GRPCCall(ctx, &dev.Request{})
+				return err
+			},
+		},
+		{
+			name: "UnicastSend",
+			call: func(ctx context.Context) error { return nilNodeClient.Unicast(ctx, &dev.Request{}).Send() },
+		},
+		{
+			name: "UnicastAsync",
+			call: func(ctx context.Context) error { return nilNodeClient.Unicast(ctx, &dev.Request{}).Async().Wait() },
+		},
+	}
+	for _, c := range nilNodeCalls {
+		t.Run("NilNode/"+c.name, func(t *testing.T) {
+			if err := c.call(t.Context()); !errors.Is(err, gorums.ErrNoNode) {
+				t.Errorf("call error = %v, want %v", err, gorums.ErrNoNode)
+			}
+		})
+	}
+
+	t.Run("EmptyConfigQuorumCall", func(t *testing.T) {
 		defer func() {
 			if recover() == nil {
-				t.Error("QuorumCall on a zero client did not panic")
+				t.Error("QuorumCall on an empty configuration did not panic")
 			}
 		}()
-		dev.ZorumsServiceClient{}.QuorumCall(t.Context(), &dev.Request{})
+		dev.NewZorumsServiceClient(nil).QuorumCall(t.Context(), &dev.Request{})
 	})
 }
 
 // Sinks keep the compiler from eliding the operations measured in
 // TestGeneratedCodeClientAllocs.
 var (
-	clientSink dev.ZorumsServiceClient
-	configSink dev.Config
+	clientSink     dev.ZorumsServiceClient
+	nodeClientSink dev.ZorumsServiceNodeClient
 )
 
-// TestGeneratedCodeClientAllocs checks that constructing the generated client
-// type and accessing its configuration allocates nothing.
+// TestGeneratedCodeClientAllocs checks how often constructing the generated
+// clients allocates. A node client holds only a pointer, so building one
+// allocates nothing. A configuration client holds a slice, which is stored on
+// the heap behind the interface.
 func TestGeneratedCodeClientAllocs(t *testing.T) {
 	config := gorumstest.Config(t, 3, newQuorumCallServer)
-	client := dev.NewZorumsServiceClient(config)
+	node := config.Nodes()[0]
 
 	tests := []struct {
 		name string
 		fn   func()
+		want float64
 	}{
-		{name: "NewZorumsServiceClient", fn: func() { clientSink = dev.NewZorumsServiceClient(config) }},
-		{name: "Config", fn: func() { configSink = client.Config() }},
+		{name: "NewZorumsServiceClient", fn: func() { clientSink = dev.NewZorumsServiceClient(config) }, want: 1},
+		{name: "NewZorumsServiceNodeClient", fn: func() { nodeClientSink = dev.NewZorumsServiceNodeClient(node) }, want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if allocs := testing.AllocsPerRun(1000, tt.fn); allocs != 0 {
-				t.Errorf("%s allocates %v times per run, want 0", tt.name, allocs)
+			if allocs := testing.AllocsPerRun(1000, tt.fn); allocs != tt.want {
+				t.Errorf("%s allocates %v times per run, want %v", tt.name, allocs, tt.want)
 			}
 		})
 	}
