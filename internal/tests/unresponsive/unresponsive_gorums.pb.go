@@ -38,37 +38,33 @@ type (
 	Node   = gorums.Node
 )
 
-// UnresponsiveClient invokes the calls of the Unresponsive service.
-// Quorum calls and multicasts execute on the client's configuration.
-// Remote calls and unicasts execute on the node given to each call; that node
-// need not belong to the client's configuration.
-// The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration from
-// [NewUnresponsiveClient]; they panic on an empty configuration.
-type UnresponsiveClient struct {
-	config gorums.Config
+// UnresponsiveNodeClient is the client API for the remote calls and unicasts
+// of the Unresponsive service. Its calls execute on the node given to
+// [NewUnresponsiveNodeClient]. If that node is nil, every call returns
+// [gorums.ErrNoNode].
+type UnresponsiveNodeClient interface {
+	// TestUnresponsive executes a remote call on the client's node and returns its
+	// reply.
+	//
+	// Example:
+	//
+	//	resp, err := nodeClient.TestUnresponsive(ctx, in)
+	TestUnresponsive(ctx context.Context, in *Empty) (*Empty, error)
 }
 
-// NewUnresponsiveClient returns a client for the Unresponsive service, bound to config.
-func NewUnresponsiveClient(config gorums.Config) UnresponsiveClient {
-	return UnresponsiveClient{config: config}
+// NewUnresponsiveNodeClient returns a node client whose calls execute on node.
+// The node may be nil, and it need not belong to a particular configuration.
+func NewUnresponsiveNodeClient(node *gorums.Node) UnresponsiveNodeClient {
+	return unresponsiveNodeClient{node: node}
 }
 
-// Config returns the configuration to which c is bound.
-func (c UnresponsiveClient) Config() gorums.Config {
-	return c.config
+// unresponsiveNodeClient implements UnresponsiveNodeClient.
+type unresponsiveNodeClient struct {
+	node *gorums.Node
 }
 
-// TestUnresponsive executes a remote call on the given node and returns its reply.
-// It ignores the client's configuration. It is a method of UnresponsiveClient
-// only to keep the service's calls together and avoid package-level name
-// conflicts.
-//
-// Example:
-//
-//	resp, err := unresponsive.UnresponsiveClient{}.TestUnresponsive(ctx, node, in)
-func (c UnresponsiveClient) TestUnresponsive(ctx context.Context, node *gorums.Node, in *Empty) (*Empty, error) {
-	return gorumsimpl.RemoteCall[*Empty, *Empty](ctx, node, in, "unresponsive.Unresponsive.TestUnresponsive")
+func (c unresponsiveNodeClient) TestUnresponsive(ctx context.Context, in *Empty) (*Empty, error) {
+	return gorumsimpl.RemoteCall[*Empty, *Empty](ctx, c.node, in, "unresponsive.Unresponsive.TestUnresponsive")
 }
 
 // Unresponsive is the server-side API for the Unresponsive Service

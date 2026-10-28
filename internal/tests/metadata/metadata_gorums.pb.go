@@ -39,35 +39,35 @@ type (
 	Node   = gorums.Node
 )
 
-// MetadataTestClient invokes the calls of the MetadataTest service.
-// Quorum calls and multicasts execute on the client's configuration.
-// Remote calls and unicasts execute on the node given to each call; that node
-// need not belong to the client's configuration.
-// The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration from
-// [NewMetadataTestClient]; they panic on an empty configuration.
-type MetadataTestClient struct {
-	config gorums.Config
+// MetadataTestNodeClient is the client API for the remote calls and unicasts
+// of the MetadataTest service. Its calls execute on the node given to
+// [NewMetadataTestNodeClient]. If that node is nil, every call returns
+// [gorums.ErrNoNode].
+type MetadataTestNodeClient interface {
+	// IDFromMD returns the 'id' field from the metadata.
+	IDFromMD(ctx context.Context, in *emptypb.Empty) (*NodeID, error)
+
+	// WhatIP returns the address of the client that calls it.
+	WhatIP(ctx context.Context, in *emptypb.Empty) (*IPAddr, error)
 }
 
-// NewMetadataTestClient returns a client for the MetadataTest service, bound to config.
-func NewMetadataTestClient(config gorums.Config) MetadataTestClient {
-	return MetadataTestClient{config: config}
+// NewMetadataTestNodeClient returns a node client whose calls execute on node.
+// The node may be nil, and it need not belong to a particular configuration.
+func NewMetadataTestNodeClient(node *gorums.Node) MetadataTestNodeClient {
+	return metadataTestNodeClient{node: node}
 }
 
-// Config returns the configuration to which c is bound.
-func (c MetadataTestClient) Config() gorums.Config {
-	return c.config
+// metadataTestNodeClient implements MetadataTestNodeClient.
+type metadataTestNodeClient struct {
+	node *gorums.Node
 }
 
-// IDFromMD returns the 'id' field from the metadata.
-func (c MetadataTestClient) IDFromMD(ctx context.Context, node *gorums.Node, in *emptypb.Empty) (*NodeID, error) {
-	return gorumsimpl.RemoteCall[*emptypb.Empty, *NodeID](ctx, node, in, "metadata.MetadataTest.IDFromMD")
+func (c metadataTestNodeClient) IDFromMD(ctx context.Context, in *emptypb.Empty) (*NodeID, error) {
+	return gorumsimpl.RemoteCall[*emptypb.Empty, *NodeID](ctx, c.node, in, "metadata.MetadataTest.IDFromMD")
 }
 
-// WhatIP returns the address of the client that calls it.
-func (c MetadataTestClient) WhatIP(ctx context.Context, node *gorums.Node, in *emptypb.Empty) (*IPAddr, error) {
-	return gorumsimpl.RemoteCall[*emptypb.Empty, *IPAddr](ctx, node, in, "metadata.MetadataTest.WhatIP")
+func (c metadataTestNodeClient) WhatIP(ctx context.Context, in *emptypb.Empty) (*IPAddr, error) {
+	return gorumsimpl.RemoteCall[*emptypb.Empty, *IPAddr](ctx, c.node, in, "metadata.MetadataTest.WhatIP")
 }
 
 // MetadataTest is the server-side API for the MetadataTest Service

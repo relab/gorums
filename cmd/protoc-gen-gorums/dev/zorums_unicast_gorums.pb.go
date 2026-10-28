@@ -23,36 +23,10 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// Unicast starts a one-way call on the given node; no reply is returned.
-// It ignores the client's configuration. It is a method of ZorumsServiceClient
-// only to keep the service's calls together and avoid package-level name
-// conflicts.
-//
-// Send blocks until the send completes and returns any send error.
-// Async returns a handle at once; Wait on the handle returns the send error.
-//
-// Example:
-//
-//	err := dev.ZorumsServiceClient{}.Unicast(ctx, node, in).Send()
-//	h := dev.ZorumsServiceClient{}.Unicast(ctx, node, in).Async()
-//	err = h.Wait()
-func (c ZorumsServiceClient) Unicast(ctx context.Context, node *gorums.Node, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Unicast(ctx, node, in, "dev.ZorumsService.Unicast")
+func (c zorumsServiceNodeClient) Unicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Unicast(ctx, c.node, in, "dev.ZorumsService.Unicast")
 }
 
-// Unicast2 starts a one-way call on the given node; no reply is returned.
-// It ignores the client's configuration. It is a method of ZorumsServiceClient
-// only to keep the service's calls together and avoid package-level name
-// conflicts.
-//
-// Send blocks until the send completes and returns any send error.
-// Async returns a handle at once; Wait on the handle returns the send error.
-//
-// Example:
-//
-//	err := dev.ZorumsServiceClient{}.Unicast2(ctx, node, in).Send()
-//	h := dev.ZorumsServiceClient{}.Unicast2(ctx, node, in).Async()
-//	err = h.Wait()
-func (c ZorumsServiceClient) Unicast2(ctx context.Context, node *gorums.Node, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Unicast(ctx, node, in, "dev.ZorumsService.Unicast2")
+func (c zorumsServiceNodeClient) Unicast2(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Unicast(ctx, c.node, in, "dev.ZorumsService.Unicast2")
 }

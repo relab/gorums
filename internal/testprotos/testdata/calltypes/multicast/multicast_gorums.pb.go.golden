@@ -42,50 +42,49 @@ type (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// MulticastClient invokes the calls of the Multicast service.
-// Quorum calls and multicasts execute on the client's configuration.
-// Remote calls and unicasts execute on the node given to each call; that node
-// need not belong to the client's configuration.
-// The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration from
-// [NewMulticastClient]; they panic on an empty configuration.
-type MulticastClient struct {
+// MulticastClient is the client API for the quorum calls and multicasts of
+// the Multicast service. Its calls execute on the configuration given to
+// [NewMulticastClient]. A call on an empty configuration panics when it is
+// built.
+type MulticastClient interface {
+	// Multicast starts a one-way call on the client's configuration; no reply
+	// is returned. Use gorums.MapRequest to send a different message to each node.
+	//
+	// Send blocks until every send completes and returns any send errors.
+	// Async returns a handle at once; Wait on the handle returns the send errors.
+	//
+	// Example:
+	//
+	//	err := client.Multicast(ctx, in).Send()
+	//	h := client.Multicast(ctx, in).Async()
+	//	err = h.Wait()
+	Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
+
+	// MulticastEmpty is testing imported message type.
+	//
+	// Example:
+	//
+	//	err := client.MulticastEmpty(ctx, in).Send()
+	//	h := client.MulticastEmpty(ctx, in).Async()
+	//	err = h.Wait()
+	MulticastEmpty(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
+}
+
+// NewMulticastClient returns a client whose calls execute on config.
+func NewMulticastClient(config gorums.Config) MulticastClient {
+	return multicastClient{config: config}
+}
+
+// multicastClient implements MulticastClient.
+type multicastClient struct {
 	config gorums.Config
 }
 
-// NewMulticastClient returns a client for the Multicast service, bound to config.
-func NewMulticastClient(config gorums.Config) MulticastClient {
-	return MulticastClient{config: config}
-}
-
-// Config returns the configuration to which c is bound.
-func (c MulticastClient) Config() gorums.Config {
-	return c.config
-}
-
-// Multicast starts a one-way call on the client's configuration; no reply
-// is returned. Use gorums.MapRequest to send a different message to each node.
-//
-// Send blocks until every send completes and returns any send errors.
-// Async returns a handle at once; Wait on the handle returns the send errors.
-//
-// Example:
-//
-//	err := client.Multicast(ctx, in).Send()
-//	h := client.Multicast(ctx, in).Async()
-//	err = h.Wait()
-func (c MulticastClient) Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+func (c multicastClient) Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "internal.testprotos.calltypes.multicast.Multicast.Multicast")
 }
 
-// MulticastEmpty is testing imported message type.
-//
-// Example:
-//
-//	err := client.MulticastEmpty(ctx, in).Send()
-//	h := client.MulticastEmpty(ctx, in).Async()
-//	err = h.Wait()
-func (c MulticastClient) MulticastEmpty(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+func (c multicastClient) MulticastEmpty(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "internal.testprotos.calltypes.multicast.Multicast.MulticastEmpty")
 }
 
