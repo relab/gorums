@@ -826,23 +826,25 @@ func earlyTermination(responses *gorums.Responses[*Response]) (*Response, error)
 This section applies to code that uses the generated call functions.
 Those functions took a `*gorums.ConfigContext` or a `*gorums.NodeContext` as their first argument.
 Gorums no longer generates them.
-For each service `S`, Gorums now generates one client type, `SClient`, bound to a `gorums.Config`.
-It has a method for each call type:
+For each service `S`, Gorums now generates up to two client interfaces:
 
-- The quorum call, streaming quorum call, and multicast methods take a `context.Context` and the request.
-  They run on the client's configuration.
-- The remote call and unicast methods take a `context.Context`, the target `*gorums.Node`, and the request.
-  They run on the given node and do not use the client's configuration.
+- `SClient` has the quorum call, streaming quorum call, and multicast methods.
+  `NewSClient(cfg)` builds it from a `gorums.Config`, and its calls run on that configuration.
+- `SNodeClient` has the remote call and unicast methods.
+  `NewSNodeClient(node)` builds it from a `*gorums.Node`, and its calls run on that node.
 
-| Removed                                          | Replacement                                           |
-| ------------------------------------------------ | ----------------------------------------------------- |
-| `gorums.ConfigContext` and `Config.Context`      | `NewSClient(cfg)`, then pass `ctx` to the call method |
-| `gorums.NodeContext` and `Node.Context`          | Pass `ctx` and `node` to the call method              |
-| `pb.ReadQC(cfgCtx, req)`                         | `client.ReadQC(ctx, req)`                             |
-| `pb.ReadRPC(nodeCtx, req)`                       | `client.ReadRPC(ctx, node, req)`                      |
-| Generated `ConfigContext`, `NodeContext` aliases | None; use `context.Context`                           |
+A service with only one kind of call gets only that client.
+Every method takes a `context.Context` and the request.
 
-Configuration calls migrate from generated functions and a configuration context to a bound service client:
+| Removed                                          | Replacement                                                |
+| ------------------------------------------------ | ---------------------------------------------------------- |
+| `gorums.ConfigContext` and `Config.Context`      | `NewSClient(cfg)`, then pass `ctx` to the call method      |
+| `gorums.NodeContext` and `Node.Context`          | `NewSNodeClient(node)`, then pass `ctx` to the call method |
+| `pb.ReadQC(cfgCtx, req)`                         | `pb.NewStorageClient(cfg).ReadQC(ctx, req)`                |
+| `pb.ReadRPC(nodeCtx, req)`                       | `pb.NewStorageNodeClient(node).ReadRPC(ctx, req)`          |
+| Generated `ConfigContext`, `NodeContext` aliases | None; use `context.Context`                                |
+
+Configuration calls migrate from generated functions and a configuration context to a configuration client:
 
 ```go
 // Before
@@ -854,32 +856,30 @@ client := pb.NewStorageClient(cfg)
 resp, err := client.ReadQC(ctx, req).Majority()
 ```
 
-Node calls take the node as an argument after the context:
+Node calls migrate from generated functions and a node context to a node client:
 
 ```go
 // Before
 nodeCtx := node.Context(ctx)
 resp, err := pb.ReadRPC(nodeCtx, req)
 
-// After, with an existing client
-resp, err := client.ReadRPC(ctx, node, req)
-
-// After, without a configuration
-resp, err = pb.StorageClient{}.ReadRPC(ctx, node, req)
+// After
+resp, err := pb.NewStorageNodeClient(node).ReadRPC(ctx, req)
 ```
 
-A node call accepts any node, also a node that is not in the client's configuration.
-The zero value of `SClient` is ready for node calls.
+Build a node client where you need it, and do not keep it.
+Building one allocates nothing.
+A node client accepts any node, also a node that is not in a configuration of yours.
 
 Configuration transformations remain on `gorums.Config`.
-To call a smaller configuration, create a client for it:
+To call a smaller configuration, build a client for it:
 
 ```go
-smaller := client.Config().Remove(nodeID)
+smaller := cfg.Remove(nodeID)
 smallerClient := pb.NewStorageClient(smaller)
 ```
 
-A nested call in a server handler binds the peer configuration to a client:
+A nested call in a server handler builds a client from the peer configuration:
 
 ```go
 // Before
@@ -889,19 +889,20 @@ resp, err := pb.ReadQC(ctx.PeerConfig().Context(ctx), req).Majority()
 resp, err := pb.NewStorageClient(ctx.PeerConfig()).ReadQC(ctx, req).Majority()
 ```
 
-A generated client does not own or close its configuration or the nodes of its calls.
+A generated client does not own or close its configuration or its node.
 Connection ownership and the close function returned by `NewConfig` are unchanged.
-A client allocates nothing when you create it, so you can create one at each call site.
 
-A call on an empty configuration or a nil node still panics.
-The panic now comes from the call method, not from `Config.Context` or `Node.Context`.
+A quorum call or multicast on an empty configuration still panics.
+The panic now comes from the call method, not from `Config.Context`.
+A remote call or unicast on a nil node no longer panics.
+It returns `gorums.ErrNoNode`, a gRPC status error with the `Unavailable` code.
+Thus, `pb.NewStorageNodeClient(cfg.Node(id))` is safe when `cfg` has no node with that ID.
 
-Regeneration reports an error for names that collide with the generated client code:
+Regeneration reports an error for a message, enum, or enum value, including a nested one, whose Go name is the name of a generated client interface, constructor, or struct.
+These names are `SClient`, `NewSClient`, and `sClient` if the service has quorum calls or multicasts, and `SNodeClient`, `NewSNodeClient`, and `sNodeClient` if it has remote calls or unicasts.
+An RPC method may have any name.
 
-- a message, enum, or enum value, including a nested one, whose Go name is `SClient` or `NewSClient`;
-- an RPC method of any call type named `Config`.
-
-Hand-written Go code in the generated package that declares `SClient` or `NewSClient`, such as your own `StorageClient` wrapper, now fails to compile.
+Hand-written Go code in the generated package that declares one of these names, such as your own `StorageClient` wrapper, now fails to compile.
 The generator cannot detect this collision, so rename such code.
 
 ## Additional Resources

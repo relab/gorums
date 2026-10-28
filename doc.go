@@ -28,26 +28,27 @@
 //
 // # Service clients
 //
-// For each service S, protoc-gen-gorums generates one client type, SClient,
-// bound to a [Config]. The client type is a namespace for the service: it
-// keeps the service's calls together and avoids package-level name conflicts.
-// The quorum call and multicast methods take a [context.Context] and the
-// request, and execute on the client's configuration. The remote call and
-// unicast methods also take the target [Node] after the context, and execute
-// on that node:
+// For each service S, protoc-gen-gorums generates up to two client
+// interfaces. SClient has the quorum calls and multicasts, and
+// NewSClient builds it from a [Config]. SNodeClient has the remote calls
+// and unicasts, and NewSNodeClient builds it from a [Node]. The call type in
+// the proto file decides which client a method belongs to. A service with
+// only one kind of call gets only that client. Every call takes a
+// [context.Context] and the request:
 //
 //	client := pb.NewStorageClient(cfg)
 //	reply, err := client.ReadQC(ctx, req).Majority()
-//	reply, err = client.ReadRPC(ctx, node, req)
 //
-// A node call does not use the client's configuration, so the zero SClient is
-// ready for node calls:
+//	leader := pb.NewStorageNodeClient(cfg.Node(leaderID))
+//	reply, err = leader.ReadRPC(ctx, req)
 //
-//	reply, err = pb.StorageClient{}.ReadRPC(ctx, node, req)
-//
-// A client holds only its configuration, so creating one allocates nothing. A
-// client does not own its configuration; the close function returned by
-// [NewConfig] closes the connections.
+// A node client holds only its node, so building one allocates nothing.
+// Build a node client where you need it, and do not keep it. The node may be
+// any node, also one outside cfg. If the node is nil, every call returns
+// [ErrNoNode]. A quorum call or multicast on an empty configuration panics
+// when the call is built. To call another configuration, build a new SClient
+// from it. A client does not own its configuration or node; the close
+// function returned by [NewConfig] closes the connections.
 //
 // # Configurations and nodes
 //
