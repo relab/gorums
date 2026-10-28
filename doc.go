@@ -50,6 +50,13 @@
 // from it. A client does not own its configuration or node; the close
 // function returned by [NewConfig] closes the connections.
 //
+// A Go package may hold several services, in one proto file or in several.
+// Each service gets its own clients, server interface, and register function.
+// The clients of all services may share one [Config], and one [Server] may
+// register all services. The generated names of the services in one Go
+// package must not collide; for example, services NewS and S both generate
+// the name NewSClient, and protoc-gen-gorums reports such a collision.
+//
 // # Configurations and nodes
 //
 // A [Node] is a client-side handle to a remote (or co-located) peer, not the
