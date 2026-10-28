@@ -1,0 +1,35 @@
+// Test that a service with only remote calls and unicasts gets only a node
+// client, so that the names of the configuration client stay free.
+
+edition = "2023";
+
+package internal.testprotos.nodeonly;
+option go_package = "github.com/relab/gorums/internal/testprotos/nodeonly";
+
+option features.field_presence = IMPLICIT;
+
+import "gorums.proto";
+
+service NodeOnly {
+    rpc Read(Request) returns (Response) {}
+    rpc Write(Request) returns (Response) {
+        option (gorums.unicast) = true;
+    }
+}
+
+message Request {
+    string Value = 1;
+}
+message Response {
+    int64 Result = 1;
+}
+
+// NodeOnlyClient takes the name of the configuration client, which the
+// service does not have.
+message NodeOnlyClient {
+    string Value = 1;
+}
+// NewNodeOnlyClient takes the name of the configuration client's constructor.
+enum NewNodeOnlyClient {
+    NEW_NODE_ONLY_CLIENT_UNSPECIFIED = 0;
+}

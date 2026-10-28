@@ -12,6 +12,7 @@ var commonVariables = `
 `
 
 var quorumCallComment = `
+{{- if .Decl}}
 {{$comments := .Method.Comments.Leading}}
 {{if ne $comments ""}}
 {{$comments -}}
@@ -21,7 +22,9 @@ var quorumCallComment = `
 // aggregated result.
 //
 // Example:
-//   resp, err := client.{{$method}}(ctx, in).Majority()
+//
+//	resp, err := client.{{$method}}(ctx, in).Majority()
+{{end -}}
 {{end -}}
 `
 
@@ -30,17 +33,19 @@ var quorumCallVariables = `
 {{$quorumCall := use "gorumsimpl.QuorumCall" .GenFile}}
 {{$quorumCallStream := use "gorumsimpl.QuorumCallStream" .GenFile}}
 {{$call := use "gorums.Call" .GenFile}}
+{{$impl := printf "%sClient" (unexport $service)}}
 {{$local := localNames "c ctx in" $in $out $context $quorumCall $quorumCallStream}}
 `
 
-var quorumCallSignature = `func ({{$local.c}} {{$service}}Client) {{$method}}(` +
+var quorumCallSignature = `{{if not .Decl}}func ({{$local.c}} {{$impl}}) {{end}}{{$method}}(` +
 	`{{$local.ctx}} {{$context}}, {{$local.in}} *{{$in}})` +
-	` *{{$call}}[*{{$in}}, *{{$out}}] {
-`
+	` *{{$call}}[*{{$in}}, *{{$out}}]`
 
-var quorumCallBody = `	return {{$quorumCall}}[*{{$in}}, *{{$out}}]({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
+var quorumCallBody = `{{if .Decl}}
+{{else}} {
+	return {{$quorumCall}}[*{{$in}}, *{{$out}}]({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
 }
-`
+{{end}}`
 
 var quorumCall = commonVariables +
 	quorumCallVariables +
@@ -50,6 +55,7 @@ var quorumCall = commonVariables +
 
 // Streaming quorum call template
 var quorumCallStreamComment = `
+{{- if .Decl}}
 {{$comments := .Method.Comments.Leading}}
 {{if ne $comments ""}}
 {{$comments -}}
@@ -59,15 +65,19 @@ var quorumCallStreamComment = `
 // until the context is canceled.
 //
 // Example:
-//   corr := client.{{$method}}(ctx, in).Correctable(2)
-//   <-corr.Watch(2)
-//   resp, level, err := corr.Get()
+//
+//	corr := client.{{$method}}(ctx, in).Correctable(2)
+//	<-corr.Watch(2)
+//	resp, level, err := corr.Get()
+{{end -}}
 {{end -}}
 `
 
-var quorumCallStreamBody = `	return {{$quorumCallStream}}[*{{$in}}, *{{$out}}]({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
+var quorumCallStreamBody = `{{if .Decl}}
+{{else}} {
+	return {{$quorumCallStream}}[*{{$in}}, *{{$out}}]({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
 }
-`
+{{end}}`
 
 var quorumCallStream = commonVariables +
 	quorumCallVariables +

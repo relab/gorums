@@ -1,5 +1,5 @@
-// Test that an RPC method may take a Go name that is not a helper method of
-// the generated client type, such as Node or ForNode.
+// Test that an RPC method may take any Go name, such as Config, WithConfig,
+// Node, or ForNode, since the generated clients have no helper methods.
 
 edition = "2023";
 
@@ -11,6 +11,14 @@ option features.field_presence = IMPLICIT;
 import "gorums.proto";
 
 service ClientNames {
+    // Config is a quorum call.
+    rpc Config(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
+    // WithConfig is a multicast.
+    rpc WithConfig(Request) returns (Response) {
+        option (gorums.multicast) = true;
+    }
     // Node is a remote call.
     rpc Node(Request) returns (Response) {}
     // ForNode is a unicast.

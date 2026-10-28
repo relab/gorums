@@ -47,44 +47,6 @@ service Reserved {
 			want: "contains message Config, which is a reserved Gorums identifier",
 		},
 		{
-			name: "ReservedQuorumCallConfig",
-			decl: `
-service Reserved {
-	rpc Config(Request) returns (Response) {
-		option (gorums.quorumcall) = true;
-	}
-}`,
-			want: "Reserved.Config: RPC method collides with the generated ReservedClient.Config method",
-		},
-		{
-			name: "ReservedRemoteCallConfig",
-			decl: `
-service Reserved {
-	rpc Config(Request) returns (Response) {}
-}`,
-			want: "Reserved.Config: RPC method collides with the generated ReservedClient.Config method",
-		},
-		{
-			name: "ReservedUnicastConfig",
-			decl: `
-service Reserved {
-	rpc Config(Request) returns (Response) {
-		option (gorums.unicast) = true;
-	}
-}`,
-			want: "Reserved.Config: RPC method collides with the generated ReservedClient.Config method",
-		},
-		{
-			name: "ReservedMulticastConfig",
-			decl: `
-service Reserved {
-	rpc Config(Request) returns (Response) {
-		option (gorums.multicast) = true;
-	}
-}`,
-			want: "Reserved.Config: RPC method collides with the generated ReservedClient.Config method",
-		},
-		{
 			name: "GeneratedClientMessage",
 			decl: `
 message ReservedClient {
@@ -109,6 +71,46 @@ service Reserved {
 	}
 }`,
 			want: "contains enum NewReservedClient, which is a generated Gorums identifier",
+		},
+		{
+			name: "GeneratedNodeClientMessage",
+			decl: `
+message ReservedNodeClient {
+	string value = 1;
+}
+service Reserved {
+	rpc Read(Request) returns (Response) {}
+}`,
+			want: "contains message ReservedNodeClient, which is a generated Gorums identifier",
+		},
+		{
+			name: "GeneratedNodeConstructorEnum",
+			decl: `
+enum NewReservedNodeClient {
+	NEW_RESERVED_NODE_CLIENT_UNSPECIFIED = 0;
+}
+service Reserved {
+	rpc Write(Request) returns (Response) {
+		option (gorums.unicast) = true;
+	}
+}`,
+			want: "contains enum NewReservedNodeClient, which is a generated Gorums identifier",
+		},
+		{
+			name: "GeneratedNodeClientWithConfigClient",
+			decl: `
+message ReservedNodeClient {
+	string value = 1;
+}
+service Reserved {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+	rpc Write(Request) returns (Response) {
+		option (gorums.unicast) = true;
+	}
+}`,
+			want: "contains message ReservedNodeClient, which is a generated Gorums identifier",
 		},
 		{
 			name: "NestedGeneratedClientMessage",
