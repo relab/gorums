@@ -47,57 +47,60 @@ type CorrectableResult = *gorums.Correctable[*Result]
 // CorrectableStartResponse is a correctable object for quorum calls returning *StartResponse.
 type CorrectableStartResponse = *gorums.Correctable[*StartResponse]
 
-// ControlClient invokes the calls of the Control service.
-// Quorum calls and multicasts execute on the client's configuration.
-// Remote calls and unicasts execute on the node given to each call; that node
-// need not belong to the client's configuration.
-// The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration from
-// [NewControlClient]; they panic on an empty configuration.
-type ControlClient struct {
+// ControlClient is the client API for the quorum calls and multicasts of
+// the Control service. Its calls execute on the configuration given to
+// [NewControlClient]. A call on an empty configuration panics when it is
+// built.
+type ControlClient interface {
+	// Start resets the server-side op counter and Stats baseline.
+	Start(ctx context.Context, in *StartRequest) *gorums.Call[*StartRequest, *StartResponse]
+
+	// Stop ends measurement and returns this server's Result. For server-measured
+	// benchmarks (e.g. Multicast) the Result carries latency samples; for
+	// client-measured benchmarks (e.g. QuorumCall) it carries only memory stats.
+	Stop(ctx context.Context, in *StopRequest) *gorums.Call[*StopRequest, *Result]
+
+	// ClockSync returns the server's wall-clock time, enabling NTP-style
+	// clock-offset estimation between peers for one-way latency correction.
+	ClockSync(ctx context.Context, in *ClockSyncRequest) *gorums.Call[*ClockSyncRequest, *ClockSyncResponse]
+
+	// Done is an advisory, one-way signal: a node multicasts it to all peers
+	// once it has finished its own benchmark work and trailing flush. It is
+	// not a barrier — a missing or delayed Done never blocks or fails a run,
+	// it only means the waiting peer falls back to its own timeout. See
+	// benchmark.AwaitPeersDoneOrGrace.
+	//
+	// Example:
+	//
+	//	err := client.Done(ctx, in).Send()
+	//	h := client.Done(ctx, in).Async()
+	//	err = h.Wait()
+	Done(ctx context.Context, in *DoneRequest) *gorums.OnewayCall[*DoneRequest]
+}
+
+// NewControlClient returns a client whose calls execute on config.
+func NewControlClient(config gorums.Config) ControlClient {
+	return controlClient{config: config}
+}
+
+// controlClient implements ControlClient.
+type controlClient struct {
 	config gorums.Config
 }
 
-// NewControlClient returns a client for the Control service, bound to config.
-func NewControlClient(config gorums.Config) ControlClient {
-	return ControlClient{config: config}
-}
-
-// Config returns the configuration to which c is bound.
-func (c ControlClient) Config() gorums.Config {
-	return c.config
-}
-
-// Start resets the server-side op counter and Stats baseline.
-func (c ControlClient) Start(ctx context.Context, in *StartRequest) *gorums.Call[*StartRequest, *StartResponse] {
+func (c controlClient) Start(ctx context.Context, in *StartRequest) *gorums.Call[*StartRequest, *StartResponse] {
 	return gorumsimpl.QuorumCall[*StartRequest, *StartResponse](ctx, c.config, in, "benchkit.Control.Start")
 }
 
-// Stop ends measurement and returns this server's Result. For server-measured
-// benchmarks (e.g. Multicast) the Result carries latency samples; for
-// client-measured benchmarks (e.g. QuorumCall) it carries only memory stats.
-func (c ControlClient) Stop(ctx context.Context, in *StopRequest) *gorums.Call[*StopRequest, *Result] {
+func (c controlClient) Stop(ctx context.Context, in *StopRequest) *gorums.Call[*StopRequest, *Result] {
 	return gorumsimpl.QuorumCall[*StopRequest, *Result](ctx, c.config, in, "benchkit.Control.Stop")
 }
 
-// ClockSync returns the server's wall-clock time, enabling NTP-style
-// clock-offset estimation between peers for one-way latency correction.
-func (c ControlClient) ClockSync(ctx context.Context, in *ClockSyncRequest) *gorums.Call[*ClockSyncRequest, *ClockSyncResponse] {
+func (c controlClient) ClockSync(ctx context.Context, in *ClockSyncRequest) *gorums.Call[*ClockSyncRequest, *ClockSyncResponse] {
 	return gorumsimpl.QuorumCall[*ClockSyncRequest, *ClockSyncResponse](ctx, c.config, in, "benchkit.Control.ClockSync")
 }
 
-// Done is an advisory, one-way signal: a node multicasts it to all peers
-// once it has finished its own benchmark work and trailing flush. It is
-// not a barrier — a missing or delayed Done never blocks or fails a run,
-// it only means the waiting peer falls back to its own timeout. See
-// benchmark.AwaitPeersDoneOrGrace.
-//
-// Example:
-//
-//	err := client.Done(ctx, in).Send()
-//	h := client.Done(ctx, in).Async()
-//	err = h.Wait()
-func (c ControlClient) Done(ctx context.Context, in *DoneRequest) *gorums.OnewayCall[*DoneRequest] {
+func (c controlClient) Done(ctx context.Context, in *DoneRequest) *gorums.OnewayCall[*DoneRequest] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "benchkit.Control.Done")
 }
 

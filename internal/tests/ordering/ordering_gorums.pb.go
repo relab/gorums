@@ -41,48 +41,62 @@ type (
 // CorrectableResponse is a correctable object for quorum calls returning *Response.
 type CorrectableResponse = *gorums.Correctable[*Response]
 
-// OrderingClient invokes the calls of the Ordering service.
-// Quorum calls and multicasts execute on the client's configuration.
-// Remote calls and unicasts execute on the node given to each call; that node
-// need not belong to the client's configuration.
-// The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration from
-// [NewOrderingClient]; they panic on an empty configuration.
-type OrderingClient struct {
+// OrderingClient is the client API for the quorum calls and multicasts of
+// the Ordering service. Its calls execute on the configuration given to
+// [NewOrderingClient]. A call on an empty configuration panics when it is
+// built.
+type OrderingClient interface {
+	// QuorumCall executes a quorum call on the client's configuration. Use
+	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
+	// aggregated result.
+	//
+	// Example:
+	//
+	//	resp, err := client.QuorumCall(ctx, in).Majority()
+	QuorumCall(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
+}
+
+// NewOrderingClient returns a client whose calls execute on config.
+func NewOrderingClient(config gorums.Config) OrderingClient {
+	return orderingClient{config: config}
+}
+
+// orderingClient implements OrderingClient.
+type orderingClient struct {
 	config gorums.Config
 }
 
-// NewOrderingClient returns a client for the Ordering service, bound to config.
-func NewOrderingClient(config gorums.Config) OrderingClient {
-	return OrderingClient{config: config}
+// OrderingNodeClient is the client API for the remote calls and unicasts
+// of the Ordering service. Its calls execute on the node given to
+// [NewOrderingNodeClient]. If that node is nil, every call returns
+// [gorums.ErrNoNode].
+type OrderingNodeClient interface {
+	// UnaryRPC executes a remote call on the client's node and returns its
+	// reply.
+	//
+	// Example:
+	//
+	//	resp, err := nodeClient.UnaryRPC(ctx, in)
+	UnaryRPC(ctx context.Context, in *Request) (*Response, error)
 }
 
-// Config returns the configuration to which c is bound.
-func (c OrderingClient) Config() gorums.Config {
-	return c.config
+// NewOrderingNodeClient returns a node client whose calls execute on node.
+// The node may be nil, and it need not belong to a particular configuration.
+func NewOrderingNodeClient(node *gorums.Node) OrderingNodeClient {
+	return orderingNodeClient{node: node}
 }
 
-// QuorumCall executes a quorum call on the client's configuration. Use
-// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
-// aggregated result.
-//
-// Example:
-//
-//	resp, err := client.QuorumCall(ctx, in).Majority()
-func (c OrderingClient) QuorumCall(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
+// orderingNodeClient implements OrderingNodeClient.
+type orderingNodeClient struct {
+	node *gorums.Node
+}
+
+func (c orderingClient) QuorumCall(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
 	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "ordering.Ordering.QuorumCall")
 }
 
-// UnaryRPC executes a remote call on the given node and returns its reply.
-// It ignores the client's configuration. It is a method of OrderingClient
-// only to keep the service's calls together and avoid package-level name
-// conflicts.
-//
-// Example:
-//
-//	resp, err := ordering.OrderingClient{}.UnaryRPC(ctx, node, in)
-func (c OrderingClient) UnaryRPC(ctx context.Context, node *gorums.Node, in *Request) (*Response, error) {
-	return gorumsimpl.RemoteCall[*Request, *Response](ctx, node, in, "ordering.Ordering.UnaryRPC")
+func (c orderingNodeClient) UnaryRPC(ctx context.Context, in *Request) (*Response, error) {
+	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "ordering.Ordering.UnaryRPC")
 }
 
 // Ordering is the server-side API for the Ordering Service

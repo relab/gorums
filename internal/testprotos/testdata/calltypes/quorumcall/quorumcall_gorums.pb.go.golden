@@ -41,35 +41,32 @@ type (
 // CorrectableResponse is a correctable object for quorum calls returning *Response.
 type CorrectableResponse = *gorums.Correctable[*Response]
 
-// QuorumCallClient invokes the calls of the QuorumCall service.
-// Quorum calls and multicasts execute on the client's configuration.
-// Remote calls and unicasts execute on the node given to each call; that node
-// need not belong to the client's configuration.
-// The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration from
-// [NewQuorumCallClient]; they panic on an empty configuration.
-type QuorumCallClient struct {
+// QuorumCallClient is the client API for the quorum calls and multicasts of
+// the QuorumCall service. Its calls execute on the configuration given to
+// [NewQuorumCallClient]. A call on an empty configuration panics when it is
+// built.
+type QuorumCallClient interface {
+	// QuorumCall executes a quorum call on the client's configuration. Use
+	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
+	// aggregated result.
+	//
+	// Example:
+	//
+	//	resp, err := client.QuorumCall(ctx, in).Majority()
+	QuorumCall(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
+}
+
+// NewQuorumCallClient returns a client whose calls execute on config.
+func NewQuorumCallClient(config gorums.Config) QuorumCallClient {
+	return quorumCallClient{config: config}
+}
+
+// quorumCallClient implements QuorumCallClient.
+type quorumCallClient struct {
 	config gorums.Config
 }
 
-// NewQuorumCallClient returns a client for the QuorumCall service, bound to config.
-func NewQuorumCallClient(config gorums.Config) QuorumCallClient {
-	return QuorumCallClient{config: config}
-}
-
-// Config returns the configuration to which c is bound.
-func (c QuorumCallClient) Config() gorums.Config {
-	return c.config
-}
-
-// QuorumCall executes a quorum call on the client's configuration. Use
-// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
-// aggregated result.
-//
-// Example:
-//
-//	resp, err := client.QuorumCall(ctx, in).Majority()
-func (c QuorumCallClient) QuorumCall(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
+func (c quorumCallClient) QuorumCall(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
 	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "internal.testprotos.calltypes.quorumcall.QuorumCall.QuorumCall")
 }
 

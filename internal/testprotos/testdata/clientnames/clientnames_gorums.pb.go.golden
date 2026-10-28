@@ -38,50 +38,104 @@ type (
 	Node   = gorums.Node
 )
 
-// ClientNamesClient invokes the calls of the ClientNames service.
-// Quorum calls and multicasts execute on the client's configuration.
-// Remote calls and unicasts execute on the node given to each call; that node
-// need not belong to the client's configuration.
-// The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration from
-// [NewClientNamesClient]; they panic on an empty configuration.
-type ClientNamesClient struct {
+// CorrectableResponse is a correctable object for quorum calls returning *Response.
+type CorrectableResponse = *gorums.Correctable[*Response]
+
+// ClientNamesClient is the client API for the quorum calls and multicasts of
+// the ClientNames service. Its calls execute on the configuration given to
+// [NewClientNamesClient]. A call on an empty configuration panics when it is
+// built.
+type ClientNamesClient interface {
+	// Config is a quorum call.
+	Config(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
+
+	// WithConfig is a multicast.
+	//
+	// Example:
+	//
+	//	err := client.WithConfig(ctx, in).Send()
+	//	h := client.WithConfig(ctx, in).Async()
+	//	err = h.Wait()
+	WithConfig(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
+}
+
+// NewClientNamesClient returns a client whose calls execute on config.
+func NewClientNamesClient(config gorums.Config) ClientNamesClient {
+	return clientNamesClient{config: config}
+}
+
+// clientNamesClient implements ClientNamesClient.
+type clientNamesClient struct {
 	config gorums.Config
 }
 
-// NewClientNamesClient returns a client for the ClientNames service, bound to config.
-func NewClientNamesClient(config gorums.Config) ClientNamesClient {
-	return ClientNamesClient{config: config}
+// ClientNamesNodeClient is the client API for the remote calls and unicasts
+// of the ClientNames service. Its calls execute on the node given to
+// [NewClientNamesNodeClient]. If that node is nil, every call returns
+// [gorums.ErrNoNode].
+type ClientNamesNodeClient interface {
+	// Node is a remote call.
+	Node(ctx context.Context, in *Request) (*Response, error)
+
+	// ForNode is a unicast.
+	//
+	// Example:
+	//
+	//	err := nodeClient.ForNode(ctx, in).Send()
+	//	h := nodeClient.ForNode(ctx, in).Async()
+	//	err = h.Wait()
+	ForNode(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
 }
 
-// Config returns the configuration to which c is bound.
-func (c ClientNamesClient) Config() gorums.Config {
-	return c.config
+// NewClientNamesNodeClient returns a node client whose calls execute on node.
+// The node may be nil, and it need not belong to a particular configuration.
+func NewClientNamesNodeClient(node *gorums.Node) ClientNamesNodeClient {
+	return clientNamesNodeClient{node: node}
 }
 
-// Node is a remote call.
-func (c ClientNamesClient) Node(ctx context.Context, node *gorums.Node, in *Request) (*Response, error) {
-	return gorumsimpl.RemoteCall[*Request, *Response](ctx, node, in, "internal.testprotos.clientnames.ClientNames.Node")
+// clientNamesNodeClient implements ClientNamesNodeClient.
+type clientNamesNodeClient struct {
+	node *gorums.Node
 }
 
-// ForNode is a unicast.
-//
-// Example:
-//
-//	err := clientnames.ClientNamesClient{}.ForNode(ctx, node, in).Send()
-//	h := clientnames.ClientNamesClient{}.ForNode(ctx, node, in).Async()
-//	err = h.Wait()
-func (c ClientNamesClient) ForNode(ctx context.Context, node *gorums.Node, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Unicast(ctx, node, in, "internal.testprotos.clientnames.ClientNames.ForNode")
+func (c clientNamesClient) Config(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
+	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "internal.testprotos.clientnames.ClientNames.Config")
+}
+
+func (c clientNamesClient) WithConfig(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "internal.testprotos.clientnames.ClientNames.WithConfig")
+}
+
+func (c clientNamesNodeClient) Node(ctx context.Context, in *Request) (*Response, error) {
+	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "internal.testprotos.clientnames.ClientNames.Node")
+}
+
+func (c clientNamesNodeClient) ForNode(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Unicast(ctx, c.node, in, "internal.testprotos.clientnames.ClientNames.ForNode")
 }
 
 // ClientNames is the server-side API for the ClientNames Service
 type ClientNamesServer interface {
+	Config(gorums.ServerContext, *Request) (*Response, error)
+	WithConfig(gorums.ServerContext, *Request)
 	Node(gorums.ServerContext, *Request) (*Response, error)
 	ForNode(gorums.ServerContext, *Request)
 }
 
 func RegisterClientNamesServer(srv *gorums.Server, impl ClientNamesServer) {
+	srv.RegisterHandler("internal.testprotos.clientnames.ClientNames.Config", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+		req := gorums.AsProto[*Request](in)
+		resp, err := impl.Config(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		return gorums.NewResponseMessage(in, resp), nil
+	})
+	srv.RegisterHandler("internal.testprotos.clientnames.ClientNames.WithConfig", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+		req := gorums.AsProto[*Request](in)
+		impl.WithConfig(ctx, req)
+		return nil, nil
+	})
 	srv.RegisterHandler("internal.testprotos.clientnames.ClientNames.Node", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		resp, err := impl.Node(ctx, req)

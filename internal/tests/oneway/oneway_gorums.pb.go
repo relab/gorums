@@ -38,56 +38,70 @@ type (
 	Node   = gorums.Node
 )
 
-// OnewayTestClient invokes the calls of the OnewayTest service.
-// Quorum calls and multicasts execute on the client's configuration.
-// Remote calls and unicasts execute on the node given to each call; that node
-// need not belong to the client's configuration.
-// The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration from
-// [NewOnewayTestClient]; they panic on an empty configuration.
-type OnewayTestClient struct {
+// OnewayTestClient is the client API for the quorum calls and multicasts of
+// the OnewayTest service. Its calls execute on the configuration given to
+// [NewOnewayTestClient]. A call on an empty configuration panics when it is
+// built.
+type OnewayTestClient interface {
+	// Multicast starts a one-way call on the client's configuration; no reply
+	// is returned. Use gorums.MapRequest to send a different message to each node.
+	//
+	// Send blocks until every send completes and returns any send errors.
+	// Async returns a handle at once; Wait on the handle returns the send errors.
+	//
+	// Example:
+	//
+	//	err := client.Multicast(ctx, in).Send()
+	//	h := client.Multicast(ctx, in).Async()
+	//	err = h.Wait()
+	Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
+}
+
+// NewOnewayTestClient returns a client whose calls execute on config.
+func NewOnewayTestClient(config gorums.Config) OnewayTestClient {
+	return onewayTestClient{config: config}
+}
+
+// onewayTestClient implements OnewayTestClient.
+type onewayTestClient struct {
 	config gorums.Config
 }
 
-// NewOnewayTestClient returns a client for the OnewayTest service, bound to config.
-func NewOnewayTestClient(config gorums.Config) OnewayTestClient {
-	return OnewayTestClient{config: config}
+// OnewayTestNodeClient is the client API for the remote calls and unicasts
+// of the OnewayTest service. Its calls execute on the node given to
+// [NewOnewayTestNodeClient]. If that node is nil, every call returns
+// [gorums.ErrNoNode].
+type OnewayTestNodeClient interface {
+	// Unicast starts a one-way call on the client's node; no reply is
+	// returned.
+	//
+	// Send blocks until the send completes and returns any send error.
+	// Async returns a handle at once; Wait on the handle returns the send error.
+	//
+	// Example:
+	//
+	//	err := nodeClient.Unicast(ctx, in).Send()
+	//	h := nodeClient.Unicast(ctx, in).Async()
+	//	err = h.Wait()
+	Unicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
 }
 
-// Config returns the configuration to which c is bound.
-func (c OnewayTestClient) Config() gorums.Config {
-	return c.config
+// NewOnewayTestNodeClient returns a node client whose calls execute on node.
+// The node may be nil, and it need not belong to a particular configuration.
+func NewOnewayTestNodeClient(node *gorums.Node) OnewayTestNodeClient {
+	return onewayTestNodeClient{node: node}
 }
 
-// Unicast starts a one-way call on the given node; no reply is returned.
-// It ignores the client's configuration. It is a method of OnewayTestClient
-// only to keep the service's calls together and avoid package-level name
-// conflicts.
-//
-// Send blocks until the send completes and returns any send error.
-// Async returns a handle at once; Wait on the handle returns the send error.
-//
-// Example:
-//
-//	err := oneway.OnewayTestClient{}.Unicast(ctx, node, in).Send()
-//	h := oneway.OnewayTestClient{}.Unicast(ctx, node, in).Async()
-//	err = h.Wait()
-func (c OnewayTestClient) Unicast(ctx context.Context, node *gorums.Node, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Unicast(ctx, node, in, "oneway.OnewayTest.Unicast")
+// onewayTestNodeClient implements OnewayTestNodeClient.
+type onewayTestNodeClient struct {
+	node *gorums.Node
 }
 
-// Multicast starts a one-way call on the client's configuration; no reply
-// is returned. Use gorums.MapRequest to send a different message to each node.
-//
-// Send blocks until every send completes and returns any send errors.
-// Async returns a handle at once; Wait on the handle returns the send errors.
-//
-// Example:
-//
-//	err := client.Multicast(ctx, in).Send()
-//	h := client.Multicast(ctx, in).Async()
-//	err = h.Wait()
-func (c OnewayTestClient) Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+func (c onewayTestNodeClient) Unicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Unicast(ctx, c.node, in, "oneway.OnewayTest.Unicast")
+}
+
+func (c onewayTestClient) Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "oneway.OnewayTest.Multicast")
 }
 

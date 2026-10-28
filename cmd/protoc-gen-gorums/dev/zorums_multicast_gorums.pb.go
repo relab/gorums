@@ -23,46 +23,18 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// Multicast plain. Response type is not needed here.
-//
-// Example:
-//
-//	err := client.Multicast(ctx, in).Send()
-//	h := client.Multicast(ctx, in).Async()
-//	err = h.Wait()
-func (c ZorumsServiceClient) Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+func (c zorumsServiceClient) Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast")
 }
 
-// Multicast2 is testing whether multiple streams work.
-//
-// Example:
-//
-//	err := client.Multicast2(ctx, in).Send()
-//	h := client.Multicast2(ctx, in).Async()
-//	err = h.Wait()
-func (c ZorumsServiceClient) Multicast2(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+func (c zorumsServiceClient) Multicast2(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast2")
 }
 
-// Multicast3 is testing imported message type.
-//
-// Example:
-//
-//	err := client.Multicast3(ctx, in).Send()
-//	h := client.Multicast3(ctx, in).Async()
-//	err = h.Wait()
-func (c ZorumsServiceClient) Multicast3(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+func (c zorumsServiceClient) Multicast3(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast3")
 }
 
-// Multicast4 is testing imported message type.
-//
-// Example:
-//
-//	err := client.Multicast4(ctx, in).Send()
-//	h := client.Multicast4(ctx, in).Async()
-//	err = h.Wait()
-func (c ZorumsServiceClient) Multicast4(ctx context.Context, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty] {
+func (c zorumsServiceClient) Multicast4(ctx context.Context, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast4")
 }

@@ -7,8 +7,10 @@
 package dev
 
 import (
+	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
@@ -18,23 +20,123 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// ZorumsServiceClient invokes the calls of the ZorumsService service.
-// Quorum calls and multicasts execute on the client's configuration.
-// Remote calls and unicasts execute on the node given to each call; that node
-// need not belong to the client's configuration.
-// The zero value is ready for remote calls and unicasts.
-// Quorum calls and multicasts need a configuration from
-// [NewZorumsServiceClient]; they panic on an empty configuration.
-type ZorumsServiceClient struct {
+// Reference imports to suppress errors if they are not otherwise used.
+var _ emptypb.Empty
+
+// ZorumsServiceClient is the client API for the quorum calls and multicasts of
+// the ZorumsService service. Its calls execute on the configuration given to
+// [NewZorumsServiceClient]. A call on an empty configuration panics when it is
+// built.
+type ZorumsServiceClient interface {
+	// QuorumCall plain.
+	QuorumCall(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
+
+	// QuorumCallEmpty for testing imported message type.
+	QuorumCallEmpty(ctx context.Context, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response]
+
+	// QuorumCallEmpty2 for testing imported message type.
+	QuorumCallEmpty2(ctx context.Context, in *Request) *gorums.Call[*Request, *emptypb.Empty]
+
+	// Multicast plain. Response type is not needed here.
+	//
+	// Example:
+	//
+	//	err := client.Multicast(ctx, in).Send()
+	//	h := client.Multicast(ctx, in).Async()
+	//	err = h.Wait()
+	Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
+
+	// Multicast2 is testing whether multiple streams work.
+	//
+	// Example:
+	//
+	//	err := client.Multicast2(ctx, in).Send()
+	//	h := client.Multicast2(ctx, in).Async()
+	//	err = h.Wait()
+	Multicast2(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
+
+	// Multicast3 is testing imported message type.
+	//
+	// Example:
+	//
+	//	err := client.Multicast3(ctx, in).Send()
+	//	h := client.Multicast3(ctx, in).Async()
+	//	err = h.Wait()
+	Multicast3(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
+
+	// Multicast4 is testing imported message type.
+	//
+	// Example:
+	//
+	//	err := client.Multicast4(ctx, in).Send()
+	//	h := client.Multicast4(ctx, in).Async()
+	//	err = h.Wait()
+	Multicast4(ctx context.Context, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty]
+
+	// QuorumCallStream plain.
+	QuorumCallStream(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
+
+	// QuorumCallStreamWithEmpty for testing imported message type.
+	QuorumCallStreamWithEmpty(ctx context.Context, in *Request) *gorums.Call[*Request, *emptypb.Empty]
+
+	// QuorumCallStreamWithEmpty2 for testing imported message type; with same return
+	// type as QuorumCallStream: Response.
+	QuorumCallStreamWithEmpty2(ctx context.Context, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response]
+}
+
+// NewZorumsServiceClient returns a client whose calls execute on config.
+func NewZorumsServiceClient(config gorums.Config) ZorumsServiceClient {
+	return zorumsServiceClient{config: config}
+}
+
+// zorumsServiceClient implements ZorumsServiceClient.
+type zorumsServiceClient struct {
 	config gorums.Config
 }
 
-// NewZorumsServiceClient returns a client for the ZorumsService service, bound to config.
-func NewZorumsServiceClient(config gorums.Config) ZorumsServiceClient {
-	return ZorumsServiceClient{config: config}
+// ZorumsServiceNodeClient is the client API for the remote calls and unicasts
+// of the ZorumsService service. Its calls execute on the node given to
+// [NewZorumsServiceNodeClient]. If that node is nil, every call returns
+// [gorums.ErrNoNode].
+type ZorumsServiceNodeClient interface {
+	// GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
+	// they are added to the _grpc.pb.go generated file.
+	GRPCCall(ctx context.Context, in *Request) (*Response, error)
+
+	// Unicast starts a one-way call on the client's node; no reply is
+	// returned.
+	//
+	// Send blocks until the send completes and returns any send error.
+	// Async returns a handle at once; Wait on the handle returns the send error.
+	//
+	// Example:
+	//
+	//	err := nodeClient.Unicast(ctx, in).Send()
+	//	h := nodeClient.Unicast(ctx, in).Async()
+	//	err = h.Wait()
+	Unicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
+
+	// Unicast2 starts a one-way call on the client's node; no reply is
+	// returned.
+	//
+	// Send blocks until the send completes and returns any send error.
+	// Async returns a handle at once; Wait on the handle returns the send error.
+	//
+	// Example:
+	//
+	//	err := nodeClient.Unicast2(ctx, in).Send()
+	//	h := nodeClient.Unicast2(ctx, in).Async()
+	//	err = h.Wait()
+	Unicast2(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
 }
 
-// Config returns the configuration to which c is bound.
-func (c ZorumsServiceClient) Config() gorums.Config {
-	return c.config
+// NewZorumsServiceNodeClient returns a node client whose calls execute on node.
+// The node may be nil, and it need not belong to a particular configuration.
+func NewZorumsServiceNodeClient(node *gorums.Node) ZorumsServiceNodeClient {
+	return zorumsServiceNodeClient{node: node}
+}
+
+// zorumsServiceNodeClient implements ZorumsServiceNodeClient.
+type zorumsServiceNodeClient struct {
+	node *gorums.Node
 }

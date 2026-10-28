@@ -8,7 +8,6 @@ package dev
 
 import (
 	context "context"
-	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 )
 
@@ -19,8 +18,6 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
-// they are added to the _grpc.pb.go generated file.
-func (c ZorumsServiceClient) GRPCCall(ctx context.Context, node *gorums.Node, in *Request) (*Response, error) {
-	return gorumsimpl.RemoteCall[*Request, *Response](ctx, node, in, "dev.ZorumsService.GRPCCall")
+func (c zorumsServiceNodeClient) GRPCCall(ctx context.Context, in *Request) (*Response, error) {
+	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "dev.ZorumsService.GRPCCall")
 }
