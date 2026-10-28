@@ -178,8 +178,9 @@ For the `unicast` and `multicast` call types, the response message type will be 
 > **Reserved names:** Gorums reserves the names `Config`, `ID`, and `Node`.
 > A message field named `ID` is fine; only type names are reserved.
 > Gorums injects type aliases with these names into every generated `_gorums.pb.go` file, so messages, enums, and enum values in any `.proto` file of the same Go package cannot use them.
-> For a service `S`, Gorums also generates the names `SClient` and `NewSClient`, so messages, enums, and enum values cannot use these names either.
-> An RPC method cannot be named `Config`, because the client type has a helper method with that name.
+> For a service `S`, Gorums also generates the client names `SClient`, `NewSClient`, and `sClient`, and the node client names `SNodeClient`, `NewSNodeClient`, and `sNodeClient`.
+> Messages, enums, and enum values cannot use the names of a client that the service has.
+> An RPC method may have any name, also `Config` or `Node`, because the clients have no helper methods.
 > The generator reports an error for a `.proto` file that uses one of these names.
 
 ### Compiling the Service Definition
@@ -205,24 +206,19 @@ The latter contains the Gorums generated client and server interfaces.
 ### Examining the Gorums Generated Code
 
 Let us examine the `storage_gorums.pb.go` file to see the code generated from our Protobuf definitions.
-For the `Storage` service, Gorums generates one client type, `StorageClient`.
-It is bound to a configuration of nodes:
+For the `Storage` service, Gorums generates two client interfaces.
+`StorageClient` has the quorum calls and multicasts.
+`StorageNodeClient` has the remote calls and unicasts.
+The call type in the Protobuf definition decides which client a method belongs to.
+A service with only one kind of call gets only that client.
+Each client has a constructor:
 
 ```go
 func NewStorageClient(config gorums.Config) StorageClient
-func (c StorageClient) Config() gorums.Config
+func NewStorageNodeClient(node *gorums.Node) StorageNodeClient
 ```
 
-The call type in the Protobuf definition selects the target of each method.
-The remote call and unicast methods send a request to one node.
-They take that node as an argument after the context:
-
-```go
-func (c StorageClient) ReadRPC(ctx context.Context, node *gorums.Node, in *ReadRequest) (*ReadResponse, error)
-func (c StorageClient) WriteUnicast(ctx context.Context, node *gorums.Node, in *WriteRequest) *gorums.OnewayCall[*WriteRequest]
-```
-
-The quorum call and multicast methods send a request to every node in the client's configuration.
+The `StorageClient` methods send a request to every node in the configuration.
 A quorum call method returns a `*gorums.Call[*ReadRequest, *ReadResponse]` handle.
 The handle embeds `*gorums.Responses[*ReadResponse]`, which provides the terminal methods.
 The `Call` type also has an `Intercept` method, which registers client interceptors before the call is sent.
@@ -232,44 +228,75 @@ The one-way `WriteMulticast` method returns a `*gorums.OnewayCall[*WriteRequest]
 `Wait` on that handle returns the send errors.
 
 ```go
-func (c StorageClient) WriteMulticast(ctx context.Context, in *WriteRequest) *gorums.OnewayCall[*WriteRequest]
-func (c StorageClient) ReadQC(ctx context.Context, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse]
-func (c StorageClient) ReadCorrectable(ctx context.Context, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse]
+type StorageClient interface {
+	ReadQC(ctx context.Context, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse]
+	ReadCorrectable(ctx context.Context, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse]
+	WriteMulticast(ctx context.Context, in *WriteRequest) *gorums.OnewayCall[*WriteRequest]
+	// ...
+}
+```
+
+The `StorageNodeClient` methods send a request to the node of the client:
+
+```go
+type StorageNodeClient interface {
+	ReadRPC(ctx context.Context, in *ReadRequest) (*ReadResponse, error)
+	WriteUnicast(ctx context.Context, in *WriteRequest) *gorums.OnewayCall[*WriteRequest]
+	// ...
+}
 ```
 
 ```mermaid
 flowchart LR
     cfg["gorums.Config"] -- "NewStorageClient(cfg)" --> client["StorageClient"]
     client -- "ReadQC(ctx, in)<br/>WriteMulticast(ctx, in)" --> all["every node in the configuration"]
-    client -- "ReadRPC(ctx, node, in)<br/>WriteUnicast(ctx, node, in)" --> one["the given node"]
+    node["*gorums.Node"] -- "NewStorageNodeClient(node)" --> nodeClient["StorageNodeClient"]
+    nodeClient -- "ReadRPC(ctx, in)<br/>WriteUnicast(ctx, in)" --> one["the client's node"]
 ```
 
-A node call does not use the client's configuration.
-The node can be any node, also a node that is not in the client's configuration.
-For a node call, the client type is a namespace for the service.
-It keeps the service's calls together and avoids package-level name conflicts.
-Thus, the zero value `StorageClient{}` is ready for node calls:
+Every call has the same shape: `client.Method(ctx, in)`.
+The target is fixed when the client is built:
 
 ```go
-resp, err := client.ReadRPC(ctx, node, req)
-resp, err = pb.StorageClient{}.ReadRPC(ctx, node, req)
+client := pb.NewStorageClient(cfg)
+resp, err := client.ReadQC(ctx, req).Majority()
+err = client.WriteMulticast(ctx, req).Send()
+
+leader := pb.NewStorageNodeClient(cfg.Node(leaderID))
+resp, err = leader.ReadRPC(ctx, req)
+err = leader.WriteUnicast(ctx, req).Send()
 ```
 
-A client holds only its configuration.
-Creating or copying a client allocates nothing, so a call site can create its own client.
+Follow these rules when you use the clients:
 
-The configuration operations stay on `gorums.Config`.
-To call a different set of nodes, derive a new configuration and create a client for it:
+* **Build node clients where you need them.**
+  A node client holds one pointer and owns nothing, so building one allocates nothing.
+  Do not keep node clients in a struct or a map.
+* **A nil node does not panic.**
+  `cfg.Node(id)` returns nil if the configuration has no node with that ID.
+  `NewStorageNodeClient(nil)` is legal, and every call on that client returns `gorums.ErrNoNode`.
+  This error is a gRPC status error with the `Unavailable` code, like the error for a node that is down.
+* **Any node works.**
+  The node can also be a node that is not in a configuration that you use for quorum calls.
+* **An empty configuration panics.**
+  A quorum call or multicast on an empty configuration panics when the call is built.
+* **Build a new client for a new configuration.**
+  The configuration operations stay on `gorums.Config`.
+  To call a different set of nodes, derive a new configuration and build a client for it.
+  After a reconfiguration, build a new `StorageClient`, and build node clients from its nodes.
 
 ```go
-smaller := client.Config().Remove(nodeID)
+smaller := cfg.Remove(nodeID)
 smallerClient := pb.NewStorageClient(smaller)
 ```
 
-A client does not own its configuration or its nodes.
+A client does not own its configuration or its node.
 It has no `Close` method; the close function from `NewConfig` closes the connections (see [Closing Configurations](#closing-configurations)).
-A client does not check its configuration when you create it.
-Instead, a quorum call or multicast panics if the configuration is empty, and a remote call or unicast panics if the node is nil.
+
+Code that uses a client can take the interface as a parameter, so a test can replace it.
+A test double must build the `*gorums.Call` and `*gorums.OnewayCall` values that the calls return.
+The in-memory servers in `gorumstest` remain the main way to test.
+When you add an RPC to the service, the interface gets a new method, and a hand-written double must add it too.
 
 And this is our server interface:
 
@@ -487,8 +514,7 @@ The `Config` type has several useful methods for combining and filtering configu
 Inspect the package documentation or source code for details.
 Configurations derived from `allNodesConfig` share its connection pool, and only `closeFn` closes it; see [Closing Configurations](#closing-configurations).
 
-A unicast call takes the target node as an argument.
-It does not use the client's configuration, so any `StorageClient` works, also the zero value `StorageClient{}`.
+A unicast call executes on the node of a `StorageNodeClient`.
 We can now invoke the WriteUnicast RPC on each node in the configuration:
 
 ```go
@@ -500,9 +526,8 @@ We can now invoke the WriteUnicast RPC on each node in the configuration:
 
   // Invoke WriteUnicast RPC on all nodes in config
   ctx := context.Background()
-  client := NewStorageClient(allNodesConfig)
   for _, node := range allNodesConfig.Nodes() {
-    err := client.WriteUnicast(ctx, node, req).Send()
+    err := NewStorageNodeClient(node).WriteUnicast(ctx, req).Send()
     if err != nil {
       log.Fatalln("write rpc returned error:", err)
     }
@@ -523,10 +548,10 @@ rpc ReadQC(ReadRequest) returns (ReadResponse) {
 }
 ```
 
-The generated `StorageClient` has a method for each quorum call method:
+The generated `StorageClient` interface has a method for each quorum call method:
 
 ```go
-func (c StorageClient) ReadQC(ctx context.Context, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse]
+ReadQC(ctx context.Context, in *ReadRequest) *gorums.Call[*ReadRequest, *ReadResponse]
 ```
 
 This method returns a `*gorums.Call[*ReadRequest, *ReadResponse]` handle.
@@ -2265,7 +2290,7 @@ The server assigns it a dynamic ID and includes it in `ConnectedClients()`.
 The client can then call `Register` (a unicast) to signal that it is ready to receive calls:
 
 ```go
-err = pb.StorageClient{}.Register(ctx, serverNode, &pb.RegisterRequest{}).Send()
+err = pb.NewStorageNodeClient(serverNode).Register(ctx, &pb.RegisterRequest{}).Send()
 ```
 
 A server configured with `WithPeers` announces its static node ID instead, and servers with a matching node list put it in their `ConnectedPeers()`, not `ConnectedClients()`.

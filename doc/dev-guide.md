@@ -35,7 +35,7 @@ Each name declared in `aliases.go` (and any other non-ignored file in `dev/`) is
 The Gorums generator rejects a proto file whose messages, enums, or enum values use a reserved identifier as their Go name.
 Such a name collides with the generated alias.
 The check includes nested messages and enums, and every file of the service's Go package.
-RPC methods are methods of a generated client type, so they do not collide with the aliases; [Generated Client Types](#generated-client-types) describes their name checks.
+RPC methods are methods of the generated client interfaces, so they do not collide with the aliases; [Generated Client Interfaces](#generated-client-interfaces) describes the name checks of the clients.
 
 The bundler (`gengorums/bundle.go`) discovers reserved identifiers by inspecting `TypesInfo.Defs` for all exported, package-scope declarations in the dev package.
 This means that simply declaring a type alias (or any other exported top-level name) in `aliases.go` is sufficient to reserve that name — no extra annotation is needed.
@@ -43,20 +43,31 @@ This means that simply declaring a type alias (or any other exported top-level n
 The `TestBundleReservedIdentifiers` test in `gengorums/bundle_test.go` pins the expected set.
 If you add or remove an alias, update that test to match.
 
-### Generated Client Types
+### Generated Client Interfaces
 
-For each service `S`, the generator emits one client type, `SClient`, and its constructor `NewSClient`.
-`SClient` holds a `gorums.Config`.
-It does not embed its configuration, and it does not allocate when it is created or copied.
-The call type of each RPC method selects the target of the call:
+For each service `S`, the generator emits up to two client interfaces, as gRPC does.
+The call type of each RPC method decides which client the method belongs to:
 
-| Call type                            | Signature                            | Runtime constructor                                      |
-| ------------------------------------ | ------------------------------------ | -------------------------------------------------------- |
-| quorum call                          | `(ctx, in) *gorums.Call`             | `gorumsimpl.QuorumCall(ctx, c.config, in, method)`       |
-| quorum call with a `stream` response | `(ctx, in) *gorums.Call`             | `gorumsimpl.QuorumCallStream(ctx, c.config, in, method)` |
-| multicast                            | `(ctx, in) *gorums.OnewayCall`       | `gorumsimpl.Multicast(ctx, c.config, in, method)`        |
-| remote call                          | `(ctx, node, in) (*Out, error)`      | `gorumsimpl.RemoteCall(ctx, node, in, method)`           |
-| unicast                              | `(ctx, node, in) *gorums.OnewayCall` | `gorumsimpl.Unicast(ctx, node, in, method)`              |
+| Client        | Constructor                                     | Implementing struct | Call types             |
+| ------------- | ----------------------------------------------- | ------------------- | ---------------------- |
+| `SClient`     | `NewSClient(config gorums.Config) SClient`      | `sClient`           | quorum call, multicast |
+| `SNodeClient` | `NewSNodeClient(node *gorums.Node) SNodeClient` | `sNodeClient`       | remote call, unicast   |
+
+A service with only one kind of call gets only that client.
+The struct name is the interface name with a lowercase first letter.
+`sClient` holds a `gorums.Config`, and `sNodeClient` holds a `*gorums.Node`.
+The structs have value receivers.
+The clients have no helper methods.
+
+Every method has the same shape `(ctx, in)`, and calls one runtime constructor:
+
+| Call type                            | Result               | Runtime constructor                                      |
+| ------------------------------------ | -------------------- | -------------------------------------------------------- |
+| quorum call                          | `*gorums.Call`       | `gorumsimpl.QuorumCall(ctx, c.config, in, method)`       |
+| quorum call with a `stream` response | `*gorums.Call`       | `gorumsimpl.QuorumCallStream(ctx, c.config, in, method)` |
+| multicast                            | `*gorums.OnewayCall` | `gorumsimpl.Multicast(ctx, c.config, in, method)`        |
+| remote call                          | `(*Out, error)`      | `gorumsimpl.RemoteCall(ctx, c.node, in, method)`         |
+| unicast                              | `*gorums.OnewayCall` | `gorumsimpl.Unicast(ctx, c.node, in, method)`            |
 
 ```mermaid
 flowchart LR
@@ -64,38 +75,46 @@ flowchart LR
     rt --> impl["internal/impl<br/>QuorumCall(ctx, config, in, method)"]
 ```
 
-A remote call or unicast requires a node argument after the context.
-A nil node compiles, but the call panics.
-A node call does not use `c.config`, so the zero `SClient` is ready for node calls.
-The doc comment of the client type states this.
-For a node call, the client type is a namespace for the service.
-It keeps the service's calls together and avoids package-level name conflicts.
+A quorum call or multicast on an empty configuration panics when the call is built.
+A remote call or unicast on a nil node does not panic.
+`RemoteCall` returns `gorums.ErrNoNode`, and the `OnewayCall` of `Unicast` sends nothing and reports `gorums.ErrNoNode` from `Send` and `Wait`.
+Thus, `NewSNodeClient(cfg.Node(id))` is safe for an unknown ID.
 
-The client type, its constructor, and its helper method `Config` come from `gengorums/template_client.go`.
-The generator checks the generated names for collisions:
+`genClients` in `gengorums/template_client.go` generates the interfaces, constructors, and structs.
+Each call type template renders a method in one of two modes, chosen by the `Decl` field of its data:
 
-* A message, enum, or enum value in the service's Go package must not be named `SClient` or `NewSClient`.
-  The check includes nested messages and enums, and all enum values, by their Go names, such as `Outer_InnerClient`, because protoc-gen-go declares them at package level.
-* An RPC method must not be named `Config`, whatever its call type, because `SClient` receives every call.
-  An RPC method named `Node` or `ForNode` is valid.
+* Declaration mode renders the doc comment and the method signature for the interface.
+  The doc comment is the proto comment, or a default text with an example.
+* Implementation mode renders the method of the struct, with its receiver and body, and without a doc comment.
 
-The generated methods name their receiver and parameters `c`, `ctx`, `node`, and `in`, and the handler registration uses `srv`, `impl`, `ctx`, `in`, `req`, `resp`, `err`, and `out`.
-An imported Go package can have one of these names, such as a message package named `node`.
+Thus, the signature of a method is written once.
+godoc shows the doc comments of the interface methods.
+
+The generator checks the generated names for collisions.
+A message, enum, or enum value in the service's Go package must not take the name of an interface, constructor, or struct of a client that the service has.
+The check includes nested messages and enums, and all enum values, by their Go names, such as `Outer_InnerClient`, because protoc-gen-go declares them at package level.
+An RPC method may have any name, such as `Config`, `WithConfig`, `Node`, or `ForNode`, because the clients have no helper methods.
+
+The generated methods name their receiver and parameters `c`, `ctx`, and `in`, and the handler registration uses `srv`, `impl`, `ctx`, `in`, `req`, `resp`, `err`, and `out`.
+An imported Go package can have one of these names, such as a message package named `out`.
 A local name with that name would hide the package in the method body.
 Thus, each template gets its local names from the `localNames` function in `gengorums/template_funcs.go`.
-The template passes the identifiers that the body refers to, such as `node.Request` or `gorumsimpl.RemoteCall`.
-`localNames` appends an underscore to a local name until it differs from each package name in these identifiers, for example `node_`.
+The template passes the identifiers that the body refers to, such as `out.Request` or `gorumsimpl.RemoteCall`.
+`localNames` appends an underscore to a local name until it differs from each package name in these identifiers, for example `out_`.
 
 In dev mode, the generator writes one `dev/zorums_{name}_gorums.pb.go` file for each entry of `gorumsCallTypesInfo` in `gengorums/generate.go`:
 
 | Dev file                         | Template                 | Contents                                       |
 | -------------------------------- | ------------------------ | ---------------------------------------------- |
 | `zorums_types_gorums.pb.go`      | `template_datatypes.go`  | `Correctable` type aliases                     |
-| `zorums_client_gorums.pb.go`     | `template_client.go`     | client types, constructors, and helper methods |
+| `zorums_client_gorums.pb.go`     | `template_client.go`     | client interfaces, constructors, and structs   |
 | `zorums_quorumcall_gorums.pb.go` | `template_quorumcall.go` | quorum call and streaming quorum call methods  |
 | `zorums_multicast_gorums.pb.go`  | `template_multicast.go`  | multicast methods                              |
 | `zorums_remotecall_gorums.pb.go` | `template_rpc.go`        | remote call methods                            |
 | `zorums_unicast_gorums.pb.go`    | `template_unicast.go`    | unicast methods                                |
+
+The client file holds the interface declarations of all call types.
+Each call type file holds the implementing methods of that call type.
 | `zorums_server_gorums.pb.go`     | `template_server.go`     | server interface and handler registration      |
 
 Outside dev mode, all of this code goes into a single `_gorums.pb.go` file.
@@ -487,7 +506,8 @@ flowchart LR
 ### Call Engine (`internal/impl`)
 
 A call constructor takes the call's `context.Context` and its target directly: a `Config` for quorum calls and multicasts, and a `*Node` for remote calls and unicasts.
-It panics on an empty `Config` or a nil `*Node`, when the generated method builds the call.
+It panics on an empty `Config`, when the generated method builds the call.
+On a nil `*Node`, `RemoteCall` returns `ErrNoNode`, and `Unicast` returns a `OnewayCall` that holds `ErrNoNode` and sends nothing.
 Each call constructor except `RemoteCall` builds a `CallContext` that holds the request, the target `Config`, the response channel, and the response iterator (`ResponseSeq`).
 A unicast's `CallContext` holds a one-node `Config`.
 A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`), as well as the `Correctable` future.
