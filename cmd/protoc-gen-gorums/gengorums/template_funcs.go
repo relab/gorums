@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"text/template"
+	"unicode"
 
 	"github.com/relab/gorums"
 	"google.golang.org/protobuf/compiler/protogen"
@@ -144,7 +145,25 @@ func field(typeName string) string {
 	return typeName[strings.LastIndex(typeName, ".")+1:]
 }
 
-func unexport(s string) string { return strings.ToLower(s[:1]) + s[1:] }
+// unexport returns s with its leading acronym or first word in lower case.
+// It lowers the run of capital letters at the start of s, except the last
+// capital of the run when a lower-case letter follows it, because that
+// capital starts the next word. For example, TLS gives tls, TLSService gives
+// tlsService, PDFService gives pdfService, and MyService gives myService.
+func unexport(s string) string {
+	runes := []rune(s)
+	n := 0
+	for n < len(runes) && unicode.IsUpper(runes[n]) {
+		n++
+	}
+	if n > 1 && n < len(runes) && unicode.IsLower(runes[n]) {
+		n--
+	}
+	if n == 0 {
+		return s
+	}
+	return strings.ToLower(string(runes[:n])) + string(runes[n:])
+}
 
 func parseTemplate(name, tmpl string) *template.Template {
 	return template.Must(template.New(name).Funcs(funcMap).Parse(tmpl))

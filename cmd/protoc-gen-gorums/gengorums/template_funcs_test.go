@@ -5,6 +5,29 @@ import (
 	"testing"
 )
 
+func TestTemplateFuncsUnexport(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"Storage", "storage"},
+		{"MyService", "myService"},
+		{"TLS", "tls"},
+		{"TLSClient", "tlsClient"},
+		{"TLSNodeClient", "tlsNodeClient"},
+		{"PDFService", "pdfService"},
+		{"LOLServiceClient", "lolServiceClient"},
+		{"A", "a"},
+		{"AClient", "aClient"},
+		{"already", "already"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			if got := unexport(tt.in); got != tt.want {
+				t.Errorf("unexport(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestTemplateFuncsLocalNames(t *testing.T) {
 	tests := []struct {
 		name  string

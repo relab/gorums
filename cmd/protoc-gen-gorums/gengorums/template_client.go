@@ -61,7 +61,7 @@ func clientIdents(service *protogen.Service) []string {
 			continue
 		}
 		name := service.GoName + kind.suffix
-		idents = append(idents, name, "New"+name, unexport(name))
+		idents = append(idents, name, "New"+name, unexport(service.GoName)+kind.suffix)
 	}
 	return idents
 }
