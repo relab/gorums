@@ -895,7 +895,7 @@ Connection ownership and the close function returned by `NewConfig` are unchange
 A quorum call or multicast on an empty configuration still panics.
 The panic now comes from the call method, not from `Config.Context`.
 A remote call or unicast on a nil node no longer panics.
-It returns `gorums.ErrNoNode`, a gRPC status error with the `Unavailable` code.
+It returns `gorums.ErrNoNode`, a gRPC status error with the `InvalidArgument` code.
 Thus, `pb.NewStorageNodeClient(cfg.Node(id))` is safe when `cfg` has no node with that ID.
 
 Regeneration reports an error for a message, enum, or enum value, including a nested one, whose Go name is the name of a generated client interface, constructor, or struct.
