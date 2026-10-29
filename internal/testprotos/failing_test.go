@@ -173,6 +173,38 @@ service Outer_Inner {
 			want: "contains enum value Outer_InnerClient, which is a generated Gorums identifier",
 		},
 		{
+			name: "GeneratedClientOneofWrapper",
+			decl: `
+message Outer {
+	oneof kind {
+		string inner_client = 1;
+	}
+}
+service Outer_Inner {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "contains oneof wrapper Outer_InnerClient, which is a generated Gorums identifier",
+		},
+		{
+			name: "NestedGeneratedClientOneofWrapper",
+			decl: `
+message Outer {
+	message Middle {
+		oneof kind {
+			string inner_client = 1;
+		}
+	}
+}
+service Outer_Middle_Inner {
+	rpc Read(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "contains oneof wrapper Outer_Middle_InnerClient, which is a generated Gorums identifier",
+		},
+		{
 			name: "ReservedEnum",
 			decl: `
 enum Node {

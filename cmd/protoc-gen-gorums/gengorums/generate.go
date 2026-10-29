@@ -123,9 +123,11 @@ func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
 	return nil
 }
 
-// checkTypes calls check with the Go name of each message, enum, and enum
-// value, including nested ones, since protoc-gen-go declares every nested type
-// and every enum value at package level.
+// checkTypes calls check with the Go name of each message, enum, enum value,
+// and oneof wrapper, including nested ones, since protoc-gen-go declares every
+// nested type, every enum value, and every oneof wrapper at package level. The
+// opaque API declares a oneof wrapper with a lowercase first letter, and the
+// Go API level is not known here, so checkTypes passes both spellings.
 func checkTypes(msgs []*protogen.Message, enums []*protogen.Enum, check func(kind, name string) error) error {
 	for _, enum := range enums {
 		if err := check("enum", enum.GoIdent.GoName); err != nil {
@@ -140,6 +142,19 @@ func checkTypes(msgs []*protogen.Message, enums []*protogen.Enum, check func(kin
 	for _, msg := range msgs {
 		if err := check("message", msg.GoIdent.GoName); err != nil {
 			return err
+		}
+		for _, oneof := range msg.Oneofs {
+			if oneof.Desc.IsSynthetic() {
+				continue
+			}
+			for _, field := range oneof.Fields {
+				name := field.GoIdent.GoName
+				for _, wrapper := range []string{name, strings.ToLower(name[:1]) + name[1:]} {
+					if err := check("oneof wrapper", wrapper); err != nil {
+						return err
+					}
+				}
+			}
 		}
 		if err := checkTypes(msg.Messages, msg.Enums, check); err != nil {
 			return err
