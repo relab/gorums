@@ -179,7 +179,7 @@ For the `unicast` and `multicast` call types, the response message type will be 
 > A message field named `ID` is fine; only type names are reserved.
 > Gorums injects type aliases with these names into every generated `_gorums.pb.go` file, so messages, enums, and enum values in any `.proto` file of the same Go package cannot use them.
 > For a service `S`, Gorums also generates the client names `SClient`, `NewSClient`, and `sClient`, and the node client names `SNodeClient`, `NewSNodeClient`, and `sNodeClient`.
-> Messages, enums, and enum values cannot use the names of a client that the service has.
+> Messages, enums, enum values, and oneof wrapper types cannot use the names of a client that the service has.
 > An RPC method may have any name, also `Config` or `Node`, because the clients have no helper methods.
 > The generator reports an error for a `.proto` file that uses one of these names.
 
@@ -275,7 +275,7 @@ Follow these rules when you use the clients:
 * **A nil node does not panic.**
   `cfg.Node(id)` returns nil if the configuration has no node with that ID.
   `NewStorageNodeClient(nil)` is legal, and every call on that client returns `gorums.ErrNoNode`.
-  This error is a gRPC status error with the `Unavailable` code, like the error for a node that is down.
+  This error is a gRPC status error with the `InvalidArgument` code, because retrying cannot fix it.
 * **Any node works.**
   The node can also be a node that is not in a configuration that you use for quorum calls.
 * **An empty configuration panics.**
