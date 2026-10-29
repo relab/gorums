@@ -61,6 +61,9 @@ type BenchmarkClient interface {
 	// Example:
 	//
 	//	err := client.Multicast(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := client.Multicast(ctx, in).Async()
 	//	err = h.Wait()
 	Multicast(ctx context.Context, in *TimedMsg) *gorums.OnewayCall[*TimedMsg]

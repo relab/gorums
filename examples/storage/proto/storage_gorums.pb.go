@@ -59,6 +59,9 @@ type StorageClient interface {
 	// Example:
 	//
 	//	err := client.WriteMulticast(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := client.WriteMulticast(ctx, in).Async()
 	//	err = h.Wait()
 	WriteMulticast(ctx context.Context, in *WriteRequest) *gorums.OnewayCall[*WriteRequest]
@@ -113,6 +116,9 @@ type StorageNodeClient interface {
 	// Example:
 	//
 	//	err := nodeClient.WriteUnicast(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := nodeClient.WriteUnicast(ctx, in).Async()
 	//	err = h.Wait()
 	WriteUnicast(ctx context.Context, in *WriteRequest) *gorums.OnewayCall[*WriteRequest]

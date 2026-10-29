@@ -60,6 +60,9 @@ type NodeOnlyNodeClient interface {
 	// Example:
 	//
 	//	err := nodeClient.Write(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := nodeClient.Write(ctx, in).Async()
 	//	err = h.Wait()
 	Write(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]

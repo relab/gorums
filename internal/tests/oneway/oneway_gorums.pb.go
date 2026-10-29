@@ -52,6 +52,9 @@ type OnewayTestClient interface {
 	// Example:
 	//
 	//	err := client.Multicast(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := client.Multicast(ctx, in).Async()
 	//	err = h.Wait()
 	Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
@@ -81,6 +84,9 @@ type OnewayTestNodeClient interface {
 	// Example:
 	//
 	//	err := nodeClient.Unicast(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := nodeClient.Unicast(ctx, in).Async()
 	//	err = h.Wait()
 	Unicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]

@@ -42,6 +42,9 @@ type ZorumsServiceClient interface {
 	// Example:
 	//
 	//	err := client.Multicast(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := client.Multicast(ctx, in).Async()
 	//	err = h.Wait()
 	Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
@@ -51,6 +54,9 @@ type ZorumsServiceClient interface {
 	// Example:
 	//
 	//	err := client.Multicast2(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := client.Multicast2(ctx, in).Async()
 	//	err = h.Wait()
 	Multicast2(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
@@ -60,6 +66,9 @@ type ZorumsServiceClient interface {
 	// Example:
 	//
 	//	err := client.Multicast3(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := client.Multicast3(ctx, in).Async()
 	//	err = h.Wait()
 	Multicast3(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
@@ -69,6 +78,9 @@ type ZorumsServiceClient interface {
 	// Example:
 	//
 	//	err := client.Multicast4(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := client.Multicast4(ctx, in).Async()
 	//	err = h.Wait()
 	Multicast4(ctx context.Context, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty]
@@ -112,6 +124,9 @@ type ZorumsServiceNodeClient interface {
 	// Example:
 	//
 	//	err := nodeClient.Unicast(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := nodeClient.Unicast(ctx, in).Async()
 	//	err = h.Wait()
 	Unicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
@@ -125,6 +140,9 @@ type ZorumsServiceNodeClient interface {
 	// Example:
 	//
 	//	err := nodeClient.Unicast2(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := nodeClient.Unicast2(ctx, in).Async()
 	//	err = h.Wait()
 	Unicast2(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]

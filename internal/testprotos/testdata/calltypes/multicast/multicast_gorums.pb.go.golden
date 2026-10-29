@@ -56,6 +56,9 @@ type MulticastClient interface {
 	// Example:
 	//
 	//	err := client.Multicast(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := client.Multicast(ctx, in).Async()
 	//	err = h.Wait()
 	Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
@@ -65,6 +68,9 @@ type MulticastClient interface {
 	// Example:
 	//
 	//	err := client.MulticastEmpty(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := client.MulticastEmpty(ctx, in).Async()
 	//	err = h.Wait()
 	MulticastEmpty(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
