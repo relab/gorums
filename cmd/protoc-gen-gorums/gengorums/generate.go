@@ -168,7 +168,15 @@ func shouldGenerate(gen *protogen.Plugin, file *protogen.File) (bool, error) {
 // this run. Two of these services must not generate the same identifier. A
 // message, enum, or enum value of any file in the package, nested or not,
 // must not take the name of a Gorums type alias or of an identifier generated
-// for one of these services.
+// for one of these services. For example, service NewS generates the
+// interface NewSClient, and service S generates the constructor NewSClient.
+//
+// The check treats every service of these files as a Gorums service, because
+// a method without a Gorums option is a remote call. A package may also hold
+// a plain gRPC service in a file that is compiled without the Gorums plugin.
+// The check then reserves the node client names of that service, such as
+// SNodeClient, although protoc-gen-go-grpc generates SClient, NewSClient, and
+// sClient instead. A clash with those names shows when the package compiles.
 func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
 	generated, err := packageIdents(gen, file.GoImportPath)
 	if err != nil {
