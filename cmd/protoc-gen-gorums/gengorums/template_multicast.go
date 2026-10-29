@@ -24,6 +24,9 @@ var multicastComment = `
 // Example:
 //
 //	err := client.{{$method}}(ctx, in).Send()
+//
+// To dispatch without waiting for the sends:
+//
 //	h := client.{{$method}}(ctx, in).Async()
 //	err = h.Wait()
 {{end -}}
@@ -33,8 +36,7 @@ var multicastSignature = `{{if not .Decl}}func ({{$local.c}} {{$impl}}) {{end}}{
 	`{{$local.ctx}} {{$context}}, {{$local.in}} *{{$in}})` +
 	` *{{$onewayCall}}[*{{$in}}]`
 
-var multicastBody = `{{if .Decl}}
-{{else}} {
+var multicastBody = `{{if not .Decl}} {
 	return {{$multicast}}({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
 }
 {{end}}`

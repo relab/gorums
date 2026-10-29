@@ -27,8 +27,7 @@ var remoteCallSignature = `{{if not .Decl}}func ({{$local.c}} {{$impl}}) {{end}}
 	`{{$local.ctx}} {{$context}}, {{$local.in}} *{{$in}})` +
 	` (*{{$out}}, error)`
 
-var remoteCallBody = `{{if .Decl}}
-{{else}} {
+var remoteCallBody = `{{if not .Decl}} {
 	return {{$rpc}}[*{{$in}}, *{{$out}}]({{$local.ctx}}, {{$local.c}}.node, {{$local.in}}, "{{$fullName}}")
 }
 {{end}}`

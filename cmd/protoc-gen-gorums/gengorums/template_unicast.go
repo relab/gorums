@@ -24,6 +24,9 @@ var unicastComment = `
 // Example:
 //
 //	err := nodeClient.{{$method}}(ctx, in).Send()
+//
+// To dispatch without waiting for the sends:
+//
 //	h := nodeClient.{{$method}}(ctx, in).Async()
 //	err = h.Wait()
 {{end -}}
@@ -33,8 +36,7 @@ var unicastSignature = `{{if not .Decl}}func ({{$local.c}} {{$impl}}) {{end}}{{$
 	`{{$local.ctx}} {{$context}}, {{$local.in}} *{{$in}})` +
 	` *{{$onewayCall}}[*{{$in}}]`
 
-var unicastBody = `{{if .Decl}}
-{{else}} {
+var unicastBody = `{{if not .Decl}} {
 	return {{$unicast}}({{$local.ctx}}, {{$local.c}}.node, {{$local.in}}, "{{$fullName}}")
 }
 {{end}}`
