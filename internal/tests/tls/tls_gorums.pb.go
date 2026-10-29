@@ -55,15 +55,15 @@ type TLSNodeClient interface {
 // NewTLSNodeClient returns a node client whose calls execute on node.
 // The node may be nil, and it need not belong to a particular configuration.
 func NewTLSNodeClient(node *gorums.Node) TLSNodeClient {
-	return tLSNodeClient{node: node}
+	return tlsNodeClient{node: node}
 }
 
-// tLSNodeClient implements TLSNodeClient.
-type tLSNodeClient struct {
+// tlsNodeClient implements TLSNodeClient.
+type tlsNodeClient struct {
 	node *gorums.Node
 }
 
-func (c tLSNodeClient) TestTLS(ctx context.Context, in *Request) (*Response, error) {
+func (c tlsNodeClient) TestTLS(ctx context.Context, in *Request) (*Response, error) {
 	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "tls.TLS.TestTLS")
 }
 

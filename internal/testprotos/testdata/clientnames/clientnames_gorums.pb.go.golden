@@ -54,6 +54,9 @@ type ClientNamesClient interface {
 	// Example:
 	//
 	//	err := client.WithConfig(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := client.WithConfig(ctx, in).Async()
 	//	err = h.Wait()
 	WithConfig(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
@@ -82,6 +85,9 @@ type ClientNamesNodeClient interface {
 	// Example:
 	//
 	//	err := nodeClient.ForNode(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := nodeClient.ForNode(ctx, in).Async()
 	//	err = h.Wait()
 	ForNode(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]

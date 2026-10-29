@@ -73,6 +73,9 @@ type ControlClient interface {
 	// Example:
 	//
 	//	err := client.Done(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := client.Done(ctx, in).Async()
 	//	err = h.Wait()
 	Done(ctx context.Context, in *DoneRequest) *gorums.OnewayCall[*DoneRequest]
