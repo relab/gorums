@@ -54,7 +54,7 @@ The call type of each RPC method decides which client the method belongs to:
 | `SNodeClient` | `NewSNodeClient(node *gorums.Node) SNodeClient` | `sNodeClient`       | remote call, unicast   |
 
 A service with only one kind of call gets only that client.
-The struct name is the interface name with a lowercase first letter.
+The struct name is an unexported variant of the interface name.
 `sClient` holds a `gorums.Config`, and `sNodeClient` holds a `*gorums.Node`.
 The structs have value receivers.
 The clients have no helper methods.
@@ -75,32 +75,8 @@ flowchart LR
     rt --> impl["internal/impl<br/>QuorumCall(ctx, config, in, method)"]
 ```
 
-A quorum call or multicast on an empty configuration panics when the call is built.
-A remote call or unicast on a nil node does not panic.
-`RemoteCall` returns `gorums.ErrNoNode`, and the `OnewayCall` of `Unicast` sends nothing and reports `gorums.ErrNoNode` from `Send` and `Wait`.
-Thus, `NewSNodeClient(cfg.Node(id))` is safe for an unknown ID.
-
-`genClients` in `gengorums/template_client.go` generates the interfaces, constructors, and structs.
-Each call type template renders a method in one of two modes, chosen by the `Decl` field of its data:
-
-* Declaration mode renders the doc comment and the method signature for the interface.
-  The doc comment is the proto comment, or a default text with an example.
-* Implementation mode renders the method of the struct, with its receiver and body, and without a doc comment.
-
-Thus, the signature of a method is written once.
+A method signature is written once, for both the interface and the struct.
 godoc shows the doc comments of the interface methods.
-
-The generator checks the generated names for collisions.
-A message, enum, or enum value in the service's Go package must not take the name of an interface, constructor, or struct of a client that the service has.
-The check includes nested messages and enums, and all enum values, by their Go names, such as `Outer_InnerClient`, because protoc-gen-go declares them at package level.
-An RPC method may have any name, such as `Config`, `WithConfig`, `Node`, or `ForNode`, because the clients have no helper methods.
-
-The generated methods name their receiver and parameters `c`, `ctx`, and `in`, and the handler registration uses `srv`, `impl`, `ctx`, `in`, `req`, `resp`, `err`, and `out`.
-An imported Go package can have one of these names, such as a message package named `out`.
-A local name with that name would hide the package in the method body.
-Thus, each template gets its local names from the `localNames` function in `gengorums/template_funcs.go`.
-The template passes the identifiers that the body refers to, such as `out.Request` or `gorumsimpl.RemoteCall`.
-`localNames` appends an underscore to a local name until it differs from each package name in these identifiers, for example `out_`.
 
 In dev mode, the generator writes one `dev/zorums_{name}_gorums.pb.go` file for each entry of `gorumsCallTypesInfo` in `gengorums/generate.go`:
 
@@ -112,10 +88,10 @@ In dev mode, the generator writes one `dev/zorums_{name}_gorums.pb.go` file for 
 | `zorums_multicast_gorums.pb.go`  | `template_multicast.go`  | multicast methods                              |
 | `zorums_remotecall_gorums.pb.go` | `template_rpc.go`        | remote call methods                            |
 | `zorums_unicast_gorums.pb.go`    | `template_unicast.go`    | unicast methods                                |
+| `zorums_server_gorums.pb.go`     | `template_server.go`     | server interface and handler registration      |
 
 The client file holds the interface declarations of all call types.
 Each call type file holds the implementing methods of that call type.
-| `zorums_server_gorums.pb.go`     | `template_server.go`     | server interface and handler registration      |
 
 Outside dev mode, all of this code goes into a single `_gorums.pb.go` file.
 
