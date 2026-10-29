@@ -29,7 +29,7 @@ var ErrNodeClosed = stream.ErrNodeClosed
 
 // ErrNoNode is returned by a remote call or unicast on a nil node, such as
 // the node that [Config.Node] returns for an ID outside the configuration.
-// It is a gRPC status error with the Unavailable code; match it with
+// It is a gRPC status error with the InvalidArgument code; match it with
 // [errors.Is].
 var ErrNoNode = impl.ErrNoNode
 

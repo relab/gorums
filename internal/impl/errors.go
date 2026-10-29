@@ -23,5 +23,6 @@ var ErrTypeMismatch = errors.New("response type mismatch")
 
 // ErrNoNode is returned by a remote call or unicast on a nil node, such as
 // the node that [Config.Node] returns for an ID outside the configuration.
-// It is a gRPC status error with the Unavailable code.
-var ErrNoNode = status.Error(codes.Unavailable, "no such node")
+// It is a gRPC status error with the InvalidArgument code, because the call
+// cannot succeed until the caller passes a node.
+var ErrNoNode = status.Error(codes.InvalidArgument, "no such node")
