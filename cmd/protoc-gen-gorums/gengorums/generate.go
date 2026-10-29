@@ -235,9 +235,12 @@ func genGorumsMethods(g *protogen.GeneratedFile, file *protogen.File, target str
 }
 
 // renderMethod renders the client method of the given method with the
-// template of its call type. If decl is true, it renders the documented
-// method declaration of the client interface; otherwise, it renders the method
-// of the implementing struct. It returns "" if the method has no Gorums call
+// template of its call type. Each template renders in one of two modes, chosen
+// by decl, so that a signature is written once. If decl is true, it renders
+// the doc comment and the signature for the client interface; the doc comment
+// is the proto comment, or a default text with an example. Otherwise, it
+// renders the method of the implementing struct, with its receiver and body
+// and without a doc comment. It returns "" if the method has no Gorums call
 // type.
 func renderMethod(g *protogen.GeneratedFile, method *protogen.Method, decl bool) string {
 	name, info := callType(method)

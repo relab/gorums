@@ -41,8 +41,7 @@ var quorumCallSignature = `{{if not .Decl}}func ({{$local.c}} {{$impl}}) {{end}}
 	`{{$local.ctx}} {{$context}}, {{$local.in}} *{{$in}})` +
 	` *{{$call}}[*{{$in}}, *{{$out}}]`
 
-var quorumCallBody = `{{if .Decl}}
-{{else}} {
+var quorumCallBody = `{{if not .Decl}} {
 	return {{$quorumCall}}[*{{$in}}, *{{$out}}]({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
 }
 {{end}}`
@@ -73,8 +72,7 @@ var quorumCallStreamComment = `
 {{end -}}
 `
 
-var quorumCallStreamBody = `{{if .Decl}}
-{{else}} {
+var quorumCallStreamBody = `{{if not .Decl}} {
 	return {{$quorumCallStream}}[*{{$in}}, *{{$out}}]({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
 }
 {{end}}`
