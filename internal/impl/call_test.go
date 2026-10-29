@@ -108,8 +108,8 @@ func TestCallNilNode(t *testing.T) {
 			if !errors.Is(err, ErrNoNode) {
 				t.Errorf("call error = %v, want %v", err, ErrNoNode)
 			}
-			if got := status.Code(err); got != codes.Unavailable {
-				t.Errorf("status.Code(err) = %v, want %v", got, codes.Unavailable)
+			if got := status.Code(err); got != codes.InvalidArgument {
+				t.Errorf("status.Code(err) = %v, want %v", got, codes.InvalidArgument)
 			}
 		})
 	}
