@@ -2,6 +2,7 @@ package impl
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
 	"strconv"
 	"sync"
@@ -76,7 +77,7 @@ func (c *CallContext[Req, Resp]) intercept(ics ...ClientInterceptor[Req, Resp]) 
 // type callType and the full method name method of the call.
 func requireConfig(callType, method string, config Config) {
 	if len(config) == 0 {
-		panic("gorums: " + callType + " " + strconv.Quote(method) + " needs a non-empty configuration")
+		panic(fmt.Sprintf("gorums: %s %s needs a non-empty configuration", callType, strconv.Quote(method)))
 	}
 }
 
