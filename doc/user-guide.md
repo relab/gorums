@@ -275,7 +275,7 @@ Follow these rules when you use the clients:
 * **A nil node does not panic.**
   `cfg.Node(id)` returns nil if the configuration has no node with that ID.
   `NewStorageNodeClient(nil)` is legal, and every call on that client returns `gorums.ErrNoNode`.
-  This error is a gRPC status error with the `Unavailable` code, like the error for a node that is down.
+  This error is a gRPC status error with the `InvalidArgument` code, because retrying cannot fix it.
 * **Any node works.**
   The node can also be a node that is not in a configuration that you use for quorum calls.
 * **An empty configuration panics.**
