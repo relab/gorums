@@ -95,6 +95,9 @@ type BetaClient interface {
 	// Example:
 	//
 	//	err := client.Write(ctx, in).Send()
+	//
+	// To dispatch without waiting for the sends:
+	//
 	//	h := client.Write(ctx, in).Async()
 	//	err = h.Wait()
 	Write(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
