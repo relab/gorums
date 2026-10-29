@@ -269,7 +269,7 @@ func (r repl) qcCfg(args []string) {
 	}
 }
 
-func (r repl) readRPC(args []string, node *pb.Node) {
+func (repl) readRPC(args []string, node *pb.Node) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
@@ -288,7 +288,7 @@ func (r repl) readRPC(args []string, node *pb.Node) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (r repl) writeRPC(args []string, node *pb.Node) {
+func (repl) writeRPC(args []string, node *pb.Node) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
