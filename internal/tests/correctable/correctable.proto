@@ -18,5 +18,5 @@ service CorrectableTest {
 message Request {}
 
 message Response {
-    int32 Level = 1;
+    int32 level = 1;
 }

@@ -18,16 +18,16 @@ service NodeOnly {
 }
 
 message Request {
-    string Value = 1;
+    string value = 1;
 }
 message Response {
-    int64 Result = 1;
+    int64 result = 1;
 }
 
 // NodeOnlyClient takes the name of the configuration client, which the
 // service does not have.
 message NodeOnlyClient {
-    string Value = 1;
+    string value = 1;
 }
 // NewNodeOnlyClient takes the name of the configuration client's constructor.
 enum NewNodeOnlyClient {

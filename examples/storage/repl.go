@@ -281,7 +281,7 @@ func (repl) readRPC(args []string, node *pb.Node) {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
 		return
 	}
-	if !resp.GetOK() {
+	if !resp.GetOk() {
 		fmt.Printf("%s was not found\n", args[0])
 		return
 	}
@@ -322,7 +322,7 @@ func (repl) readQC(args []string, config pb.Config) {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
 		return
 	}
-	if !resp.GetOK() {
+	if !resp.GetOk() {
 		fmt.Printf("%s was not found\n", args[0])
 		return
 	}
@@ -348,7 +348,7 @@ func (repl) creadQC(args []string, config pb.Config) {
 			fmt.Printf("Read correctable error at level %d: %v\n", currentLevel, err)
 			break
 		}
-		if !resp.GetOK() {
+		if !resp.GetOk() {
 			fmt.Printf("%s was not found (level %d)\n", args[0], currentLevel)
 		} else {
 			fmt.Printf("%s = %s (level %d)\n", args[0], resp.GetValue(), currentLevel)
@@ -393,7 +393,7 @@ func (repl) readNestedQC(args []string, config pb.Config) {
 		fmt.Printf("Nested read quorum call finished with error: %v\n", err)
 		return
 	}
-	if !resp.GetOK() {
+	if !resp.GetOk() {
 		fmt.Printf("%s was not found\n", args[0])
 		return
 	}

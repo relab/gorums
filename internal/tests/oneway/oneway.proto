@@ -17,6 +17,6 @@ service OnewayTest {
 }
 
 message Request {
-    uint64 Num = 1;
+    uint64 num = 1;
 }
 message Empty {}

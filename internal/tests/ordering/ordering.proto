@@ -16,9 +16,9 @@ service Ordering {
 }
 
 message Request {
-    uint64 Num = 1;
+    uint64 num = 1;
 }
 
 message Response {
-    bool InOrder = 1;
+    bool in_order = 1;
 }

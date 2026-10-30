@@ -30,7 +30,7 @@ func (testSrv) IDFromMD(ctx gorums.ServerContext, _ *emptypb.Empty) (resp *NodeI
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "value of id field: %q is not a number: %v", v[0], err)
 	}
-	return NodeID_builder{ID: uint32(id)}.Build(), nil
+	return NodeID_builder{Id: uint32(id)}.Build(), nil
 }
 
 func (testSrv) WhatIP(ctx gorums.ServerContext, _ *emptypb.Empty) (resp *IPAddr, err error) {
@@ -79,7 +79,7 @@ func TestMetadata(t *testing.T) {
 			if err != nil {
 				t.Fatalf("RPC error: %v", err)
 			}
-			if got := resp.GetID(); got != want {
+			if got := resp.GetId(); got != want {
 				t.Fatalf("IDFromMD() = %d, want %d", got, want)
 			}
 		})
@@ -124,7 +124,7 @@ func TestPerMessageMetadataAcrossStreamTopologies(t *testing.T) {
 			if err != nil {
 				t.Fatalf("IDFromMD: %v", err)
 			}
-			if got := resp.GetID(); got != want {
+			if got := resp.GetId(); got != want {
 				t.Fatalf("IDFromMD() = %d, want %d", got, want)
 			}
 		})
