@@ -35,20 +35,20 @@ type TLSNodeClient interface {
 
 // NewTLSNodeClient returns a node client whose calls execute on node.
 // The node may be nil, and it need not belong to a particular configuration.
-func NewTLSNodeClient(node *gorums.Node) TLSNodeClient {
+func NewTLSNodeClient(node *Node) TLSNodeClient {
 	return tlsNodeClient{node: node}
 }
 
 // tlsNodeClient implements TLSNodeClient.
 type tlsNodeClient struct {
-	node *gorums.Node
+	node *Node
 }
 
 func (c tlsNodeClient) TestTLS(ctx context.Context, in *Request) (*Response, error) {
 	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "tls.TLS.TestTLS")
 }
 
-// TLS is the server-side API for the TLS Service
+// TLSServer is the server-side API for the TLS Service
 type TLSServer interface {
 	TestTLS(gorums.ServerContext, *Request) (*Response, error)
 }

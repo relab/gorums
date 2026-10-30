@@ -48,13 +48,13 @@ type BenchmarkClient interface {
 }
 
 // NewBenchmarkClient returns a client whose calls execute on config.
-func NewBenchmarkClient(config gorums.Config) BenchmarkClient {
+func NewBenchmarkClient(config Config) BenchmarkClient {
 	return benchmarkClient{config: config}
 }
 
 // benchmarkClient implements BenchmarkClient.
 type benchmarkClient struct {
-	config gorums.Config
+	config Config
 }
 
 func (c benchmarkClient) QuorumCall(ctx context.Context, in *Echo) *gorums.Call[*Echo, *Echo] {
@@ -69,7 +69,7 @@ func (c benchmarkClient) Multicast(ctx context.Context, in *TimedMsg) *gorums.On
 	return gorumsimpl.Multicast(ctx, c.config, in, "benchmark.Benchmark.Multicast")
 }
 
-// Benchmark is the server-side API for the Benchmark Service
+// BenchmarkServer is the server-side API for the Benchmark Service
 type BenchmarkServer interface {
 	QuorumCall(gorums.ServerContext, *Echo) (*Echo, error)
 	SlowServer(gorums.ServerContext, *Echo) (*Echo, error)

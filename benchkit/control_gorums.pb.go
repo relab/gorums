@@ -54,13 +54,13 @@ type ControlClient interface {
 }
 
 // NewControlClient returns a client whose calls execute on config.
-func NewControlClient(config gorums.Config) ControlClient {
+func NewControlClient(config Config) ControlClient {
 	return controlClient{config: config}
 }
 
 // controlClient implements ControlClient.
 type controlClient struct {
-	config gorums.Config
+	config Config
 }
 
 func (c controlClient) Start(ctx context.Context, in *StartRequest) *gorums.Call[*StartRequest, *StartResponse] {
@@ -79,7 +79,7 @@ func (c controlClient) Done(ctx context.Context, in *DoneRequest) *gorums.Oneway
 	return gorumsimpl.Multicast(ctx, c.config, in, "benchkit.Control.Done")
 }
 
-// Control is the server-side API for the Control Service
+// ControlServer is the server-side API for the Control Service
 type ControlServer interface {
 	Start(gorums.ServerContext, *StartRequest) (*StartResponse, error)
 	Stop(gorums.ServerContext, *StopRequest) (*Result, error)

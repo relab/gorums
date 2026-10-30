@@ -46,13 +46,13 @@ type CorrectableTestClient interface {
 }
 
 // NewCorrectableTestClient returns a client whose calls execute on config.
-func NewCorrectableTestClient(config gorums.Config) CorrectableTestClient {
+func NewCorrectableTestClient(config Config) CorrectableTestClient {
 	return correctableTestClient{config: config}
 }
 
 // correctableTestClient implements CorrectableTestClient.
 type correctableTestClient struct {
-	config gorums.Config
+	config Config
 }
 
 func (c correctableTestClient) Correctable(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
@@ -63,7 +63,7 @@ func (c correctableTestClient) CorrectableStream(ctx context.Context, in *Reques
 	return gorumsimpl.QuorumCallStream[*Request, *Response](ctx, c.config, in, "correctable.CorrectableTest.CorrectableStream")
 }
 
-// CorrectableTest is the server-side API for the CorrectableTest Service
+// CorrectableTestServer is the server-side API for the CorrectableTest Service
 type CorrectableTestServer interface {
 	Correctable(gorums.ServerContext, *Request) (*Response, error)
 	CorrectableStream(gorums.ServerContext, *Request, func(*Response))

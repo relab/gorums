@@ -35,13 +35,13 @@ type AlphaClient interface {
 }
 
 // NewAlphaClient returns a client whose calls execute on config.
-func NewAlphaClient(config gorums.Config) AlphaClient {
+func NewAlphaClient(config Config) AlphaClient {
 	return alphaClient{config: config}
 }
 
 // alphaClient implements AlphaClient.
 type alphaClient struct {
-	config gorums.Config
+	config Config
 }
 
 // AlphaNodeClient is the client API for the remote calls and unicasts
@@ -60,13 +60,13 @@ type AlphaNodeClient interface {
 
 // NewAlphaNodeClient returns a node client whose calls execute on node.
 // The node may be nil, and it need not belong to a particular configuration.
-func NewAlphaNodeClient(node *gorums.Node) AlphaNodeClient {
+func NewAlphaNodeClient(node *Node) AlphaNodeClient {
 	return alphaNodeClient{node: node}
 }
 
 // alphaNodeClient implements AlphaNodeClient.
 type alphaNodeClient struct {
-	node *gorums.Node
+	node *Node
 }
 
 // BetaClient is the client API for the quorum calls and multicasts of
@@ -94,13 +94,13 @@ type BetaClient interface {
 }
 
 // NewBetaClient returns a client whose calls execute on config.
-func NewBetaClient(config gorums.Config) BetaClient {
+func NewBetaClient(config Config) BetaClient {
 	return betaClient{config: config}
 }
 
 // betaClient implements BetaClient.
 type betaClient struct {
-	config gorums.Config
+	config Config
 }
 
 func (c alphaClient) Heartbeat(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
@@ -119,13 +119,13 @@ func (c betaClient) Write(ctx context.Context, in *Request) *gorums.Call[*Reques
 	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "multiservice.Beta.Write")
 }
 
-// Alpha is the server-side API for the Alpha Service
+// AlphaServer is the server-side API for the Alpha Service
 type AlphaServer interface {
 	Heartbeat(gorums.ServerContext, *Request) (*Response, error)
 	Read(gorums.ServerContext, *Request) (*Response, error)
 }
 
-// Beta is the server-side API for the Beta Service
+// BetaServer is the server-side API for the Beta Service
 type BetaServer interface {
 	Heartbeat(gorums.ServerContext, *Request) (*Response, error)
 	Write(gorums.ServerContext, *Request) (*Response, error)

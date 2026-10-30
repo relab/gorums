@@ -35,20 +35,20 @@ type QuorumCallClient interface {
 }
 
 // NewQuorumCallClient returns a client whose calls execute on config.
-func NewQuorumCallClient(config gorums.Config) QuorumCallClient {
+func NewQuorumCallClient(config Config) QuorumCallClient {
 	return quorumCallClient{config: config}
 }
 
 // quorumCallClient implements QuorumCallClient.
 type quorumCallClient struct {
-	config gorums.Config
+	config Config
 }
 
 func (c quorumCallClient) QuorumCall(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
 	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "internal.testprotos.calltypes.quorumcall.QuorumCall.QuorumCall")
 }
 
-// QuorumCall is the server-side API for the QuorumCall Service
+// QuorumCallServer is the server-side API for the QuorumCall Service
 type QuorumCallServer interface {
 	QuorumCall(gorums.ServerContext, *Request) (*Response, error)
 }

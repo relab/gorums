@@ -42,13 +42,13 @@ type OnewayTestClient interface {
 }
 
 // NewOnewayTestClient returns a client whose calls execute on config.
-func NewOnewayTestClient(config gorums.Config) OnewayTestClient {
+func NewOnewayTestClient(config Config) OnewayTestClient {
 	return onewayTestClient{config: config}
 }
 
 // onewayTestClient implements OnewayTestClient.
 type onewayTestClient struct {
-	config gorums.Config
+	config Config
 }
 
 // OnewayTestNodeClient is the client API for the remote calls and unicasts
@@ -75,13 +75,13 @@ type OnewayTestNodeClient interface {
 
 // NewOnewayTestNodeClient returns a node client whose calls execute on node.
 // The node may be nil, and it need not belong to a particular configuration.
-func NewOnewayTestNodeClient(node *gorums.Node) OnewayTestNodeClient {
+func NewOnewayTestNodeClient(node *Node) OnewayTestNodeClient {
 	return onewayTestNodeClient{node: node}
 }
 
 // onewayTestNodeClient implements OnewayTestNodeClient.
 type onewayTestNodeClient struct {
-	node *gorums.Node
+	node *Node
 }
 
 func (c onewayTestNodeClient) Unicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
@@ -92,7 +92,7 @@ func (c onewayTestClient) Multicast(ctx context.Context, in *Request) *gorums.On
 	return gorumsimpl.Multicast(ctx, c.config, in, "oneway.OnewayTest.Multicast")
 }
 
-// OnewayTest is the server-side API for the OnewayTest Service
+// OnewayTestServer is the server-side API for the OnewayTest Service
 type OnewayTestServer interface {
 	Unicast(gorums.ServerContext, *Request)
 	Multicast(gorums.ServerContext, *Request)
