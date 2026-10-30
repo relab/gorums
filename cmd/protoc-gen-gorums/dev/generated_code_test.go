@@ -22,9 +22,9 @@ import (
 	"github.com/relab/gorums/gorumstest"
 )
 
-// quorumCallServer implements the QuorumCall and GRPCCall methods of the
+// quorumCallServer implements the QuorumCall and RemoteCall methods of the
 // generated [dev.ZorumsServiceServer] interface. QuorumCall returns the length
-// of the request value. GRPCCall returns the server's tag, which identifies
+// of the request value. RemoteCall returns the server's tag, which identifies
 // the server that handled the call. The embedded interface is nil, so the
 // other methods panic if called.
 type quorumCallServer struct {
@@ -38,7 +38,7 @@ func (quorumCallServer) QuorumCall(_ gorums.ServerContext, req *dev.Request) (*d
 	return resp, nil
 }
 
-func (s quorumCallServer) GRPCCall(_ gorums.ServerContext, _ *dev.Request) (*dev.Response, error) {
+func (s quorumCallServer) RemoteCall(_ gorums.ServerContext, _ *dev.Request) (*dev.Response, error) {
 	resp := &dev.Response{}
 	resp.SetResult(s.tag)
 	return resp, nil
@@ -174,9 +174,9 @@ func TestGeneratedCodeDerivedConfig(t *testing.T) {
 // named ID, even though ID is a reserved identifier in the generated package.
 func TestGeneratedCodeIDField(t *testing.T) {
 	req := &dev.Request{}
-	req.SetID(42)
-	if got := req.GetID(); got != 42 {
-		t.Errorf("GetID() = %d, want 42", got)
+	req.SetId(42)
+	if got := req.GetId(); got != 42 {
+		t.Errorf("GetId() = %d, want 42", got)
 	}
 	var _ dev.ID // the reserved alias must remain usable alongside the field
 }
@@ -223,12 +223,12 @@ func TestGeneratedCodeClient(t *testing.T) {
 	for _, n := range nodes {
 		t.Run("NodeCall/"+n.name, func(t *testing.T) {
 			nodeClient := dev.NewZorumsServiceNodeClient(n.node)
-			resp, err := nodeClient.GRPCCall(gorumstest.Context(t, 2*time.Second), &dev.Request{})
+			resp, err := nodeClient.RemoteCall(gorumstest.Context(t, 2*time.Second), &dev.Request{})
 			if err != nil {
-				t.Fatalf("GRPCCall failed: %v", err)
+				t.Fatalf("RemoteCall failed: %v", err)
 			}
 			if got := resp.GetResult(); got != n.wantTag {
-				t.Errorf("GRPCCall result = %d, want %d", got, n.wantTag)
+				t.Errorf("RemoteCall result = %d, want %d", got, n.wantTag)
 			}
 		})
 	}
@@ -243,7 +243,7 @@ func TestGeneratedCodeClient(t *testing.T) {
 		{
 			name: "RemoteCall",
 			call: func(ctx context.Context) error {
-				_, err := nilNodeClient.GRPCCall(ctx, &dev.Request{})
+				_, err := nilNodeClient.RemoteCall(ctx, &dev.Request{})
 				return err
 			},
 		},
@@ -280,7 +280,7 @@ func TestGeneratedCodeClient(t *testing.T) {
 		},
 		{
 			name: "MulticastSend",
-			call: func(ctx context.Context) error { return emptyClient.Multicast(ctx, &dev.Request{}).Send() },
+			call: func(ctx context.Context) error { return emptyClient.MulticastWithResponse(ctx, &dev.Request{}).Send() },
 		},
 	}
 	for _, c := range emptyConfigCalls {
