@@ -66,7 +66,7 @@ func (b0 Request_builder) Build() *Request {
 
 type Response struct {
 	state            protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Level int32                  `protobuf:"varint,1,opt,name=Level"`
+	xxx_hidden_Level int32                  `protobuf:"varint,1,opt,name=level"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -128,7 +128,7 @@ const file_correctable_correctable_proto_rawDesc = "" +
 	"\x1dcorrectable/correctable.proto\x12\vcorrectable\x1a\fgorums.proto\"\t\n" +
 	"\aRequest\" \n" +
 	"\bResponse\x12\x14\n" +
-	"\x05Level\x18\x01 \x01(\x05R\x05Level2\x9d\x01\n" +
+	"\x05level\x18\x01 \x01(\x05R\x05level2\x9d\x01\n" +
 	"\x0fCorrectableTest\x12@\n" +
 	"\vCorrectable\x12\x14.correctable.Request\x1a\x15.correctable.Response\"\x04\xa0\xb5\x18\x01\x12H\n" +
 	"\x11CorrectableStream\x12\x14.correctable.Request\x1a\x15.correctable.Response\"\x04\xa0\xb5\x18\x010\x01B9Z2github.com/relab/gorums/internal/tests/correctable\x92\x03\x02\b\x02b\beditionsp\xe8\a"

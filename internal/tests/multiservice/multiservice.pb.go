@@ -23,7 +23,7 @@ const (
 
 type Request struct {
 	state            protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Value string                 `protobuf:"bytes,1,opt,name=Value"`
+	xxx_hidden_Value string                 `protobuf:"bytes,1,opt,name=value"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -80,7 +80,7 @@ func (b0 Request_builder) Build() *Request {
 
 type Response struct {
 	state            protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Value string                 `protobuf:"bytes,1,opt,name=Value"`
+	xxx_hidden_Value string                 `protobuf:"bytes,1,opt,name=value"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -141,9 +141,9 @@ const file_multiservice_multiservice_proto_rawDesc = "" +
 	"\n" +
 	"\x1fmultiservice/multiservice.proto\x12\fmultiservice\x1a\fgorums.proto\"\x1f\n" +
 	"\aRequest\x12\x14\n" +
-	"\x05Value\x18\x01 \x01(\tR\x05Value\" \n" +
+	"\x05value\x18\x01 \x01(\tR\x05value\" \n" +
 	"\bResponse\x12\x14\n" +
-	"\x05Value\x18\x01 \x01(\tR\x05Value2\x82\x01\n" +
+	"\x05value\x18\x01 \x01(\tR\x05value2\x82\x01\n" +
 	"\x05Alpha\x12@\n" +
 	"\tHeartbeat\x12\x15.multiservice.Request\x1a\x16.multiservice.Response\"\x04\xa0\xb5\x18\x01\x127\n" +
 	"\x04Read\x12\x15.multiservice.Request\x1a\x16.multiservice.Response\"\x002\x86\x01\n" +

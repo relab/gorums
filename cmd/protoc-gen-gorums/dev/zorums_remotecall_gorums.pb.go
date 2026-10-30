@@ -18,6 +18,6 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-func (c zorumsServiceNodeClient) GRPCCall(ctx context.Context, in *Request) (*Response, error) {
-	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "dev.ZorumsService.GRPCCall")
+func (c zorumsServiceNodeClient) RemoteCall(ctx context.Context, in *Request) (*Response, error) {
+	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "dev.ZorumsService.RemoteCall")
 }

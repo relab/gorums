@@ -23,7 +23,7 @@ const (
 
 type Request struct {
 	state          protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Num uint64                 `protobuf:"varint,1,opt,name=Num"`
+	xxx_hidden_Num uint64                 `protobuf:"varint,1,opt,name=num"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -80,7 +80,7 @@ func (b0 Request_builder) Build() *Request {
 
 type Response struct {
 	state              protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_InOrder bool                   `protobuf:"varint,1,opt,name=InOrder"`
+	xxx_hidden_InOrder bool                   `protobuf:"varint,1,opt,name=in_order,json=inOrder"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -141,9 +141,9 @@ const file_ordering_ordering_proto_rawDesc = "" +
 	"\n" +
 	"\x17ordering/ordering.proto\x12\bordering\x1a\fgorums.proto\"\x1b\n" +
 	"\aRequest\x12\x10\n" +
-	"\x03Num\x18\x01 \x01(\x04R\x03Num\"$\n" +
-	"\bResponse\x12\x18\n" +
-	"\aInOrder\x18\x01 \x01(\bR\aInOrder2z\n" +
+	"\x03num\x18\x01 \x01(\x04R\x03num\"%\n" +
+	"\bResponse\x12\x19\n" +
+	"\bin_order\x18\x01 \x01(\bR\ainOrder2z\n" +
 	"\bOrdering\x129\n" +
 	"\n" +
 	"QuorumCall\x12\x11.ordering.Request\x1a\x12.ordering.Response\"\x04\xa0\xb5\x18\x01\x123\n" +
