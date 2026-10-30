@@ -11,17 +11,6 @@ func correctableAlias(method *protogen.Method) string {
 	return "Correctable" + method.Output.GoIdent.GoName
 }
 
-// typeAliasIdents returns the names of the Correctable aliases that the
-// quorum calls of the given service produce. Services of one Go package share
-// these aliases; [dataTypes] declares each one once per Go package.
-func typeAliasIdents(service *protogen.Service) []string {
-	var idents []string
-	for _, method := range quorumCallMethods(service) {
-		idents = append(idents, correctableAlias(method))
-	}
-	return idents
-}
-
 // quorumCallMethods returns the quorum call methods of the given service;
 // each one produces the Correctable alias of its response type.
 func quorumCallMethods(service *protogen.Service) []*protogen.Method {
@@ -34,15 +23,14 @@ func quorumCallMethods(service *protogen.Service) []*protogen.Method {
 	return methods
 }
 
-// This type alias is generated only once per return type for a correctable
-// call type. That is, if multiple correctable calls use the same return type,
-// this type alias is only generated once. An alias in .Declared belongs to an
-// earlier file of the Go package and is not generated again.
+// The Correctable aliases are generated once per Go package; .Aliases holds
+// those that this file declares.
 var correctableDataType = `
 {{$correctable := use "gorums.Correctable" .GenFile}}
-{{range $correctableOut, $customOut := mapCorrectableOutType .GenFile .Services .Declared}}
-// {{$correctableOut}} is a correctable object for quorum calls returning *{{$customOut}}.
-type {{$correctableOut}} = *{{$correctable}}[*{{$customOut}}]
+{{range $alias, $method := .Aliases}}
+{{- $out := out $.GenFile $method}}
+// {{$alias}} is a correctable object for quorum calls returning *{{$out}}.
+type {{$alias}} = *{{$correctable}}[*{{$out}}]
 {{end}}
 `
 
