@@ -39,12 +39,13 @@ func (c *Correctable[Resp]) Done() <-chan struct{} {
 	return c.donech
 }
 
-// Watch returns a channel that closes when the call reaches level.
+// Watch returns a channel that closes when the call reaches level or completes.
+// If the call has completed, the returned channel is already closed.
 func (c *Correctable[Resp]) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if level <= c.level {
+	if c.done || level <= c.level {
 		close(ch)
 		return ch
 	}

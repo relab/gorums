@@ -9,6 +9,36 @@ import (
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+// TestCorrectableEmptyConfigWatch verifies that watches registered after an
+// empty call completes close immediately, including levels it cannot reach.
+func TestCorrectableEmptyConfigWatch(t *testing.T) {
+	for _, streaming := range []bool{false, true} {
+		name := "QuorumCall"
+		if streaming {
+			name = "QuorumCallStream"
+		}
+		t.Run(name, func(t *testing.T) {
+			call := invokeQuorumCall[*pb.StringValue, *pb.StringValue](t.Context(), nil, pb.String("hello"), "test.Method", streaming)
+			corr := call.Correctable(1)
+			select {
+			case <-corr.Done():
+			default:
+				t.Fatal("empty correctable did not complete synchronously")
+			}
+			if _, level, err := corr.Get(); level != LevelNotSet || !errors.Is(err, ErrEmptyConfig) {
+				t.Fatalf("Get() level = %d, error = %v; want %d, %v", level, err, LevelNotSet, ErrEmptyConfig)
+			}
+			for _, level := range []int{1, 2} {
+				select {
+				case <-corr.Watch(level):
+				default:
+					t.Errorf("Watch(%d) remained open after completion", level)
+				}
+			}
+		})
+	}
+}
+
 // TestCorrectableSkipNodeSemantics verifies that Correctable treats
 // ErrSkipNode consistently with the terminal methods: a skipped node must
 // count toward neither the reached level nor the node-error count.

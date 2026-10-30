@@ -788,6 +788,9 @@ reply, level, err := corr.Get()
 reply, level, err = corr.Get()
 ```
 
+`Watch(level)` closes when the call reaches that level or completes, including when it completes with an error.
+If the call has already completed, `Watch` returns a closed channel.
+
 `Correctable(n)` panics if `n` is not positive.
 It panics before it sends any request.
 
