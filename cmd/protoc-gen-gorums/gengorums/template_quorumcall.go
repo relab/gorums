@@ -33,7 +33,7 @@ var quorumCallVariables = `
 {{$quorumCall := use "gorumsimpl.QuorumCall" .GenFile}}
 {{$quorumCallStream := use "gorumsimpl.QuorumCallStream" .GenFile}}
 {{$call := use "gorums.Call" .GenFile}}
-{{$impl := printf "%sClient" (unexport $service)}}
+{{$impl := .Impl}}
 {{$local := localNames "c ctx in" $in $out $context $quorumCall $quorumCallStream}}
 `
 

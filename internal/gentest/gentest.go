@@ -64,8 +64,12 @@ func Generate(t testing.TB, opts Options, files ...string) (map[string]string, e
 		goParam = opts.Param + "," + goParam
 	}
 	out := make(map[string]string)
-	err := run(req, goParam, out, func(gen *protogen.Plugin, f *protogen.File) error {
-		gengo.GenerateFile(gen, f)
+	err := run(req, goParam, out, func(gen *protogen.Plugin) error {
+		for _, f := range gen.Files {
+			if f.Generate {
+				gengo.GenerateFile(gen, f)
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -74,11 +78,10 @@ func Generate(t testing.TB, opts Options, files ...string) (map[string]string, e
 	if opts.NoGorums {
 		return out, nil
 	}
-	generate := gengorums.GenerateFile
-	if opts.Dev {
-		generate = gengorums.GenerateDevFiles
-	}
-	if err := run(req, opts.Param, out, generate); err != nil {
+	err = run(req, opts.Param, out, func(gen *protogen.Plugin) error {
+		return gengorums.Generate(gen, opts.Dev)
+	})
+	if err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -115,20 +118,15 @@ func request(t testing.TB, importPaths, files []string) *pluginpb.CodeGeneratorR
 
 // run runs one generator on req with the given parameter, as protoc runs one
 // plugin, and adds the generated files to out.
-func run(req *pluginpb.CodeGeneratorRequest, param string, out map[string]string, generate func(*protogen.Plugin, *protogen.File) error) error {
+func run(req *pluginpb.CodeGeneratorRequest, param string, out map[string]string, generate func(*protogen.Plugin) error) error {
 	req = proto.CloneOf(req)
 	req.Parameter = new(param)
 	gen, err := protogen.Options{}.New(req)
 	if err != nil {
 		return err
 	}
-	for _, f := range gen.Files {
-		if !f.Generate {
-			continue
-		}
-		if err := generate(gen, f); err != nil {
-			return err
-		}
+	if err := generate(gen); err != nil {
+		return err
 	}
 	resp := gen.Response()
 	if resp.Error != nil {

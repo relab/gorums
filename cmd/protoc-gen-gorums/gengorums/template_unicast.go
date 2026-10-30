@@ -4,7 +4,7 @@ var unicastVar = `
 {{$genFile := .GenFile}}
 {{$unicast := use "gorumsimpl.Unicast" .GenFile}}
 {{$onewayCall := use "gorums.OnewayCall" .GenFile}}
-{{$impl := printf "%sNodeClient" (unexport $service)}}
+{{$impl := .Impl}}
 {{$local := localNames "c ctx in" $in $context $unicast}}
 `
 
