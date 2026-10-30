@@ -59,7 +59,6 @@ var funcMap = template.FuncMap{
 	"out":                   out,
 	"methodTypes":           methodTypes,
 	"localNames":            localNames,
-	"mapCorrectableOutType": mapCorrectableOutType,
 	"unexport":              unexport,
 }
 
@@ -110,34 +109,8 @@ func methodTypes(g *protogen.GeneratedFile, service *protogen.Service) []string 
 	return types
 }
 
-// mapType returns a map from alias name to qualified output type for the
-// quorum call methods of the given services, where name returns the alias
-// name of a method. It skips the alias names in declared.
-func mapType(g *protogen.GeneratedFile, services []*protogen.Service, declared map[string]bool, name func(*protogen.Method) string) map[string]string {
-	s := make(map[string]string)
-	for _, service := range services {
-		for _, method := range service.Methods {
-			// Quorum call results offer Correctable.
-			if !hasMethodOption(method, gorums.E_Quorumcall) {
-				continue
-			}
-			if alias := name(method); !declared[alias] {
-				s[alias] = out(g, method)
-			}
-		}
-	}
-	return s
-}
-
 func out(g *protogen.GeneratedFile, method *protogen.Method) string {
 	return g.QualifiedGoIdent(method.Output.GoIdent)
-}
-
-// mapCorrectableOutType returns the Correctable aliases that the quorum calls
-// of the given services produce, except those in declared, mapped to their
-// qualified output types.
-func mapCorrectableOutType(g *protogen.GeneratedFile, services []*protogen.Service, declared map[string]bool) map[string]string {
-	return mapType(g, services, declared, correctableAlias)
 }
 
 // unexport returns s with its leading acronym or first word in lower case.
