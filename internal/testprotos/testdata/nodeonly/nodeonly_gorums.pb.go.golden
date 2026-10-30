@@ -51,13 +51,13 @@ type NodeOnlyNodeClient interface {
 
 // NewNodeOnlyNodeClient returns a node client whose calls execute on node.
 // The node may be nil, and it need not belong to a particular configuration.
-func NewNodeOnlyNodeClient(node *gorums.Node) NodeOnlyNodeClient {
+func NewNodeOnlyNodeClient(node *Node) NodeOnlyNodeClient {
 	return nodeOnlyNodeClient{node: node}
 }
 
 // nodeOnlyNodeClient implements NodeOnlyNodeClient.
 type nodeOnlyNodeClient struct {
-	node *gorums.Node
+	node *Node
 }
 
 func (c nodeOnlyNodeClient) Read(ctx context.Context, in *Request) (*Response, error) {
@@ -68,7 +68,7 @@ func (c nodeOnlyNodeClient) Write(ctx context.Context, in *Request) *gorums.Onew
 	return gorumsimpl.Unicast(ctx, c.node, in, "internal.testprotos.nodeonly.NodeOnly.Write")
 }
 
-// NodeOnly is the server-side API for the NodeOnly Service
+// NodeOnlyServer is the server-side API for the NodeOnly Service
 type NodeOnlyServer interface {
 	Read(gorums.ServerContext, *Request) (*Response, error)
 	Write(gorums.ServerContext, *Request)

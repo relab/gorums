@@ -63,13 +63,13 @@ type StorageClient interface {
 }
 
 // NewStorageClient returns a client whose calls execute on config.
-func NewStorageClient(config gorums.Config) StorageClient {
+func NewStorageClient(config Config) StorageClient {
 	return storageClient{config: config}
 }
 
 // storageClient implements StorageClient.
 type storageClient struct {
-	config gorums.Config
+	config Config
 }
 
 // StorageNodeClient is the client API for the remote calls and unicasts
@@ -101,13 +101,13 @@ type StorageNodeClient interface {
 
 // NewStorageNodeClient returns a node client whose calls execute on node.
 // The node may be nil, and it need not belong to a particular configuration.
-func NewStorageNodeClient(node *gorums.Node) StorageNodeClient {
+func NewStorageNodeClient(node *Node) StorageNodeClient {
 	return storageNodeClient{node: node}
 }
 
 // storageNodeClient implements StorageNodeClient.
 type storageNodeClient struct {
-	node *gorums.Node
+	node *Node
 }
 
 func (c storageNodeClient) ReadRPC(ctx context.Context, in *ReadRequest) (*ReadResponse, error) {
@@ -146,7 +146,7 @@ func (c storageClient) ReadCorrectable(ctx context.Context, in *ReadRequest) *go
 	return gorumsimpl.QuorumCallStream[*ReadRequest, *ReadResponse](ctx, c.config, in, "proto.Storage.ReadCorrectable")
 }
 
-// Storage is the server-side API for the Storage Service
+// StorageServer is the server-side API for the Storage Service
 type StorageServer interface {
 	ReadRPC(gorums.ServerContext, *ReadRequest) (*ReadResponse, error)
 	WriteRPC(gorums.ServerContext, *WriteRequest) (*WriteResponse, error)

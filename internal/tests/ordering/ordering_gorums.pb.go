@@ -35,13 +35,13 @@ type OrderingClient interface {
 }
 
 // NewOrderingClient returns a client whose calls execute on config.
-func NewOrderingClient(config gorums.Config) OrderingClient {
+func NewOrderingClient(config Config) OrderingClient {
 	return orderingClient{config: config}
 }
 
 // orderingClient implements OrderingClient.
 type orderingClient struct {
-	config gorums.Config
+	config Config
 }
 
 // OrderingNodeClient is the client API for the remote calls and unicasts
@@ -60,13 +60,13 @@ type OrderingNodeClient interface {
 
 // NewOrderingNodeClient returns a node client whose calls execute on node.
 // The node may be nil, and it need not belong to a particular configuration.
-func NewOrderingNodeClient(node *gorums.Node) OrderingNodeClient {
+func NewOrderingNodeClient(node *Node) OrderingNodeClient {
 	return orderingNodeClient{node: node}
 }
 
 // orderingNodeClient implements OrderingNodeClient.
 type orderingNodeClient struct {
-	node *gorums.Node
+	node *Node
 }
 
 func (c orderingClient) QuorumCall(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
@@ -77,7 +77,7 @@ func (c orderingNodeClient) UnaryRPC(ctx context.Context, in *Request) (*Respons
 	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "ordering.Ordering.UnaryRPC")
 }
 
-// Ordering is the server-side API for the Ordering Service
+// OrderingServer is the server-side API for the Ordering Service
 type OrderingServer interface {
 	QuorumCall(gorums.ServerContext, *Request) (*Response, error)
 	UnaryRPC(gorums.ServerContext, *Request) (*Response, error)

@@ -19,7 +19,7 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// ZorumsService is the server-side API for the ZorumsService Service
+// ZorumsServiceServer is the server-side API for the ZorumsService Service
 type ZorumsServiceServer interface {
 	RemoteCall(gorums.ServerContext, *Request) (*Response, error)
 	QuorumCall(gorums.ServerContext, *Request) (*Response, error)

@@ -100,13 +100,13 @@ type ZorumsServiceClient interface {
 }
 
 // NewZorumsServiceClient returns a client whose calls execute on config.
-func NewZorumsServiceClient(config gorums.Config) ZorumsServiceClient {
+func NewZorumsServiceClient(config Config) ZorumsServiceClient {
 	return zorumsServiceClient{config: config}
 }
 
 // zorumsServiceClient implements ZorumsServiceClient.
 type zorumsServiceClient struct {
-	config gorums.Config
+	config Config
 }
 
 // ZorumsServiceNodeClient is the client API for the remote calls and unicasts
@@ -146,11 +146,11 @@ type ZorumsServiceNodeClient interface {
 
 // NewZorumsServiceNodeClient returns a node client whose calls execute on node.
 // The node may be nil, and it need not belong to a particular configuration.
-func NewZorumsServiceNodeClient(node *gorums.Node) ZorumsServiceNodeClient {
+func NewZorumsServiceNodeClient(node *Node) ZorumsServiceNodeClient {
 	return zorumsServiceNodeClient{node: node}
 }
 
 // zorumsServiceNodeClient implements ZorumsServiceNodeClient.
 type zorumsServiceNodeClient struct {
-	node *gorums.Node
+	node *Node
 }

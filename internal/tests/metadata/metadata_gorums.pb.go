@@ -34,13 +34,13 @@ type MetadataTestNodeClient interface {
 
 // NewMetadataTestNodeClient returns a node client whose calls execute on node.
 // The node may be nil, and it need not belong to a particular configuration.
-func NewMetadataTestNodeClient(node *gorums.Node) MetadataTestNodeClient {
+func NewMetadataTestNodeClient(node *Node) MetadataTestNodeClient {
 	return metadataTestNodeClient{node: node}
 }
 
 // metadataTestNodeClient implements MetadataTestNodeClient.
 type metadataTestNodeClient struct {
-	node *gorums.Node
+	node *Node
 }
 
 func (c metadataTestNodeClient) IDFromMD(ctx context.Context, in *emptypb.Empty) (*NodeID, error) {
@@ -51,7 +51,7 @@ func (c metadataTestNodeClient) WhatIP(ctx context.Context, in *emptypb.Empty) (
 	return gorumsimpl.RemoteCall[*emptypb.Empty, *IPAddr](ctx, c.node, in, "metadata.MetadataTest.WhatIP")
 }
 
-// MetadataTest is the server-side API for the MetadataTest Service
+// MetadataTestServer is the server-side API for the MetadataTest Service
 type MetadataTestServer interface {
 	IDFromMD(gorums.ServerContext, *emptypb.Empty) (*NodeID, error)
 	WhatIP(gorums.ServerContext, *emptypb.Empty) (*IPAddr, error)

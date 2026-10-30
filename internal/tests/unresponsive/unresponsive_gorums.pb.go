@@ -35,20 +35,20 @@ type UnresponsiveNodeClient interface {
 
 // NewUnresponsiveNodeClient returns a node client whose calls execute on node.
 // The node may be nil, and it need not belong to a particular configuration.
-func NewUnresponsiveNodeClient(node *gorums.Node) UnresponsiveNodeClient {
+func NewUnresponsiveNodeClient(node *Node) UnresponsiveNodeClient {
 	return unresponsiveNodeClient{node: node}
 }
 
 // unresponsiveNodeClient implements UnresponsiveNodeClient.
 type unresponsiveNodeClient struct {
-	node *gorums.Node
+	node *Node
 }
 
 func (c unresponsiveNodeClient) TestUnresponsive(ctx context.Context, in *Empty) (*Empty, error) {
 	return gorumsimpl.RemoteCall[*Empty, *Empty](ctx, c.node, in, "unresponsive.Unresponsive.TestUnresponsive")
 }
 
-// Unresponsive is the server-side API for the Unresponsive Service
+// UnresponsiveServer is the server-side API for the Unresponsive Service
 type UnresponsiveServer interface {
 	TestUnresponsive(gorums.ServerContext, *Empty) (*Empty, error)
 }

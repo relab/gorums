@@ -58,13 +58,13 @@ type MulticastClient interface {
 }
 
 // NewMulticastClient returns a client whose calls execute on config.
-func NewMulticastClient(config gorums.Config) MulticastClient {
+func NewMulticastClient(config Config) MulticastClient {
 	return multicastClient{config: config}
 }
 
 // multicastClient implements MulticastClient.
 type multicastClient struct {
-	config gorums.Config
+	config Config
 }
 
 func (c multicastClient) Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
@@ -75,7 +75,7 @@ func (c multicastClient) MulticastEmpty(ctx context.Context, in *Request) *gorum
 	return gorumsimpl.Multicast(ctx, c.config, in, "internal.testprotos.calltypes.multicast.Multicast.MulticastEmpty")
 }
 
-// Multicast is the server-side API for the Multicast Service
+// MulticastServer is the server-side API for the Multicast Service
 type MulticastServer interface {
 	Multicast(gorums.ServerContext, *Request)
 	MulticastEmpty(gorums.ServerContext, *Request)

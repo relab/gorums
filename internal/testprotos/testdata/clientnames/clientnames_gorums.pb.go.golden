@@ -41,13 +41,13 @@ type ClientNamesClient interface {
 }
 
 // NewClientNamesClient returns a client whose calls execute on config.
-func NewClientNamesClient(config gorums.Config) ClientNamesClient {
+func NewClientNamesClient(config Config) ClientNamesClient {
 	return clientNamesClient{config: config}
 }
 
 // clientNamesClient implements ClientNamesClient.
 type clientNamesClient struct {
-	config gorums.Config
+	config Config
 }
 
 // ClientNamesNodeClient is the client API for the remote calls and unicasts
@@ -73,13 +73,13 @@ type ClientNamesNodeClient interface {
 
 // NewClientNamesNodeClient returns a node client whose calls execute on node.
 // The node may be nil, and it need not belong to a particular configuration.
-func NewClientNamesNodeClient(node *gorums.Node) ClientNamesNodeClient {
+func NewClientNamesNodeClient(node *Node) ClientNamesNodeClient {
 	return clientNamesNodeClient{node: node}
 }
 
 // clientNamesNodeClient implements ClientNamesNodeClient.
 type clientNamesNodeClient struct {
-	node *gorums.Node
+	node *Node
 }
 
 func (c clientNamesClient) Config(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
@@ -98,7 +98,7 @@ func (c clientNamesNodeClient) ForNode(ctx context.Context, in *Request) *gorums
 	return gorumsimpl.Unicast(ctx, c.node, in, "internal.testprotos.clientnames.ClientNames.ForNode")
 }
 
-// ClientNames is the server-side API for the ClientNames Service
+// ClientNamesServer is the server-side API for the ClientNames Service
 type ClientNamesServer interface {
 	Config(gorums.ServerContext, *Request) (*Response, error)
 	WithConfig(gorums.ServerContext, *Request)
