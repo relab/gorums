@@ -20,12 +20,6 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// CorrectableReadResponse is a correctable object for quorum calls returning *ReadResponse.
-type CorrectableReadResponse = *gorums.Correctable[*ReadResponse]
-
-// CorrectableWriteResponse is a correctable object for quorum calls returning *WriteResponse.
-type CorrectableWriteResponse = *gorums.Correctable[*WriteResponse]
-
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 

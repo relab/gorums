@@ -19,15 +19,6 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// CorrectableClockSyncResponse is a correctable object for quorum calls returning *ClockSyncResponse.
-type CorrectableClockSyncResponse = *gorums.Correctable[*ClockSyncResponse]
-
-// CorrectableResult is a correctable object for quorum calls returning *Result.
-type CorrectableResult = *gorums.Correctable[*Result]
-
-// CorrectableStartResponse is a correctable object for quorum calls returning *StartResponse.
-type CorrectableStartResponse = *gorums.Correctable[*StartResponse]
-
 // ControlClient is the client API for the quorum calls and multicasts of
 // the Control service. Its calls execute on the configuration given to
 // [NewControlClient]. A call on an empty configuration panics when it is

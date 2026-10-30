@@ -23,7 +23,8 @@ import (
 // automatically discover them and add them to the reserved identifiers list.
 
 type (
-	Config = gorums.Config
-	ID     = gorums.ID
-	Node   = gorums.Node
+	Config                = gorums.Config
+	ID                    = gorums.ID
+	Node                  = gorums.Node
+	Correctable[Resp any] = gorums.Correctable[Resp]
 )

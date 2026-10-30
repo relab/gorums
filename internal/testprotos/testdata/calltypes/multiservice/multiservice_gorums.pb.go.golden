@@ -19,9 +19,6 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// CorrectableResponse is a correctable object for quorum calls returning *Response.
-type CorrectableResponse = *gorums.Correctable[*Response]
-
 // AlphaClient is the client API for the quorum calls and multicasts of
 // the Alpha service. Its calls execute on the configuration given to
 // [NewAlphaClient]. A call on an empty configuration panics when it is
