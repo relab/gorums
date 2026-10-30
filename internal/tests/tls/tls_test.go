@@ -18,9 +18,9 @@ type testSrv struct{}
 func (testSrv) TestTLS(ctx gorums.ServerContext, _ *Request) (resp *Response, err error) {
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok || peerInfo.AuthInfo.AuthType() != "tls" {
-		return Response_builder{OK: false}.Build(), nil
+		return Response_builder{Ok: false}.Build(), nil
 	}
-	return Response_builder{OK: true}.Build(), nil
+	return Response_builder{Ok: true}.Build(), nil
 }
 
 func TestTLSConnection(t *testing.T) {
@@ -53,7 +53,7 @@ func TestTLSConnection(t *testing.T) {
 		t.Fatalf("RPC error: %v", err)
 	}
 
-	if !resp.GetOK() {
-		t.Fatalf("TestTLS() == %t, want %t", resp.GetOK(), true)
+	if !resp.GetOk() {
+		t.Fatalf("TestTLS() == %t, want %t", resp.GetOk(), true)
 	}
 }

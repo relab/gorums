@@ -15,9 +15,9 @@ service MetadataTest {
 }
 
 message NodeID {
-    uint32 ID = 1;
+    uint32 id = 1;
 }
 
 message IPAddr {
-    string Addr = 1;
+    string addr = 1;
 }

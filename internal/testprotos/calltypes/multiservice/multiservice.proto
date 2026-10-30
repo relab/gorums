@@ -27,8 +27,8 @@ service Beta {
 }
 
 message Request {
-    string Value = 1;
+    string value = 1;
 }
 message Response {
-    int64 Result = 1;
+    int64 result = 1;
 }
