@@ -145,6 +145,7 @@ stressdev: tools
 # Use the golangci-lint version that .github/workflows/golangci-lint.yml pins,
 # so make lint and CI agree.
 lint: deadcode
+	@buf lint
 	@golangci-lint run ./... ./examples/... ./benchkit/...
 
 # deadcode reports functions unreachable from any main or test across all

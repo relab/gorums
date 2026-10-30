@@ -4,7 +4,9 @@ modules:
     excludes:
       - .claude
       - third_party
+      - benchkit/proto
   - path: third_party
+  - path: benchkit/proto
 lint:
   use:
     - STANDARD
@@ -16,3 +18,16 @@ lint:
     # Our enums have no *_UNSPECIFIED zero value; the zero value is instead a
     # meaningful default (e.g. CLIENT_MEASURED, EXACT, START).
     - ENUM_ZERO_VALUE_SUFFIX
+    # Gorums services intentionally reuse message types across RPCs (also
+    # imported ones such as google.protobuf.Empty), and renaming them would
+    # change the generated Go API that the tests exercise.
+    - RPC_REQUEST_RESPONSE_UNIQUE
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+    # Service names are part of the wire method names and the generated Go API
+    # (e.g. ZorumsService, Storage, Control), so we do not add a Service suffix.
+    - SERVICE_SUFFIX
+    # Proto package names mirror the Go package layout and are part of the wire
+    # method names; we do not add version suffixes or match directory names.
+    - PACKAGE_VERSION_SUFFIX
+    - PACKAGE_DIRECTORY_MATCH
