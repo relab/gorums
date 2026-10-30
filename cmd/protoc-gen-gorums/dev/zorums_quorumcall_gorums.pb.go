@@ -24,22 +24,22 @@ func (c zorumsServiceClient) QuorumCall(ctx context.Context, in *Request) *gorum
 	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCall")
 }
 
-func (c zorumsServiceClient) QuorumCallEmpty(ctx context.Context, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response] {
-	return gorumsimpl.QuorumCall[*emptypb.Empty, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCallEmpty")
+func (c zorumsServiceClient) QuorumCallWithEmptyRequest(ctx context.Context, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response] {
+	return gorumsimpl.QuorumCall[*emptypb.Empty, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCallWithEmptyRequest")
 }
 
-func (c zorumsServiceClient) QuorumCallEmpty2(ctx context.Context, in *Request) *gorums.Call[*Request, *emptypb.Empty] {
-	return gorumsimpl.QuorumCall[*Request, *emptypb.Empty](ctx, c.config, in, "dev.ZorumsService.QuorumCallEmpty2")
+func (c zorumsServiceClient) QuorumCallWithEmptyResponse(ctx context.Context, in *Request) *gorums.Call[*Request, *emptypb.Empty] {
+	return gorumsimpl.QuorumCall[*Request, *emptypb.Empty](ctx, c.config, in, "dev.ZorumsService.QuorumCallWithEmptyResponse")
 }
 
 func (c zorumsServiceClient) QuorumCallStream(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
 	return gorumsimpl.QuorumCallStream[*Request, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCallStream")
 }
 
-func (c zorumsServiceClient) QuorumCallStreamWithEmpty(ctx context.Context, in *Request) *gorums.Call[*Request, *emptypb.Empty] {
-	return gorumsimpl.QuorumCallStream[*Request, *emptypb.Empty](ctx, c.config, in, "dev.ZorumsService.QuorumCallStreamWithEmpty")
+func (c zorumsServiceClient) QuorumCallStreamWithEmptyResponse(ctx context.Context, in *Request) *gorums.Call[*Request, *emptypb.Empty] {
+	return gorumsimpl.QuorumCallStream[*Request, *emptypb.Empty](ctx, c.config, in, "dev.ZorumsService.QuorumCallStreamWithEmptyResponse")
 }
 
-func (c zorumsServiceClient) QuorumCallStreamWithEmpty2(ctx context.Context, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response] {
-	return gorumsimpl.QuorumCallStream[*emptypb.Empty, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCallStreamWithEmpty2")
+func (c zorumsServiceClient) QuorumCallStreamWithEmptyRequest(ctx context.Context, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response] {
+	return gorumsimpl.QuorumCallStream[*emptypb.Empty, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCallStreamWithEmptyRequest")
 }

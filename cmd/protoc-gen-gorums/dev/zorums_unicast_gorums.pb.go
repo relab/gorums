@@ -27,6 +27,6 @@ func (c zorumsServiceNodeClient) Unicast(ctx context.Context, in *Request) *goru
 	return gorumsimpl.Unicast(ctx, c.node, in, "dev.ZorumsService.Unicast")
 }
 
-func (c zorumsServiceNodeClient) Unicast2(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Unicast(ctx, c.node, in, "dev.ZorumsService.Unicast2")
+func (c zorumsServiceNodeClient) UnicastWithEmptyResponse(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Unicast(ctx, c.node, in, "dev.ZorumsService.UnicastWithEmptyResponse")
 }

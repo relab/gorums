@@ -28,72 +28,75 @@ var _ emptypb.Empty
 // [NewZorumsServiceClient]. If that configuration is empty, every call returns
 // [gorums.ErrEmptyConfig].
 type ZorumsServiceClient interface {
-	// QuorumCall plain.
+	// QuorumCall tests a plain quorum call.
 	QuorumCall(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
 
-	// QuorumCallEmpty for testing imported message type.
-	QuorumCallEmpty(ctx context.Context, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response]
+	// QuorumCallWithEmptyRequest tests an imported message type as the request.
+	QuorumCallWithEmptyRequest(ctx context.Context, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response]
 
-	// QuorumCallEmpty2 for testing imported message type.
-	QuorumCallEmpty2(ctx context.Context, in *Request) *gorums.Call[*Request, *emptypb.Empty]
+	// QuorumCallWithEmptyResponse tests an imported message type as the response.
+	QuorumCallWithEmptyResponse(ctx context.Context, in *Request) *gorums.Call[*Request, *emptypb.Empty]
 
-	// Multicast plain. Response type is not needed here.
+	// MulticastWithResponse tests a multicast that declares a response type,
+	// which a multicast never returns.
 	//
 	// Example:
 	//
-	//	err := client.Multicast(ctx, in).Send()
+	//	err := client.MulticastWithResponse(ctx, in).Send()
 	//
 	// To dispatch without waiting for the sends:
 	//
-	//	h := client.Multicast(ctx, in).Async()
+	//	h := client.MulticastWithResponse(ctx, in).Async()
 	//	err = h.Wait()
-	Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
+	MulticastWithResponse(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
 
-	// Multicast2 is testing whether multiple streams work.
+	// MulticastSecondMethod tests multiple multicast methods on one service.
 	//
 	// Example:
 	//
-	//	err := client.Multicast2(ctx, in).Send()
+	//	err := client.MulticastSecondMethod(ctx, in).Send()
 	//
 	// To dispatch without waiting for the sends:
 	//
-	//	h := client.Multicast2(ctx, in).Async()
+	//	h := client.MulticastSecondMethod(ctx, in).Async()
 	//	err = h.Wait()
-	Multicast2(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
+	MulticastSecondMethod(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
 
-	// Multicast3 is testing imported message type.
+	// MulticastWithEmptyResponse tests an imported message type as the response.
 	//
 	// Example:
 	//
-	//	err := client.Multicast3(ctx, in).Send()
+	//	err := client.MulticastWithEmptyResponse(ctx, in).Send()
 	//
 	// To dispatch without waiting for the sends:
 	//
-	//	h := client.Multicast3(ctx, in).Async()
+	//	h := client.MulticastWithEmptyResponse(ctx, in).Async()
 	//	err = h.Wait()
-	Multicast3(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
+	MulticastWithEmptyResponse(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
 
-	// Multicast4 is testing imported message type.
+	// MulticastWithEmptyRequestAndResponse tests an imported message type as both
+	// request and response.
 	//
 	// Example:
 	//
-	//	err := client.Multicast4(ctx, in).Send()
+	//	err := client.MulticastWithEmptyRequestAndResponse(ctx, in).Send()
 	//
 	// To dispatch without waiting for the sends:
 	//
-	//	h := client.Multicast4(ctx, in).Async()
+	//	h := client.MulticastWithEmptyRequestAndResponse(ctx, in).Async()
 	//	err = h.Wait()
-	Multicast4(ctx context.Context, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty]
+	MulticastWithEmptyRequestAndResponse(ctx context.Context, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty]
 
-	// QuorumCallStream plain.
+	// QuorumCallStream tests a plain streaming quorum call.
 	QuorumCallStream(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
 
-	// QuorumCallStreamWithEmpty for testing imported message type.
-	QuorumCallStreamWithEmpty(ctx context.Context, in *Request) *gorums.Call[*Request, *emptypb.Empty]
+	// QuorumCallStreamWithEmptyResponse tests an imported message type as the
+	// streamed response.
+	QuorumCallStreamWithEmptyResponse(ctx context.Context, in *Request) *gorums.Call[*Request, *emptypb.Empty]
 
-	// QuorumCallStreamWithEmpty2 for testing imported message type; with same return
-	// type as QuorumCallStream: Response.
-	QuorumCallStreamWithEmpty2(ctx context.Context, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response]
+	// QuorumCallStreamWithEmptyRequest tests an imported message type as the
+	// request, with the same streamed response type as QuorumCallStream.
+	QuorumCallStreamWithEmptyRequest(ctx context.Context, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response]
 }
 
 // NewZorumsServiceClient returns a client whose calls execute on config.
@@ -111,15 +114,11 @@ type zorumsServiceClient struct {
 // [NewZorumsServiceNodeClient]. If that node is nil, every call returns
 // [gorums.ErrNoNode].
 type ZorumsServiceNodeClient interface {
-	// GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
-	// they are added to the _grpc.pb.go generated file.
-	GRPCCall(ctx context.Context, in *Request) (*Response, error)
+	// RemoteCall is a unary call to a single node; it tests the remote call
+	// method on the node client and its server handler.
+	RemoteCall(ctx context.Context, in *Request) (*Response, error)
 
-	// Unicast starts a one-way call on the client's node; no reply is
-	// returned.
-	//
-	// Send blocks until the send completes and returns any send error.
-	// Async returns a handle at once; Wait on the handle returns the send error.
+	// Unicast tests a plain unicast.
 	//
 	// Example:
 	//
@@ -131,21 +130,17 @@ type ZorumsServiceNodeClient interface {
 	//	err = h.Wait()
 	Unicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
 
-	// Unicast2 starts a one-way call on the client's node; no reply is
-	// returned.
-	//
-	// Send blocks until the send completes and returns any send error.
-	// Async returns a handle at once; Wait on the handle returns the send error.
+	// UnicastWithEmptyResponse tests an imported message type as the response.
 	//
 	// Example:
 	//
-	//	err := nodeClient.Unicast2(ctx, in).Send()
+	//	err := nodeClient.UnicastWithEmptyResponse(ctx, in).Send()
 	//
 	// To dispatch without waiting for the sends:
 	//
-	//	h := nodeClient.Unicast2(ctx, in).Async()
+	//	h := nodeClient.UnicastWithEmptyResponse(ctx, in).Async()
 	//	err = h.Wait()
-	Unicast2(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
+	UnicastWithEmptyResponse(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
 }
 
 // NewZorumsServiceNodeClient returns a node client whose calls execute on node.

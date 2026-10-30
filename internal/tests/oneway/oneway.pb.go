@@ -23,7 +23,7 @@ const (
 
 type Request struct {
 	state          protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Num uint64                 `protobuf:"varint,1,opt,name=Num"`
+	xxx_hidden_Num uint64                 `protobuf:"varint,1,opt,name=num"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -127,7 +127,7 @@ const file_oneway_oneway_proto_rawDesc = "" +
 	"\n" +
 	"\x13oneway/oneway.proto\x12\x06oneway\x1a\fgorums.proto\"\x1b\n" +
 	"\aRequest\x12\x10\n" +
-	"\x03Num\x18\x01 \x01(\x04R\x03Num\"\a\n" +
+	"\x03num\x18\x01 \x01(\x04R\x03num\"\a\n" +
 	"\x05Empty2p\n" +
 	"\n" +
 	"OnewayTest\x12/\n" +

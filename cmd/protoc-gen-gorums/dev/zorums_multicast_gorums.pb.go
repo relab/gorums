@@ -23,18 +23,18 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-func (c zorumsServiceClient) Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast")
+func (c zorumsServiceClient) MulticastWithResponse(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.MulticastWithResponse")
 }
 
-func (c zorumsServiceClient) Multicast2(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast2")
+func (c zorumsServiceClient) MulticastSecondMethod(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.MulticastSecondMethod")
 }
 
-func (c zorumsServiceClient) Multicast3(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast3")
+func (c zorumsServiceClient) MulticastWithEmptyResponse(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.MulticastWithEmptyResponse")
 }
 
-func (c zorumsServiceClient) Multicast4(ctx context.Context, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty] {
-	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.Multicast4")
+func (c zorumsServiceClient) MulticastWithEmptyRequestAndResponse(ctx context.Context, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.MulticastWithEmptyRequestAndResponse")
 }

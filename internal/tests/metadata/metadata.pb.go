@@ -23,7 +23,7 @@ const (
 
 type NodeID struct {
 	state         protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_ID uint32                 `protobuf:"varint,1,opt,name=ID"`
+	xxx_hidden_Id uint32                 `protobuf:"varint,1,opt,name=id"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -53,34 +53,34 @@ func (x *NodeID) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *NodeID) GetID() uint32 {
+func (x *NodeID) GetId() uint32 {
 	if x != nil {
-		return x.xxx_hidden_ID
+		return x.xxx_hidden_Id
 	}
 	return 0
 }
 
-func (x *NodeID) SetID(v uint32) {
-	x.xxx_hidden_ID = v
+func (x *NodeID) SetId(v uint32) {
+	x.xxx_hidden_Id = v
 }
 
 type NodeID_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	ID uint32
+	Id uint32
 }
 
 func (b0 NodeID_builder) Build() *NodeID {
 	m0 := &NodeID{}
 	b, x := &b0, m0
 	_, _ = b, x
-	x.xxx_hidden_ID = b.ID
+	x.xxx_hidden_Id = b.Id
 	return m0
 }
 
 type IPAddr struct {
 	state           protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Addr string                 `protobuf:"bytes,1,opt,name=Addr"`
+	xxx_hidden_Addr string                 `protobuf:"bytes,1,opt,name=addr"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -141,9 +141,9 @@ const file_metadata_metadata_proto_rawDesc = "" +
 	"\n" +
 	"\x17metadata/metadata.proto\x12\bmetadata\x1a\x1bgoogle/protobuf/empty.proto\"\x18\n" +
 	"\x06NodeID\x12\x0e\n" +
-	"\x02ID\x18\x01 \x01(\rR\x02ID\"\x1c\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\"\x1c\n" +
 	"\x06IPAddr\x12\x12\n" +
-	"\x04Addr\x18\x01 \x01(\tR\x04Addr2|\n" +
+	"\x04addr\x18\x01 \x01(\tR\x04addr2|\n" +
 	"\fMetadataTest\x126\n" +
 	"\bIDFromMD\x12\x16.google.protobuf.Empty\x1a\x10.metadata.NodeID\"\x00\x124\n" +
 	"\x06WhatIP\x12\x16.google.protobuf.Empty\x1a\x10.metadata.IPAddr\"\x00B6Z/github.com/relab/gorums/internal/tests/metadata\x92\x03\x02\b\x02b\beditionsp\xe8\a"
