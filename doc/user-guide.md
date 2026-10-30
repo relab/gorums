@@ -282,8 +282,10 @@ Follow these rules when you use the clients:
   This error is a gRPC status error with the `InvalidArgument` code, because retrying cannot fix it.
 * **Any node works.**
   The node can also be a node that is not in a configuration that you use for quorum calls.
-* **An empty configuration panics.**
-  A quorum call or multicast on an empty configuration panics when the call is built.
+* **An empty configuration does not panic.**
+  A quorum call or multicast on an empty configuration sends nothing and returns `gorums.ErrEmptyConfig`.
+  This error is a gRPC status error with the `InvalidArgument` code.
+  `Results()` yields one response whose `Err` is `gorums.ErrEmptyConfig`, and `Correctable` completes at once with this error.
 * **Build a new client for a new configuration.**
   The configuration operations stay on `gorums.Config`.
   To call a different set of nodes, derive a new configuration and build a client for it.
@@ -606,7 +608,8 @@ func ExampleTerminalMethods(config gorums.Config) {
 }
 ```
 
-Terminal methods return `gorums.ErrIncomplete` when:
+Terminal methods return `gorums.ErrEmptyConfig` if the configuration is empty.
+They return `gorums.ErrIncomplete` when:
 
 * The context is canceled before the threshold is met
 * Not enough successful responses are received
@@ -2234,8 +2237,8 @@ Nested calls follow the rule in [Request Ordering and ServerContext.Release](#re
 `ReadNestedQC` below calls `Release` first, because the nested reads of different requests may run in any order; the next request starts while the nested calls are in flight.
 `WriteNestedMulticast` dispatches its multicast before `Release`, so the peers receive the writes in the order the requests arrived.
 
-Check that a configuration is non-empty before you call a method of its client: a quorum call or a multicast on an empty configuration panics.
-The `len(config) == 0` checks below exist for this reason, not just as a general safety habit.
+A quorum call or a multicast on an empty configuration returns `gorums.ErrEmptyConfig`.
+The `len(config) == 0` checks below return a clearer error for a server that has no peers.
 
 ```go
 // ReadNestedQC is a quorum-call handler that fans out a nested ReadQC
@@ -2481,7 +2484,7 @@ This is how a protocol can use a new tree for each view, or fall back to a star 
 The root is simply the first node of the configuration, and it is a node like any other: it holds the data and runs the same handlers.
 A caller that is not in the configuration starts a tree call by sending to the root, with a one-node configuration, for example `gorums.Config{tree.Root()}`.
 The root's handler then relays to `tree.ChildrenOf(root.ID())` like every other internal node, so the root's own work is done too.
-Do not start at `tree.ChildrenOf(tree.Root().ID())` from outside: that skips the root, and a call on an empty configuration panics, which is what `ChildrenOf` returns for a one-node tree.
+Do not start at `tree.ChildrenOf(tree.Root().ID())` from outside: that skips the root, and a call on an empty configuration, which is what `ChildrenOf` returns for a one-node tree, returns `gorums.ErrEmptyConfig`.
 When the process that starts the call is itself the root, it does its local work and then sends to `tree.ChildrenOf(id)` with its own ID.
 
 ### Relaying in a Server

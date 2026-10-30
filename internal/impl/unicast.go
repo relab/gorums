@@ -26,8 +26,9 @@ func Unicast[Req proto.Message](ctx context.Context, node *Node, req Req, method
 		oneway:  true,
 	}
 	if node == nil {
-		return &OnewayCall[Req]{ctx: callCtx, unicast: true, err: ErrNoNode}
+		callCtx.err = ErrNoNode
+	} else {
+		callCtx.config = Config{node}
 	}
-	callCtx.config = Config{node}
 	return &OnewayCall[Req]{ctx: callCtx, unicast: true}
 }

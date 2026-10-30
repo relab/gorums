@@ -1,8 +1,8 @@
 package impl
 
 import (
+	"context"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/relab/gorums/internal/conn"
@@ -13,57 +13,132 @@ import (
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// TestCallConstructorsPanic verifies that each multi-node call constructor
-// panics on a nil or empty configuration.
-func TestCallConstructorsPanic(t *testing.T) {
+// TestCallEmptyConfig verifies that a multi-node call on a nil or empty
+// configuration does not panic, but reports [ErrEmptyConfig] from every
+// terminal method, from Wait after Async, and from Send.
+func TestCallEmptyConfig(t *testing.T) {
 	const method = "test.Method"
 	req := pb.String("hello")
-	tests := []struct {
-		name      string
-		call      func()
-		wantPanic string
+	type qcFunc func(context.Context, Config, *pb.StringValue, string) *Call[*pb.StringValue, *pb.StringValue]
+	quorumCalls := []struct {
+		name string
+		call qcFunc
 	}{
-		{
-			name:      "QuorumCall/NilConfig",
-			call:      func() { QuorumCall[*pb.StringValue, *pb.StringValue](t.Context(), nil, req, method) },
-			wantPanic: `gorums: QuorumCall "test.Method" needs a non-empty configuration`,
-		},
-		{
-			name:      "QuorumCall/EmptyConfig",
-			call:      func() { QuorumCall[*pb.StringValue, *pb.StringValue](t.Context(), Config{}, req, method) },
-			wantPanic: `gorums: QuorumCall "test.Method" needs a non-empty configuration`,
-		},
-		{
-			name:      "QuorumCallStream/NilConfig",
-			call:      func() { QuorumCallStream[*pb.StringValue, *pb.StringValue](t.Context(), nil, req, method) },
-			wantPanic: `gorums: QuorumCallStream "test.Method" needs a non-empty configuration`,
-		},
-		{
-			name:      "QuorumCallStream/EmptyConfig",
-			call:      func() { QuorumCallStream[*pb.StringValue, *pb.StringValue](t.Context(), Config{}, req, method) },
-			wantPanic: `gorums: QuorumCallStream "test.Method" needs a non-empty configuration`,
-		},
-		{
-			name:      "Multicast/NilConfig",
-			call:      func() { Multicast(t.Context(), nil, req, method) },
-			wantPanic: `gorums: Multicast "test.Method" needs a non-empty configuration`,
-		},
-		{
-			name:      "Multicast/EmptyConfig",
-			call:      func() { Multicast(t.Context(), Config{}, req, method) },
-			wantPanic: `gorums: Multicast "test.Method" needs a non-empty configuration`,
-		},
+		{name: "QuorumCall", call: QuorumCall},
+		{name: "QuorumCallStream", call: QuorumCallStream},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				if got := fmt.Sprint(recover()); got != tt.wantPanic {
-					t.Errorf("panic = %q, want %q", got, tt.wantPanic)
-				}
-			}()
-			tt.call()
-		})
+	firstErr := func(seq ResponseSeq[*pb.StringValue]) (int, error) {
+		var (
+			n   int
+			err error
+		)
+		for r := range seq {
+			if n == 0 {
+				err = r.Err
+			}
+			n++
+		}
+		if n != 1 {
+			t.Errorf("sequence yielded %d responses, want 1", n)
+		}
+		return n, err
 	}
+	terminals := []struct {
+		name string
+		call func(*Call[*pb.StringValue, *pb.StringValue]) error
+	}{
+		{name: "First", call: func(c *Call[*pb.StringValue, *pb.StringValue]) error { _, err := c.First(); return err }},
+		{name: "Majority", call: func(c *Call[*pb.StringValue, *pb.StringValue]) error { _, err := c.Majority(); return err }},
+		{name: "All", call: func(c *Call[*pb.StringValue, *pb.StringValue]) error { _, err := c.All(); return err }},
+		{name: "Threshold", call: func(c *Call[*pb.StringValue, *pb.StringValue]) error { _, err := c.Threshold(2); return err }},
+		{name: "Reduce", call: func(c *Call[*pb.StringValue, *pb.StringValue]) error {
+			_, err := c.Reduce(1, 0, func(acc int, _ NodeResponse[*pb.StringValue]) (int, error) { return acc + 1, nil })
+			return err
+		}},
+		{name: "Matching", call: func(c *Call[*pb.StringValue, *pb.StringValue]) error {
+			_, err := c.Matching(1, (*pb.StringValue).GetValue)
+			return err
+		}},
+		{name: "Aggregate", call: func(c *Call[*pb.StringValue, *pb.StringValue]) error {
+			_, err := c.Aggregate(firstErr)
+			return err
+		}},
+		{name: "Results", call: func(c *Call[*pb.StringValue, *pb.StringValue]) error {
+			_, err := firstErr(c.Results())
+			return err
+		}},
+		{name: "Correctable", call: func(c *Call[*pb.StringValue, *pb.StringValue]) error {
+			corr := c.Correctable(1)
+			<-corr.Done()
+			_, level, err := corr.Get()
+			if level != LevelNotSet {
+				t.Errorf("Correctable level = %d, want %d", level, LevelNotSet)
+			}
+			return err
+		}},
+		{name: "Async", call: func(c *Call[*pb.StringValue, *pb.StringValue]) error { _, err := c.Async().Majority(); return err }},
+		{name: "Intercept", call: func(c *Call[*pb.StringValue, *pb.StringValue]) error {
+			mapResp := MapResponse[*pb.StringValue](func(r *pb.StringValue, _ *Node) *pb.StringValue { return r })
+			_, err := c.Intercept(mapResp).Majority()
+			return err
+		}},
+	}
+	configs := []struct {
+		name   string
+		config Config
+	}{
+		{name: "NilConfig", config: nil},
+		{name: "EmptyConfig", config: Config{}},
+	}
+	checkErr := func(t *testing.T, err error) {
+		t.Helper()
+		if !errors.Is(err, ErrEmptyConfig) {
+			t.Errorf("call error = %v, want %v", err, ErrEmptyConfig)
+		}
+		if got := status.Code(err); got != codes.InvalidArgument {
+			t.Errorf("status.Code(err) = %v, want %v", got, codes.InvalidArgument)
+		}
+	}
+	for _, cfg := range configs {
+		for _, qc := range quorumCalls {
+			for _, term := range terminals {
+				t.Run(qc.name+"/"+cfg.name+"/"+term.name, func(t *testing.T) {
+					checkErr(t, term.call(qc.call(t.Context(), cfg.config, req, method)))
+				})
+			}
+		}
+		onewayCalls := []struct {
+			name string
+			call func() error
+		}{
+			{name: "Send", call: func() error { return Multicast(t.Context(), cfg.config, req, method).Send() }},
+			{name: "Async", call: func() error { return Multicast(t.Context(), cfg.config, req, method).Async().Wait() }},
+			{name: "Intercept", call: func() error {
+				skip := MapRequest[*pb.StringValue, *emptypb.Empty](func(*pb.StringValue, *Node) *pb.StringValue { return nil })
+				return Multicast(t.Context(), cfg.config, req, method).Intercept(skip).Send()
+			}},
+		}
+		for _, oc := range onewayCalls {
+			t.Run("Multicast/"+cfg.name+"/"+oc.name, func(t *testing.T) {
+				checkErr(t, oc.call())
+			})
+		}
+	}
+}
+
+// TestCallEmptyConfigDispatched verifies that a terminal method on an empty
+// configuration dispatches the call, so a later Intercept panics.
+func TestCallEmptyConfigDispatched(t *testing.T) {
+	call := QuorumCall[*pb.StringValue, *pb.StringValue](t.Context(), Config{}, pb.String("hello"), "test.Method")
+	if _, err := call.Majority(); !errors.Is(err, ErrEmptyConfig) {
+		t.Fatalf("Majority() error = %v, want %v", err, ErrEmptyConfig)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Error("Intercept after Majority did not panic")
+		}
+	}()
+	call.Intercept()
 }
 
 // TestCallNilNode verifies that a single-node call on a nil node does not

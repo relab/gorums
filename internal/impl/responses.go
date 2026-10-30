@@ -63,6 +63,8 @@ type Responses[Resp proto.Message] struct {
 	seq   ResponseSeq[Resp]
 	size  int
 	start starter
+	// err, if set, is the error that the call reports instead of sending.
+	err error
 }
 
 type starter interface {
@@ -84,6 +86,7 @@ func newResponses[Req, Resp proto.Message](ctx *CallContext[Req, Resp]) *Respons
 		seq:   ctx.responseSeq,
 		size:  ctx.Size(),
 		start: ctx,
+		err:   ctx.err,
 	}
 }
 
@@ -94,10 +97,21 @@ func (r *Responses[Resp]) Size() int {
 
 // Results returns a single-use sequence that yields responses as they arrive.
 // Iteration dispatches the call and ends after every node responds or the
-// context is canceled. Calling [Call.Intercept] after Results panics.
+// context is canceled. On an empty configuration, the sequence yields one
+// response whose Err is [ErrEmptyConfig]. Calling [Call.Intercept] after
+// Results panics.
 func (r *Responses[Resp]) Results() ResponseSeq[Resp] {
 	r.markDispatched()
 	return r.seq
+}
+
+// callErr returns the error that the call reports instead of sending. If it is
+// set, callErr marks the call as dispatched, as ranging over the responses would.
+func (r *Responses[Resp]) callErr() error {
+	if r.err != nil {
+		r.markDispatched()
+	}
+	return r.err
 }
 
 // sendNow triggers immediate sending of requests.
@@ -123,7 +137,10 @@ func (r *Responses[Resp]) Majority() (Resp, error) {
 
 // All returns the first response once all nodes have responded successfully.
 // If any node fails, it returns an error.
-func (r *Responses[Resp]) All() (Resp, error) {
+func (r *Responses[Resp]) All() (resp Resp, err error) {
+	if err := r.callErr(); err != nil {
+		return resp, err
+	}
 	return r.Threshold(r.size)
 }
 
@@ -134,6 +151,9 @@ func (r *Responses[Resp]) All() (Resp, error) {
 // It panics if threshold is not positive.
 func (r *Responses[Resp]) Threshold(threshold int) (resp Resp, err error) {
 	checkThreshold("Threshold", threshold)
+	if err := r.callErr(); err != nil {
+		return resp, err
+	}
 	var (
 		count int
 		errs  []conn.NodeError

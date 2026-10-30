@@ -892,8 +892,10 @@ resp, err := pb.NewStorageClient(ctx.PeerConfig()).ReadQC(ctx, req).Majority()
 A generated client does not own or close its configuration or its node.
 Connection ownership and the close function returned by `NewConfig` are unchanged.
 
-A quorum call or multicast on an empty configuration still panics.
-The panic now comes from the call method, not from `Config.Context`.
+A quorum call or multicast on an empty configuration no longer panics.
+It sends nothing and returns `gorums.ErrEmptyConfig`, a gRPC status error with the `InvalidArgument` code.
+Every terminal method returns this error, and `Results()` yields one response whose `Err` is this error.
+Code that recovered from the panic, or that checked `cfg.Size() == 0` only to avoid it, can match the error with `errors.Is` instead.
 A remote call or unicast on a nil node no longer panics.
 It returns `gorums.ErrNoNode`, a gRPC status error with the `InvalidArgument` code.
 Thus, `pb.NewStorageNodeClient(cfg.Node(id))` is safe when `cfg` has no node with that ID.

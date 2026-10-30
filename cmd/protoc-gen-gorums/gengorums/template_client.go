@@ -96,12 +96,13 @@ func genClients(g *protogen.GeneratedFile, services []*protogen.Service) {
 // configClient generates the configuration client of a service.
 var configClient = `
 {{$config := use "gorums.Config" .GenFile}}
+{{$errEmptyConfig := use "gorums.ErrEmptyConfig" .GenFile}}
 {{$service := .Service.GoName}}
 {{$impl := printf "%sClient" (unexport $service)}}
 // {{$service}}Client is the client API for the quorum calls and multicasts of
 // the {{$service}} service. Its calls execute on the configuration given to
-// [New{{$service}}Client]. A call on an empty configuration panics when it is
-// built.
+// [New{{$service}}Client]. If that configuration is empty, every call returns
+// [{{$errEmptyConfig}}].
 type {{$service}}Client interface {
 {{.Methods}}
 }
