@@ -25,8 +25,8 @@ var _ emptypb.Empty
 
 // ZorumsServiceClient is the client API for the quorum calls and multicasts of
 // the ZorumsService service. Its calls execute on the configuration given to
-// [NewZorumsServiceClient]. A call on an empty configuration panics when it is
-// built.
+// [NewZorumsServiceClient]. If that configuration is empty, every call returns
+// [gorums.ErrEmptyConfig].
 type ZorumsServiceClient interface {
 	// QuorumCall plain.
 	QuorumCall(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]

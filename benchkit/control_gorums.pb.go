@@ -21,8 +21,8 @@ const (
 
 // ControlClient is the client API for the quorum calls and multicasts of
 // the Control service. Its calls execute on the configuration given to
-// [NewControlClient]. A call on an empty configuration panics when it is
-// built.
+// [NewControlClient]. If that configuration is empty, every call returns
+// [gorums.ErrEmptyConfig].
 type ControlClient interface {
 	// Start resets the server-side op counter and Stats baseline.
 	Start(ctx context.Context, in *StartRequest) *gorums.Call[*StartRequest, *StartResponse]
