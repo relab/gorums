@@ -101,8 +101,7 @@ make genproto
 
 This generates new `*_gorums.pb.go` files, and one `gorums.pb.go` file per Go package, with:
 
-- Type aliases `Config`, `ID`, and `Node` for `gorums.Config`, `gorums.ID`, and `gorums.Node`, in `gorums.pb.go`
-- Type aliases `CorrectableX` for the correctable results of each quorum call response type `X`
+- Type aliases `Config`, `ID`, `Node`, and `Correctable[Resp]` for `gorums.Config`, `gorums.ID`, `gorums.Node`, and `gorums.Correctable[Resp]`, in `gorums.pb.go`
 - Service client types with a method for each call (e.g., `client.ReadQC`, `client.WriteQC`)
 - Terminal methods on `*gorums.Responses[T]`
 
@@ -903,12 +902,15 @@ A `.proto` file may now declare several services, and several `.proto` files of 
 Each service gets its own client interfaces, and all services share one `gorums.Config` and one `gorums.Server`.
 See [Several Services](user-guide.md#several-services) in the user guide.
 
+The generated `CorrectableX` aliases are gone.
+The generic alias `Correctable[Resp]` in `gorums.pb.go` replaces them: replace `pb.CorrectableX` with `*pb.Correctable[*pb.X]`.
+A message, enum, or enum value named `Correctable` now collides with this alias.
+
 The `Config`, `ID`, and `Node` aliases now live in a new generated file, `gorums.pb.go`, one per Go package.
 Regeneration removes them from the `X_gorums.pb.go` files and writes `gorums.pb.go` next to them.
 Commit `gorums.pb.go` with the other generated files.
 Every `protoc` run that generates Gorums code for the package writes the same `gorums.pb.go`, so the files of a Go package may be compiled in separate runs.
 If you remove the last Gorums `.proto` file of a package, delete its `gorums.pb.go` file too.
-Separate runs need care only for `CorrectableX` aliases: two files that do not import each other, and whose quorum calls return the same type `X`, must be compiled in one run.
 A plain gRPC service may share the Go package with Gorums services if its `.proto` file is compiled without `--gorums_out`.
 Rename a `.proto` file named `gorums.proto` in a directory with Gorums output, because its `gorums.pb.go` file would collide with the Gorums package file.
 The generator reports an error for such a file.
@@ -917,7 +919,6 @@ Regeneration reports an error for names that collide with the generated code:
 
 - a message, enum, enum value, or oneof wrapper type, including a nested one, whose Go name is the name of a generated client interface, constructor, or struct, or `SServer` or `RegisterSServer`;
   the client names are `SClient`, `NewSClient`, and `sClient` if the service has quorum calls or multicasts, and `SNodeClient`, `NewSNodeClient`, and `sNodeClient` if it has remote calls or unicasts;
-- a message or enum named `CorrectableX`, where `X` is the response type of a quorum call;
 - two services of one Go package that generate the same name, such as services `NewS` and `S` with quorum calls, which both generate `NewSClient`.
 
 An RPC method may have any name.

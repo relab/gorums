@@ -27,27 +27,19 @@ The content depends only on the Go package name and the versions of `protoc-gen-
 Thus, separate runs for the files of one Go package write the same file.
 The `_gorums.pb.go` files hold no static code.
 In dev mode, the generator writes no `gorums.pb.go` file, because `dev/aliases.go` declares the static code.
-The static code currently consists of three type aliases from `dev/aliases.go`:
+The static code currently consists of four type aliases from `dev/aliases.go`:
 
 ```go
 type (
-    Config = gorums.Config
-    ID     = gorums.ID
-    Node   = gorums.Node
+    Config                = gorums.Config
+    ID                    = gorums.ID
+    Node                  = gorums.Node
+    Correctable[Resp any] = gorums.Correctable[Resp]
 )
 ```
 
-These aliases make the most commonly used Gorums types available as `pb.Config`, `pb.ID`, and `*pb.Node`.
+These aliases make the most commonly used Gorums types available as `pb.Config`, `pb.ID`, `*pb.Node`, and `*pb.Correctable[*pb.X]`.
 They exist for application code; the generated code itself refers to the `gorums` types, such as `gorums.Config` and `*gorums.Node`.
-
-The `types` template (`gengorums/template_datatypes.go`) declares the alias `CorrectableX` for each response type `X` of a quorum call.
-Several services and files of a Go package may return the same `X`.
-Thus, the generator declares each such alias once per Go package.
-The alias goes in the generated file of the first `.proto` file, in `protoc`'s file order, whose quorum calls return `X`.
-In that order, imported files come first.
-The generator picks this owner among all files of the `protoc` request, including the files that are only imports of the run (`Generate` is false).
-If the owner is only an import, the run skips the alias; the run that generates the owner declares it.
-Only a method with the `gorums.quorumcall` option produces an alias, so the owner always has a Gorums run.
 
 Because the static code appears once per Go package, it may declare package-level names.
 Each exported package-level name of the static code becomes a **reserved identifier**.
@@ -60,11 +52,7 @@ RPC methods are methods of the generated client interfaces, so they do not colli
 
 The `.proto` files of a Go package may be compiled in one `protoc` run or in separate runs.
 Separate runs write the same `gorums.pb.go`, so the static code is declared once.
-Only the `Correctable` aliases need care.
-If `b.proto` imports `a.proto` from the same Go package, the run for `b.proto` sees `a.proto` as an import.
-That run skips the `Correctable` aliases that `a.proto` owns, because the run for `a.proto` declares them.
-If neither file imports the other, directly or indirectly, each run declares the `Correctable` aliases of its own quorum calls.
-Thus, two such files must not both produce the same `CorrectableX` alias in separate runs.
+The `_gorums.pb.go` files declare only the names of their own services.
 
 The `TestBundleReservedIdentifiers` test in `gengorums/bundle_test.go` pins the expected set.
 If you add or remove a static declaration, update that test to match.
@@ -111,7 +99,6 @@ In dev mode, the generator writes one `dev/zorums_{name}_gorums.pb.go` file for 
 
 | Dev file                         | Template                 | Contents                                       |
 | -------------------------------- | ------------------------ | ---------------------------------------------- |
-| `zorums_types_gorums.pb.go`      | `template_datatypes.go`  | `Correctable` type aliases                     |
 | `zorums_client_gorums.pb.go`     | `template_client.go`     | client interfaces, constructors, and structs   |
 | `zorums_quorumcall_gorums.pb.go` | `template_quorumcall.go` | quorum call and streaming quorum call methods  |
 | `zorums_multicast_gorums.pb.go`  | `template_multicast.go`  | multicast methods                              |
