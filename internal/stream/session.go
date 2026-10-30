@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -40,15 +39,11 @@ type session struct {
 	requeue bool
 
 	pending pendingCalls
-	// sendMu lets an outbound send remove a locally rejected request before
-	// the receive loop disposes of pending calls. Cancel the stream before
-	// waiting for this mutex, so a send blocked on flow control can return.
-	sendMu sync.Mutex
 
-	drain       chan struct{} // closed when the session starts draining
-	draining    atomic.Bool
-	sendStopped atomic.Bool
-	received    atomic.Bool // a frame has been received
+	drain    chan struct{} // closed when the session starts draining
+	sendDone chan struct{} // closed when the send loop returns
+	draining atomic.Bool
+	received atomic.Bool // a frame has been received
 
 	// verdict is closed when the stream delivers its first frame or receiving
 	// ends. refusal is set before that if the server refused the stream.
@@ -83,6 +78,7 @@ func newSession(ctx context.Context, cancel context.CancelFunc, e *endpoint, str
 		serverRequests: serverRequests,
 		requeue:        requeue,
 		drain:          make(chan struct{}),
+		sendDone:       make(chan struct{}),
 		verdict:        make(chan struct{}),
 		opened:         time.Now(),
 	}
@@ -126,27 +122,14 @@ func (s *session) sendLoop(req *Request) *Request {
 // A two-way request must already be pending; a one-way request is confirmed
 // once it is sent.
 func (s *session) send(req Request) bool {
-	if s.requeue {
-		s.sendMu.Lock()
-		if s.ended() {
-			s.sendMu.Unlock()
-			return false
-		}
-	}
 	s.sendStart.Store(time.Now().UnixNano())
 	err := s.stream.Send(req.Msg)
 	s.sendStart.Store(0)
 	// A client's Send returns local errors directly; remote errors arrive
-	// through Recv, with Send returning io.EOF. A local size rejection must
-	// leave the pending table before either loop can retry calls.
-	tooLarge := s.requeue && status.Code(err) == codes.ResourceExhausted
-	if tooLarge {
+	// through Recv, with Send returning io.EOF. Fail a locally oversized
+	// request before the session retries its other pending calls.
+	if s.requeue && status.Code(err) == codes.ResourceExhausted {
 		s.pending.remove(req.Msg.GetMessageSeqNo())
-	}
-	if s.requeue {
-		s.sendMu.Unlock()
-	}
-	if tooLarge {
 		req.sendErrorResponse(s.id, err)
 		// gRPC aborts the stream on a local send error. Other pending
 		// calls still follow the usual stream-loss policy.
@@ -247,20 +230,22 @@ func (s *session) receiveFailed(err error) {
 		}
 		close(s.verdict)
 	}
-	switch {
-	case s.refusal != nil:
+	if s.refusal != nil || prev == streamSendFailed || !s.ended() {
 		s.recordHealth(err)
-		s.cancel()
-		for _, req := range s.drainPending() {
+	}
+	s.cancel()
+	if s.requeue {
+		// Cancellation unblocks Send. Let it remove a locally rejected
+		// request before retrying calls. Publish the verdict first because
+		// a failed one-way send may be waiting for it.
+		<-s.sendDone
+	}
+	for _, req := range s.pending.drain() {
+		if s.refusal != nil {
 			req.sendErrorResponse(s.id, err)
+		} else {
+			s.retry(req)
 		}
-	case prev == streamSendFailed:
-		// The failed send ended the session without recording its error;
-		// err is the stream's status.
-		s.recordHealth(err)
-		s.end()
-	default:
-		s.fail(err)
 	}
 }
 
@@ -303,19 +288,9 @@ func (s *session) fail(err error) {
 // [session.retry]. It is idempotent.
 func (s *session) end() {
 	s.cancel()
-	for _, req := range s.drainPending() {
+	for _, req := range s.pending.drain() {
 		s.retry(req)
 	}
-}
-
-// drainPending removes pending calls after an outbound send has resolved any
-// local size rejection. The stream must be canceled before calling it.
-func (s *session) drainPending() []Request {
-	if s.requeue {
-		s.sendMu.Lock()
-		defer s.sendMu.Unlock()
-	}
-	return s.pending.drain()
 }
 
 // ended reports whether the session has ended.
@@ -370,14 +345,20 @@ func (s *session) startDrain() {
 
 // stopSending records that the send loop has returned.
 func (s *session) stopSending() {
-	s.sendStopped.Store(true)
+	close(s.sendDone)
 	s.endIfDrained()
 }
 
 // endIfDrained ends a draining session that has stopped sending and has no
 // pending calls left.
 func (s *session) endIfDrained() {
-	if s.draining.Load() && s.sendStopped.Load() && s.pending.len() == 0 {
-		s.end()
+	if s.draining.Load() {
+		select {
+		case <-s.sendDone:
+			if s.pending.len() == 0 {
+				s.end()
+			}
+		default:
+		}
 	}
 }

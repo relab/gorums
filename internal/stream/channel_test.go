@@ -1756,6 +1756,7 @@ func TestChannelSessionDispatchesOnlyServerInitiatedUnknownMessages(t *testing.T
 			e := newEndpoint(t.Context(), 1, 1, 0, handler, nil)
 			ctx, cancel := context.WithCancel(e.ctx)
 			s := newSession(ctx, cancel, &e, stream, true, true)
+			s.stopSending() // this test exercises only receiving
 			t.Cleanup(e.cancel)
 
 			done := make(chan struct{})

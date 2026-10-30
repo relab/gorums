@@ -497,6 +497,10 @@ func TestSessionLocalSizeErrorBeforeRetry(t *testing.T) {
 				<-st.entered
 				go s.receiveFailed(localErr)
 				<-s.done // receiving canceled the stream while Send is still blocked
+				synctest.Wait()
+				if len(s.queue.ch) != 0 || len(responseChan) != 0 {
+					t.Error("receiving disposed of pending calls before Send returned")
+				}
 				close(st.resume)
 				synctest.Wait()
 				if err := responseErr(t, responseChan, "oversized request"); !errors.Is(err, localErr) {
@@ -547,6 +551,7 @@ func TestSessionRefusalFailsPendingCalls(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s, stream := newScriptedSession(t, nil, !tt.inbound)
+			s.stopSending() // this test exercises only receiving
 			twoWay := make(chan response, 1)
 			streaming := make(chan response, 1)
 			s.pending.add(1, Request{Ctx: t.Context(), Msg: &Message{}, ResponseChan: twoWay})
@@ -719,6 +724,7 @@ func TestSessionRefusalOwnsPendingAfterCancellation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				s, _ := newScriptedSession(t, nil, true)
+				s.stopSending() // sendFailed is called directly, without a send loop
 				responseChan := make(chan response, 1)
 				s.pending.add(1, Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), Streaming: streaming, ResponseChan: responseChan})
 				refusal := status.Error(codes.Unauthenticated, "refused")
@@ -767,6 +773,7 @@ func TestSessionVerdict(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				s, stream := newScriptedSession(t, nil, true)
+				s.stopSending() // this test exercises only receiving
 				go func() { _ = s.receive() }()
 				defer func() {
 					stream.end(context.Canceled) // ends a receive loop still running

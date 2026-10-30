@@ -1689,13 +1689,7 @@ if err != nil {
 The error type matching uses `errors.Is`, which properly handles wrapped errors.
 This allows you to filter nodes based on the underlying cause of their failures, enabling fine-grained control over which nodes to exclude when creating new configurations.
 
-## Request Send Limits
-
-A request that exceeds the client's `grpc.MaxCallSendMsgSize` fails with `codes.ResourceExhausted` as soon as gRPC rejects the send.
-This applies to two-way, streaming, and one-way calls.
-The rejected request is not sent again.
-gRPC aborts the stream on this local error, so other pending calls follow the usual stream-loss policy: two-way calls are retried, and streaming calls fail with `gorums.ErrStreamDown`.
-Later calls can use the same node.
+A request that exceeds the client's `grpc.MaxCallSendMsgSize` fails with `codes.ResourceExhausted` without retrying, for two-way, streaming, and one-way calls.
 
 ## Refused Streams
 
