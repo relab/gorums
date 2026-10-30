@@ -34,6 +34,14 @@ func VerificationError(id ID, err error) error {
 	return status.Errorf(codes.Unauthenticated, "gorums: node %d failed verification: %v", id, err)
 }
 
+// failsCalls reports whether a stream that ends with err fails its pending
+// calls instead of sending them again. gRPC ends a stream with
+// ResourceExhausted when a message exceeds the client's send limit or the
+// server's receive limit, so a new stream would end the same way.
+func failsCalls(err error) bool {
+	return status.Code(err) == codes.ResourceExhausted
+}
+
 // isRefusal reports whether err is a status with which a server refuses a
 // stream: Unauthenticated, PermissionDenied, InvalidArgument, or Unimplemented.
 func isRefusal(err error) bool {
