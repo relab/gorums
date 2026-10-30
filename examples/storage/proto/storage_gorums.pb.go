@@ -25,8 +25,8 @@ var _ emptypb.Empty
 
 // StorageClient is the client API for the quorum calls and multicasts of
 // the Storage service. Its calls execute on the configuration given to
-// [NewStorageClient]. A call on an empty configuration panics when it is
-// built.
+// [NewStorageClient]. If that configuration is empty, every call returns
+// [gorums.ErrEmptyConfig].
 type StorageClient interface {
 	// WriteMulticast executes a Write multicast call on a configuration of nodes.
 	// It does not wait for any responses.

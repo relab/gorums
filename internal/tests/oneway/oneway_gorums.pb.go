@@ -21,8 +21,8 @@ const (
 
 // OnewayTestClient is the client API for the quorum calls and multicasts of
 // the OnewayTest service. Its calls execute on the configuration given to
-// [NewOnewayTestClient]. A call on an empty configuration panics when it is
-// built.
+// [NewOnewayTestClient]. If that configuration is empty, every call returns
+// [gorums.ErrEmptyConfig].
 type OnewayTestClient interface {
 	// Multicast starts a one-way call on the client's configuration; no reply
 	// is returned. Use gorums.MapRequest to send a different message to each node.

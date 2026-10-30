@@ -22,8 +22,8 @@ const (
 
 // QuorumCallClient is the client API for the quorum calls and multicasts of
 // the QuorumCall service. Its calls execute on the configuration given to
-// [NewQuorumCallClient]. A call on an empty configuration panics when it is
-// built.
+// [NewQuorumCallClient]. If that configuration is empty, every call returns
+// [gorums.ErrEmptyConfig].
 type QuorumCallClient interface {
 	// QuorumCall executes a quorum call on the client's configuration. Use
 	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the

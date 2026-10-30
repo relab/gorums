@@ -21,8 +21,8 @@ const (
 
 // AlphaClient is the client API for the quorum calls and multicasts of
 // the Alpha service. Its calls execute on the configuration given to
-// [NewAlphaClient]. A call on an empty configuration panics when it is
-// built.
+// [NewAlphaClient]. If that configuration is empty, every call returns
+// [gorums.ErrEmptyConfig].
 type AlphaClient interface {
 	// Heartbeat executes a quorum call on the client's configuration. Use
 	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
@@ -71,8 +71,8 @@ type alphaNodeClient struct {
 
 // BetaClient is the client API for the quorum calls and multicasts of
 // the Beta service. Its calls execute on the configuration given to
-// [NewBetaClient]. A call on an empty configuration panics when it is
-// built.
+// [NewBetaClient]. If that configuration is empty, every call returns
+// [gorums.ErrEmptyConfig].
 type BetaClient interface {
 	// Heartbeat executes a quorum call on the client's configuration. Use
 	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the

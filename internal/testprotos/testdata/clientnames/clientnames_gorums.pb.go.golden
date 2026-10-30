@@ -21,8 +21,8 @@ const (
 
 // ClientNamesClient is the client API for the quorum calls and multicasts of
 // the ClientNames service. Its calls execute on the configuration given to
-// [NewClientNamesClient]. A call on an empty configuration panics when it is
-// built.
+// [NewClientNamesClient]. If that configuration is empty, every call returns
+// [gorums.ErrEmptyConfig].
 type ClientNamesClient interface {
 	// Config is a quorum call.
 	Config(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
