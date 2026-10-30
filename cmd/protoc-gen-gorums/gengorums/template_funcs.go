@@ -56,10 +56,10 @@ var funcMap = template.FuncMap{
 	"isOneway": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast)
 	},
-	"out":                   out,
-	"methodTypes":           methodTypes,
-	"localNames":            localNames,
-	"unexport":              unexport,
+	"out":         out,
+	"methodTypes": methodTypes,
+	"localNames":  localNames,
+	"unexport":    unexport,
 }
 
 // localNames maps each of the space-separated base names to a local name for
