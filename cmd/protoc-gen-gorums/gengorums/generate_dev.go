@@ -1,36 +1,40 @@
 package gengorums
 
 import (
-	"github.com/relab/gorums"
+	"maps"
+	"slices"
+
 	"google.golang.org/protobuf/compiler/protogen"
 )
 
-// GenerateDevFiles generates a separate {prefix}_{name}_gorums.pb.go file for
-// each call type name in [gorumsCallTypesInfo], where prefix is the generated
-// file name prefix of file. It returns an error if the file cannot be
-// generated as written.
-func GenerateDevFiles(gen *protogen.Plugin, file *protogen.File) error {
-	if ok, err := shouldGenerate(gen, file); !ok {
-		return err
+// File names of the dev files that do not hold the methods of a call type.
+const (
+	devClientName = "client"
+	devServerName = "server"
+)
+
+// generateDevFiles generates a separate {prefix}_{name}_gorums.pb.go file for
+// each part of the Gorums code of file, where prefix is the generated file name
+// prefix of file. The parts are the client interfaces, the server interface,
+// and the client methods of each call type in [gorumsCallTypesInfo], named by
+// the call type.
+func generateDevFiles(gen *protogen.Plugin, file *protogen.File) {
+	g := newDevFile(gen, file, devClientName)
+	genReferenceImports(g, file.Services)
+	genClients(g, file.Services)
+
+	for _, name := range slices.Sorted(maps.Keys(gorumsCallTypesInfo)) {
+		g := newDevFile(gen, file, name)
+		if gorumsCallTypesInfo[name].oneway {
+			genReferenceImports(g, file.Services)
+		}
+		genMethods(g, file, name)
 	}
-	for gorumsType := range gorumsCallTypesInfo {
-		generateDevFile(gen, file, gorumsType)
-	}
-	return nil
+
+	genServer(newDevFile(gen, file, devServerName), file.Services)
 }
 
-func generateDevFile(gen *protogen.Plugin, file *protogen.File, gorumsType string) {
-	// generate dev file for given gorumsType
-	filename := file.GeneratedFilenamePrefix + "_" + gorumsType + "_gorums.pb.go"
-	g := gen.NewGeneratedFile(filename, file.GoImportPath)
-	genGeneratedHeader(gen, file, g)
-	g.P("package ", file.GoPackageName)
-	g.P()
-	genVersionCheck(g)
-	switch gorumsType {
-	case clientEntry, callTypeName(gorums.E_Multicast), callTypeName(gorums.E_Unicast):
-		genReferenceImports(g, file.Services)
-	}
-	genGorumsType(g, file.Services, gorumsType)
-	genGorumsMethods(g, file, gorumsType)
+// newDevFile returns the generated dev file with the given name.
+func newDevFile(gen *protogen.Plugin, file *protogen.File, name string) *protogen.GeneratedFile {
+	return newGorumsFile(gen, file, "_"+name+"_gorums.pb.go")
 }

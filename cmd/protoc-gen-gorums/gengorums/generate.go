@@ -3,57 +3,72 @@ package gengorums
 
 import (
 	"fmt"
-	"iter"
 	"path"
-	"slices"
 	"strings"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/version"
 	"github.com/relab/gorums/runtime/gorumsimpl"
 	"google.golang.org/protobuf/compiler/protogen"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/runtime/protoimpl"
 )
 
-// GenerateFile generates a _gorums.pb.go file containing Gorums service
-// definitions. If file is the first file of its Go package that this run
-// generates Gorums code for, GenerateFile also generates the package's
-// gorums.pb.go file. It returns an error if the file cannot be generated as
-// written.
-func GenerateFile(gen *protogen.Plugin, file *protogen.File) error {
-	if ok, err := shouldGenerate(gen, file); !ok {
-		return err
-	}
-	if isPackageFileOwner(gen, file) {
-		if err := generatePackageFile(gen, file); err != nil {
+// Generate generates the Gorums code for the files of gen that protoc asked to
+// generate. In dev mode, it generates a separate file for each part of the
+// code instead; see [generateDevFiles]. It returns an error if a file cannot
+// be generated as written.
+func Generate(gen *protogen.Plugin, dev bool) error {
+	pkgs := newGoPackages(gen)
+	for _, file := range gen.Files {
+		if !file.Generate {
+			continue
+		}
+		pkg := pkgs[file.GoImportPath]
+		if ok, err := shouldGenerate(pkg, file); !ok {
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		if dev {
+			generateDevFiles(gen, file)
+		} else if err := generateFile(gen, pkg, file); err != nil {
 			return err
 		}
 	}
-	filename := file.GeneratedFilenamePrefix + "_gorums.pb.go"
-	g := gen.NewGeneratedFile(filename, file.GoImportPath)
+	return nil
+}
+
+// generateFile generates a _gorums.pb.go file containing Gorums service
+// definitions. If file is the owner of its Go package, generateFile also
+// generates the package's gorums.pb.go file.
+func generateFile(gen *protogen.Plugin, pkg *goPackage, file *protogen.File) error {
+	if pkg.owner == file {
+		if err := generatePackageFile(gen, pkg, file); err != nil {
+			return err
+		}
+	}
+	g := newGorumsFile(gen, file, "_gorums.pb.go")
+	genReferenceImports(g, file.Services)
+	genClients(g, file.Services)
+	genMethods(g, file, "")
+	genServer(g, file.Services)
+	return nil
+}
+
+// newGorumsFile returns a generated file named after file, with the given
+// suffix, that holds the header, package clause, and version check.
+func newGorumsFile(gen *protogen.Plugin, file *protogen.File, suffix string) *protogen.GeneratedFile {
+	g := gen.NewGeneratedFile(file.GeneratedFilenamePrefix+suffix, file.GoImportPath)
 	genGeneratedHeader(gen, file, g)
 	g.P("package ", file.GoPackageName)
 	g.P()
 	genVersionCheck(g)
-	generateFileContent(file, g)
-	return nil
+	return g
 }
 
 // packageFileName is the name of the file that holds the static code of a Go
 // package.
 const packageFileName = "gorums.pb.go"
-
-// isPackageFileOwner reports whether file is the first file of its Go package
-// with Gorums methods that this run generates, in the order of gen.Files.
-func isPackageFileOwner(gen *protogen.Plugin, file *protogen.File) bool {
-	for f := range gorumsPackageFiles(gen, file.GoImportPath) {
-		if f.Generate {
-			return f == file
-		}
-	}
-	return false
-}
 
 // generatePackageFile generates the gorums.pb.go file of file's Go package,
 // in the output directory of file's generated files. The file holds the
@@ -63,10 +78,10 @@ func isPackageFileOwner(gen *protogen.Plugin, file *protogen.File) bool {
 // package writes the same file. It returns an error if protoc-gen-go writes a
 // file with the same path for a proto file of the package, such as
 // gorums.proto in the same directory.
-func generatePackageFile(gen *protogen.Plugin, file *protogen.File) error {
+func generatePackageFile(gen *protogen.Plugin, pkg *goPackage, file *protogen.File) error {
 	filename := path.Join(path.Dir(file.GeneratedFilenamePrefix), packageFileName)
-	for _, f := range gen.Files {
-		if f.GoImportPath == file.GoImportPath && f.GeneratedFilenamePrefix+".pb.go" == filename {
+	for _, f := range pkg.files {
+		if f.GeneratedFilenamePrefix+".pb.go" == filename {
 			return fmt.Errorf("%s: protoc-gen-go writes %s, which Gorums uses for the package aliases; rename the proto file",
 				f.Desc.Path(), packageFileName)
 		}
@@ -82,23 +97,6 @@ func generatePackageFile(gen *protogen.Plugin, file *protogen.File) error {
 		addImport(path, ident, g)
 	}
 	return nil
-}
-
-// gorumsPackageFiles returns the files of the Go package with the given
-// import path that have Gorums methods, in the order of gen.Files. It
-// includes the files that are only imports of this run, because the run that
-// generates such a file emits its Gorums code into the same Go package.
-func gorumsPackageFiles(gen *protogen.Plugin, importPath protogen.GoImportPath) iter.Seq[*protogen.File] {
-	return func(yield func(*protogen.File) bool) {
-		for _, f := range gen.Files {
-			if f.GoImportPath != importPath || !hasGorumsMethods(f.Services) {
-				continue
-			}
-			if !yield(f) {
-				return
-			}
-		}
-	}
 }
 
 func genGeneratedHeader(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile) {
@@ -139,9 +137,9 @@ func genVersions(gen *protogen.Plugin, g *protogen.GeneratedFile) {
 }
 
 // shouldGenerate reports whether there is something for Gorums to generate
-// for the given file. It returns an error, and false, if the file has Gorums
-// methods but cannot be generated as written.
-func shouldGenerate(gen *protogen.Plugin, file *protogen.File) (bool, error) {
+// for the given file of pkg. It returns an error, and false, if the file has
+// Gorums methods but cannot be generated as written.
+func shouldGenerate(pkg *goPackage, file *protogen.File) (bool, error) {
 	if len(file.Services) == 0 || !hasGorumsMethods(file.Services) {
 		// there is nothing for this plugin to do
 		return false, nil
@@ -155,146 +153,10 @@ func shouldGenerate(gen *protogen.Plugin, file *protogen.File) (bool, error) {
 			}
 		}
 	}
-	if err := checkReservedIdents(gen, file); err != nil {
+	if err := pkg.checkReservedIdents(); err != nil {
 		return false, err
 	}
 	return true, nil
-}
-
-// checkReservedIdents returns an error if a Go declaration of the file's Go
-// package collides with an identifier that Gorums declares in that package.
-// The Gorums services of the package are the services of every file in the
-// package with Gorums methods, including the files that are only imports of
-// this run. Two of these services must not generate the same identifier. A
-// message, enum, or enum value of any file in the package, nested or not,
-// must not take the name of a Gorums type alias or of an identifier generated
-// for one of these services. For example, service NewS generates the
-// interface NewSClient, and service S generates the constructor NewSClient.
-//
-// The check treats every service of these files as a Gorums service, because
-// a method without a Gorums option is a remote call. A package may also hold
-// a plain gRPC service in a file that is compiled without the Gorums plugin.
-// The check then reserves the node client names of that service, such as
-// SNodeClient, although protoc-gen-go-grpc generates SClient, NewSClient, and
-// sClient instead. A clash with those names shows when the package compiles.
-func checkReservedIdents(gen *protogen.Plugin, file *protogen.File) error {
-	generated, err := packageIdents(gen, file.GoImportPath)
-	if err != nil {
-		return err
-	}
-	for _, f := range gen.Files {
-		if f.GoImportPath != file.GoImportPath {
-			continue
-		}
-		check := func(kind, name string) error {
-			switch service := generated[name]; {
-			case slices.Contains(reservedIdents, name):
-				return fmt.Errorf("%s: contains %s %s, which is a reserved Gorums identifier", f.Desc.Path(), kind, name)
-			case service != nil:
-				return fmt.Errorf("%s: contains %s %s, which is the Gorums identifier generated for service %s (%s)",
-					f.Desc.Path(), kind, name, service.Desc.Name(), service.Desc.ParentFile().Path())
-			}
-			return nil
-		}
-		if err := checkTypes(f.Messages, f.Enums, check); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// checkTypes calls check with the Go name of each message, enum, enum value,
-// and oneof wrapper, including nested ones, since protoc-gen-go declares every
-// nested type, every enum value, and every oneof wrapper at package level. The
-// opaque API declares a oneof wrapper with a lowercase first letter, and the
-// Go API level is not known here, so checkTypes passes both spellings.
-func checkTypes(msgs []*protogen.Message, enums []*protogen.Enum, check func(kind, name string) error) error {
-	for _, enum := range enums {
-		if err := check("enum", enum.GoIdent.GoName); err != nil {
-			return err
-		}
-		for _, value := range enum.Values {
-			if err := check("enum value", value.GoIdent.GoName); err != nil {
-				return err
-			}
-		}
-	}
-	for _, msg := range msgs {
-		if err := check("message", msg.GoIdent.GoName); err != nil {
-			return err
-		}
-		for _, oneof := range msg.Oneofs {
-			if oneof.Desc.IsSynthetic() {
-				continue
-			}
-			for _, field := range oneof.Fields {
-				name := field.GoIdent.GoName
-				for _, wrapper := range []string{name, strings.ToLower(name[:1]) + name[1:]} {
-					if err := check("oneof wrapper", wrapper); err != nil {
-						return err
-					}
-				}
-			}
-		}
-		if err := checkTypes(msg.Messages, msg.Enums, check); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// packageIdents returns the package-level identifiers that Gorums generates
-// for the services of the Go package with the given import path, mapped to
-// the service that generates each one. It considers every file of the
-// package in [gorumsPackageFiles], in the order of gen.Files. It returns an
-// error if two services generate the same identifier.
-func packageIdents(gen *protogen.Plugin, importPath protogen.GoImportPath) (map[string]*protogen.Service, error) {
-	idents := make(map[string]*protogen.Service)
-	for f := range gorumsPackageFiles(gen, importPath) {
-		for _, service := range f.Services {
-			for _, name := range serviceIdents(service) {
-				if first, ok := idents[name]; ok {
-					return nil, identCollisionError(first, service, name)
-				}
-				idents[name] = service
-			}
-		}
-	}
-	return idents, nil
-}
-
-// serviceIdents returns the package-level identifiers that Gorums generates
-// for the given service. No two of them are equal.
-func serviceIdents(service *protogen.Service) []string {
-	return slices.Concat(clientIdents(service), serverIdents(service))
-}
-
-// identCollisionError returns the error for two services, first and second,
-// that both generate the identifier name. The error names the file of first,
-// and the file of second if it differs.
-func identCollisionError(first, second *protogen.Service, name string) error {
-	firstPath, secondPath := first.Desc.ParentFile().Path(), second.Desc.ParentFile().Path()
-	secondName := string(second.Desc.Name())
-	if secondPath != firstPath {
-		secondName += " (" + secondPath + ")"
-	}
-	return fmt.Errorf("%s: services %s and %s both generate the Gorums identifier %s",
-		firstPath, first.Desc.Name(), secondName, name)
-}
-
-// generateFileContent generates the Gorums service definitions, excluding the package statement.
-func generateFileContent(file *protogen.File, g *protogen.GeneratedFile) {
-	// 1. Reference Imports
-	genReferenceImports(g, file.Services)
-
-	// 2. Client Interfaces, Constructors, and Structs
-	genGorumsType(g, file.Services, "client")
-
-	// 3. Client Method Implementations (in proto order)
-	genGorumsMethods(g, file, "")
-
-	// 4. Server Interface and Registration
-	genGorumsType(g, file.Services, "server")
 }
 
 // genReferenceImports generates a dummy reference to suppress unused import errors.
@@ -329,33 +191,10 @@ func genReferenceImports(g *protogen.GeneratedFile, services []*protogen.Service
 	}
 }
 
-// genGorumsType generates the service-level code for the named entry in
-// [gorumsCallTypesInfo], such as "client" or "server". It generates nothing
-// for an entry that belongs to a method option. The client entry has no
-// template of its own; [genClients] generates its code from the templates of
-// the call types.
-func genGorumsType(g *protogen.GeneratedFile, services []*protogen.Service, name string) {
-	info := gorumsCallTypesInfo[name]
-	switch {
-	case info.ext != nil:
-		// A method option entry has no service-level code.
-	case name == clientEntry:
-		genClients(g, services)
-	default:
-		// servicesData hold the services to generate and a reference to the file in which
-		// the services should be generated. This is data to be used by template generator.
-		type servicesData struct {
-			GenFile  *protogen.GeneratedFile
-			Services []*protogen.Service
-		}
-		g.P(mustExecute(parseTemplate(name, info.template), servicesData{g, services}))
-	}
-}
-
-// genGorumsMethods generates the client method implementations of the
-// services in file whose call type is target. An empty target generates the
-// methods of all call types.
-func genGorumsMethods(g *protogen.GeneratedFile, file *protogen.File, target string) {
+// genMethods generates the client method implementations of the services in
+// file whose call type is target. An empty target generates the methods of all
+// call types, in proto order.
+func genMethods(g *protogen.GeneratedFile, file *protogen.File, target string) {
 	for _, service := range file.Services {
 		for _, method := range service.Methods {
 			if name, _ := callType(method); target == "" || target == name {
@@ -378,186 +217,14 @@ func renderMethod(g *protogen.GeneratedFile, method *protogen.Method, decl bool)
 	if info == nil {
 		return ""
 	}
+	// methodData is the data of a method template. Impl is the name of the
+	// struct that implements the client interface of the method.
 	type methodData struct {
 		GenFile *protogen.GeneratedFile
 		Method  *protogen.Method
+		Impl    string
 		Decl    bool
 	}
-	return mustExecute(parseTemplate(name, info.template), methodData{g, method, decl})
-}
-
-// callType returns the name and information of the call type that matches
-// the given method. The name is the key in [gorumsCallTypesInfo]. If that
-// entry has a nested call type that matches the method, the returned
-// information is the nested entry's. It returns "" and nil if no call type
-// matches.
-func callType(method *protogen.Method) (string, *callTypeInfo) {
-	for name, info := range gorumsCallTypesInfo {
-		if info = info.resolve(method); info.matches(method) {
-			return name, info
-		}
-	}
-	return "", nil
-}
-
-// hasGorumsMethods returns true if one of the methods in the set of services
-// has a Gorums call type.
-func hasGorumsMethods(services []*protogen.Service) bool {
-	for _, service := range services {
-		for _, method := range service.Methods {
-			if _, info := callType(method); info != nil {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// callTypeInfo describes how to generate code for one call type.
-type callTypeInfo struct {
-	// ext is the Gorums method option of this call type.
-	// It is nil for the service-level entries "client" and "server".
-	ext *protoimpl.ExtensionInfo
-	// template generates the code for this call type. For a method option,
-	// it generates one client method; for a service-level entry, it generates
-	// the code for all services. It is empty if nested holds the templates,
-	// and for the client entry.
-	template string
-	// match reports whether a method has this call type.
-	// It is nil for the service-level entries, which match no method.
-	match func(m *protogen.Method) bool
-	// nested holds the variants of this call type, keyed by variant name.
-	// The variant whose match accepts a method replaces this entry for that
-	// method. The variants of an entry are mutually exclusive.
-	nested map[string]*callTypeInfo
-}
-
-// matches reports whether the given method has this call type.
-func (c *callTypeInfo) matches(m *protogen.Method) bool {
-	if c != nil && c.match != nil {
-		return c.match(m)
-	}
-	return false
-}
-
-// resolve returns the nested call type that matches the given method,
-// or c if no nested call type matches.
-func (c *callTypeInfo) resolve(m *protogen.Method) *callTypeInfo {
-	if c != nil {
-		for _, nested := range c.nested {
-			if nested.match(m) {
-				return nested
-			}
-		}
-	}
-	return c
-}
-
-// callTypeName returns the name of the call type option with the prefix removed.
-func callTypeName(ext *protoimpl.ExtensionInfo) string {
-	s := string(ext.TypeDescriptor().FullName())
-	return s[strings.LastIndex(s, ".")+1:]
-}
-
-// clientEntry is the key of the service-level entry in [gorumsCallTypesInfo]
-// for the client interfaces.
-const clientEntry = "client"
-
-// gorumsCallTypesInfo maps each Gorums call type name to its [callTypeInfo].
-// The method option entries are mutually exclusive: at most one matches a
-// given method. In dev mode, each key names a generated
-// zorums_{key}_gorums.pb.go file.
-var gorumsCallTypesInfo = map[string]*callTypeInfo{
-	clientEntry: {},
-	"server":    {template: server},
-
-	callTypeName(gorums.E_Remotecall): {
-		ext:      gorums.E_Remotecall,
-		template: remoteCall,
-		match: func(m *protogen.Method) bool {
-			return !hasMethodOption(m, gorumsCallTypes...)
-		},
-	},
-	callTypeName(gorums.E_Quorumcall): {
-		ext: gorums.E_Quorumcall,
-		match: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_Quorumcall)
-		},
-		nested: map[string]*callTypeInfo{
-			"quorumcall": {
-				ext:      gorums.E_Quorumcall,
-				template: quorumCall,
-				match: func(m *protogen.Method) bool {
-					return hasMethodOption(m, gorums.E_Quorumcall) && !m.Desc.IsStreamingServer()
-				},
-			},
-			"quorumcall_stream": {
-				ext:      gorums.E_Quorumcall,
-				template: quorumCallStream,
-				match: func(m *protogen.Method) bool {
-					return hasMethodOption(m, gorums.E_Quorumcall) && m.Desc.IsStreamingServer()
-				},
-			},
-		},
-	},
-	callTypeName(gorums.E_Multicast): {
-		ext:      gorums.E_Multicast,
-		template: multicastCall,
-		match: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_Multicast)
-		},
-	},
-	callTypeName(gorums.E_Unicast): {
-		ext:      gorums.E_Unicast,
-		template: unicastCall,
-		match: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_Unicast)
-		},
-	},
-}
-
-// gorumsCallTypes should list all available call types supported by Gorums.
-// A method may have at most one of them; [validateOptions] rejects more.
-var gorumsCallTypes = []*protoimpl.ExtensionInfo{
-	gorums.E_Quorumcall,
-	gorums.E_Multicast,
-	gorums.E_Unicast,
-}
-
-// hasMethodOption reports whether the method has one of the given method options.
-func hasMethodOption(method *protogen.Method, exts ...*protoimpl.ExtensionInfo) bool {
-	options := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
-	for _, ext := range exts {
-		if proto.HasExtension(options, ext) {
-			return true
-		}
-	}
-	return false
-}
-
-// validateOptions returns an error if the extension options
-// for the provided method are incompatible.
-func validateOptions(method *protogen.Method) error {
-	var set []*protoimpl.ExtensionInfo
-	for _, ext := range gorumsCallTypes {
-		if hasMethodOption(method, ext) {
-			set = append(set, ext)
-		}
-	}
-	switch {
-	case len(set) > 1:
-		return fmt.Errorf("%s.%s: options '%s' and '%s' cannot be combined", method.Parent.Desc.Name(), method.Desc.Name(),
-			set[0].TypeDescriptor().FullName(), set[1].TypeDescriptor().FullName())
-
-	case !hasMethodOption(method, gorums.E_Multicast) && method.Desc.IsStreamingClient():
-		return optionErrorf("is required for client-server stream methods", method, gorums.E_Multicast)
-
-	case !hasMethodOption(method, gorums.E_Quorumcall) && method.Desc.IsStreamingServer():
-		return optionErrorf("is required for server-client stream methods", method, gorums.E_Quorumcall)
-	}
-	return nil
-}
-
-func optionErrorf(s string, method *protogen.Method, ext *protoimpl.ExtensionInfo) error {
-	return fmt.Errorf("%s.%s: option '%s' "+s, method.Parent.Desc.Name(), method.Desc.Name(), ext.TypeDescriptor().FullName())
+	impl := clientNamesOf(method.Parent, info.client).Impl
+	return mustExecute(parseTemplate(name, info.template), methodData{g, method, impl, decl})
 }

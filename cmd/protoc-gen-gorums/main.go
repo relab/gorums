@@ -57,18 +57,6 @@ func main() {
 		gen.SupportedFeatures = supportedFeatures
 		gen.SupportedEditionsMinimum = supportedEditionsMinimum
 		gen.SupportedEditionsMaximum = supportedEditionsMaximum
-		for _, f := range gen.Files {
-			if !f.Generate {
-				continue
-			}
-			generate := gengorums.GenerateFile
-			if *dev {
-				generate = gengorums.GenerateDevFiles
-			}
-			if err := generate(gen, f); err != nil {
-				return err
-			}
-		}
-		return nil
+		return gengorums.Generate(gen, *dev)
 	})
 }

@@ -95,7 +95,7 @@ godoc shows the doc comments of the interface methods.
 
 The server interface `SServer` and the function `RegisterSServer` come from `gengorums/template_server.go`.
 
-In dev mode, the generator writes one `dev/zorums_{name}_gorums.pb.go` file for each entry of `gorumsCallTypesInfo` in `gengorums/generate.go`:
+In dev mode, the generator writes one `dev/zorums_{name}_gorums.pb.go` file for the client interfaces, for the server interface, and for each entry of `gorumsCallTypesInfo` in `gengorums/calltype.go`:
 
 | Dev file                         | Template                 | Contents                                       |
 | -------------------------------- | ------------------------ | ---------------------------------------------- |

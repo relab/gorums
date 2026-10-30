@@ -19,7 +19,7 @@ var remoteCallComment = `
 var remoteCallVar = `
 {{$genFile := .GenFile}}
 {{$rpc := use "gorumsimpl.RemoteCall" .GenFile}}
-{{$impl := printf "%sNodeClient" (unexport $service)}}
+{{$impl := .Impl}}
 {{$local := localNames "c ctx in" $in $out $context $rpc}}
 `
 

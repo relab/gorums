@@ -4,7 +4,7 @@ var mcVar = `
 {{$genFile := .GenFile}}
 {{$multicast := use "gorumsimpl.Multicast" .GenFile}}
 {{$onewayCall := use "gorums.OnewayCall" .GenFile}}
-{{$impl := printf "%sClient" (unexport $service)}}
+{{$impl := .Impl}}
 {{$local := localNames "c ctx in" $in $context $multicast}}
 `
 

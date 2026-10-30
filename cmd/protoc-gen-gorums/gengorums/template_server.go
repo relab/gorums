@@ -2,11 +2,47 @@ package gengorums
 
 import "google.golang.org/protobuf/compiler/protogen"
 
-// serverIdents returns the package-level identifiers that [server] declares
-// for the given service.
-func serverIdents(service *protogen.Service) []string {
-	server := service.GoName + "Server"
-	return []string{server, "Register" + server}
+// serverNames holds the package-level identifiers that [genServer] declares
+// for a service. The server templates take them as data, so that the templates
+// and [serviceIdents] agree on the names.
+type serverNames struct {
+	// Interface is the name of the server interface.
+	Interface string
+	// Register is the name of the function that registers an implementation.
+	Register string
+}
+
+// serverNamesOf returns the identifiers that [genServer] declares for the
+// given service.
+func serverNamesOf(service *protogen.Service) serverNames {
+	name := service.GoName + serverSuffix
+	return serverNames{Interface: name, Register: registerPrefix + name}
+}
+
+// idents returns the names as a list.
+func (n serverNames) idents() []string {
+	return []string{n.Interface, n.Register}
+}
+
+// genServer generates the server interface and registration function of each
+// service.
+func genServer(g *protogen.GeneratedFile, services []*protogen.Service) {
+	// serverService is a service with the names that the server templates
+	// declare for it.
+	type serverService struct {
+		Service *protogen.Service
+		Names   serverNames
+	}
+	// serverData is the data of the server template.
+	type serverData struct {
+		GenFile  *protogen.GeneratedFile
+		Services []serverService
+	}
+	data := serverData{GenFile: g}
+	for _, service := range services {
+		data.Services = append(data.Services, serverService{service, serverNamesOf(service)})
+	}
+	g.P(mustExecute(parseTemplate("server", server), data))
 }
 
 var serverVariables = `
@@ -16,10 +52,10 @@ var serverVariables = `
 var serverInterface = `
 {{$genFile := .GenFile}}
 {{range .Services -}}
-{{$service := .GoName}}
-// {{$service}} is the server-side API for the {{$service}} Service
-type {{$service}}Server interface {
-	{{- range .Methods}}
+{{$service := .Service.GoName}}
+// {{.Names.Interface}} is the server-side API for the {{$service}} Service
+type {{.Names.Interface}} interface {
+	{{- range .Service.Methods}}
 	{{- if isOneway .}}
 	{{.GoName}}({{$context}}, *{{in $genFile .}})
 	{{- else if isStreamingServer .}}
@@ -39,11 +75,11 @@ var registerInterface = `
 {{$newMessage := use "gorums.NewResponseMessage" $genFile}}
 {{$gorumsServer := use "gorums.Server" $genFile}}
 {{range .Services -}}
-{{$service := .GoName}}
-{{$reg := localNames "srv impl" $context $gorumsMessage $asProto $newMessage (methodTypes $genFile .)}}
+{{$names := .Names}}
+{{$reg := localNames "srv impl" $context $gorumsMessage $asProto $newMessage (methodTypes $genFile .Service)}}
 
-func Register{{$service}}Server({{$reg.srv}} *{{$gorumsServer}}, {{$reg.impl}} {{$service}}Server) {
-	{{- range .Methods}}
+func {{$names.Register}}({{$reg.srv}} *{{$gorumsServer}}, {{$reg.impl}} {{$names.Interface}}) {
+	{{- range .Service.Methods}}
 	{{- $local := localNames "ctx in req resp err out" $context $gorumsMessage $asProto $newMessage (in $genFile .) (out $genFile .) $reg.impl}}
 	{{$reg.srv}}.RegisterHandler("{{.Desc.FullName}}", func({{$local.ctx}} {{$context}}, {{$local.in}} *{{$gorumsMessage}}) (*{{$gorumsMessage}}, error) {
 		{{$local.req}} := {{$asProto}}[*{{in $genFile .}}]({{$local.in}})
