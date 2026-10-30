@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -14,6 +15,9 @@ import (
 	"github.com/relab/gorums/internal/testutils/mock"
 	"github.com/relab/gorums/internal/testutils/mockcall"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -288,6 +292,48 @@ func TestRemoteCallTimedOut(t *testing.T) {
 	}
 	if response != nil {
 		t.Fatalf("Unexpected response, got: %v, want: %v", response, nil)
+	}
+}
+
+// TestRemoteCallOversizedRequest verifies that a request larger than the
+// client's send limit or the server's receive limit fails at once with
+// ResourceExhausted instead of being sent again until its context ends, and
+// that the node still serves the next call. A one-way request fails only
+// against the client's limit, since its send completes before the server
+// rejects it.
+func TestRemoteCallOversizedRequest(t *testing.T) {
+	const limit = 256
+	tests := []struct {
+		name   string
+		opt    gorumstest.Option
+		oneway bool
+	}{
+		{name: "ClientSendLimit", opt: gorums.WithGRPCDialOptions(grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(limit)))},
+		{name: "ClientSendLimit/Oneway", opt: gorums.WithGRPCDialOptions(grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(limit))), oneway: true},
+		{name: "ServerRecvLimit", opt: gorums.WithGRPCServerOptions(grpc.MaxRecvMsgSize(limit))},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node := gorumstest.Node(t, nil, tt.opt)
+			ctx := gorumstest.Context(t, 5*time.Second)
+			large := strings.Repeat("x", 2*limit)
+			var err error
+			if tt.oneway {
+				err = mockcall.Unicast(ctx, node, large).Send()
+			} else {
+				_, err = mockcall.RemoteCall(ctx, node, large)
+			}
+			if got := status.Code(err); got != codes.ResourceExhausted {
+				t.Errorf("oversized request: code = %v, want %v (error: %v)", got, codes.ResourceExhausted, err)
+			}
+			if got := node.PendingCount(); got != 0 {
+				t.Errorf("pending calls = %d, want 0", got)
+			}
+			ctx = gorumstest.Context(t, 5*time.Second)
+			if _, err := mockcall.RemoteCall(ctx, node, "small"); err != nil {
+				t.Errorf("next call: %v", err)
+			}
+		})
 	}
 }
 

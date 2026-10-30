@@ -1712,7 +1712,21 @@ Connection state is optimistic, so it does not confirm that the server accepted 
 
 With one-way-only traffic and GOAWAY rotation that keeps every stream shorter than 2 s, `LastErr` can keep a stale refusal after the server accepts again, even while messages reach the server.
 
-A stream that ends with any other status, or that ends after it delivered a message, is lost, not refused: the node resends its two-way calls on a new stream.
+A stream that ends with any other status (except `codes.ResourceExhausted`; see [Oversized Requests](#oversized-requests)), or that ends after it delivered a message, is lost, not refused: the node resends its two-way calls on a new stream.
+
+## Oversized Requests
+
+gRPC limits the size of a message.
+A client rejects a request larger than its `grpc.MaxCallSendMsgSize`, which is unlimited by default.
+A server rejects a request larger than its `grpc.MaxRecvMsgSize`, which is 4 MiB by default.
+In both cases, gRPC ends the whole stream with `codes.ResourceExhausted`.
+
+A new stream would end the same way, so the node does not resend the calls on that stream:
+
+* The oversized call fails with `codes.ResourceExhausted`.
+* Other two-way and streaming calls still waiting on that stream also fail with `codes.ResourceExhausted`, since the node cannot tell which request was too large.
+* A one-way call fails with `codes.ResourceExhausted` only if it exceeds the client's limit. A one-way call that exceeds only the server's limit counts as sent.
+* The node stays usable: a later call opens a new stream to the same server.
 
 ## Working with Configurations
 

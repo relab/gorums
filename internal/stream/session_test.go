@@ -462,8 +462,9 @@ func responseErr(t *testing.T, ch <-chan response, what string) error {
 }
 
 // TestSessionRefusalFailsPendingCalls verifies that an outbound session whose
-// stream ends with a refusal code before it delivered a frame fails its
-// pending calls with the refusal, and that every other end retries them.
+// stream ends with a refusal code before it delivered a frame, or with
+// ResourceExhausted at any time, fails its pending calls with that status, and
+// that every other end retries them.
 func TestSessionRefusalFailsPendingCalls(t *testing.T) {
 	refusal := func(code codes.Code) error { return status.Error(code, "refused by test") }
 	tests := []struct {
@@ -477,6 +478,8 @@ func TestSessionRefusalFailsPendingCalls(t *testing.T) {
 		{name: "PermissionDenied", err: refusal(codes.PermissionDenied), wantCode: codes.PermissionDenied},
 		{name: "InvalidArgument", err: refusal(codes.InvalidArgument), wantCode: codes.InvalidArgument},
 		{name: "Unimplemented", err: refusal(codes.Unimplemented), wantCode: codes.Unimplemented},
+		{name: "ResourceExhausted", err: refusal(codes.ResourceExhausted), wantCode: codes.ResourceExhausted},
+		{name: "ResourceExhaustedAfterFrame", err: refusal(codes.ResourceExhausted), afterFrame: true, wantCode: codes.ResourceExhausted},
 		{name: "Unavailable", err: refusal(codes.Unavailable)},
 		{name: "Unknown", err: refusal(codes.Unknown)},
 		{name: "Canceled", err: refusal(codes.Canceled)},
@@ -525,6 +528,30 @@ func TestSessionRefusalFailsPendingCalls(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestSessionSendResourceExhaustedFailsPendingCalls verifies that a send that
+// fails locally with ResourceExhausted fails the request and the other pending
+// calls with that status, instead of sending them again on a new stream that
+// would end the same way.
+func TestSessionSendResourceExhaustedFailsPendingCalls(t *testing.T) {
+	sizeErr := status.Error(codes.ResourceExhausted, "trying to send message larger than max")
+	s, _ := newScriptedSession(t, sizeErr, true)
+	oversized := make(chan response, 1)
+	other := make(chan response, 1)
+	s.pending.add(2, Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 2}.Build(), ResponseChan: other})
+	req := Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), ResponseChan: oversized}
+	if left := s.sendLoop(&req); left != nil {
+		t.Fatalf("sendLoop returned unsent request %d", left.Msg.GetMessageSeqNo())
+	}
+	for what, ch := range map[string]chan response{"oversized call": oversized, "other call": other} {
+		if err := responseErr(t, ch, what); !errors.Is(err, sizeErr) {
+			t.Errorf("%s failed with %v, want %v", what, err, sizeErr)
+		}
+	}
+	if got := len(s.queue.ch); got != 0 {
+		t.Errorf("requeued %d calls, want 0", got)
 	}
 }
 
