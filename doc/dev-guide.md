@@ -380,6 +380,9 @@ The session's `handoff` state ensures that exactly one goroutine disposes of the
 The session's `verdict` channel closes when the stream delivers its first frame or receiving ends; the run loop waits for it after a session ends, and then reads whether the server refused the stream.
 A one-way send that fails this way also waits for the verdict, so that it fails with the refusal too.
 If a frame arrives after the failed send, the stream was accepted: receiving delivers the frames that the stream buffered, and retries the calls still pending when `Recv` fails.
+An outbound `Send` that returns `ResourceExhausted` reports a local size rejection, so the rejected request fails with that status and is removed from the pending table before either loop can retry it.
+The outbound send holds `sendMu` until that removal; disposal of pending calls waits for it after canceling the stream to unblock any send in progress.
+gRPC aborts the stream on the size error, so other pending calls follow the normal stream-loss policy.
 
 ```mermaid
 stateDiagram-v2

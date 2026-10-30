@@ -5,8 +5,12 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
 	"sync/atomic"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // BidiStream abstracts both client-side and server-side bidirectional streams.
@@ -36,6 +40,10 @@ type session struct {
 	requeue bool
 
 	pending pendingCalls
+	// sendMu lets an outbound send remove a locally rejected request before
+	// the receive loop disposes of pending calls. Cancel the stream before
+	// waiting for this mutex, so a send blocked on flow control can return.
+	sendMu sync.Mutex
 
 	drain       chan struct{} // closed when the session starts draining
 	draining    atomic.Bool
@@ -118,9 +126,33 @@ func (s *session) sendLoop(req *Request) *Request {
 // A two-way request must already be pending; a one-way request is confirmed
 // once it is sent.
 func (s *session) send(req Request) bool {
+	if s.requeue {
+		s.sendMu.Lock()
+		if s.ended() {
+			s.sendMu.Unlock()
+			return false
+		}
+	}
 	s.sendStart.Store(time.Now().UnixNano())
 	err := s.stream.Send(req.Msg)
 	s.sendStart.Store(0)
+	// A client's Send returns local errors directly; remote errors arrive
+	// through Recv, with Send returning io.EOF. A local size rejection must
+	// leave the pending table before either loop can retry calls.
+	tooLarge := s.requeue && status.Code(err) == codes.ResourceExhausted
+	if tooLarge {
+		s.pending.remove(req.Msg.GetMessageSeqNo())
+	}
+	if s.requeue {
+		s.sendMu.Unlock()
+	}
+	if tooLarge {
+		req.sendErrorResponse(s.id, err)
+		// gRPC aborts the stream on a local send error. Other pending
+		// calls still follow the usual stream-loss policy.
+		s.sendFailed(err)
+		return false
+	}
 	if err != nil {
 		receiveDecides := s.sendFailed(err)
 		if !req.wantServerResponse() {
@@ -219,7 +251,7 @@ func (s *session) receiveFailed(err error) {
 	case s.refusal != nil:
 		s.recordHealth(err)
 		s.cancel()
-		for _, req := range s.pending.drain() {
+		for _, req := range s.drainPending() {
 			req.sendErrorResponse(s.id, err)
 		}
 	case prev == streamSendFailed:
@@ -271,9 +303,19 @@ func (s *session) fail(err error) {
 // [session.retry]. It is idempotent.
 func (s *session) end() {
 	s.cancel()
-	for _, req := range s.pending.drain() {
+	for _, req := range s.drainPending() {
 		s.retry(req)
 	}
+}
+
+// drainPending removes pending calls after an outbound send has resolved any
+// local size rejection. The stream must be canceled before calling it.
+func (s *session) drainPending() []Request {
+	if s.requeue {
+		s.sendMu.Lock()
+		defer s.sendMu.Unlock()
+	}
+	return s.pending.drain()
 }
 
 // ended reports whether the session has ended.

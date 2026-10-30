@@ -62,6 +62,8 @@ type OutboundOptions struct {
 // new stream. Calls that do not fit in the send queue fail with
 // [ErrSendQueueFull]. Streaming calls fail with [ErrStreamDown] instead. They
 // are not sent again, since they may already have received responses.
+// A request rejected by the local send-size check fails with
+// codes.ResourceExhausted and is not sent again.
 //
 // A server that shuts down gracefully first tells the client to stop using
 // the connection (a GOAWAY). The channel then sends new calls on a new

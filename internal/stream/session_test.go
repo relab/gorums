@@ -461,6 +461,65 @@ func responseErr(t *testing.T, ch <-chan response, what string) error {
 	}
 }
 
+// delayedSendErrorStream lets receiving end before Send returns its local error.
+type delayedSendErrorStream struct {
+	BidiStream
+	entered chan struct{}
+	resume  chan struct{}
+	err     error
+}
+
+func (s *delayedSendErrorStream) Send(*Message) error {
+	close(s.entered)
+	<-s.resume
+	return s.err
+}
+
+// TestSessionLocalSizeErrorBeforeRetry verifies that receiving cannot retry
+// a request whose Send is still returning a local size error.
+func TestSessionLocalSizeErrorBeforeRetry(t *testing.T) {
+	for _, streaming := range []bool{false, true} {
+		name := "TwoWay"
+		if streaming {
+			name = "Streaming"
+		}
+		t.Run(name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				localErr := status.Error(codes.ResourceExhausted, "request exceeds send limit")
+				s, _ := newScriptedSession(t, nil, true)
+				st := &delayedSendErrorStream{entered: make(chan struct{}), resume: make(chan struct{}), err: localErr}
+				s.stream = st
+				responseChan := make(chan response, 2)
+				s.queue.push(Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), Streaming: streaming, ResponseChan: responseChan}, false)
+				// A different call was already sent and must still be retried.
+				s.pending.add(2, Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 2}.Build(), ResponseChan: make(chan response, 1)})
+				go s.sendLoop(nil)
+				<-st.entered
+				go s.receiveFailed(localErr)
+				<-s.done // receiving canceled the stream while Send is still blocked
+				close(st.resume)
+				synctest.Wait()
+				if err := responseErr(t, responseChan, "oversized request"); !errors.Is(err, localErr) {
+					t.Errorf("request error = %v, want %v", err, localErr)
+				}
+				if got := len(responseChan); got != 0 {
+					t.Errorf("extra responses = %d, want 0", got)
+				}
+				var got []uint64
+				for _, req := range drain(s.queue.ch) {
+					got = append(got, req.Msg.GetMessageSeqNo())
+				}
+				if !slices.Equal(got, []uint64{2}) {
+					t.Errorf("requeued IDs = %v, want [2]", got)
+				}
+				if got := s.pending.len(); got != 0 {
+					t.Errorf("pending calls = %d, want 0", got)
+				}
+			})
+		})
+	}
+}
+
 // TestSessionRefusalFailsPendingCalls verifies that an outbound session whose
 // stream ends with a refusal code before it delivered a frame fails its
 // pending calls with the refusal, and that every other end retries them.
@@ -478,6 +537,7 @@ func TestSessionRefusalFailsPendingCalls(t *testing.T) {
 		{name: "InvalidArgument", err: refusal(codes.InvalidArgument), wantCode: codes.InvalidArgument},
 		{name: "Unimplemented", err: refusal(codes.Unimplemented), wantCode: codes.Unimplemented},
 		{name: "Unavailable", err: refusal(codes.Unavailable)},
+		{name: "ResourceExhausted", err: refusal(codes.ResourceExhausted)},
 		{name: "Unknown", err: refusal(codes.Unknown)},
 		{name: "Canceled", err: refusal(codes.Canceled)},
 		{name: "EOF", err: io.EOF},

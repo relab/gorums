@@ -1655,7 +1655,7 @@ func TestChannelVerifyFailureBacksOff(t *testing.T) {
 // stream that ends with a status other than a refusal, before the stream
 // delivered a frame, is sent again on a new stream.
 func TestChannelLostStreamBeforeFrameRetries(t *testing.T) {
-	for _, code := range []codes.Code{codes.Unavailable, codes.Unknown, codes.Internal} {
+	for _, code := range []codes.Code{codes.Unavailable, codes.Unknown, codes.Internal, codes.ResourceExhausted} {
 		t.Run(code.String(), func(t *testing.T) {
 			var streams atomic.Int32
 			serverFn := func(stream Gorums_NodeStreamServer) error {

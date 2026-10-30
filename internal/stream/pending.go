@@ -68,6 +68,15 @@ func (p *pendingCalls) take(msgID uint64) (Request, bool) {
 	return call.req, ok
 }
 
+// remove removes the call for msgID, including a streaming call.
+func (p *pendingCalls) remove(msgID uint64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if call, ok := p.calls[msgID]; ok {
+		p.deleteLocked(msgID, call)
+	}
+}
+
 // drain removes and returns all calls and makes later adds fail.
 func (p *pendingCalls) drain() []Request {
 	p.mu.Lock()
