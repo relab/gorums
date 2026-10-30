@@ -102,7 +102,7 @@ In dev mode, the generator writes one `dev/zorums_{name}_gorums.pb.go` file for 
 | `zorums_client_gorums.pb.go`     | `template_client.go`     | client interfaces, constructors, and structs   |
 | `zorums_quorumcall_gorums.pb.go` | `template_quorumcall.go` | quorum call and streaming quorum call methods  |
 | `zorums_multicast_gorums.pb.go`  | `template_multicast.go`  | multicast methods                              |
-| `zorums_remotecall_gorums.pb.go` | `template_rpc.go`        | remote call methods                            |
+| `zorums_remotecall_gorums.pb.go` | `template_remotecall.go` | remote call methods                            |
 | `zorums_unicast_gorums.pb.go`    | `template_unicast.go`    | unicast methods                                |
 | `zorums_server_gorums.pb.go`     | `template_server.go`     | server interface and handler registration      |
 
