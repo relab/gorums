@@ -20,9 +20,6 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// CorrectableEcho is a correctable object for quorum calls returning *Echo.
-type CorrectableEcho = *gorums.Correctable[*Echo]
-
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
