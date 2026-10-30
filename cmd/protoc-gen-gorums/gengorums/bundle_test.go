@@ -12,7 +12,7 @@ import (
 
 // wantReservedIdents is the set of reserved identifiers that the static code
 // of the dev package exports.
-var wantReservedIdents = []string{"Config", "ID", "Node"}
+var wantReservedIdents = []string{"Config", "Correctable", "ID", "Node"}
 
 // TestBundleReservedIdentifiers pins the set of identifiers that the bundler
 // marks as reserved. The generator emits the static code that declares them

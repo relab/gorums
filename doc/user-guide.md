@@ -175,12 +175,11 @@ message WriteRequest {
 
 For the `unicast` and `multicast` call types, the response message type will be unused by Gorums.
 
-> **Generated names:** Gorums reserves the names `Config`, `ID`, and `Node`.
+> **Generated names:** Gorums reserves the names `Config`, `Correctable`, `ID`, and `Node`.
 > A message field named `ID` is fine; only type names are reserved.
 > Gorums declares type aliases with these names in the generated `gorums.pb.go` file of each Go package.
 > For a service `S`, Gorums also generates the client names `SClient`, `NewSClient`, and `sClient`, and the node client names `SNodeClient`, `NewSNodeClient`, and `sNodeClient`, but only for a client that the service has.
 > It also generates the server names `SServer` and `RegisterSServer`.
-> For each response type `X` of a quorum call, Gorums generates the type alias `CorrectableX`.
 > Messages, enums, enum values, and oneof wrapper types in any `.proto` file of the same Go package cannot use these names.
 > An RPC method may have any name, also `Config` or `Node`, because the clients have no helper methods.
 > The generator reports an error for a `.proto` file that uses one of these names.
@@ -789,12 +788,11 @@ reply, level, err = corr.Get()
 `Correctable(n)` panics if `n` is not positive.
 It panics before it sends any request.
 
-For each response type `X` of a quorum call, Gorums generates the type alias `CorrectableX` for `*gorums.Correctable[*X]`.
 Type inference covers most uses, as above.
-To declare a variable or field that holds a correctable result, use the alias:
+To declare a variable or field that holds a correctable result, use the generic alias `Correctable`, which Gorums declares in each Go package:
 
 ```go
-var corr CorrectableReadResponse
+var corr *pb.Correctable[*pb.ReadResponse]
 ```
 
 ### Send-Timing Model
@@ -1121,24 +1119,11 @@ Two services in a Go package must not generate the same name.
 For example, service `NewS` generates the interface `NewSClient`, and service `S` generates the constructor `NewSClient`.
 The generator reports such a collision with the names of both services.
 
-Gorums declares the `Config`, `ID`, and `Node` aliases in the `gorums.pb.go` file of each Go package.
-Every `protoc` run that generates Gorums code for the package writes this file with the same content, so you can compile the `.proto` files of a package in one run or in several.
+Gorums declares the `Config`, `Correctable`, `ID`, and `Node` aliases in the `gorums.pb.go` file of each Go package.
+Every `protoc` run that generates Gorums code for the package writes this file with the same content, so you can compile the `.proto` files of a package in one run or in several, in any order.
 If you remove the last Gorums `.proto` file of a package, delete the package's `gorums.pb.go` file too; no run removes it.
-Gorums declares each `CorrectableX` alias in only one generated file per Go package, even if the quorum calls of several files return `X`.
-Such an alias belongs to the first `.proto` file of the package that needs it.
-Imported files come first.
-The simplest way is to compile all `.proto` files of a Go package in one `protoc` run.
-The generator then emits each alias once and checks the generated names across all files of the package.
-The quorum calls of a Go package must not return two types named `X` from different Go packages, since both map to `CorrectableX`; the generator reports this as an error.
-
-You can also compile the files of a package in separate runs.
-For example, `b.proto` imports `a.proto`, and both files are in one Go package.
-The run for `b.proto` reads `a.proto` as an import.
-It then leaves out the `CorrectableX` aliases that `a.proto` owns, because the run for `a.proto` declares them.
-The order of the runs does not matter.
-If neither file imports the other, directly or indirectly, each run declares the `CorrectableX` aliases of its own quorum calls.
-Thus, compile two such files in one run if the quorum calls of both return the same type `X`.
-Otherwise, both runs declare `CorrectableX`, and the package does not compile.
+A run checks the generated names across the files of the package that it compiles or imports.
+Thus, a single run for all `.proto` files of a Go package checks all names.
 
 A Go package may also hold plain gRPC services.
 Compile their `.proto` files with `protoc-gen-go-grpc` and without `--gorums_out`.

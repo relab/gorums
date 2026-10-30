@@ -146,23 +146,16 @@ import "gorums.proto";
 // emits into the gorums.pb.go file of each Go package.
 var aliasDecl = regexp.MustCompile(`Config\s*=\s*gorums\.Config\b`)
 
-// typeAliasDecl matches the declaration of a Correctable alias and captures
-// its name.
-var typeAliasDecl = regexp.MustCompile(`(?m)^type (Correctable\w+) =`)
-
 // TestGeneratePackageFiles checks that the code generated for several proto
 // files of one Go package compiles as one package. Each Go package with
 // Gorums methods gets one gorums.pb.go file, which alone declares the static
-// aliases (Config, ID, and Node). Each Correctable alias is declared only in
-// the Gorums file of the first proto file whose quorum calls produce it, in
-// protoc's file order. Imported files come first in that order.
+// aliases (Config, ID, Node, and Correctable).
 func TestGeneratePackageFiles(t *testing.T) {
 	tests := []struct {
 		name          string
-		sources       map[string]string   // declarations, keyed by proto file name
-		packages      map[string]string   // Go package of a proto file, if not pkgfiles
-		aliasPackages []string            // Go packages that get a gorums.pb.go file
-		typeAliases   map[string][]string // Correctable aliases declared, keyed by proto file
+		sources       map[string]string // declarations, keyed by proto file name
+		packages      map[string]string // Go package of a proto file, if not pkgfiles
+		aliasPackages []string          // Go packages that get a gorums.pb.go file
 	}{
 		{
 			name: "OneServicePerFile",
@@ -194,13 +187,9 @@ message BetaResponse {
 }`,
 			},
 			aliasPackages: []string{"pkgfiles"},
-			typeAliases: map[string][]string{
-				"alpha.proto": {"CorrectableAlphaResponse"},
-				"beta.proto":  {"CorrectableBetaResponse"},
-			},
 		},
 		{
-			// Both services return Response; only alpha.proto declares its aliases.
+			// Both services return Response.
 			name: "SharedResponseType",
 			sources: map[string]string{
 				"alpha.proto": `
@@ -225,9 +214,6 @@ service Beta {
 }`,
 			},
 			aliasPackages: []string{"pkgfiles"},
-			typeAliases: map[string][]string{
-				"alpha.proto": {"CorrectableResponse"},
-			},
 		},
 		{
 			// The first file has no Gorums methods and gets no Gorums file.
@@ -250,14 +236,10 @@ service Beta {
 }`,
 			},
 			aliasPackages: []string{"pkgfiles"},
-			typeAliases: map[string][]string{
-				"b.proto": {"CorrectableResponse"},
-			},
 		},
 		{
 			// protoc places the imported b.proto before a.proto. Both files
-			// return Response, so b.proto declares its aliases; a.proto
-			// declares only the aliases of AlphaResponse.
+			// return Response.
 			name: "ImportedFileFirst",
 			sources: map[string]string{
 				"a.proto": `
@@ -288,13 +270,9 @@ message Response {
 }`,
 			},
 			aliasPackages: []string{"pkgfiles"},
-			typeAliases: map[string][]string{
-				"a.proto": {"CorrectableAlphaResponse"},
-				"b.proto": {"CorrectableResponse"},
-			},
 		},
 		{
-			// Each Go package declares its own aliases of Response.
+			// Each Go package gets its own gorums.pb.go file.
 			name: "TwoGoPackages",
 			sources: map[string]string{
 				"alpha.proto": `
@@ -324,10 +302,6 @@ message Response {
 			},
 			packages:      map[string]string{"beta.proto": "pkgother"},
 			aliasPackages: []string{"pkgfiles", "pkgother"},
-			typeAliases: map[string][]string{
-				"alpha.proto": {"CorrectableResponse"},
-				"beta.proto":  {"CorrectableResponse"},
-			},
 		},
 	}
 	for _, tt := range tests {
@@ -352,7 +326,6 @@ message Response {
 			}
 			compileWithAliases(t, files, tt.aliasPackages)
 			checkAliasFiles(t, files, tt.aliasPackages)
-			checkTypeAliases(t, files, tt.typeAliases)
 		})
 	}
 }
@@ -360,13 +333,10 @@ message Response {
 // TestGeneratePackageFilesSeparateRuns checks that the code generated for the
 // proto files of one Go package in separate protoc runs compiles as one
 // package. Each run generates one file, and every run with Gorums methods
-// writes the same gorums.pb.go file. A run leaves out the Correctable aliases
-// that an imported file of the package owns, because the run of the imported
-// file declares them. A file whose service is plain gRPC is generated
-// without Gorums.
+// writes the same gorums.pb.go file. A file whose service is plain gRPC is
+// generated without Gorums.
 func TestGeneratePackageFilesSeparateRuns(t *testing.T) {
-	// imported declares the Correctable alias of Response; importing
-	// declares only the Correctable alias of OtherResponse.
+	// importing uses the messages of imported.
 	const imported = `
 service Imported {
 	rpc Read(Request) returns (Response) {
@@ -428,11 +398,10 @@ message Response {
 	string value = 1;
 }`
 	tests := []struct {
-		name        string
-		sources     map[string]string   // declarations, keyed by proto file name
-		runs        []string            // the proto file of each run, in run order
-		noGorums    []string            // proto files whose run has no Gorums
-		typeAliases map[string][]string // Correctable aliases declared, keyed by proto file
+		name     string
+		sources  map[string]string // declarations, keyed by proto file name
+		runs     []string          // the proto file of each run, in run order
+		noGorums []string          // proto files whose run has no Gorums
 	}{
 		{
 			name: "ImportedFileFirst",
@@ -441,10 +410,6 @@ message Response {
 				"b.proto": `import "a.proto";` + importing,
 			},
 			runs: []string{"a.proto", "b.proto"},
-			typeAliases: map[string][]string{
-				"a.proto": {"CorrectableResponse"},
-				"b.proto": {"CorrectableOtherResponse"},
-			},
 		},
 		{
 			name: "ImportingFileFirst",
@@ -453,19 +418,11 @@ message Response {
 				"b.proto": imported,
 			},
 			runs: []string{"b.proto", "a.proto"},
-			typeAliases: map[string][]string{
-				"a.proto": {"CorrectableOtherResponse"},
-				"b.proto": {"CorrectableResponse"},
-			},
 		},
 		{
 			name:    "NoImport",
 			sources: map[string]string{"a.proto": alpha, "b.proto": beta},
 			runs:    []string{"a.proto", "b.proto"},
-			typeAliases: map[string][]string{
-				"a.proto": {"CorrectableAlphaResponse"},
-				"b.proto": {"CorrectableBetaResponse"},
-			},
 		},
 		{
 			// The imported plain.proto comes first in protoc's file order of
@@ -482,9 +439,6 @@ service Storage {
 			},
 			runs:     []string{"plain.proto", "service.proto"},
 			noGorums: []string{"plain.proto"},
-			typeAliases: map[string][]string{
-				"service.proto": {"CorrectableResponse"},
-			},
 		},
 	}
 	for _, tt := range tests {
@@ -515,28 +469,7 @@ service Storage {
 			}
 			compileWithAliases(t, files, []string{"pkgfiles"})
 			checkAliasFiles(t, files, []string{"pkgfiles"})
-			checkTypeAliases(t, files, tt.typeAliases)
 		})
-	}
-}
-
-// checkTypeAliases checks that each generated Gorums file declares exactly
-// the Correctable aliases listed for its proto file in want.
-func checkTypeAliases(t *testing.T, files map[string]string, want map[string][]string) {
-	t.Helper()
-	for _, name := range slices.Sorted(maps.Keys(files)) {
-		if !strings.HasSuffix(name, "_gorums.pb.go") {
-			continue
-		}
-		var got []string
-		for _, m := range typeAliasDecl.FindAllStringSubmatch(files[name], -1) {
-			got = append(got, m[1])
-		}
-		slices.Sort(got)
-		proto := strings.TrimSuffix(path.Base(name), "_gorums.pb.go") + ".proto"
-		if wantNames := slices.Sorted(slices.Values(want[proto])); !slices.Equal(got, wantNames) {
-			t.Errorf("%s declares type aliases %v, want %v", name, got, wantNames)
-		}
 	}
 }
 
@@ -566,7 +499,7 @@ func compileWithAliases(t *testing.T, files map[string]string, pkgs []string) {
 	t.Helper()
 	all := maps.Clone(files)
 	for _, pkg := range pkgs {
-		all[pkgDir(pkg)+"/use_aliases.go"] = "package " + pkg + "\n\nvar (\n\t_ Config\n\t_ ID\n\t_ *Node\n)\n"
+		all[pkgDir(pkg)+"/use_aliases.go"] = "package " + pkg + "\n\nvar (\n\t_ Config\n\t_ ID\n\t_ *Node\n\t_ *Correctable[ID]\n)\n"
 	}
 	gentest.Compile(t, all)
 }

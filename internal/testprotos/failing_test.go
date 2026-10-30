@@ -1,7 +1,6 @@
 package testprotos_test
 
 import (
-	"maps"
 	"strings"
 	"testing"
 
@@ -308,7 +307,7 @@ service NewFoo {
 			want:       "failing.proto: services Foo and NewFoo (other.proto) both generate the Gorums identifier NewFooNodeClient",
 		},
 		{
-			name: "MessageNamedAfterImportedAlias",
+			name: "ImportedMessageNamedCorrectable",
 			decl: `
 service Reserved {
 	rpc Read(Request) returns (Response) {
@@ -316,14 +315,14 @@ service Reserved {
 	}
 }`,
 			other: `
-message CorrectableResponse {
+message Correctable {
 	string value = 1;
 }
 service Other {
 	rpc Read(Request) returns (Response) {}
 }`,
 			importOnly: true,
-			want:       "other.proto: contains message CorrectableResponse, which is the Gorums identifier generated for service Reserved (failing.proto)",
+			want:       "other.proto: contains message Correctable, which is a reserved Gorums identifier",
 		},
 		{
 			name: "MessageNamedAfterPackageService",
@@ -368,9 +367,9 @@ service Reserved {
 			want: "failing.proto: contains message RegisterReservedServer, which is the Gorums identifier generated for service Reserved (failing.proto)",
 		},
 		{
-			name: "GeneratedCorrectableMessage",
+			name: "ReservedCorrectableMessage",
 			decl: `
-message CorrectableResponse {
+message Correctable {
 	string value = 1;
 }
 service Reserved {
@@ -378,55 +377,7 @@ service Reserved {
 		option (gorums.quorumcall) = true;
 	}
 }`,
-			want: "failing.proto: contains message CorrectableResponse, which is the Gorums identifier generated for service Reserved (failing.proto)",
-		},
-		{
-			name: "PackageEnumNamedAfterCorrectable",
-			decl: `
-enum CorrectableResponse {
-	CORRECTABLE_RESPONSE_UNSPECIFIED = 0;
-}
-service Reserved {
-	rpc Read(Request) returns (Response) {}
-}`,
-			other: `
-service Other {
-	rpc Read(Request) returns (Response) {
-		option (gorums.quorumcall) = true;
-	}
-}`,
-			want: "failing.proto: contains enum CorrectableResponse, which is the Gorums identifier generated for service Other (other.proto)",
-		},
-		{
-			name: "TypeAliasAndClientIdent",
-			decl: `
-message FooClient {
-	string value = 1;
-}
-service CorrectableFoo {
-	rpc Read(Request) returns (Response) {
-		option (gorums.quorumcall) = true;
-	}
-}
-service Bar {
-	rpc Read(Request) returns (FooClient) {
-		option (gorums.quorumcall) = true;
-	}
-}`,
-			want: "failing.proto: services CorrectableFoo and Bar both generate the Gorums identifier CorrectableFooClient",
-		},
-		{
-			name: "TypeAliasAndOwnClientIdent",
-			decl: `
-message FooClient {
-	string value = 1;
-}
-service CorrectableFoo {
-	rpc Read(Request) returns (FooClient) {
-		option (gorums.quorumcall) = true;
-	}
-}`,
-			want: "failing.proto: service CorrectableFoo generates the Gorums identifier CorrectableFooClient twice",
+			want: "failing.proto: contains message Correctable, which is a reserved Gorums identifier",
 		},
 		{
 			name: "ClientStreamWithoutMulticast",
@@ -480,103 +431,6 @@ service Conflict {
 			}
 			dir := gentest.Inline(t, sources)
 			files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, protos...)
-			if err == nil {
-				t.Fatalf("Generate succeeded, want an error containing %q; generated %d files", tt.want, len(files))
-			}
-			if !strings.Contains(err.Error(), tt.want) {
-				t.Errorf("Generate error = %q, want it to contain %q", err, tt.want)
-			}
-		})
-	}
-}
-
-// TestFailingProtoFilesAliasResponseTypes verifies that the generator rejects
-// a Go package whose quorum calls return two different response types with the
-// same Go name, since both types map to one Correctable alias name.
-func TestFailingProtoFilesAliasResponseTypes(t *testing.T) {
-	responseProto := func(pkg string) string {
-		return `
-edition = "2023";
-
-package internal.testprotos.` + pkg + `;
-option go_package = "github.com/relab/gorums/internal/testprotos/` + pkg + `";
-
-message Request {
-	string value = 1;
-}
-message Response {
-	string value = 1;
-}
-`
-	}
-	serviceProto := func(decl string) string {
-		return `
-edition = "2023";
-
-package internal.testprotos.aliases;
-option go_package = "github.com/relab/gorums/internal/testprotos/aliases";
-
-import "gorums.proto";
-import "left.proto";
-import "right.proto";
-` + decl
-	}
-	alpha := serviceProto(`
-service Alpha {
-	rpc Read(internal.testprotos.left.Request) returns (internal.testprotos.left.Response) {
-		option (gorums.quorumcall) = true;
-	}
-}`)
-	beta := serviceProto(`
-service Beta {
-	rpc Read(internal.testprotos.right.Request) returns (internal.testprotos.right.Response) {
-		option (gorums.quorumcall) = true;
-	}
-}`)
-	gamma := serviceProto(`
-service Gamma {
-	rpc ReadLeft(internal.testprotos.left.Request) returns (internal.testprotos.left.Response) {
-		option (gorums.quorumcall) = true;
-	}
-	rpc ReadRight(internal.testprotos.right.Request) returns (internal.testprotos.right.Response) {
-		option (gorums.quorumcall) = true;
-	}
-}`)
-	const (
-		left  = "github.com/relab/gorums/internal/testprotos/left.Response"
-		right = "github.com/relab/gorums/internal/testprotos/right.Response"
-	)
-	tests := []struct {
-		name    string
-		sources map[string]string
-		protos  []string
-		want    string
-	}{
-		{
-			name:    "AlphaFirst",
-			sources: map[string]string{"alpha.proto": alpha, "beta.proto": beta},
-			protos:  []string{"alpha.proto", "beta.proto"},
-			want:    "alpha.proto: Alpha.Read returns " + left + " and Beta.Read (beta.proto) returns " + right + "; both map to the Gorums alias CorrectableResponse",
-		},
-		{
-			name:    "BetaFirst",
-			sources: map[string]string{"alpha.proto": alpha, "beta.proto": beta},
-			protos:  []string{"beta.proto", "alpha.proto"},
-			want:    "beta.proto: Beta.Read returns " + right + " and Alpha.Read (alpha.proto) returns " + left + "; both map to the Gorums alias CorrectableResponse",
-		},
-		{
-			name:    "OneService",
-			sources: map[string]string{"gamma.proto": gamma},
-			protos:  []string{"gamma.proto"},
-			want:    "gamma.proto: Gamma.ReadLeft returns " + left + " and Gamma.ReadRight returns " + right + "; both map to the Gorums alias CorrectableResponse",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			sources := map[string]string{"left.proto": responseProto("left"), "right.proto": responseProto("right")}
-			maps.Copy(sources, tt.sources)
-			dir := gentest.Inline(t, sources)
-			files, err := gentest.Generate(t, gentest.Options{ImportPaths: []string{dir}}, tt.protos...)
 			if err == nil {
 				t.Fatalf("Generate succeeded, want an error containing %q; generated %d files", tt.want, len(files))
 			}
