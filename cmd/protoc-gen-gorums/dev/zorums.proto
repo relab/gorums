@@ -10,14 +10,14 @@ import "gorums.proto";
 import "google/protobuf/empty.proto";
 
 message Request {
-    string Value = 1;
-    uint32 ID = 2;
+    string value = 1;
+    uint32 id = 2;
 }
 message Response {
-    int64 Result = 1;
+    int64 result = 1;
 }
 message MyResponse {
-    string Value = 1;
+    string value = 1;
 }
 
 // ZorumsService is not meant to be implemented.
@@ -29,24 +29,24 @@ message MyResponse {
 // options and call types, including imported message types and
 // multiple RPCs reusing the same input and output types.
 service ZorumsService {
-    // GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
-    // they are added to the _grpc.pb.go generated file.
-    rpc GRPCCall(Request) returns (Response) {}
+    // RemoteCall is a unary call to a single node; it tests the remote call
+    // method on the node client and its server handler.
+    rpc RemoteCall(Request) returns (Response) {}
 
     // ---------------------------------------------------------------
     // QuorumCall variants
     // ---------------------------------------------------------------
 
-    // QuorumCall plain.
+    // QuorumCall tests a plain quorum call.
     rpc QuorumCall(Request) returns (Response) {
         option (gorums.quorumcall) = true;
     }
-    // QuorumCallEmpty for testing imported message type.
-    rpc QuorumCallEmpty(google.protobuf.Empty) returns (Response) {
+    // QuorumCallWithEmptyRequest tests an imported message type as the request.
+    rpc QuorumCallWithEmptyRequest(google.protobuf.Empty) returns (Response) {
         option (gorums.quorumcall) = true;
     }
-    // QuorumCallEmpty2 for testing imported message type.
-    rpc QuorumCallEmpty2(Request) returns (google.protobuf.Empty) {
+    // QuorumCallWithEmptyResponse tests an imported message type as the response.
+    rpc QuorumCallWithEmptyResponse(Request) returns (google.protobuf.Empty) {
         option (gorums.quorumcall) = true;
     }
 
@@ -54,20 +54,22 @@ service ZorumsService {
     // Multicast variants
     // ------------------------------------------------------------------
 
-    // Multicast plain. Response type is not needed here.
-    rpc Multicast(Request) returns (Response) {
+    // MulticastWithResponse tests a multicast that declares a response type,
+    // which a multicast never returns.
+    rpc MulticastWithResponse(Request) returns (Response) {
         option (gorums.multicast) = true;
     }
-    // Multicast2 is testing whether multiple streams work.
-    rpc Multicast2(Request) returns (Response) {
+    // MulticastSecondMethod tests multiple multicast methods on one service.
+    rpc MulticastSecondMethod(Request) returns (Response) {
         option (gorums.multicast) = true;
     }
-    // Multicast3 is testing imported message type.
-    rpc Multicast3(Request) returns (google.protobuf.Empty) {
+    // MulticastWithEmptyResponse tests an imported message type as the response.
+    rpc MulticastWithEmptyResponse(Request) returns (google.protobuf.Empty) {
         option (gorums.multicast) = true;
     }
-    // Multicast4 is testing imported message type.
-    rpc Multicast4(google.protobuf.Empty) returns (google.protobuf.Empty) {
+    // MulticastWithEmptyRequestAndResponse tests an imported message type as both
+    // request and response.
+    rpc MulticastWithEmptyRequestAndResponse(google.protobuf.Empty) returns (google.protobuf.Empty) {
         option (gorums.multicast) = true;
     }
 
@@ -75,17 +77,18 @@ service ZorumsService {
     // Streaming quorum call variants
     // ---------------------------------------------------------------
 
-    // QuorumCallStream plain.
+    // QuorumCallStream tests a plain streaming quorum call.
     rpc QuorumCallStream(Request) returns (stream Response) {
         option (gorums.quorumcall) = true;
     }
-    // QuorumCallStreamWithEmpty for testing imported message type.
-    rpc QuorumCallStreamWithEmpty(Request) returns (stream google.protobuf.Empty) {
+    // QuorumCallStreamWithEmptyResponse tests an imported message type as the
+    // streamed response.
+    rpc QuorumCallStreamWithEmptyResponse(Request) returns (stream google.protobuf.Empty) {
         option (gorums.quorumcall) = true;
     }
-    // QuorumCallStreamWithEmpty2 for testing imported message type; with same return
-    // type as QuorumCallStream: Response.
-    rpc QuorumCallStreamWithEmpty2(google.protobuf.Empty) returns (stream Response) {
+    // QuorumCallStreamWithEmptyRequest tests an imported message type as the
+    // request, with the same streamed response type as QuorumCallStream.
+    rpc QuorumCallStreamWithEmptyRequest(google.protobuf.Empty) returns (stream Response) {
         option (gorums.quorumcall) = true;
     }
 
@@ -93,11 +96,13 @@ service ZorumsService {
     // Unicast
     // ---------------------------------------------------------------
 
+    // Unicast tests a plain unicast.
     rpc Unicast(Request) returns (Response) {
         option (gorums.unicast) = true;
     }
 
-    rpc Unicast2(Request) returns (google.protobuf.Empty) {
+    // UnicastWithEmptyResponse tests an imported message type as the response.
+    rpc UnicastWithEmptyResponse(Request) returns (google.protobuf.Empty) {
         option (gorums.unicast) = true;
     }
 }
