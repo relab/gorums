@@ -501,8 +501,8 @@ flowchart LR
 ### Call Engine (`internal/impl`)
 
 A call constructor takes the call's `context.Context` and its target directly: a `Config` for quorum calls and multicasts, and a `*Node` for remote calls and unicasts.
-It panics on an empty `Config`, when the generated method builds the call.
-On a nil `*Node`, `RemoteCall` returns `ErrNoNode`, and `Unicast` returns a `OnewayCall` that holds `ErrNoNode` and sends nothing.
+On an empty `Config`, the `CallContext` holds `ErrEmptyConfig`: a quorum call sends nothing, its terminal methods return the error, and its response iterator yields one response that holds the error; `Multicast` returns a `OnewayCall` that sends nothing and reports the error.
+On a nil `*Node`, `RemoteCall` returns `ErrNoNode`, and `Unicast` returns a `OnewayCall` whose `CallContext` holds `ErrNoNode` and that sends nothing.
 Each call constructor except `RemoteCall` builds a `CallContext` that holds the request, the target `Config`, the response channel, and the response iterator (`ResponseSeq`).
 A unicast's `CallContext` holds a one-node `Config`.
 A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`), as well as the `Correctable` future.

@@ -2,9 +2,7 @@ package impl
 
 import (
 	"context"
-	"fmt"
 	"math/rand/v2"
-	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -33,6 +31,9 @@ type CallContext[Req, Resp proto.Message] struct {
 
 	// oneway indicates whether this is a one-way call (for multicast).
 	oneway bool
+
+	// err, if set, is the error that the call reports instead of sending.
+	err error
 
 	// sendOnce ensures messages are sent exactly once, on the first
 	// call to sendNow. This deferred sending allows interceptors
@@ -73,14 +74,6 @@ func (c *CallContext[Req, Resp]) intercept(ics ...ClientInterceptor[Req, Resp]) 
 	}
 }
 
-// requireConfig panics if config is empty. The panic message names the call
-// type callType and the full method name method of the call.
-func requireConfig(callType, method string, config Config) {
-	if len(config) == 0 {
-		panic(fmt.Sprintf("gorums: %s %s needs a non-empty configuration", callType, strconv.Quote(method)))
-	}
-}
-
 // newQuorumCallContext constructs a CallContext for quorum calls (two-way, always returns responses).
 // A response channel is always created; streaming controls both its buffer size and the response iterator type.
 func newQuorumCallContext[Req, Resp proto.Message](
@@ -102,9 +95,13 @@ func newQuorumCallContext[Req, Resp proto.Message](
 		streaming:    streaming,
 		responseChan: make(chan NodeResponse[*stream.Message], n),
 	}
-	if streaming {
+	switch {
+	case len(config) == 0:
+		callCtx.err = ErrEmptyConfig
+		callCtx.responseSeq = callCtx.errorResponseSeq()
+	case streaming:
 		callCtx.responseSeq = callCtx.streamingResponseSeq()
-	} else {
+	default:
 		callCtx.responseSeq = callCtx.defaultResponseSeq()
 	}
 	return callCtx
@@ -263,6 +260,15 @@ func (c *CallContext[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 				return // Context canceled
 			}
 		}
+	}
+}
+
+// errorResponseSeq returns an iterator that sends nothing and yields one
+// response that holds c.err.
+func (c *CallContext[Req, Resp]) errorResponseSeq() ResponseSeq[Resp] {
+	return func(yield func(NodeResponse[Resp]) bool) {
+		c.markDispatched()
+		yield(NodeResponse[Resp]{Err: c.err})
 	}
 }
 

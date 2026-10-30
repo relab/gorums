@@ -33,6 +33,12 @@ var ErrNodeClosed = stream.ErrNodeClosed
 // [errors.Is].
 var ErrNoNode = impl.ErrNoNode
 
+// ErrEmptyConfig is returned by a quorum call or multicast on an empty
+// configuration, such as one that [Config.Remove] or [Config.WithoutErrors]
+// emptied. It is a gRPC status error with the InvalidArgument code; match it
+// with [errors.Is].
+var ErrEmptyConfig = impl.ErrEmptyConfig
+
 // ErrSendQueueFull is returned for a two-way call enqueued while the node's
 // send queue is full, so quorum logic counts the peer as failed; see
 // [WithSendBufferSize]. It is a gRPC status error with the Unavailable code;

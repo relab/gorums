@@ -45,10 +45,10 @@
 // A node client holds only its node, so building one allocates nothing.
 // Build a node client where you need it, and do not keep it. The node may be
 // any node, also one outside cfg. If the node is nil, every call returns
-// [ErrNoNode]. A quorum call or multicast on an empty configuration panics
-// when the call is built. To call another configuration, build a new SClient
-// from it. A client does not own its configuration or node; the close
-// function returned by [NewConfig] closes the connections.
+// [ErrNoNode]. A quorum call or multicast on an empty configuration sends
+// nothing and returns [ErrEmptyConfig]. To call another configuration, build
+// a new SClient from it. A client does not own its configuration or node;
+// the close function returned by [NewConfig] closes the connections.
 //
 // A Go package may hold several services, in one proto file or in several.
 // Each service gets its own clients, server interface, and register function.

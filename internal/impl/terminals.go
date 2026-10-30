@@ -68,6 +68,10 @@ func (r *Responses[Resp]) Aggregate[Out any](
 	if fn == nil {
 		panic("gorums: Aggregate called with nil function")
 	}
+	if err := r.callErr(); err != nil {
+		var out Out
+		return out, err
+	}
 	return fn(r.Results())
 }
 
@@ -103,6 +107,9 @@ func (r *Responses[Resp]) Reduce[Acc any](
 		panic("gorums: Reduce called with nil add function")
 	}
 	acc := initial
+	if err := r.callErr(); err != nil {
+		return acc, err
+	}
 	tally := nodeTally{counted: make([]ID, 0, min(n, r.size))}
 	for result := range r.seq {
 		if !tally.add(result.NodeID, result.Err) {
@@ -146,6 +153,9 @@ func (r *Responses[Resp]) Matching[Key comparable](
 	checkThreshold("Matching", n)
 	if key == nil {
 		panic("gorums: Matching called with nil key function")
+	}
+	if err := r.callErr(); err != nil {
+		return Agreement[Resp]{}, err
 	}
 	var (
 		tally   = nodeTally{counted: make([]ID, 0, r.size)}

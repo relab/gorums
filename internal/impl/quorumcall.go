@@ -8,7 +8,8 @@ import (
 
 // QuorumCall performs a quorum call on the nodes in config and returns a
 // [Call] handle that provides access to node responses via terminal methods
-// and fluent iteration. It panics if config is empty.
+// and fluent iteration. If config is empty, the call sends nothing and
+// reports [ErrEmptyConfig].
 //
 // Type parameters:
 //   - Req: The request message type
@@ -22,12 +23,12 @@ import (
 //
 // This function should only be used by generated code.
 func QuorumCall[Req, Resp proto.Message](ctx context.Context, config Config, req Req, method string) *Call[Req, Resp] {
-	requireConfig("QuorumCall", method, config)
 	return invokeQuorumCall[Req, Resp](ctx, config, req, method, false)
 }
 
 // QuorumCallStream performs a streaming quorum call on the nodes in config and
-// returns a [Call] handle. It panics if config is empty.
+// returns a [Call] handle. If config is empty, the call sends nothing and
+// reports [ErrEmptyConfig].
 // This is used for correctable stream methods where the server sends multiple responses.
 //
 // In streaming mode, the response iterator continues indefinitely until the context
@@ -35,7 +36,6 @@ func QuorumCall[Req, Resp proto.Message](ctx context.Context, config Config, req
 //
 // This function should only be used by generated code.
 func QuorumCallStream[Req, Resp proto.Message](ctx context.Context, config Config, req Req, method string) *Call[Req, Resp] {
-	requireConfig("QuorumCallStream", method, config)
 	return invokeQuorumCall[Req, Resp](ctx, config, req, method, true)
 }
 

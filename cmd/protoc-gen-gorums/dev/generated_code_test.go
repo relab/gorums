@@ -264,14 +264,32 @@ func TestGeneratedCodeClient(t *testing.T) {
 		})
 	}
 
-	t.Run("EmptyConfigQuorumCall", func(t *testing.T) {
-		defer func() {
-			if recover() == nil {
-				t.Error("QuorumCall on an empty configuration did not panic")
+	// A configuration client of an empty configuration reports
+	// ErrEmptyConfig from every call.
+	emptyClient := dev.NewZorumsServiceClient(nil)
+	emptyConfigCalls := []struct {
+		name string
+		call func(context.Context) error
+	}{
+		{
+			name: "QuorumCall",
+			call: func(ctx context.Context) error {
+				_, err := emptyClient.QuorumCall(ctx, &dev.Request{}).Majority()
+				return err
+			},
+		},
+		{
+			name: "MulticastSend",
+			call: func(ctx context.Context) error { return emptyClient.Multicast(ctx, &dev.Request{}).Send() },
+		},
+	}
+	for _, c := range emptyConfigCalls {
+		t.Run("EmptyConfig/"+c.name, func(t *testing.T) {
+			if err := c.call(t.Context()); !errors.Is(err, gorums.ErrEmptyConfig) {
+				t.Errorf("call error = %v, want %v", err, gorums.ErrEmptyConfig)
 			}
-		}()
-		dev.NewZorumsServiceClient(nil).QuorumCall(t.Context(), &dev.Request{})
-	})
+		})
+	}
 }
 
 // Sinks keep the compiler from eliding the operations measured in
