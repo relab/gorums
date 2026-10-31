@@ -155,7 +155,7 @@ func (m *outboundManager) newNode(id ID, addr string, verify PeerVerifier) (*Nod
 	opts := nodeOptions{
 		ID:              id,
 		SendBufferSize:  m.opts.SendBufferSize,
-		DispatchSize:    m.opts.DispatchSize,
+		RecvBufferSize:  m.opts.RecvBufferSize,
 		MsgIDGen:        m.nextMsgID,
 		Metadata:        m.opts.Metadata,
 		GRPCDialOptions: m.opts.GRPCDialOptions,

@@ -2765,7 +2765,7 @@ Peer identity checks do not authenticate clients that claim no peer ID; the tran
 ## Send Queue Capacity and Backpressure
 
 The per-node send queue defaults to 4096 entries.
-Passing zero to `WithSendBufferSize` or the send-size argument of `WithBufferSizes` selects that default.
+Passing zero to `WithSendBufferSize` or the send-size argument of `WithBufferSizes` or `WithDialBufferSizes` selects that default.
 Two-way requests fail fast with an unavailable error when a real buffered queue is full.
 One-way client calls (`Unicast`, `Multicast`) wait for space instead, since backpressure on the caller is what paces them.
 A reply sent from a receive or dispatch loop, whether a back-channel reply from a client or a server's reply to an inbound request, never waits either, so the connection keeps reading further messages.
@@ -2782,6 +2782,6 @@ Replies on that stream then wait too.
 A handler that waits for a reply from the sending peer before `Release` waits until its context ends if the peer fills the queue in the meantime.
 Dispatch such a call before `Release` and wait for the reply after `Release`, or choose a receive size larger than the number of requests the peer can send while the call is in flight.
 An outbound channel queues requests that the peer sends back on its stream the same way, for example a client's back channel or a peer's connection to another peer.
-`WithReceiveBufferSize` is the dial option that sets that capacity for outbound channels, as the receive-size argument of `WithBufferSizes` does for inbound streams.
+The receive-size argument of `WithDialBufferSizes` sets that capacity for outbound channels, as the receive-size argument of `WithBufferSizes` does for inbound streams.
 Zero selects the default of 4096.
 A server in a peer group passes it through `WithPeers`, together with its other dial options.

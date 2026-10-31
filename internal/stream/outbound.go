@@ -36,9 +36,9 @@ type PeerVerifier func(ctx context.Context, id ID) error
 type OutboundOptions struct {
 	// SendBufferSize is the send queue capacity.
 	SendBufferSize uint
-	// DispatchSize is the number of requests received from the server that can
-	// wait for the running handler. Zero selects the default.
-	DispatchSize uint
+	// RecvBufferSize is the number of requests received from the server that
+	// can wait for the running handler.
+	RecvBufferSize uint
 	// Handler serves requests the server sends on the stream; may be nil.
 	Handler RequestHandler
 	// Latency receives round-trip samples; may be nil.
@@ -104,7 +104,7 @@ type OutboundChannel struct {
 // also closes conn.
 func NewOutboundChannel(ctx context.Context, id ID, conn *grpc.ClientConn, opts OutboundOptions) *OutboundChannel {
 	c := &OutboundChannel{
-		endpoint:       newEndpoint(ctx, id, opts.SendBufferSize, opts.DispatchSize, opts.Handler, opts.Latency),
+		endpoint:       newEndpoint(ctx, id, opts.SendBufferSize, opts.RecvBufferSize, opts.Handler, opts.Latency),
 		conn:           conn,
 		eagerReconnect: opts.EagerReconnect,
 		onStreamChange: opts.OnStreamChange,
