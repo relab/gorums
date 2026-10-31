@@ -2,6 +2,7 @@ edition = "2024";
 
 package benchkit;
 
+import "google/protobuf/empty.proto";
 import "gorums.proto";
 import "benchkit/benchkit.proto";
 
@@ -38,10 +39,6 @@ message DoneRequest {
   uint32 sender_id = 1;
 }
 
-// DoneResponse is an empty message; Done is a one-way advisory signal, but a
-// response type must be defined to satisfy the gRPC schema.
-message DoneResponse {}
-
 // The Result, Report, and MemoryStat data messages live in benchkit.proto, a
 // gorums-free file that consumers (e.g. sweep) can compile standalone without
 // pulling in gorums.proto. The Stop RPC below returns benchkit.Result.
@@ -74,7 +71,7 @@ service Control {
   // not a barrier — a missing or delayed Done never blocks or fails a run,
   // it only means the waiting peer falls back to its own timeout. See
   // benchmark.AwaitPeersDoneOrGrace.
-  rpc Done(DoneRequest) returns (DoneResponse) {
+  rpc Done(DoneRequest) returns (google.protobuf.Empty) {
     option (gorums.multicast) = true;
   }
 }

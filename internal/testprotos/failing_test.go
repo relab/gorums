@@ -16,6 +16,7 @@ package internal.testprotos.failing;
 option go_package = "github.com/relab/gorums/internal/testprotos/failing";
 
 import "gorums.proto";
+import "google/protobuf/empty.proto";
 
 message Request {
 	string value = 1;
@@ -106,7 +107,7 @@ enum NewReservedNodeClient {
 	NEW_RESERVED_NODE_CLIENT_UNSPECIFIED = 0;
 }
 service Reserved {
-	rpc Write(Request) returns (Response) {
+	rpc Write(Request) returns (google.protobuf.Empty) {
 		option (gorums.unicast) = true;
 	}
 }`,
@@ -122,7 +123,7 @@ service Reserved {
 	rpc Read(Request) returns (Response) {
 		option (gorums.quorumcall) = true;
 	}
-	rpc Write(Request) returns (Response) {
+	rpc Write(Request) returns (google.protobuf.Empty) {
 		option (gorums.unicast) = true;
 	}
 }`,
@@ -410,12 +411,63 @@ service Conflict {
 			name: "MulticastAndUnicast",
 			decl: `
 service Conflict {
-	rpc Send(Request) returns (Response) {
+	rpc Send(Request) returns (google.protobuf.Empty) {
 		option (gorums.multicast) = true;
 		option (gorums.unicast) = true;
 	}
 }`,
 			want: "Conflict.Send: options 'gorums.multicast' and 'gorums.unicast' cannot be combined",
+		},
+		{
+			name: "MulticastNonEmptyResponse",
+			decl: `
+service OneWay {
+	rpc Send(Request) returns (Response) {
+		option (gorums.multicast) = true;
+	}
+}`,
+			want: "OneWay.Send: option 'gorums.multicast' requires response type google.protobuf.Empty, not internal.testprotos.failing.Response",
+		},
+		{
+			name: "UnicastNonEmptyResponse",
+			decl: `
+service OneWay {
+	rpc Send(Request) returns (Response) {
+		option (gorums.unicast) = true;
+	}
+}`,
+			want: "OneWay.Send: option 'gorums.unicast' requires response type google.protobuf.Empty, not internal.testprotos.failing.Response",
+		},
+		{
+			name: "ClientStreamMulticastNonEmptyResponse",
+			decl: `
+service OneWay {
+	rpc Send(stream Request) returns (Response) {
+		option (gorums.multicast) = true;
+	}
+}`,
+			want: "OneWay.Send: option 'gorums.multicast' requires response type google.protobuf.Empty, not internal.testprotos.failing.Response",
+		},
+		{
+			name: "MulticastLocalEmptyResponse",
+			decl: `
+message Empty {}
+service OneWay {
+	rpc Send(Request) returns (Empty) {
+		option (gorums.multicast) = true;
+	}
+}`,
+			want: "OneWay.Send: option 'gorums.multicast' requires response type google.protobuf.Empty, not internal.testprotos.failing.Empty",
+		},
+		{
+			name: "UnicastNonEmptyResponseWithEmptyRequest",
+			decl: `
+service OneWay {
+	rpc Send(google.protobuf.Empty) returns (Response) {
+		option (gorums.unicast) = true;
+	}
+}`,
+			want: "OneWay.Send: option 'gorums.unicast' requires response type google.protobuf.Empty, not internal.testprotos.failing.Response",
 		},
 	}
 	for _, tt := range tests {

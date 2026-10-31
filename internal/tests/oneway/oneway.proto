@@ -6,12 +6,13 @@ option go_package = "github.com/relab/gorums/internal/tests/oneway";
 option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
+import "google/protobuf/empty.proto";
 
 service OnewayTest {
-    rpc Unicast(Request) returns (Empty) {
+    rpc Unicast(Request) returns (google.protobuf.Empty) {
         option (gorums.unicast) = true;
     }
-    rpc Multicast(Request) returns (Empty) {
+    rpc Multicast(Request) returns (google.protobuf.Empty) {
         option (gorums.multicast) = true;
     }
 }
@@ -19,4 +20,3 @@ service OnewayTest {
 message Request {
     uint64 num = 1;
 }
-message Empty {}

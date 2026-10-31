@@ -9,6 +9,7 @@ option go_package = "github.com/relab/gorums/internal/testprotos/clientnames";
 option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
+import "google/protobuf/empty.proto";
 
 service ClientNames {
     // Config is a quorum call.
@@ -16,13 +17,13 @@ service ClientNames {
         option (gorums.quorumcall) = true;
     }
     // WithConfig is a multicast.
-    rpc WithConfig(Request) returns (Response) {
+    rpc WithConfig(Request) returns (google.protobuf.Empty) {
         option (gorums.multicast) = true;
     }
     // Node is a remote call.
     rpc Node(Request) returns (Response) {}
     // ForNode is a unicast.
-    rpc ForNode(Request) returns (Response) {
+    rpc ForNode(Request) returns (google.protobuf.Empty) {
         option (gorums.unicast) = true;
     }
 }

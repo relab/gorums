@@ -537,6 +537,7 @@ package internal.testprotos.shadow.service;
 option go_package = "github.com/relab/gorums/internal/testprotos/shadow/service";
 
 import "gorums.proto";
+import "google/protobuf/empty.proto";
 import "%[1]s.proto";
 
 service Shadow {
@@ -546,10 +547,10 @@ service Shadow {
 	rpc QuorumCallStream(%[2]s.Request) returns (stream %[2]s.Response) {
 		option (gorums.quorumcall) = true;
 	}
-	rpc Multicast(%[2]s.Request) returns (%[2]s.Response) {
+	rpc Multicast(%[2]s.Request) returns (google.protobuf.Empty) {
 		option (gorums.multicast) = true;
 	}
-	rpc Unicast(%[2]s.Request) returns (%[2]s.Response) {
+	rpc Unicast(%[2]s.Request) returns (google.protobuf.Empty) {
 		option (gorums.unicast) = true;
 	}
 	rpc RemoteCall(%[2]s.Request) returns (%[2]s.Response) {}

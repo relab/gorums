@@ -280,7 +280,7 @@ func TestGeneratedCodeClient(t *testing.T) {
 		},
 		{
 			name: "MulticastSend",
-			call: func(ctx context.Context) error { return emptyClient.MulticastWithResponse(ctx, &dev.Request{}).Send() },
+			call: func(ctx context.Context) error { return emptyClient.MulticastWithEmptyResponse(ctx, &dev.Request{}).Send() },
 		},
 	}
 	for _, c := range emptyConfigCalls {

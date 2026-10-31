@@ -71,6 +71,10 @@ To select a call type for a Protobuf service method, specify one of the followin
 | Synchronous Quorum Call | `gorums.quorumcall`            | Synchronous variant; chain a terminal method (`.First()`, `.Majority()`, `.All()`, `.Threshold(n)`) to block until the quorum threshold is met. |
 | Correctable             | `gorums.quorumcall` + `stream` | Streaming quorum call; use `.Correctable(n)` to observe progressive updates as nodes respond.                                                   |
 
+A unicast or multicast method must declare `google.protobuf.Empty` as its response type, since the call has no reply.
+The request may be any message, including `google.protobuf.Empty`.
+`protoc-gen-gorums` rejects any other response type and names the method and the type in its error.
+
 The generated API is similar to unary gRPC, unless the `stream` keyword is used in the proto definition.
 A method without a Gorums option becomes a remote call, which replaces gRPC's unary RPC.
 You do not need to generate a separate `_grpc.pb.go` file with `protoc-gen-go-grpc` for it.
@@ -1194,7 +1198,7 @@ client.WriteMulticast(ctx, &WriteRequest{}).
     Send()
 ```
 
-One-way calls have no response type, so their interceptors use `*emptypb.Empty` (from `google.golang.org/protobuf/types/known/emptypb`) as `Resp`.
+The response type of a one-way call is always `google.protobuf.Empty`, so their interceptors use `*emptypb.Empty` (from `google.golang.org/protobuf/types/known/emptypb`) as `Resp`.
 
 **Note:** If `MapRequest` returns `nil` for a node, the message will not be sent to that node.
 
