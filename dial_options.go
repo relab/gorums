@@ -38,21 +38,8 @@ func WithBackoff(backoff backoff.Config) DialOption {
 }
 
 // DefaultSendBufferSize is the per-node send queue capacity Gorums uses when
-// [WithSendBufferSize], [WithDialBufferSizes], or [WithBufferSizes] is applied
-// with size 0.
+// [WithDialBufferSizes] or [WithBufferSizes] is applied with a send size of 0.
 const DefaultSendBufferSize = conn.DefaultSendBufferSize
-
-// WithSendBufferSize sets the capacity of the per-node send queue. When the
-// queue is full, two-way calls fail with [ErrSendQueueFull] and one-way calls
-// wait for space. Size 0 selects [DefaultSendBufferSize].
-func WithSendBufferSize(size uint) DialOption {
-	return func(o *conn.DialOptions) {
-		if size == 0 {
-			size = conn.DefaultSendBufferSize
-		}
-		o.SendBufferSize = size
-	}
-}
 
 // WithDialBufferSizes sets the receive and send buffer sizes of each outbound
 // channel, as [WithBufferSizes] does for a server.
@@ -63,12 +50,16 @@ func WithSendBufferSize(size uint) DialOption {
 // the stream waits while that many are queued. A recvSize of 0 selects the
 // default of 4096.
 //
-// The sendSize is the capacity of the per-node send queue, as for
-// [WithSendBufferSize]. A sendSize of 0 selects [DefaultSendBufferSize].
+// The sendSize is the capacity of the per-node send queue. When the queue is
+// full, two-way calls fail with [ErrSendQueueFull] and one-way calls wait for
+// space. A sendSize of 0 selects [DefaultSendBufferSize].
 func WithDialBufferSizes(recvSize, sendSize uint) DialOption {
 	return func(o *conn.DialOptions) {
+		if sendSize == 0 {
+			sendSize = conn.DefaultSendBufferSize
+		}
 		o.RecvBufferSize = recvSize
-		WithSendBufferSize(sendSize)(o)
+		o.SendBufferSize = sendSize
 	}
 }
 

@@ -2761,7 +2761,7 @@ Peer identity checks do not authenticate clients that claim no peer ID; the tran
 ## Send Queue Capacity and Backpressure
 
 The per-node send queue defaults to 4096 entries.
-Passing zero to `WithSendBufferSize` or the send-size argument of `WithBufferSizes` or `WithDialBufferSizes` selects that default.
+Passing zero as the send-size argument of `WithBufferSizes` or `WithDialBufferSizes` selects that default.
 Two-way requests fail fast with an unavailable error when a real buffered queue is full.
 One-way client calls (`Unicast`, `Multicast`) wait for space instead, since backpressure on the caller is what paces them.
 A reply sent from a receive or dispatch loop, whether a back-channel reply from a client or a server's reply to an inbound request, never waits either, so the connection keeps reading further messages.

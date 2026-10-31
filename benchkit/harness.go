@@ -73,7 +73,7 @@ type Options struct {
 	// SendBuffer and RecvBuffer record the buffer capacities the run is
 	// configured with, so results differing only by buffer size stay
 	// distinguishable. Zero selects Gorums' own default for that buffer, the
-	// same substitution [gorums.WithSendBufferSize] and [gorums.WithBufferSizes]
+	// same substitution [gorums.WithDialBufferSizes] and [gorums.WithBufferSizes]
 	// apply internally.
 	SendBuffer uint
 	RecvBuffer uint
