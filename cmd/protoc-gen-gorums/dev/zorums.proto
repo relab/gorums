@@ -56,21 +56,17 @@ service ZorumsService {
     // Multicast variants
     // ------------------------------------------------------------------
 
-    // MulticastWithResponse tests a multicast that declares a response type,
-    // which a multicast never returns.
-    rpc MulticastWithResponse(Request) returns (Response) {
-        option (gorums.multicast) = true;
-    }
-    // MulticastSecondMethod tests multiple multicast methods on one service.
-    rpc MulticastSecondMethod(Request) returns (Response) {
-        option (gorums.multicast) = true;
-    }
-    // MulticastWithEmptyResponse tests an imported message type as the response.
+    // MulticastWithEmptyResponse tests a plain multicast, which requires
+    // google.protobuf.Empty as its response type.
     rpc MulticastWithEmptyResponse(Request) returns (google.protobuf.Empty) {
         option (gorums.multicast) = true;
     }
-    // MulticastWithEmptyRequestAndResponse tests an imported message type as both
-    // request and response.
+    // MulticastSecondMethod tests multiple multicast methods on one service.
+    rpc MulticastSecondMethod(Request) returns (google.protobuf.Empty) {
+        option (gorums.multicast) = true;
+    }
+    // MulticastWithEmptyRequestAndResponse tests an imported message type as the
+    // request, with the same response type as the other multicasts.
     rpc MulticastWithEmptyRequestAndResponse(google.protobuf.Empty) returns (google.protobuf.Empty) {
         option (gorums.multicast) = true;
     }
@@ -98,13 +94,9 @@ service ZorumsService {
     // Unicast
     // ---------------------------------------------------------------
 
-    // Unicast tests a plain unicast.
-    rpc Unicast(Request) returns (Response) {
-        option (gorums.unicast) = true;
-    }
-
-    // UnicastWithEmptyResponse tests an imported message type as the response.
-    rpc UnicastWithEmptyResponse(Request) returns (google.protobuf.Empty) {
+    // Unicast tests a plain unicast, which requires google.protobuf.Empty as
+    // its response type.
+    rpc Unicast(Request) returns (google.protobuf.Empty) {
         option (gorums.unicast) = true;
     }
 }

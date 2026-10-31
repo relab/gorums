@@ -177,8 +177,22 @@ func validateOptions(method *protogen.Method) error {
 
 	case !hasMethodOption(method, gorums.E_Quorumcall) && method.Desc.IsStreamingServer():
 		return optionErrorf("is required for server-client stream methods", method, gorums.E_Quorumcall)
+
+	case len(set) == 1 && isOneway(set[0]) && method.Output.Desc.FullName() != emptyMessage:
+		return fmt.Errorf("%s.%s: option '%s' requires response type %s, not %s", method.Parent.Desc.Name(), method.Desc.Name(),
+			set[0].TypeDescriptor().FullName(), emptyMessage, method.Output.Desc.FullName())
 	}
 	return nil
+}
+
+// emptyMessage is the full name of the only response type that one-way calls
+// accept.
+const emptyMessage = "google.protobuf.Empty"
+
+// isOneway reports whether the call type option ext names a one-way call.
+func isOneway(ext *protoimpl.ExtensionInfo) bool {
+	info := gorumsCallTypesInfo[callTypeName(ext)]
+	return info != nil && info.oneway
 }
 
 func optionErrorf(s string, method *protogen.Method, ext *protoimpl.ExtensionInfo) error {

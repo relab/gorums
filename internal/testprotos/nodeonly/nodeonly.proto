@@ -9,10 +9,11 @@ option go_package = "github.com/relab/gorums/internal/testprotos/nodeonly";
 option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
+import "google/protobuf/empty.proto";
 
 service NodeOnly {
     rpc Read(Request) returns (Response) {}
-    rpc Write(Request) returns (Response) {
+    rpc Write(Request) returns (google.protobuf.Empty) {
         option (gorums.unicast) = true;
     }
 }

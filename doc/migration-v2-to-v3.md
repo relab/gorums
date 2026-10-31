@@ -925,6 +925,11 @@ Regeneration reports an error for names that collide with the generated code:
 
 An RPC method may have any name.
 
+A unicast or multicast method must now return `google.protobuf.Empty`.
+Regeneration reports an error for any other response type, including a message of your own named `Empty`.
+Change the response type of such a method, and add `import "google/protobuf/empty.proto";` to the `.proto` file if it is missing.
+The generated client methods and server handlers of these calls do not use the response type, so no Go code changes.
+
 Hand-written Go code in the generated package that declares one of these names, such as your own `StorageClient` wrapper, now fails to compile.
 The generator cannot detect this collision, so rename such code.
 

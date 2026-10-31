@@ -9,6 +9,7 @@ option go_package = "github.com/relab/gorums/internal/testprotos/calltypes/multi
 option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
+import "google/protobuf/empty.proto";
 
 service Alpha {
     rpc Heartbeat(Request) returns (Response) {
@@ -21,7 +22,7 @@ service Beta {
     rpc Heartbeat(Request) returns (Response) {
         option (gorums.quorumcall) = true;
     }
-    rpc Write(stream Request) returns (Response) {
+    rpc Write(stream Request) returns (google.protobuf.Empty) {
         option (gorums.multicast) = true;
     }
 }
