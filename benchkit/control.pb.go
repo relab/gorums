@@ -274,12 +274,13 @@ func (b0 ClockSyncResponse_builder) Build() *ClockSyncResponse {
 }
 
 // DoneRequest is multicast to advise peers that the sender has finished its
-// own benchmark work and will issue no further calls.
+// own benchmark work and will issue no further calls. The receiver identifies
+// the sender by its Gorums node ID, which it de-duplicates signals by and uses
+// to name peers that have not yet signaled when diagnosing a timeout.
 type DoneRequest struct {
-	state               protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_SenderId uint32                 `protobuf:"varint,1,opt,name=sender_id,json=senderId"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"opaque.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DoneRequest) Reset() {
@@ -307,30 +308,15 @@ func (x *DoneRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *DoneRequest) GetSenderId() uint32 {
-	if x != nil {
-		return x.xxx_hidden_SenderId
-	}
-	return 0
-}
-
-func (x *DoneRequest) SetSenderId(v uint32) {
-	x.xxx_hidden_SenderId = v
-}
-
 type DoneRequest_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	// sender_id is the sender's Gorums node ID, used to de-duplicate signals
-	// and to name peers that have not yet signaled when diagnosing a timeout.
-	SenderId uint32
 }
 
 func (b0 DoneRequest_builder) Build() *DoneRequest {
 	m0 := &DoneRequest{}
 	b, x := &b0, m0
 	_, _ = b, x
-	x.xxx_hidden_SenderId = b.SenderId
 	return m0
 }
 
@@ -347,9 +333,8 @@ const file_benchkit_control_proto_rawDesc = "" +
 	"\x10ClockSyncRequest\"4\n" +
 	"\x11ClockSyncResponse\x12\x1f\n" +
 	"\vserver_time\x18\x01 \x01(\x03R\n" +
-	"serverTime\"*\n" +
-	"\vDoneRequest\x12\x1b\n" +
-	"\tsender_id\x18\x01 \x01(\rR\bsenderId2\x89\x02\n" +
+	"serverTime\"\r\n" +
+	"\vDoneRequest2\x89\x02\n" +
 	"\aControl\x12>\n" +
 	"\x05Start\x12\x16.benchkit.StartRequest\x1a\x17.benchkit.StartResponse\"\x04\xa0\xb5\x18\x01\x125\n" +
 	"\x04Stop\x12\x15.benchkit.StopRequest\x1a\x10.benchkit.Result\"\x04\xa0\xb5\x18\x01\x12J\n" +
