@@ -45,18 +45,20 @@ func TestWithSendBufferSizeDefault(t *testing.T) {
 	}
 }
 
-// TestWithReceiveBufferSize verifies that WithReceiveBufferSize sets the
-// dispatch queue capacity of outbound channels, and that leaving it unset or
-// passing 0 keeps the default selection (0).
-func TestWithReceiveBufferSize(t *testing.T) {
+// TestWithDialBufferSizes verifies that WithDialBufferSizes sets both buffer
+// sizes of outbound channels, and that 0 selects the default for each: the
+// receive size resolves to the default in the stream layer and stays 0 here,
+// while the send size resolves to [conn.DefaultSendBufferSize].
+func TestWithDialBufferSizes(t *testing.T) {
 	tests := []struct {
-		name string
-		opt  DialOption
-		want uint
+		name     string
+		opt      DialOption
+		wantRecv uint
+		wantSend uint
 	}{
-		{name: "Unset", opt: nil, want: 0},
-		{name: "Zero", opt: WithReceiveBufferSize(0), want: 0},
-		{name: "Explicit", opt: WithReceiveBufferSize(128), want: 128},
+		{name: "Unset", opt: nil, wantRecv: 0, wantSend: conn.DefaultSendBufferSize},
+		{name: "Zero", opt: WithDialBufferSizes(0, 0), wantRecv: 0, wantSend: conn.DefaultSendBufferSize},
+		{name: "Explicit", opt: WithDialBufferSizes(128, 64), wantRecv: 128, wantSend: 64},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -64,8 +66,11 @@ func TestWithReceiveBufferSize(t *testing.T) {
 			if tt.opt != nil {
 				tt.opt(&opts)
 			}
-			if opts.DispatchSize != tt.want {
-				t.Errorf("DispatchSize = %d, want %d", opts.DispatchSize, tt.want)
+			if opts.RecvBufferSize != tt.wantRecv {
+				t.Errorf("RecvBufferSize = %d, want %d", opts.RecvBufferSize, tt.wantRecv)
+			}
+			if opts.SendBufferSize != tt.wantSend {
+				t.Errorf("SendBufferSize = %d, want %d", opts.SendBufferSize, tt.wantSend)
 			}
 		})
 	}
