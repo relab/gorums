@@ -23,16 +23,12 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-func (c zorumsServiceClient) MulticastWithResponse(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.MulticastWithResponse")
+func (c zorumsServiceClient) MulticastWithEmptyResponse(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.MulticastWithEmptyResponse")
 }
 
 func (c zorumsServiceClient) MulticastSecondMethod(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.MulticastSecondMethod")
-}
-
-func (c zorumsServiceClient) MulticastWithEmptyResponse(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.MulticastWithEmptyResponse")
 }
 
 func (c zorumsServiceClient) MulticastWithEmptyRequestAndResponse(ctx context.Context, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty] {
