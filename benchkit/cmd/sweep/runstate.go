@@ -97,7 +97,7 @@ func updateLastRunCollection(rootDir, remoteWorkDir, collection string) {
 func writeCollectScript(outDir string, state lastRunState) (string, error) {
 	path := filepath.Join(outDir, collectScriptName)
 	var args []string
-	args = append(args, "-driver", state.Driver, "-collect="+state.RemoteWorkDir, "-outdir", filepath.Dir(state.LocalRunDir))
+	args = append(args, "-detach", state.Driver, "-collect="+state.RemoteWorkDir, "-outdir", filepath.Dir(state.LocalRunDir))
 	if state.SSHConfig != "" {
 		args = append(args, "-config", state.SSHConfig)
 	}
@@ -106,7 +106,7 @@ func writeCollectScript(outDir string, state lastRunState) (string, error) {
 	}
 	var b strings.Builder
 	b.WriteString("#!/bin/sh\nset -eu\n\n")
-	b.WriteString("# Safe collection waits for the remote run to finish.\n")
+	b.WriteString("# Collect only if the remote run has finished; otherwise exit.\n")
 	b.WriteString("exec ./cmd/sweep/sweep")
 	for _, arg := range args {
 		b.WriteByte(' ')

@@ -27,21 +27,20 @@ import (
 // and the benchmark binary crosses the WAN only once (laptop -> driver).
 //
 // Every operation that ships a binary or the generated SSH config to the driver
-// — a full -driver run, a driver-routed -check, or the explain check — goes
+// — a full -detach run, a driver-routed -check, or the explain check — goes
 // through the shared cache in driverCacheDir (see cachedUpload), so a laptop
 // with nothing changed since the last upload pays no WAN transfer at all, no
 // matter which of those entry points it uses.
 //
 // Two processes cooperate:
 //
-//   - The launcher (this file, run on the laptop with -driver <host>) cross-
+//   - The launcher (this file, run on the laptop with -detach <host>) cross-
 //     builds sweep and the benchmark binary for linux/amd64, uploads whichever
 //     of them (plus the generated SSH config) changed since the last upload to
 //     the driver's binary cache over a single iago SSH connection, and re-execs
-//     sweep on the driver with -driven. It then streams the remote sweep's
-//     output and, on clean completion, downloads a compact plot-data export
-//     plus any failed-run result files. Raw successful result files stay on the
-//     driver until an explicit -collect archives them.
+//     sweep on the driver with -driven. It confirms peer readiness and exits.
+//     A later -collect downloads compact plot data and failed-run results;
+//     another -collect archives raw results and removes the remote work dir.
 //   - The driven sweep (-driven, run on the driver) is an ordinary sweep with a
 //     few laptop-only steps relaxed (no module-root requirement, no build, no
 //     replay script, no stale-binary warning); it does all the peer SSH itself.
@@ -55,7 +54,7 @@ import (
 // no longer affects the run, which is why the remote sweep is detached (setsid)
 // and survives the control connection dropping.
 
-// resolveDriver resolves the -driver flag to a concrete host alias and computes
+// resolveDriver resolves the -detach flag to a concrete host alias and computes
 // the benchmark host pool. The driver host is always excluded from the
 // benchmark pool when it appears in hosts, so the orchestrator does not perturb
 // a co-located replica's measurements. A driver host outside hosts (a dedicated
@@ -80,14 +79,14 @@ func resolveDriver(driverFlag string, hosts []string) (driver string, benchHosts
 	return driver, benchHosts, nil
 }
 
-// resolveDriverHost resolves the -driver flag to a concrete host alias. The
+// resolveDriverHost resolves the -detach flag to a concrete host alias. The
 // sentinel "first" selects hosts[0]; any other value is the alias itself. Unlike
 // resolveDriver it computes no benchmark pool, so it serves callers (such as the
 // driver-routed explain check) that need only the driver host.
 func resolveDriverHost(driverFlag string, hosts []string) (string, error) {
 	if driverFlag == "first" {
 		if len(hosts) == 0 {
-			return "", errors.New("-driver first: no hosts to choose from")
+			return "", errors.New("-detach requires -hosts to select the first host; supply -detach <hostname> instead")
 		}
 		return hosts[0], nil
 	}
@@ -105,7 +104,7 @@ func maxNodeCount(sc sweepConfig) int {
 
 // driverCacheDir is the persistent driver-side directory that holds the sweep
 // and benchmark binaries and the generated SSH config, shared across every
-// -driver entry point (a full run, a driver-routed -check, the explain check).
+// -detach entry point (a full run, a driver-routed -check, the explain check).
 // Caching them here instead of inside each run's fresh, timestamped work
 // directory means a laptop with nothing changed since the last upload pays no
 // WAN transfer at all, regardless of which entry point it uses; see
@@ -161,7 +160,7 @@ func fileSHA256(path string) (string, error) {
 }
 
 // runDriver is the laptop-side launcher: build, ship, re-exec on the driver,
-// stream, and collect. It connects only to the driver host (over iago using the
+// confirm startup, and detach. It connects only to the driver host (using the
 // user's SSH config), never to the peers.
 func runDriver(cfg *config, hosts []string) error {
 	driver, benchHosts, err := resolveDriver(cfg.driver, hosts)
@@ -274,45 +273,26 @@ func runDriver(cfg *config, hosts []string) error {
 	sweepCmd := remoteSweepCommand(cfg, wd, cacheDir, strings.Join(benchHosts, ","), sha)
 	llmEnv := driverLLMEnv(cfg)
 
-	if cfg.detach {
-		log.Printf("starting remote sweep on %s (detached)", driver)
-		runErr := iago.Shell{
-			Command: "bash -s",
-			Stdin:   strings.NewReader(detachBootstrapScript(wd, sweepCmd, llmEnv, cfg.fdLimit)),
-			Stdout:  os.Stderr,
-			Stderr:  os.Stderr,
-		}.Apply(ctx, host)
-		if runErr != nil {
-			return fmt.Errorf("start detached run on %s: %w", driver, runErr)
-		}
-		log.Printf("[driver] waiting for the run to dial its peers (up to %s) before declaring it safe to disconnect...", detachReadyWindow)
-		if err := awaitDetachedStartup(ctx, host, driver, wd); err != nil {
-			return err
-		}
-		log.Printf("detached sweep started on %s:%s; laptop is free to disconnect", driver, wd)
-		log.Printf("collect results with:")
-		log.Printf("  ./cmd/sweep/sweep -collect -outdir %s", cfg.rootDir)
-		log.Printf("collect a snapshot before completion with:")
-		log.Printf("  ./cmd/sweep/sweep -collect-now -outdir %s", cfg.rootDir)
-		return nil
-	}
-
-	log.Printf("starting remote sweep on %s (output streamed below)", driver)
-	log.Printf("if the connection drops, the run continues; reconnect and collect with:")
-	log.Printf("  ./cmd/sweep/sweep -driver %s -collect %s -outdir %s", driver, wd, cfg.rootDir)
+	log.Printf("starting remote sweep on %s (detached)", driver)
 	runErr := iago.Shell{
 		Command: "bash -s",
-		Stdin:   strings.NewReader(bootstrapScript(wd, sweepCmd, llmEnv, cfg.fdLimit)),
+		Stdin:   strings.NewReader(detachBootstrapScript(wd, sweepCmd, llmEnv, cfg.fdLimit)),
 		Stdout:  os.Stderr,
 		Stderr:  os.Stderr,
 	}.Apply(ctx, host)
-	if !finishedRemotely(runErr) {
-		return fmt.Errorf("connection to driver ended before the sweep finished: %w\n"+
-			"the run may still be in progress on %s\n"+
-			"reconnect with: ./cmd/sweep/sweep -driver %s -collect %s -outdir %s",
-			runErr, driver, driver, wd, cfg.rootDir)
+	if runErr != nil {
+		return fmt.Errorf("start detached run on %s: %w", driver, runErr)
 	}
-	return collectDriverResults(cfg, host, wd)
+	log.Printf("[driver] waiting for the run to dial its peers (up to %s) before declaring it safe to disconnect...", detachReadyWindow)
+	if err := awaitDetachedStartup(ctx, host, driver, wd); err != nil {
+		return err
+	}
+	log.Printf("detached sweep started on %s:%s; laptop is free to disconnect", driver, wd)
+	log.Printf("collect results with:")
+	log.Printf("  ./cmd/sweep/sweep -collect -outdir %s", cfg.rootDir)
+	log.Printf("collect a snapshot before completion with:")
+	log.Printf("  ./cmd/sweep/sweep -collect-now -outdir %s", cfg.rootDir)
+	return nil
 }
 
 // runDriverCollect checks a driver run once and downloads it only when finished,
@@ -320,7 +300,7 @@ func runDriver(cfg *config, hosts []string) error {
 // agent because the driver has long since dialed its peers.
 func runDriverCollect(cfg *config) error {
 	if cfg.driver == "" {
-		return errors.New("-collect requires -driver <host>")
+		return errors.New("-collect requires -detach <host>")
 	}
 	driverGroup, err := dialDriverGroup(cfg.driver, cfg.sshConfig)
 	if err != nil {
@@ -442,7 +422,7 @@ func runDriverExplainCheck(cfg *config, hosts []string) error {
 // explainCheckScript exports the forwarded API key and runs the uploaded sweep
 // binary's -explain-check on the driver. The key is exported (not passed as a
 // flag or printed) so it stays out of the argv and the streamed console, the
-// same discipline bootstrapScript uses for a full sweep. The trailing "exit"
+// same discipline detachBootstrapScript uses for a full sweep. The trailing "exit"
 // is essential: bash -s reads its script from stdin, and iago closes that pipe
 // only after the command returns, so without an explicit exit a successful run
 // blocks waiting for stdin EOF (set -e already exits on the failure path).
@@ -550,21 +530,6 @@ cd %s
 ./sweep -check -hosts %s -config %s/ssh.config -port %d -self-host %s -remote-dir %s%s
 exit 0
 `, iago.Quote(cacheDir), iago.Quote(hostsCSV), iago.Quote(cacheDir), port, iago.Quote(self), iago.Quote(remoteDir), bin)
-}
-
-// finishedRemotely reports whether the remote bootstrap/collect script ran to
-// completion. A nil error or an SSH exit error (the remote process exited, even
-// non-zero for failed runs) both mean "finished"; any other error type is a
-// transport failure and the detached run may still be going.
-func finishedRemotely(runErr error) bool {
-	if runErr == nil {
-		return true
-	}
-	if exitErr, ok := errors.AsType[iago.ExitStatus](runErr); ok {
-		log.Printf("remote sweep finished with non-zero status %d; collecting results", exitErr.ExitStatus())
-		return true
-	}
-	return false
 }
 
 // collectMode selects what a -collect downloads from the driver; see
@@ -692,7 +657,7 @@ func collectDriverCompactResults(cfg *config, host iago.Host, wd, remoteOut, run
 	log.Printf("raw .binpb results retained on %s:%s", host.Name(), wd)
 	updateLastRunCollection(cfg.rootDir, wd, "compact")
 	log.Printf("to archive raw results and remove the driver work dir:")
-	log.Printf("  ./cmd/sweep/sweep -driver %s -collect %s -outdir %s", host.Name(), wd, cfg.rootDir)
+	log.Printf("  ./cmd/sweep/sweep -detach %s -collect %s -outdir %s", host.Name(), wd, cfg.rootDir)
 	log.Printf("to discard raw driver results without archiving:")
 	log.Printf("  %s", driverCleanupCommand(host.Name(), cfg.sshConfig, wd))
 	autoReport(cfg)
@@ -940,11 +905,8 @@ func remoteSweepCommand(cfg *config, wd, binDir, hostsCSV, sha string) string {
 	if len(cfg.sweep.recvBuffers) > 0 {
 		args = append(args, "-recv-buffer="+joinInts(cfg.sweep.recvBuffers))
 	}
-	if cfg.detach {
-		// In -detach the launcher leaves as soon as the driven sweep signals it
-		// has dialed its peers, so it must know where to look for that marker.
-		args = append(args, "-ready-marker="+driverReadyMarkerPath(wd))
-	}
+	// The launcher stays connected until the driven sweep has dialed its peers.
+	args = append(args, "-ready-marker="+driverReadyMarkerPath(wd))
 	if cfg.verbose {
 		args = append(args, "-verbose")
 	}
@@ -1013,7 +975,7 @@ func driverLLMEnv(cfg *config) string {
 // needs no seeded known_hosts; authentication is by the forwarded agent, and
 // peer aliases resolve through the driver's own resolver (plain "ssh bbN").
 func generatedSSHConfig() string {
-	return `# Generated by 'sweep -driver': minimal config for driver->peer SSH.
+	return `# Generated by 'sweep -detach': minimal config for driver->peer SSH.
 # Auth uses the SSH agent forwarded from the laptop (ForwardAgent in the user's
 # SSH config). Host-key checking is disabled because the cluster LAN is trusted
 # and the driver has no seeded known_hosts for its peers; peer aliases resolve
@@ -1025,18 +987,16 @@ Host *
 `
 }
 
-// bootstrapPreamble creates the remote work dir, writes run.sh, and starts
-// the sweep detached (setsid) so it survives a laptop disconnect. The sweep
-// command goes through a run.sh written by a quoted heredoc so its embedded
-// quotes are not reinterpreted by the bootstrap shell. It is shared by
-// bootstrapScript and detachBootstrapScript, which differ only in what they
-// do once the detached sweep has started.
+// detachBootstrapScript writes run.sh and starts the sweep detached (setsid),
+// then returns without waiting for completion. A quoted heredoc preserves the
+// sweep command's embedded quotes. The launcher confirms peer readiness before
+// disconnecting and leaves collection to a later -collect.
 //
 // envExport, when non-empty, is a NAME=value assignment (e.g. the LLM API key
 // for -explain) exported into the bootstrap shell and inherited by the detached
 // sweep. It is deliberately kept out of run.sh, the sweep argv, and console.log
 // so the secret never lands on disk or in the streamed log.
-func bootstrapPreamble(wd, sweepCmd, envExport string, fdLimit int) string {
+func detachBootstrapScript(wd, sweepCmd, envExport string, fdLimit int) string {
 	export := ""
 	if envExport != "" {
 		export = "export " + envExport + "\n"
@@ -1054,8 +1014,7 @@ func bootstrapPreamble(wd, sweepCmd, envExport string, fdLimit int) string {
 mkdir -p "$WD"
 cd "$WD"
 rm -f exit.code
-# Create the log before tailing so the follower never races the writer; the
-# detached sweep appends to the same file.
+# The detached sweep appends its output to this log.
 : > console.log
 cat > run.sh <<'SWEEP_EOF'
 #!/bin/sh
@@ -1065,34 +1024,13 @@ chmod +x run.sh
 setsid sh -c './run.sh >> console.log 2>&1; echo $? > exit.code' </dev/null >/dev/null 2>&1 &
 echo $! > run.pid
 echo "[driver] detached sweep started in $WD"
+exit 0
 `, export, iago.Quote(wd), ulimit, sweepCmd)
 }
 
-// bootstrapScript starts the detached sweep via bootstrapPreamble, then tails
-// its console log until the run records an exit code.
-func bootstrapScript(wd, sweepCmd, envExport string, fdLimit int) string {
-	return bootstrapPreamble(wd, sweepCmd, envExport, fdLimit) + `tail -n +1 -F console.log &
-TAILPID=$!
-while [ ! -f exit.code ]; do sleep 1; done
-sleep 1
-kill "$TAILPID" 2>/dev/null || true
-EC=$(cat exit.code)
-echo "[driver] sweep exited with status $EC"
-exit "$EC"
-`
-}
-
-// detachBootstrapScript starts the detached sweep via bootstrapPreamble and
-// returns immediately, without tailing its console log or waiting for it to
-// finish. It is used by -detach so the launcher can confirm the run started
-// and exit, leaving collection for a later -collect.
-func detachBootstrapScript(wd, sweepCmd, envExport string, fdLimit int) string {
-	return bootstrapPreamble(wd, sweepCmd, envExport, fdLimit) + "exit 0\n"
-}
-
 // driverKeepAlive is how often the launcher pings the driver control channel.
-// The channel can sit quiet for the length of a single benchmark run while the
-// driver streams nothing, and crypto/ssh does not honor ServerAliveInterval, so
+// Build/upload, startup confirmation, and collection can leave it idle.
+// crypto/ssh does not honor ServerAliveInterval, so
 // without these pings a NAT or firewall idle timeout could silently drop the
 // connection mid-sweep.
 const driverKeepAlive = 30 * time.Second

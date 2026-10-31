@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"errors"
+	"strings"
+)
 
 // optionalPathFlag behaves as a boolean flag when no value is supplied and as
 // a path flag for both "-collect path" and "-collect=path".
@@ -25,10 +28,13 @@ func (f optionalPathFlag) Set(value string) error {
 
 func (optionalPathFlag) IsBoolFlag() bool { return true }
 
-func normalizeOptionalPathArgs(args []string) []string {
+func normalizeOptionalArgs(args []string) []string {
 	out := append([]string(nil), args...)
 	for i := 0; i < len(out); i++ {
-		if out[i] != "-collect" && out[i] != "-collect-now" && out[i] != "--collect" && out[i] != "--collect-now" {
+		if out[i] == "--" {
+			break
+		}
+		if out[i] != "-detach" && out[i] != "--detach" && out[i] != "-collect" && out[i] != "-collect-now" && out[i] != "--collect" && out[i] != "--collect-now" {
 			continue
 		}
 		if i+1 < len(out) && !strings.HasPrefix(out[i+1], "-") {
@@ -38,3 +44,26 @@ func normalizeOptionalPathArgs(args []string) []string {
 	}
 	return out
 }
+
+// optionalHostFlag selects the first host when -detach has no argument.
+type optionalHostFlag struct{ value *string }
+
+func (f optionalHostFlag) String() string {
+	if f.value == nil {
+		return ""
+	}
+	return *f.value
+}
+
+func (f optionalHostFlag) Set(value string) error {
+	switch value {
+	case "true":
+		value = "first"
+	case "", "false":
+		return errors.New("use -detach [hostname], or omit -detach for local execution")
+	}
+	*f.value = value
+	return nil
+}
+
+func (optionalHostFlag) IsBoolFlag() bool { return true }
