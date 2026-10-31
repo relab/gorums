@@ -94,13 +94,12 @@ type Stats struct {
 	mode     StatsMode              // backing store mode for the aggregate and per-sender stores
 	store    SampleStore            // aggregate store; nil → lazily initialized as StatsMode_EXACT
 	bySender map[uint32]SampleStore // per-sender one-way latency stores keyed by sender node ID
+	series   *latencySeries         // optional per-sender receive-time intervals
 
 	// Per-interval Welford accumulator used by the Ticker. Always O(1).
-	iMean    float64
-	iM2      float64 // sum of squared deviations
-	iCount   uint64  // samples in the current interval
-	opCount  uint64  // total ops recorded since the last Reset
-	iOpStart uint64  // opCount at the start of the current interval
+	interval latencyMoments
+	opCount  uint64 // total ops recorded since the last Reset
+	iOpStart uint64 // opCount at the start of the current interval
 }
 
 // NewStats creates a Stats with the given sample storage mode, applied to both
@@ -151,11 +150,7 @@ func (s *Stats) AddLatency(l time.Duration) {
 // the total op counter. Must be called with s.mut held.
 func (s *Stats) intervalUpdate(ns int64) {
 	s.opCount++
-	s.iCount++
-	delta := float64(ns) - s.iMean
-	s.iMean += delta / float64(s.iCount)
-	delta2 := float64(ns) - s.iMean
-	s.iM2 += delta * delta2
+	s.interval.add(ns)
 }
 
 // AddOp increments the per-interval operation counter without recording a
@@ -188,16 +183,12 @@ func (s *Stats) Ops() uint64 {
 // tick.
 func (s *Stats) TickInterval() (mean, stddev float64, count, opDelta uint64) {
 	s.mut.Lock()
-	mean = s.iMean
-	if s.iCount > 1 {
-		stddev = math.Sqrt(s.iM2 / float64(s.iCount-1))
-	}
-	count = s.iCount
+	mean = s.interval.mean
+	stddev = s.interval.stddev()
+	count = s.interval.count
 	opDelta = s.opCount - s.iOpStart
 	// Reset interval state for the next tick.
-	s.iMean = 0
-	s.iM2 = 0
-	s.iCount = 0
+	s.interval = latencyMoments{}
 	s.iOpStart = s.opCount
 	s.mut.Unlock()
 	return
@@ -207,9 +198,11 @@ func (s *Stats) TickInterval() (mean, stddev float64, count, opDelta uint64) {
 // Used by symmetric benchmarks where a node receives from multiple senders and
 // each sender's samples must later be corrected by that sender's clock offset
 // (see [Stats.GetResultCorrected]). It also updates the per-interval Welford
-// accumulator so the [Ticker] reflects server-measured latency.
+// accumulator. [Measurement.TrackLatency] enables per-sender receive-time
+// buckets whose moments can be corrected after the run.
 func (s *Stats) AddLatencyBySender(id uint32, l time.Duration) {
 	ns := l.Nanoseconds()
+	now := time.Now()
 	s.mut.Lock()
 	if s.bySender == nil {
 		s.bySender = make(map[uint32]SampleStore)
@@ -221,6 +214,9 @@ func (s *Stats) AddLatencyBySender(id uint32, l time.Duration) {
 	}
 	st.Add(ns)
 	s.intervalUpdate(ns)
+	if s.series != nil {
+		s.series.add(now, id, ns)
+	}
 	s.mut.Unlock()
 }
 
@@ -261,10 +257,13 @@ func (s *Stats) GetResult() *Result {
 // sender's histogram bucket values; the shifted per-sender histograms are then
 // re-quantized onto one canonical histogram (Result.Histogram, Latencies nil),
 // bounding memory the same way the aggregate HDR store does.
+// When [Measurement.TrackLatency] enabled interval collection, Events also
+// carries corrected receive-time latency intervals, in bucket order.
 func (s *Stats) GetResultCorrected(offsets map[uint32]int64) *Result {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
+	var r *Result
 	if s.mode == StatsMode_HDR {
 		agg := newHDRHistogram()
 		for _, id := range slices.Sorted(maps.Keys(s.bySender)) {
@@ -272,17 +271,19 @@ func (s *Stats) GetResultCorrected(offsets map[uint32]int64) *Result {
 				agg.recordPairs(hs.buckets(), offsets[id])
 			}
 		}
-		return s.resultFromHistogram(agg)
-	}
-
-	var corrected []int64
-	for _, id := range slices.Sorted(maps.Keys(s.bySender)) {
-		off := offsets[id]
-		for _, l := range s.bySender[id].Samples() {
-			corrected = append(corrected, l+off)
+		r = s.resultFromHistogram(agg)
+	} else {
+		var corrected []int64
+		for _, id := range slices.Sorted(maps.Keys(s.bySender)) {
+			off := offsets[id]
+			for _, l := range s.bySender[id].Samples() {
+				corrected = append(corrected, l+off)
+			}
 		}
+		r = s.resultFromSamples(corrected)
 	}
-	return s.resultFromSamples(corrected)
+	r.SetEvents(s.series.corrected(offsets))
+	return r
 }
 
 // resultFromSamples builds a Result from the given samples and the timing and
@@ -354,10 +355,9 @@ func (s *Stats) resetLocked(mode StatsMode) {
 	s.mode = mode
 	s.store = newSampleStore(mode)
 	clear(s.bySender)
+	s.series = nil
 	// Reset per-interval Welford accumulator and op counters.
-	s.iMean = 0
-	s.iM2 = 0
-	s.iCount = 0
+	s.interval = latencyMoments{}
 	s.opCount = 0
 	s.iOpStart = 0
 }

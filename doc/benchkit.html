@@ -901,6 +901,27 @@
         <p><code>Finish</code> and <code>Attach</code> also record the run's <code>MeasurementMode</code>
             (client-measured vs server-measured) on the result, so downstream consumers never infer it.</p>
 
+        <p><code>SymmetricMulticast</code> registers its local server statistics with
+            <code>Measurement.TrackLatency(stats ...*Stats)</code> before the send window starts.
+            Each receiver records per-sender counts, means, and squared deviations in fixed-width
+            <code>-interval</code> buckets aligned to the client's START, using local monotonic receive time.
+            After the trailing clock sync, <code>Stats.GetResultCorrected</code> adds each sender's averaged
+            clock offset to that sender's interval means, then merges the corrected moments by sample count.
+            The merge preserves both within-sender and between-sender variance.
+            In local mode, <code>AggregateServerResults</code> also merges matching buckets across servers;
+            in distributed mode, each node retains its own receive-time series.
+            <code>Attach</code> merges these latency events with the client throughput and phase events in time order.</p>
+        <p>These latency intervals count receives; throughput intervals count sends.
+            Collection includes trailing receives up to the corrected result snapshot.
+            Each latency event is timestamped at its bucket's exclusive end, with the final partial bucket
+            bounded by the result attachment time.
+            Trailing receives can therefore produce latency events after STOP, which marks the end of sending.
+            Empty latency buckets emit no event.
+            Interval means and sample standard deviations use the original samples in both exact and hdr modes;
+            only the aggregate hdr distribution is quantized.
+            Interval storage grows with occupied buckets and senders, rather than message count,
+            and <code>-interval=0</code> disables it.</p>
+
         <h3>Reusable lifecycles</h3>
         <p>Two helpers build a <code>Bench.Run</code> closure for the common measurement shapes; both wrap a measurement
             <em>core</em> that owns just the paced send window, leaving the control-plane lifecycle around it to the
