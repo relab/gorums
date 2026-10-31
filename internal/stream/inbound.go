@@ -44,7 +44,7 @@ func NewInboundChannel(ctx context.Context, id ID, stream BidiStream, opts Inbou
 	c.session = newSession(sessionCtx, cancel, &c.endpoint, stream, false, false)
 	c.closeOnce = sync.OnceValue(func() error {
 		c.cancel()
-		c.session.end()
+		c.session.end(nil)
 		c.queue.close()
 		return nil
 	})

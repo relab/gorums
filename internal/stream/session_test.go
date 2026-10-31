@@ -93,7 +93,7 @@ func TestSessionEndRetriesPendingCalls(t *testing.T) {
 			if tt.closeChannel {
 				s.endpoint.cancel()
 			}
-			s.end()
+			s.end(nil)
 			if !s.ended() {
 				t.Error("session not ended")
 			}

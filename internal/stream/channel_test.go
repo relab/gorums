@@ -42,7 +42,7 @@ func (c *OutboundChannel) endSessions() {
 	sessions := slices.Collect(maps.Keys(c.sessions))
 	c.mu.Unlock()
 	for _, s := range sessions {
-		s.end()
+		s.end(nil)
 	}
 }
 
@@ -1991,7 +1991,7 @@ func TestChannelSessionEndWithFullQueue(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		s.end()
+		s.end(nil)
 		close(done)
 	}()
 	select {
