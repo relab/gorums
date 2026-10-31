@@ -17,6 +17,7 @@ type Ticker struct {
 	interval time.Duration
 	stats    *Stats
 	buffer   *eventBuffer
+	start    time.Time // common origin for client events and server latency buckets
 
 	done chan struct{}
 	wg   sync.WaitGroup
@@ -42,7 +43,8 @@ func NewTicker(interval time.Duration, stats *Stats) *Ticker {
 // Start emits a START phase marker (carrying the initial target rate) and
 // starts the background ticker goroutine if interval > 0.
 func (t *Ticker) Start(rate int64) {
-	t.buffer.emitPhase(time.Now(), PhaseMarker_START, rate)
+	t.start = time.Now()
+	t.buffer.emitPhase(t.start, PhaseMarker_START, rate)
 	if t.interval > 0 {
 		t.wg.Add(1)
 		go t.run()

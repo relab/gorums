@@ -38,6 +38,9 @@ func serverMemoryStat(reply *Result) *MemoryStat {
 //
 // Per-server memory and alloc counters are attached as ServerStats in a stable
 // node-ID order so the output columns do not reshuffle between runs.
+// Corrected latency events with a shared bucket end are combined using their
+// sample counts, means, and sample variances. Replies must use the same time
+// origin and interval width, as arranged by [Measurement.TrackLatency].
 func AggregateServerResults(replies map[uint32]*Result) (*Result, error) {
 	if len(replies) == 0 {
 		return nil, gorums.ErrIncomplete
@@ -46,6 +49,7 @@ func AggregateServerResults(replies map[uint32]*Result) (*Result, error) {
 	resp := &Result{}
 	var allSamples []int64
 	var hists []*LatencyHistogram
+	var latencyEvents []*Event
 	for _, id := range slices.Sorted(maps.Keys(replies)) {
 		reply := replies[id]
 		// The benchmark name lives in RunConfig and is stamped by Run on the
@@ -54,6 +58,7 @@ func AggregateServerResults(replies map[uint32]*Result) (*Result, error) {
 		resp.SetTotalTime(max(resp.GetTotalTime(), reply.GetTotalTime()))
 		resp.SetThroughput(resp.GetThroughput() + reply.GetThroughput())
 		allSamples = append(allSamples, reply.GetLatencies()...)
+		latencyEvents = append(latencyEvents, reply.GetEvents()...)
 		if h := reply.GetHistogram(); h != nil {
 			hists = append(hists, h)
 		}
@@ -65,5 +70,6 @@ func AggregateServerResults(replies map[uint32]*Result) (*Result, error) {
 	if len(hists) > 0 {
 		resp.SetHistogram(mergeHistograms(hists...))
 	}
+	resp.SetEvents(mergeLatencyEvents(latencyEvents))
 	return resp, nil
 }

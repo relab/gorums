@@ -564,6 +564,11 @@ func runSymmetricMulticast(t *SymmetricTarget, opts benchkit.Options) (*benchkit
 	// runners. Going through MeasureOneWay also gives the symmetric multicast the
 	// rate-ramp and ticker rate-step support the coordinator runners already have.
 	m, window := benchkit.MeasureOneWay(ctx, opts, sends...)
+	latencyStats := make([]*benchkit.Stats, len(t.controls))
+	for i, ctrl := range t.controls {
+		latencyStats[i] = ctrl.Stats()
+	}
+	m.TrackLatency(latencyStats...)
 
 	estimate := func() ([]map[uint32]int64, error) {
 		off, err := estimateAllOffsets(ctx, t)
