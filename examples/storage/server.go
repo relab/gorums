@@ -249,9 +249,9 @@ func (s *storageServer) read(req *pb.ReadRequest) (*pb.ReadResponse, error) {
 	defer s.mut.Unlock()
 	state, ok := s.storage[req.GetKey()]
 	if !ok {
-		return pb.ReadResponse_builder{Ok: false}.Build(), nil
+		return pb.ReadResponse_builder{Found: false}.Build(), nil
 	}
-	return pb.ReadResponse_builder{Ok: true, Value: state.Value, Time: timestamppb.New(state.Time)}.Build(), nil
+	return pb.ReadResponse_builder{Found: true, Value: state.Value, Time: timestamppb.New(state.Time)}.Build(), nil
 }
 
 // write writes a new value to storage if it is newer than the old value.

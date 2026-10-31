@@ -72,6 +72,8 @@ To select a call type for a Protobuf service method, specify one of the followin
 | Correctable             | `gorums.quorumcall` + `stream` | Streaming quorum call; use `.Correctable(n)` to observe progressive updates as nodes respond.                                                   |
 
 The generated API is similar to unary gRPC, unless the `stream` keyword is used in the proto definition.
+A method without a Gorums option becomes a remote call, which replaces gRPC's unary RPC.
+You do not need to generate a separate `_grpc.pb.go` file with `protoc-gen-go-grpc` for it.
 Server streaming is only supported for quorum calls.
 Client streaming is not supported.
 

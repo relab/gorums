@@ -174,9 +174,9 @@ func TestGeneratedCodeDerivedConfig(t *testing.T) {
 // named ID, even though ID is a reserved identifier in the generated package.
 func TestGeneratedCodeIDField(t *testing.T) {
 	req := &dev.Request{}
-	req.SetId(42)
-	if got := req.GetId(); got != 42 {
-		t.Errorf("GetId() = %d, want 42", got)
+	req.SetID(42)
+	if got := req.GetID(); got != 42 {
+		t.Errorf("GetID() = %d, want 42", got)
 	}
 	var _ dev.ID // the reserved alias must remain usable alongside the field
 }

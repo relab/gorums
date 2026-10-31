@@ -15,7 +15,8 @@ service MetadataTest {
 }
 
 message NodeID {
-    uint32 id = 1;
+    // buf:lint:ignore FIELD_LOWER_SNAKE_CASE
+    uint32 ID = 1;
 }
 
 message IPAddr {
