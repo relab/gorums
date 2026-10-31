@@ -36,7 +36,7 @@ type ServerOption func(*serverOptions)
 //
 // The sendSize controls the capacity of the server's per-node send queue for
 // outgoing peer messages, with the same full-queue semantics as
-// [WithSendBufferSize]. Two-way requests fail fast when the queue is full.
+// [WithDialBufferSizes]. Two-way requests fail fast when the queue is full.
 // One-way requests wait for space. A reply never waits: it fails fast, or is
 // dropped when it has no channel to report the error on. A sendSize of 0
 // selects [DefaultSendBufferSize]. Larger values may increase throughput at

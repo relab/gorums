@@ -18,33 +18,6 @@ func TestNewServerToleratesNilOptions(t *testing.T) {
 	srv.Stop()
 }
 
-// TestWithSendBufferSizeDefault verifies that the send queue capacity defaults
-// to defaultSendBufferSize and that an explicit size of 0 selects the same
-// default. Capacity 0 is not viable under the full-queue fail-fast semantics:
-// every two-way request enqueued while the sender is busy would fail.
-func TestWithSendBufferSizeDefault(t *testing.T) {
-	tests := []struct {
-		name string
-		opt  DialOption
-		want uint
-	}{
-		{name: "Unset", opt: nil, want: conn.DefaultSendBufferSize},
-		{name: "Zero", opt: WithSendBufferSize(0), want: conn.DefaultSendBufferSize},
-		{name: "Explicit", opt: WithSendBufferSize(128), want: 128},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			opts := conn.NewDialOptions()
-			if tt.opt != nil {
-				tt.opt(&opts)
-			}
-			if opts.SendBufferSize != tt.want {
-				t.Errorf("SendBufferSize = %d, want %d", opts.SendBufferSize, tt.want)
-			}
-		})
-	}
-}
-
 // TestWithDialBufferSizes verifies that WithDialBufferSizes sets both buffer
 // sizes of outbound channels, and that 0 selects the default for each: the
 // receive size resolves to the default in the stream layer and stays 0 here,
