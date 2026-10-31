@@ -212,9 +212,9 @@ func (s *session) accept() {
 	close(s.verdict)
 }
 
-// receiveFailed ends the session after receiving failed with err. The pending
-// calls fail with err if it refuses the stream or fails calls (see
-// [failsCalls]), and are retried otherwise.
+// receiveFailed ends the session after a receive failed with err. If the
+// session is outbound and err is due to a refused stream or resource
+// exhaustion, pending calls fail with err. Otherwise, they are retried.
 func (s *session) receiveFailed(err error) {
 	prev := s.handoff.Swap(streamClosed)
 	if prev != streamAccepted {
@@ -224,7 +224,7 @@ func (s *session) receiveFailed(err error) {
 		close(s.verdict)
 	}
 	switch {
-	case s.refusal != nil || s.requeue && failsCalls(err):
+	case s.refusal != nil || s.requeue && isResourceExhausted(err):
 		s.recordHealth(err)
 		s.cancel()
 		for _, req := range s.pending.drain() {
@@ -266,15 +266,15 @@ func (s *session) handle(msg *Message) {
 	req.deliver(resp)
 }
 
-// fail records err as the channel's health and ends the session, unless the
-// session had already ended, in which case err only reflects that ending. An
-// outbound session's pending calls fail with err if it fails calls (see
-// [failsCalls]), and are retried otherwise.
+// fail ends the session. It records err as the channel's health unless the
+// session has already ended. If the session is outbound and err is due to
+// resource exhaustion, pending calls fail with err. Otherwise, they are
+// retried.
 func (s *session) fail(err error) {
 	if !s.ended() {
 		s.recordHealth(err)
 	}
-	if s.requeue && failsCalls(err) {
+	if s.requeue && isResourceExhausted(err) {
 		s.cancel()
 		for _, req := range s.pending.drain() {
 			req.sendErrorResponse(s.id, err)

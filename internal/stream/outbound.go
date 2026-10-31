@@ -63,11 +63,12 @@ type OutboundOptions struct {
 // [ErrSendQueueFull]. Streaming calls fail with [ErrStreamDown] instead. They
 // are not sent again, since they may already have received responses.
 //
-// A stream that ends with codes.ResourceExhausted fails the calls on it with
-// that status instead. gRPC ends a stream this way when a request exceeds the
-// client's send limit or the server's receive limit, and sending the request
-// again would end the next stream the same way. The other calls on the stream
-// fail too, since the client cannot tell which request was too large.
+// If the stream ends with codes.ResourceExhausted, the calls still awaiting
+// responses fail with that status and are not sent again. gRPC ends a stream
+// this way when a request exceeds the client's send limit or the server's
+// receive limit, and sending the request again would end the next stream the
+// same way. The other calls on the stream fail too, since the client cannot
+// tell which request was too large.
 //
 // A server that shuts down gracefully first tells the client to stop using
 // the connection (a GOAWAY). The channel then sends new calls on a new
