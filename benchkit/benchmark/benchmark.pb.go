@@ -88,7 +88,6 @@ type TimedMsg struct {
 	state               protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_SendTime int64                  `protobuf:"varint,1,opt,name=send_time,json=sendTime"`
 	xxx_hidden_Payload  []byte                 `protobuf:"bytes,2,opt,name=payload"`
-	xxx_hidden_SenderId uint32                 `protobuf:"varint,3,opt,name=sender_id,json=senderId"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -132,13 +131,6 @@ func (x *TimedMsg) GetPayload() []byte {
 	return nil
 }
 
-func (x *TimedMsg) GetSenderId() uint32 {
-	if x != nil {
-		return x.xxx_hidden_SenderId
-	}
-	return 0
-}
-
 func (x *TimedMsg) SetSendTime(v int64) {
 	x.xxx_hidden_SendTime = v
 }
@@ -150,16 +142,11 @@ func (x *TimedMsg) SetPayload(v []byte) {
 	x.xxx_hidden_Payload = v
 }
 
-func (x *TimedMsg) SetSenderId(v uint32) {
-	x.xxx_hidden_SenderId = v
-}
-
 type TimedMsg_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	SendTime int64
 	Payload  []byte
-	SenderId uint32
 }
 
 func (b0 TimedMsg_builder) Build() *TimedMsg {
@@ -168,7 +155,6 @@ func (b0 TimedMsg_builder) Build() *TimedMsg {
 	_, _ = b, x
 	x.xxx_hidden_SendTime = b.SendTime
 	x.xxx_hidden_Payload = b.Payload
-	x.xxx_hidden_SenderId = b.SenderId
 	return m0
 }
 
@@ -178,11 +164,10 @@ const file_benchmark_benchmark_proto_rawDesc = "" +
 	"\n" +
 	"\x19benchmark/benchmark.proto\x12\tbenchmark\x1a\x1bgoogle/protobuf/empty.proto\x1a\fgorums.proto\" \n" +
 	"\x04Echo\x12\x18\n" +
-	"\apayload\x18\x01 \x01(\fR\apayload\"^\n" +
+	"\apayload\x18\x01 \x01(\fR\apayload\"A\n" +
 	"\bTimedMsg\x12\x1b\n" +
 	"\tsend_time\x18\x01 \x01(\x03R\bsendTime\x12\x18\n" +
-	"\apayload\x18\x02 \x01(\fR\apayload\x12\x1b\n" +
-	"\tsender_id\x18\x03 \x01(\rR\bsenderId2\xb7\x01\n" +
+	"\apayload\x18\x02 \x01(\fR\apayload2\xb7\x01\n" +
 	"\tBenchmark\x124\n" +
 	"\n" +
 	"QuorumCall\x12\x0f.benchmark.Echo\x1a\x0f.benchmark.Echo\"\x04\xa0\xb5\x18\x01\x124\n" +
