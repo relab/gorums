@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/internal/stream"
+	"github.com/relab/gorums/internal/testutils/mock"
 	"github.com/relab/gorums/internal/testutils/servers"
 	"go.uber.org/goleak"
 	"google.golang.org/grpc"
@@ -26,6 +28,30 @@ func Context(t testing.TB, timeout time.Duration) context.Context {
 	ctx, cancel := context.WithTimeout(t.Context(), timeout)
 	t.Cleanup(cancel)
 	return ctx
+}
+
+// ServerContext returns a [gorums.ServerContext] whose SenderID reports
+// senderID, for unit tests that call a handler or interceptor directly. Its
+// Context is t.Context(). It has no peer configuration, and a handler that
+// sends a message through it sends nothing. It fails the test if the context
+// cannot be built.
+func ServerContext(t testing.TB, senderID gorums.ID) gorums.ServerContext {
+	t.Helper()
+	var (
+		srvCtx gorums.ServerContext
+		ran    bool
+	)
+	srv := gorums.NewServer()
+	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message) (*gorums.Message, error) {
+		srvCtx, ran = ctx, true
+		return nil, nil
+	})
+	req := stream.Message_builder{Method: mock.TestMethod}.Build()
+	srv.HandleRequest(t.Context(), senderID, req, func() {}, func(*stream.Message) {})
+	if !ran {
+		t.Fatalf("gorumstest: HandleRequest did not run the handler for %s", mock.TestMethod)
+	}
+	return srvCtx
 }
 
 // WaitUntil polls predicate until it returns true or timeout elapses.

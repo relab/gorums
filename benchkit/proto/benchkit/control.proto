@@ -32,12 +32,10 @@ message ClockSyncResponse {
 }
 
 // DoneRequest is multicast to advise peers that the sender has finished its
-// own benchmark work and will issue no further calls.
-message DoneRequest {
-  // sender_id is the sender's Gorums node ID, used to de-duplicate signals
-  // and to name peers that have not yet signaled when diagnosing a timeout.
-  uint32 sender_id = 1;
-}
+// own benchmark work and will issue no further calls. The receiver identifies
+// the sender by its Gorums node ID, which it de-duplicates signals by and uses
+// to name peers that have not yet signaled when diagnosing a timeout.
+message DoneRequest {}
 
 // The Result, Report, and MemoryStat data messages live in benchkit.proto, a
 // gorums-free file that consumers (e.g. sweep) can compile standalone without

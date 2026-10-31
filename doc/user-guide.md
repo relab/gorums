@@ -1927,6 +1927,10 @@ The sender is the last hop.
 When a message travels through several nodes, for example down a tree, `SenderID` identifies the node that forwarded it, not the node where the message started.
 Put the origin in the message if the handler needs it.
 
+To unit-test a handler that reads `SenderID`, call it directly with `gorumstest.ServerContext(t, senderID)`.
+`ServerContext` has no exported constructor, so a test cannot build one with a chosen sender.
+The context from `gorumstest.ServerContext` has no peer configuration, and a message that the handler sends through it goes nowhere.
+
 The sender asserts its ID when it connects.
 A server whose peer nodes implement `TLSIdentity` checks the ID of every configured peer; see [Authenticating Peers](#authenticating-peers).
 Peer IDs are unauthenticated when the peer nodes do not declare TLS identities.

@@ -28,13 +28,13 @@ func (srv *workloadServer) SlowServer(ctx gorums.ServerContext, in *Echo) (*Echo
 	return in, nil
 }
 
-func (srv *workloadServer) Multicast(_ gorums.ServerContext, msg *TimedMsg) {
+func (srv *workloadServer) Multicast(ctx gorums.ServerContext, msg *TimedMsg) {
 	srv.ctrl.RecordOp()
 	latency := time.Duration(time.Now().UnixNano() - msg.GetSendTime())
-	// A symmetric sender tags the message with its node ID (>= 1) so its
-	// samples can be corrected by that sender's clock offset; an untagged
-	// message (sender ID 0) records into the flat samples instead.
-	if id := msg.GetSenderId(); id != 0 {
+	// A symmetric peer has a node ID (>= 1), so its samples can be corrected
+	// by that sender's clock offset; a request from a regular client (sender
+	// ID 0) records into the flat samples instead.
+	if id := ctx.SenderID(); id != 0 {
 		srv.ctrl.Stats().AddLatencyBySender(id, latency)
 	} else {
 		srv.ctrl.Stats().AddLatency(latency)

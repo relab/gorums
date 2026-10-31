@@ -418,7 +418,7 @@ func TestSymmetricRunOver(t *testing.T) {
 	// Signal every peer done on the first server; the run is now winding down.
 	target.controls[0].ArmDone(size)
 	for id := 1; id <= size; id++ {
-		target.controls[0].Done(gorums.ServerContext{}, benchkit.DoneRequest_builder{SenderId: uint32(id)}.Build())
+		target.controls[0].Done(gorumstest.ServerContext(t, gorums.ID(id)), &benchkit.DoneRequest{})
 	}
 	if !anyPeerFinished(target) {
 		t.Error("anyPeerFinished = false after all peers Done, want true")
@@ -677,7 +677,7 @@ func TestRunSymmetricQuorumCallStragglerEndsCleanly(t *testing.T) {
 	// and it has signaled Done, so quorumRunOver must recognize this as the
 	// expected end of the run rather than a fault.
 	servers[1].Stop()
-	target.controls[0].Done(gorums.ServerContext{}, benchkit.DoneRequest_builder{SenderId: 2}.Build())
+	target.controls[0].Done(gorumstest.ServerContext(t, 2), &benchkit.DoneRequest{})
 
 	// Duration is deliberately long relative to the expected stop: a regular
 	// (non-run-over) failure is only counted via Stats.RecordError and the
