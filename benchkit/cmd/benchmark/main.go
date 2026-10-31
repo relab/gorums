@@ -44,7 +44,7 @@ func parseFlags() *flags {
 	flag.IntVar(&f.configSize, "config-size", 4, "Size of the configuration to use. In local mode this is the number of in-process servers and must be >= 1. In coordinator mode, values < 1 or greater than the number of remotes use all remotes. Ignored in distributed mode (-self), where every remote is used.")
 	flag.IntVar(&f.qSize, "quorum-size", 0, "Number of replies to wait for before completing a quorum call.")
 	flag.UintVar(&f.sendBuffer, "send-buffer", 0, "The size of the client's (and server's reverse channel) send buffer.")
-	flag.UintVar(&f.recvBuffer, "recv-buffer", 0, "The size of the receive buffer of the server and of the client's outbound channels.")
+	flag.UintVar(&f.recvBuffer, "recv-buffer", 0, "The size of the server's receive buffer and the client's receive buffer.")
 	flag.BoolVar(&f.list, "list", false, "List all available benchmarks.")
 	flag.StringVar(&f.label, "label", "", "Label for this run, stored in the output file.")
 	flag.StringVar(&f.compare, "compare", "", "Compare against results in this `file`.")
