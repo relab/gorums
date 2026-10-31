@@ -21,7 +21,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -476,135 +475,6 @@ func TestChannelErrors(t *testing.T) {
 				t.Errorf("expected error containing %q, got: %v", tt.wantErr, resp.Err)
 			}
 		})
-	}
-}
-
-// TestChannelVerify verifies that a channel with a verifier checks the remote
-// end of each new stream against the channel's ID, with the stream's
-// context, before it sends requests on the stream.
-func TestChannelVerify(t *testing.T) {
-	errRefused := errors.New("certificate names another node")
-	tests := []struct {
-		name       string
-		noVerifier bool
-		verifyErr  error
-		wantCode   codes.Code
-	}{
-		{name: "NoVerifier", noVerifier: true, wantCode: codes.OK},
-		{name: "Accepted", wantCode: codes.OK},
-		{name: "Refused", verifyErr: errRefused, wantCode: codes.Unauthenticated},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var received atomic.Int32
-			countingEcho := func(stream Gorums_NodeStreamServer) error {
-				for {
-					in, err := stream.Recv()
-					if err != nil {
-						return err
-					}
-					received.Add(1)
-					if err := stream.Send(in); err != nil {
-						return err
-					}
-				}
-			}
-			var mu sync.Mutex
-			var checkedIDs []ID
-			missingPeer := false
-			var opts OutboundOptions
-			if !tt.noVerifier {
-				opts.Verify = func(ctx context.Context, id ID) error {
-					_, ok := peer.FromContext(ctx)
-					mu.Lock()
-					defer mu.Unlock()
-					checkedIDs = append(checkedIDs, id)
-					missingPeer = missingPeer || !ok
-					return tt.verifyErr
-				}
-			}
-			tc := setupChannelOptions(t, opts, countingEcho)
-
-			resp := sendRequest(t, tc.OutboundChannel, Request{}, 1)
-			if got := status.Code(resp.Err); got != tt.wantCode {
-				t.Fatalf("request error = %v; want code %v", resp.Err, tt.wantCode)
-			}
-			if tt.verifyErr != nil {
-				want := "gorums: node 1 failed verification: " + tt.verifyErr.Error()
-				if !strings.Contains(resp.Err.Error(), want) {
-					t.Errorf("request error = %q; want it to contain %q", resp.Err, want)
-				}
-				if got := received.Load(); got != 0 {
-					t.Errorf("server received %d messages on refused streams; want 0", got)
-				}
-			}
-
-			mu.Lock()
-			defer mu.Unlock()
-			if tt.noVerifier {
-				return
-			}
-			if len(checkedIDs) == 0 {
-				t.Fatal("verifier was not called")
-			}
-			for _, id := range checkedIDs {
-				if id != 1 {
-					t.Errorf("verifier checked node %d; want 1, the channel's ID", id)
-				}
-			}
-			if missingPeer {
-				t.Error("verifier context carries no peer information; want the stream's context")
-			}
-		})
-	}
-}
-
-// TestChannelVerifyChecksEveryStream verifies that a channel with a verifier
-// checks the remote end of every stream it opens, not only the first: after
-// the server kills the first stream, the eager reconnect's replacement stream
-// is checked against the channel's ID before it carries a request.
-func TestChannelVerifyChecksEveryStream(t *testing.T) {
-	var mu sync.Mutex
-	var checkedIDs []ID
-	opts := OutboundOptions{
-		RecvBufferSize: testRecvBufferSize,
-		EagerReconnect: true,
-		Verify: func(_ context.Context, id ID) error {
-			mu.Lock()
-			defer mu.Unlock()
-			checkedIDs = append(checkedIDs, id)
-			return nil
-		},
-	}
-	serverFn, conns := killFirstStreamServer()
-	tc := setupChannelOptions(t, opts, serverFn)
-
-	// The server kills the first stream; the channel redials on its own.
-	for want := int32(1); want <= 2; want++ {
-		select {
-		case n := <-conns:
-			if n != want {
-				t.Fatalf("accepted stream ordinal = %d; want %d", n, want)
-			}
-		case <-time.After(defaultTestTimeout):
-			t.Fatalf("stream %d never reached the server", want)
-		}
-	}
-
-	// A request is sent only after the second stream's check returns.
-	if resp := sendRequest(t, tc.OutboundChannel, Request{}, 1); resp.Err != nil {
-		t.Fatalf("request on the second stream: %v", resp.Err)
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
-	if len(checkedIDs) < 2 {
-		t.Fatalf("verifier called %d times; want at least 2, once per stream", len(checkedIDs))
-	}
-	for _, id := range checkedIDs {
-		if id != 1 {
-			t.Errorf("verifier checked node %d; want 1, the channel's ID", id)
-		}
 	}
 }
 
@@ -1622,33 +1492,6 @@ func TestChannelRefusalRacesSends(t *testing.T) {
 				t.Errorf("server saw %d streams in %v, want at most 20", got, window)
 			}
 		})
-	}
-}
-
-// TestChannelVerifyFailureBacksOff verifies that a channel whose own check of
-// the server fails paces the streams it opens, while calls keep failing with
-// codes.Unauthenticated.
-func TestChannelVerifyFailureBacksOff(t *testing.T) {
-	var streams atomic.Int32
-	countingEcho := func(stream Gorums_NodeStreamServer) error {
-		streams.Add(1)
-		return echoServer(stream)
-	}
-	opts := OutboundOptions{RecvBufferSize: testRecvBufferSize, Verify: func(context.Context, ID) error { return errors.New("certificate names another node") }}
-	tc := setupChannelOptions(t, opts, countingEcho)
-
-	const window = 500 * time.Millisecond
-	calls := 0
-	for deadline := time.Now().Add(window); time.Now().Before(deadline); calls++ {
-		resp := sendRequest(t, tc.OutboundChannel, Request{}, uint64(calls+1))
-		if got := status.Code(resp.Err); got != codes.Unauthenticated {
-			t.Fatalf("call %d failed with %v, want code %v", calls+1, resp.Err, codes.Unauthenticated)
-		}
-	}
-	// As in TestChannelRefusalBacksOff, the doubling delay allows about five
-	// attempts in the window.
-	if got := streams.Load(); got > 7 {
-		t.Errorf("server saw %d streams during %d calls in %v, want at most 7", got, calls, window)
 	}
 }
 

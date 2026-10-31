@@ -21,6 +21,7 @@ import (
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	"go.uber.org/goleak"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -1242,7 +1243,8 @@ var (
 )
 
 // TestServerIdentityConfiguration verifies that declaring a TLS identity on
-// any peer requires a nonempty, unique identity on every peer.
+// any peer requires a nonempty, unique identity on every peer, and transport
+// credentials set with WithTransportCredentials.
 func TestServerIdentityConfiguration(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -1288,6 +1290,14 @@ func TestServerIdentityConfiguration(t *testing.T) {
 			},
 			want: `gorums: nodes 1 and 2 have the same TLS identity "Node1.Relab.Example"`,
 		},
+		{
+			name: "MissingCredentials",
+			nodes: map[gorums.ID]gorums.NodeAddress{
+				1: tlsNode{"127.0.0.1:9001", "spiffe://relab/node/1"},
+				2: tlsNode{"127.0.0.1:9002", "spiffe://relab/node/2"},
+			},
+			want: "gorums: node 1 has a TLS identity; set the TLS credentials with WithTransportCredentials",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1308,7 +1318,7 @@ func TestServerIdentityRequiresTLS(t *testing.T) {
 			gorums.WithPeers(1, gorums.WithNodes(map[gorums.ID]tlsNode{
 				1: {"127.0.0.1:9001", "spiffe://relab/node/1"},
 				2: {"127.0.0.1:9002", "spiffe://relab/node/2"},
-			}), gorumstest.DialOptions(t)),
+			}), gorumstest.DialOptions(t), gorums.WithTransportCredentials(insecure.NewCredentials())),
 			gorums.WithConnectCallback(func(_ context.Context) { callbacks.Add(1) }),
 		)
 		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
@@ -1346,7 +1356,7 @@ func TestServerIdentitySnapshot(t *testing.T) {
 	first.addr, first.identity = "not-an-address", ""
 	delete(nodes, 2)
 	nodes[3] = &tlsNode{"127.0.0.1:9003", ""}
-	srv := gorums.NewServer(gorums.WithPeers(1, source, gorumstest.InsecureDialOptions(t)))
+	srv := gorums.NewServer(gorums.WithPeers(1, source, gorumstest.InsecureDialOptions(t), gorums.WithTransportCredentials(insecure.NewCredentials())))
 	t.Cleanup(srv.Stop)
 	if got := srv.PeerConfig().NodeIDs(); !slices.Equal(got, []gorums.ID{1, 2}) {
 		t.Errorf("peer IDs = %v; want [1 2]", got)
@@ -1357,21 +1367,28 @@ func TestServerIdentitySnapshot(t *testing.T) {
 }
 
 // TestServerIdentityStandaloneConfig verifies that NewConfig validates the
-// identities of its source.
+// identities of its source, and requires transport credentials set with
+// WithTransportCredentials for them.
 // The dial-side check itself is covered by TestClientIdentityCheck.
 func TestServerIdentityStandaloneConfig(t *testing.T) {
 	tests := []struct {
-		name     string
-		identity string
-		wantErr  string
+		name          string
+		identity      string
+		noCredentials bool
+		wantErr       string
 	}{
 		{name: "Valid", identity: "spiffe://relab/node/1"},
 		{name: "Empty", wantErr: "node 1 has an empty TLS identity"},
+		{name: "MissingCredentials", identity: "spiffe://relab/node/1", noCredentials: true, wantErr: "gorums: node 1 has a TLS identity; set the TLS credentials with WithTransportCredentials"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			nodes := gorums.WithNodes(map[gorums.ID]tlsNode{1: {"127.0.0.1:9001", tt.identity}})
-			cfg, closeFn, err := gorums.NewConfig(nodes, gorumstest.InsecureDialOptions(t))
+			opts := []gorums.DialOption{gorumstest.InsecureDialOptions(t)}
+			if !tt.noCredentials {
+				opts = append(opts, gorums.WithTransportCredentials(insecure.NewCredentials()))
+			}
+			cfg, closeFn, err := gorums.NewConfig(nodes, opts...)
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Errorf("NewConfig() error = %v; want it to contain %q", err, tt.wantErr)
@@ -1402,7 +1419,7 @@ func TestServerIdentityPeerStreams(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opts := append([]gorumstest.Option{localIdentityNodes()}, tt.opts...)
+			opts := append([]gorumstest.Option{localIdentityNodes(), insecureIdentityCredentials()}, tt.opts...)
 			servers := gorumstest.LocalServers(t, n, opts...)
 			for _, srv := range servers {
 				for _, node := range srv.PeerConfig() {
@@ -1428,6 +1445,13 @@ func localIdentityNodes() gorums.LocalServerOption {
 	})
 }
 
+// insecureIdentityCredentials gives the local servers the transport
+// credentials that TLS identities require. They are insecure, so every
+// identity check fails: the connections do not use TLS.
+func insecureIdentityCredentials() gorums.LocalServerOption {
+	return gorums.WithLocalDialOptions(gorums.WithTransportCredentials(insecure.NewCredentials()))
+}
+
 // TestServerIdentityRefusals verifies that a server with peer identities
 // fails its calls to a peer that does not pass the check, that a peer it
 // refuses sees the verifier's text in its node's last error, that it refuses
@@ -1436,7 +1460,7 @@ func localIdentityNodes() gorums.LocalServerOption {
 func TestServerIdentityRefusals(t *testing.T) {
 	start := func(t *testing.T) []*gorums.Server {
 		t.Helper()
-		servers := gorumstest.LocalServers(t, 2, localIdentityNodes())
+		servers := gorumstest.LocalServers(t, 2, localIdentityNodes(), insecureIdentityCredentials())
 		for _, srv := range servers {
 			srv.RegisterHandler(mock.TestMethod, gorumstest.EchoHandler("echo"))
 		}

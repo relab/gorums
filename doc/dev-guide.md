@@ -290,6 +290,7 @@ There are three channel kinds:
   A stream that the server refuses is not lost: it ends with a refusal code (`Unauthenticated`, `PermissionDenied`, `InvalidArgument`, or `Unimplemented`) before it delivered a frame.
   Its pending two-way and streaming calls fail with the refusal, as does a one-way call whose send fails on it.
   The channel then backs off before it opens the next stream, failing requests at once with the refusal until then.
+  A stream that cannot be opened because of a refusal code is handled the same way, for example when the connection failed the dial-side identity check.
   A stream opened after a refusal is suspect for health reporting: its sends do not clear `LastErr` until it delivers a frame or lives 2 s.
   Connection reporting is optimistic: each stream counts as up when opened, before the server accepts or refuses it.
 * `InboundChannel` runs over one stream that the server accepted; its single `session` ends with the stream.
@@ -300,12 +301,7 @@ A `session` sends queued requests on its `BidiStream`, records two-way calls in 
 The dispatcher runs handlers one at a time, in arrival order.
 A handler that returns without calling `Release` hands its goroutine to the next queued handler, so a busy stream keeps one goroutine and the stack it has grown; an early `Release` starts the next handler on a new goroutine.
 On the server side, `Server.NodeStream` asks a `PeerAcceptor` for the `InboundChannel` of each accepted stream.
-An `OutboundChannel` can use a `PeerVerifier` to check the remote node's identity.
-The verifier receives the stream's context and the channel's expected node ID.
-It runs on each new stream, before any request is sent.
-If verification fails, the channel closes the stream.
-The waiting request fails with `codes.Unauthenticated`.
-The channel then backs off as for a refused stream.
+The stream layer does not check identities; the connection layer below does.
 
 ```mermaid
 classDiagram
@@ -411,7 +407,12 @@ It implements `stream.PeerAcceptor`, attaching each accepted stream to the match
 If a `PeerVerifier` is set, `InboundManager` checks each claimed peer ID.
 It refuses unknown IDs.
 For a known ID, it attaches the stream only after verification succeeds.
-The outbound manager gives the same verifier to the channels that dial configured peers.
+The outbound manager uses the same verifier for the configured peers that it dials.
+It wraps the node's transport credentials in `verifiedCredentials`, which run the verifier right after each TLS handshake, with the handshake's `AuthInfo` in the context.
+A failed check closes the connection before it carries any stream.
+The handshake error carries `codes.Unauthenticated`, and gRPC passes that code on to the stream that the `OutboundChannel` tries to open.
+The channel treats it as a refusal and backs off, while gRPC's reconnect backoff paces the handshakes.
+A node with a verifier therefore requires `DialOptions.TransportCredentials`, which `WithTransportCredentials` sets.
 Both managers implement `nodeRegistry`, which a `NodeSource` uses to build a configuration.
 `WithNodes` captures each node's address and optional `TLSIdentity` together.
 When a server uses that source through `WithPeers`, `conn.NewPeerVerifier` validates the identity set and creates the internal TLS verifier.

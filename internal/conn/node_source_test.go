@@ -5,12 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// insecureDial sets the transport credentials that nodes with TLS identities
+// require. They are insecure, since these tests never connect.
 func insecureDial(o *DialOptions) {
-	o.GRPCDialOptions = append(o.GRPCDialOptions, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	o.TransportCredentials = insecure.NewCredentials()
 }
 
 // TestNodeSourceHasIdentity verifies that any declared identity enables checks,

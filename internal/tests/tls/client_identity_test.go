@@ -7,8 +7,8 @@ import (
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // TestClientIdentityCheck verifies that a [gorums.NewConfig] client checks
@@ -36,7 +36,7 @@ func TestClientIdentityCheck(t *testing.T) {
 			}
 			cfg, closeFn, err := gorums.NewConfig(gorums.WithNodes(nodes),
 				dialOpt,
-				gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(ca.dialCreds())),
+				gorums.WithTransportCredentials(ca.dialCreds()),
 			)
 			if err != nil {
 				t.Fatalf("NewConfig: %v", err)
@@ -69,10 +69,14 @@ func TestClientIdentityInsecure(t *testing.T) {
 	cfg, closeFn, err := gorums.NewConfig(
 		gorums.WithNodes(map[gorums.ID]peerNode{1: {servers[0].Addr(), nodeIdentity(1)}}),
 		gorumstest.DialOptions(t),
+		gorums.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
 		t.Fatalf("NewConfig: %v", err)
 	}
 	t.Cleanup(closeFn)
-	awaitCode(t, cfg.Node(1), codes.Unauthenticated)
+	err = awaitCode(t, cfg.Node(1), codes.Unauthenticated)
+	if want := "gorums: node 1 failed verification: connection does not use TLS"; !strings.Contains(err.Error(), want) {
+		t.Errorf("call to node 1: err = %q; want it to contain %q", err, want)
+	}
 }

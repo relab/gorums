@@ -399,7 +399,8 @@ type ServerContext struct {
 // The sender is the last hop: when a message travels through several nodes,
 // SenderID identifies the node that forwarded it. The sender asserts its ID
 // when it connects. A server whose peers declare [TLSIdentity] authenticates
-// every peer on streams in both directions.
+// every peer, both on the streams that peers open and on the connections that
+// it dials.
 func (ctx *ServerContext) SenderID() ID {
 	return ctx.senderID
 }

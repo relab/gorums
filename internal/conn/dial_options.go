@@ -5,6 +5,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/relab/gorums/internal/stream"
@@ -17,17 +18,18 @@ type DialOption func(*DialOptions)
 // connections. Its fields are populated by the option constructors in package
 // gorums and consumed by the outbound manager when it builds nodes.
 type DialOptions struct {
-	GRPCDialOptions []grpc.DialOption
-	Logger          *log.Logger
-	Backoff         backoff.Config
-	SendBufferSize  uint
-	RecvBufferSize  uint
-	Metadata        metadata.MD
-	Handler         stream.RequestHandler
-	LocalNodeID     ID              // if non-zero, skip setting handler on this node ID
-	StreamDedup     bool            // reuse a lower-ID peer's dialed stream instead of dialing back
-	InboundManager  *InboundManager // set when the configuration carries a server (peer or back-channel client); enables eager reconnect and, with StreamDedup, borrowing
-	Err             error           // records misuse of a dial option; surfaced by NewConfig
+	GRPCDialOptions      []grpc.DialOption
+	TransportCredentials credentials.TransportCredentials // if non-nil, replaces the credentials in GRPCDialOptions; nodes with TLS identities require it
+	Logger               *log.Logger
+	Backoff              backoff.Config
+	SendBufferSize       uint
+	RecvBufferSize       uint
+	Metadata             metadata.MD
+	Handler              stream.RequestHandler
+	LocalNodeID          ID              // if non-zero, skip setting handler on this node ID
+	StreamDedup          bool            // reuse a lower-ID peer's dialed stream instead of dialing back
+	InboundManager       *InboundManager // set when the configuration carries a server (peer or back-channel client); enables eager reconnect and, with StreamDedup, borrowing
+	Err                  error           // records misuse of a dial option; surfaced by NewConfig
 }
 
 // DefaultSendBufferSize is the per-node send queue capacity used when no

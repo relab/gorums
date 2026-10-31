@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/relab/gorums/internal/stream"
@@ -33,10 +34,6 @@ func sharedNodeTransport(peer *Node) *stream.Transport {
 // start at [ClientIDStart] and skip configured IDs. Under stream
 // deduplication, the peer with the lower ID dials.
 type ID = stream.ID
-
-// PeerVerifier reports whether the remote end of a stream is the node with a
-// given ID; see [stream.PeerVerifier].
-type PeerVerifier = stream.PeerVerifier
 
 // Node encapsulates the state of a node on which a remote procedure call
 // can be performed.
@@ -84,10 +81,10 @@ type nodeOptions struct {
 	Metadata        metadata.MD
 	GRPCDialOptions []grpc.DialOption
 	Handler         stream.RequestHandler
-	EagerReconnect  bool             // re-establish a lost stream proactively; see [stream.OutboundOptions]
-	OnStreamChange  func()           // optional; invoked on outbound stream transitions
-	Verify          PeerVerifier     // optional; checks the remote end of each dialed stream
-	Manager         *outboundManager // owning manager
+	EagerReconnect  bool                             // re-establish a lost stream proactively; see [stream.OutboundOptions]
+	OnStreamChange  func()                           // optional; invoked on outbound stream transitions
+	Credentials     credentials.TransportCredentials // optional; replaces the credentials in GRPCDialOptions
+	Manager         *outboundManager                 // owning manager
 }
 
 // newOutboundNode creates a new node using the provided options. It establishes
@@ -97,7 +94,12 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 	n := newNode(opts.ID, addr, opts.Manager, transport)
 
 	// Create gRPC connection to the node without connecting (lazy dial).
-	conn, err := grpc.NewClient(n.addr, opts.GRPCDialOptions...)
+	// The node's credentials come last, so they replace any earlier ones.
+	dialOpts := opts.GRPCDialOptions
+	if opts.Credentials != nil {
+		dialOpts = append(slices.Clip(dialOpts), grpc.WithTransportCredentials(opts.Credentials))
+	}
+	conn, err := grpc.NewClient(n.addr, dialOpts...)
 	if err != nil {
 		return nil, NodeError{nodeID: n.id, cause: err}
 	}
@@ -114,7 +116,6 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 		Latency:        transport.Latency(),
 		EagerReconnect: opts.EagerReconnect,
 		OnStreamChange: opts.OnStreamChange,
-		Verify:         opts.Verify,
 	}))
 	return n, nil
 }

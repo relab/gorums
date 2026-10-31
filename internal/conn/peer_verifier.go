@@ -11,9 +11,68 @@ import (
 	"strconv"
 	"strings"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 )
+
+// PeerVerifier reports whether the remote end of a connection is the node
+// with ID id. ctx carries the remote end's [peer.Peer]. On a server, ctx is
+// the stream's context, which also carries the stream's incoming metadata. On
+// a dialer, the peer holds the AuthInfo of the TLS handshake. A PeerVerifier
+// returns nil to accept the remote end, and an error that explains the
+// refusal otherwise. It must be safe for concurrent use and should return
+// promptly.
+type PeerVerifier func(ctx context.Context, id ID) error
+
+// verificationError is the error for a remote end that failed a
+// [PeerVerifier] check as node id. Its gRPC status code is
+// codes.Unauthenticated.
+type verificationError struct {
+	id  ID
+	err error
+}
+
+func (e verificationError) Error() string {
+	return fmt.Sprintf("gorums: node %d failed verification: %v", e.id, e.err)
+}
+
+// GRPCStatus returns e as a codes.Unauthenticated status. gRPC uses it for a
+// stream that a server refuses with e, and for a call on a connection whose
+// handshake failed with e.
+func (e verificationError) GRPCStatus() *status.Status {
+	return status.New(codes.Unauthenticated, e.Error())
+}
+
+// verifiedCredentials are transport credentials that check the server at the
+// other end of each connection with verify, right after the TLS handshake and
+// before the connection carries any stream. If the check fails, the
+// connection is closed, and the handshake fails with a [verificationError].
+type verifiedCredentials struct {
+	credentials.TransportCredentials
+	id     ID // the node that each connection dials
+	verify PeerVerifier
+}
+
+// ClientHandshake runs the wrapped handshake and checks its result.
+func (c verifiedCredentials) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	conn, authInfo, err := c.TransportCredentials.ClientHandshake(ctx, authority, rawConn)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := c.verify(peer.NewContext(ctx, &peer.Peer{AuthInfo: authInfo}), c.id); err != nil {
+		_ = conn.Close()
+		return nil, nil, verificationError{id: c.id, err: err}
+	}
+	return conn, authInfo, nil
+}
+
+// Clone returns a copy of c that wraps a clone of c's credentials.
+func (c verifiedCredentials) Clone() credentials.TransportCredentials {
+	c.TransportCredentials = c.TransportCredentials.Clone()
+	return c
+}
 
 // peerIdentity is the name that a node's certificate must carry: a URI SAN
 // if uri is set, and a DNS SAN otherwise.
@@ -103,8 +162,8 @@ func isDNSName(s string) bool {
 // NewPeerVerifier returns a TLS verifier for nodes that declare [TLSIdentity],
 // or nil for an address-only source. If any node declares an identity, every
 // node must declare a nonempty identity that a certificate SAN can match (see
-// [parseIdentity]), and no two IDs may name the same SAN. A stream is accepted
-// only if its verified certificate has the expected SAN.
+// [parseIdentity]), and no two IDs may name the same SAN. The verifier accepts
+// a remote end only if its verified certificate has the expected SAN.
 func NewPeerVerifier(nodes NodeSource) (PeerVerifier, error) {
 	if nodes == nil {
 		return nil, nil

@@ -92,22 +92,31 @@ func WithServerInterceptors(i ...ServerInterceptor) ServerOption {
 // contains a duplicate or malformed address.
 //
 // If any node supplied through [WithNodes] implements [TLSIdentity], the server
-// authenticates every peer on each stream, in both directions, before callbacks
-// or handlers run. Every node must then supply a unique identity that a
-// certificate SAN can match; see [TLSIdentity].
-// A failed check or an unknown claimed peer ID ends the stream with
-// codes.Unauthenticated. Clients that claim no peer ID are not checked.
-// A refused peer sees the reason in [Node.LastErr], and its calls on the
-// refused stream fail with the refusal instead of being resent. It backs off
-// before it opens a new stream: 50 ms after the first refusal, doubling after
-// each further refusal up to 2 s. Until the backoff ends, its calls fail at
-// once with the refusal. A failed dial-side check uses the same backoff.
+// authenticates every peer, in both directions, before callbacks or handlers
+// run. Every node must then supply a unique identity that a certificate SAN can
+// match; see [TLSIdentity].
+//
+// The server checks each inbound stream that claims a peer ID. A failed check
+// or an unknown claimed peer ID ends the stream with codes.Unauthenticated.
+// Clients that claim no peer ID are not checked. A refused peer sees the reason
+// in [Node.LastErr], and its calls on the refused stream fail with the refusal
+// instead of being resent. It backs off before it opens a new stream: 50 ms
+// after the first refusal, doubling after each further refusal up to 2 s. Until
+// the backoff ends, its calls fail at once with the refusal.
+//
+// The server also checks each peer that it dials, right after the TLS
+// handshake. A failed check closes the connection before it carries any
+// stream, so the dialed peer never sees a stream from this server. Calls to
+// that peer fail with codes.Unauthenticated, with the same backoff, and gRPC's
+// reconnect backoff paces the handshakes.
 //
 // Both the server and its peer dialer must use TLS credentials that verify
 // certificates against the cluster's CA and present this replica's certificate.
-// The server must verify client certificates when given, and each replica's
-// certificate must be valid for both client and server authentication.
-// Without a verified TLS certificate, a peer stream is refused.
+// Pass the dialer's credentials in opts with [WithTransportCredentials];
+// [NewServer] panics without them. The server must verify client certificates
+// when given, and each replica's certificate must be valid for both client and
+// server authentication. Without a verified TLS certificate, a peer stream is
+// refused.
 func WithPeers(myID ID, nodes NodeSource, opts ...DialOption) ServerOption {
 	return func(o *serverOptions) {
 		o.myID = myID

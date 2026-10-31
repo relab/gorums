@@ -3,6 +3,8 @@ package tls
 import (
 	"crypto/tls"
 	"fmt"
+	"net/url"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -15,6 +17,7 @@ import (
 	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -48,7 +51,7 @@ func peerGroup(t *testing.T, ca *testCA, n int, certIDs []gorums.ID, opts ...gor
 			}
 		}),
 		gorums.WithLocalDialOptionsFunc(func(id gorums.ID) []gorums.DialOption {
-			return []gorums.DialOption{gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(ca.dialCreds(certs[id])))}
+			return []gorums.DialOption{gorums.WithTransportCredentials(ca.dialCreds(certs[id]))}
 		}),
 	}, opts...)
 	servers = gorumstest.LocalServers(t, n, opts...)
@@ -152,6 +155,72 @@ func TestPeerIdentityWrongCertificate(t *testing.T) {
 			// The other pair is unaffected.
 			if got, err := remoteCall(t, servers[0].PeerConfig().Node(3), 3*time.Second); err != nil || got != "server 3 from 1: hello" {
 				t.Errorf("call from server 1 to node 3 = %q, %v; want \"server 3 from 1: hello\", nil", got, err)
+			}
+		})
+	}
+}
+
+// TestPeerIdentityDialCheckOpensNoStream verifies that a dialer checks the
+// server's identity in the TLS handshake: a server that presents another
+// node's certificate never receives a stream from a peer that dials it, and
+// that peer paces its handshakes while its calls fail.
+func TestPeerIdentityDialCheckOpensNoStream(t *testing.T) {
+	for _, mode := range peerIdentityModes {
+		t.Run(mode.name, func(t *testing.T) {
+			ca := newTestCA(t)
+			var streams, handshakes atomic.Int32
+			// Server 2 serves with node 3's certificate, and counts the
+			// handshakes and streams from server 1.
+			observeServer2 := gorums.WithLocalServerOptionsFunc(func(id gorums.ID) []gorums.ServerOption {
+				if id != 2 {
+					return nil
+				}
+				cfg := &tls.Config{
+					Certificates: []tls.Certificate{ca.issue(t, 3)},
+					ClientCAs:    ca.pool,
+					ClientAuth:   tls.VerifyClientCertIfGiven,
+					VerifyConnection: func(cs tls.ConnectionState) error {
+						if len(cs.PeerCertificates) > 0 && slices.ContainsFunc(cs.PeerCertificates[0].URIs, func(u *url.URL) bool {
+							return u.String() == nodeIdentity(1)
+						}) {
+							handshakes.Add(1)
+						}
+						return nil
+					},
+				}
+				return []gorums.ServerOption{gorums.WithGRPCServerOptions(
+					grpc.Creds(credentials.NewTLS(cfg)),
+					grpc.StreamInterceptor(func(srv any, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+						md, _ := metadata.FromIncomingContext(stream.Context())
+						if slices.Contains(md.Get("gorums-node-id"), "1") {
+							streams.Add(1)
+						}
+						return handler(srv, stream)
+					}),
+				)}
+			})
+			servers, _ := peerGroup(t, ca, 3, nil, append(mode.opts, observeServer2)...)
+			node2 := servers[0].PeerConfig().Node(2)
+			err := awaitCode(t, node2, codes.Unauthenticated)
+			if want := "gorums: node 2 failed verification"; !strings.Contains(err.Error(), want) {
+				t.Errorf("call from server 1 to node 2: err = %q; want it to contain %q", err, want)
+			}
+
+			before := handshakes.Load()
+			const window = time.Second
+			calls := 0
+			for deadline := time.Now().Add(window); time.Now().Before(deadline); calls++ {
+				if _, err := remoteCall(t, node2, 3*time.Second); status.Code(err) != codes.Unauthenticated {
+					t.Fatalf("call %d from server 1 to node 2: err = %v; want code %v", calls+1, err, codes.Unauthenticated)
+				}
+			}
+			t.Logf("%d refused calls, %d handshakes on server 2", calls, handshakes.Load()-before)
+			if got := streams.Load(); got != 0 {
+				t.Errorf("server 2 received %d streams from server 1; want 0", got)
+			}
+			// gRPC's reconnect backoff starts at 1 s.
+			if got := handshakes.Load() - before; got > 3 {
+				t.Errorf("server 2 saw %d handshakes from server 1 in %v; want at most 3", got, window)
 			}
 		})
 	}
