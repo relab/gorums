@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/gorumstest"
 )
 
 // TestControlStartHonorsStatsMode verifies that the Start RPC builds the server's
@@ -58,10 +59,10 @@ func TestControlDoneCount(t *testing.T) {
 	if got := ctrl.DoneCount(); got != 0 {
 		t.Errorf("DoneCount after ArmDone = %d, want 0", got)
 	}
-	ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 2}.Build())
-	ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 2}.Build()) // duplicate: counted once
-	ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 3}.Build())
-	ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 9}.Build()) // out of range: ignored
+	ctrl.Done(gorumstest.ServerContext(t, 2), &DoneRequest{})
+	ctrl.Done(gorumstest.ServerContext(t, 2), &DoneRequest{}) // duplicate: counted once
+	ctrl.Done(gorumstest.ServerContext(t, 3), &DoneRequest{})
+	ctrl.Done(gorumstest.ServerContext(t, 9), &DoneRequest{}) // out of range: ignored
 	if got := ctrl.DoneCount(); got != 2 {
 		t.Errorf("DoneCount = %d, want 2", got)
 	}
@@ -71,21 +72,21 @@ func TestControlDoneClosesChannelWhenAllSendersSignal(t *testing.T) {
 	ctrl := NewControl()
 	doneCh := ctrl.ArmDone(3)
 
-	ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 1}.Build())
+	ctrl.Done(gorumstest.ServerContext(t, 1), &DoneRequest{})
 	select {
 	case <-doneCh:
 		t.Fatal("DoneCh closed after 1/3 signals, want open")
 	default:
 	}
 
-	ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 2}.Build())
+	ctrl.Done(gorumstest.ServerContext(t, 2), &DoneRequest{})
 	select {
 	case <-doneCh:
 		t.Fatal("DoneCh closed after 2/3 signals, want open")
 	default:
 	}
 
-	ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 3}.Build())
+	ctrl.Done(gorumstest.ServerContext(t, 3), &DoneRequest{})
 	select {
 	case <-doneCh:
 	default:
@@ -109,7 +110,7 @@ func TestControlArmDoneWithoutPeers(t *testing.T) {
 			}
 
 			// A stray signal must not close the channel a second time.
-			ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 1}.Build())
+			ctrl.Done(gorumstest.ServerContext(t, 1), &DoneRequest{})
 		})
 	}
 }
@@ -118,9 +119,9 @@ func TestControlDoneIgnoresDuplicateSender(t *testing.T) {
 	ctrl := NewControl()
 	doneCh := ctrl.ArmDone(2)
 
-	ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 1}.Build())
-	ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 1}.Build())
-	ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 1}.Build())
+	ctrl.Done(gorumstest.ServerContext(t, 1), &DoneRequest{})
+	ctrl.Done(gorumstest.ServerContext(t, 1), &DoneRequest{})
+	ctrl.Done(gorumstest.ServerContext(t, 1), &DoneRequest{})
 
 	select {
 	case <-doneCh:
@@ -137,7 +138,7 @@ func TestControlDoneTracksMissingSenders(t *testing.T) {
 	ctrl := NewControl()
 	ctrl.ArmDone(3)
 
-	ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 2}.Build())
+	ctrl.Done(gorumstest.ServerContext(t, 2), &DoneRequest{})
 
 	if got := ctrl.MissingDone(); !slices.Equal(got, []uint32{1, 3}) {
 		t.Errorf("MissingDone() = %v, want [1 3]", got)
@@ -152,7 +153,7 @@ func TestControlDoneNoopWhenUnarmed(t *testing.T) {
 	}
 
 	// Must not panic.
-	ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 1}.Build())
+	ctrl.Done(gorumstest.ServerContext(t, 1), &DoneRequest{})
 
 	if ctrl.DoneCh() != nil {
 		t.Fatal("DoneCh() != nil after Done() without ArmDone, want nil")
@@ -163,9 +164,9 @@ func TestControlDoneIgnoresSenderIDOutOfRange(t *testing.T) {
 	ctrl := NewControl()
 	doneCh := ctrl.ArmDone(2)
 
-	// sender_id 0 and out-of-range IDs must not panic or count toward the total.
-	ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 0}.Build())
-	ctrl.Done(gorums.ServerContext{}, DoneRequest_builder{SenderId: 99}.Build())
+	// Sender ID 0 and out-of-range IDs must not panic or count toward the total.
+	ctrl.Done(gorumstest.ServerContext(t, 0), &DoneRequest{})
+	ctrl.Done(gorumstest.ServerContext(t, 99), &DoneRequest{})
 
 	select {
 	case <-doneCh:

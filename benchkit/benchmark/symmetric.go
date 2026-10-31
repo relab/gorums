@@ -156,7 +156,7 @@ func SignalDone(ctx context.Context, t *SymmetricTarget) {
 		if out.Size() == 0 {
 			continue
 		}
-		req := benchkit.DoneRequest_builder{SenderId: t.controls[i].ID()}.Build()
+		req := &benchkit.DoneRequest{}
 		// Report rather than return: Done is advisory, and a peer that already
 		// finished and exited makes a failed send the expected outcome, not a
 		// fault. Logging it still distinguishes that from a run where every
@@ -516,12 +516,12 @@ func runSymmetricMulticast(t *SymmetricTarget, opts benchkit.Options) (*benchkit
 	defer cancel()
 
 	payload := make([]byte, opts.Payload)
-	// Each sender tags the message with its own node ID so the receiving server
-	// can bucket samples per sender and correct them by that sender's estimated
-	// clock offset (see [benchkit.EstimateOffsets] and
+	// The receiving server buckets samples per sender, using the sender ID
+	// that gorums reports, and corrects them by that sender's estimated clock
+	// offset (see [benchkit.EstimateOffsets] and
 	// [benchkit.Stats.GetResultCorrected]).
-	newMsg := func(senderID uint32) *TimedMsg {
-		return TimedMsg_builder{SendTime: time.Now().UnixNano(), SenderId: senderID, Payload: payload}.Build()
+	newMsg := func() *TimedMsg {
+		return TimedMsg_builder{SendTime: time.Now().UnixNano(), Payload: payload}.Build()
 	}
 
 	// resetServerStats clears and restarts every local server's counters so the
@@ -543,14 +543,13 @@ func runSymmetricMulticast(t *SymmetricTarget, opts benchkit.Options) (*benchkit
 	var totalSent atomic.Int64
 	var elapsed time.Duration
 
-	// One send target per server; each tags its message with its own node ID so
-	// the receiving server can bucket and clock-correct samples per sender.
+	// One send target per server; the receiving server buckets and
+	// clock-corrects samples by the sender's node ID.
 	sends := make([]func() error, len(t.servers))
 	for i, srv := range t.servers {
 		client := NewBenchmarkClient(srv.PeerConfig())
-		senderID := t.controls[i].ID()
 		sends[i] = func() error {
-			if err := client.Multicast(ctx, newMsg(senderID)).Send(); err != nil {
+			if err := client.Multicast(ctx, newMsg()).Send(); err != nil {
 				return err
 			}
 			totalSent.Add(1)
