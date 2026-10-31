@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
 )
 
@@ -114,5 +115,32 @@ func TestGorumstestUnreachableConfigSentinelOutsideEphemeralRange(t *testing.T) 
 	}
 	if port == 0 || port >= linuxEphemeralStart {
 		t.Errorf("sentinel port %d is inside an ephemeral range", port)
+	}
+}
+
+// TestGorumstestServerContext verifies that ServerContext returns a context
+// that reports the requested sender ID and carries the test's context.
+func TestGorumstestServerContext(t *testing.T) {
+	tests := []struct {
+		name     string
+		senderID gorums.ID
+	}{
+		{name: "regular client", senderID: 0},
+		{name: "peer", senderID: 1},
+		{name: "large ID", senderID: 4000000000},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := gorumstest.ServerContext(t, tt.senderID)
+			if got := ctx.SenderID(); got != tt.senderID {
+				t.Errorf("SenderID() = %d, want %d", got, tt.senderID)
+			}
+			if ctx.Context == nil {
+				t.Fatal("ServerContext().Context is nil, want the test's context")
+			}
+			if err := ctx.Err(); err != nil {
+				t.Errorf("ctx.Err() = %v, want nil while the test runs", err)
+			}
+		})
 	}
 }
