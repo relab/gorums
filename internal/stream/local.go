@@ -14,9 +14,10 @@ type LocalChannel struct {
 	requests *dispatcher
 }
 
-// NewLocalChannel returns a channel that serves requests with handler.
-func NewLocalChannel(id ID, handler RequestHandler) *LocalChannel {
-	return &LocalChannel{id: id, handler: handler, requests: newDispatcher(nil, 0)}
+// NewLocalChannel returns a channel that serves requests with handler. Up to
+// dispatchSize requests can wait for the running handler; it must be positive.
+func NewLocalChannel(id ID, handler RequestHandler, dispatchSize uint) *LocalChannel {
+	return &LocalChannel{id: id, handler: handler, requests: newDispatcher(nil, dispatchSize)}
 }
 
 // Enqueue queues req for the handler. A one-way request is confirmed once

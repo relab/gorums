@@ -19,7 +19,7 @@ import (
 // newTestSession returns a session over a mock stream; it is not started.
 func newTestSession(t *testing.T, sendBufferSize uint, handler RequestHandler, serverRequests, requeue bool) *session {
 	t.Helper()
-	e := newEndpoint(t.Context(), 1, sendBufferSize, 0, handler, newLatency())
+	e := newEndpoint(t.Context(), 1, sendBufferSize, testDispatchSize, handler, newLatency())
 	t.Cleanup(e.cancel)
 	ctx, cancel := context.WithCancel(e.ctx)
 	return newSession(ctx, cancel, &e, mock.NewBidiStream[*Message](), serverRequests, requeue)
@@ -191,7 +191,7 @@ func TestLastErrReportsStalledSend(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			e := newEndpoint(t.Context(), 1, 1, 0, nil, nil)
+			e := newEndpoint(t.Context(), 1, 1, testDispatchSize, nil, nil)
 			t.Cleanup(e.cancel)
 			e.recordHealth(tt.lastErr)
 			if tt.blocked > 0 {
@@ -209,7 +209,7 @@ func TestLastErrReportsStalledSend(t *testing.T) {
 func TestSessionSendMarksSendInProgress(t *testing.T) {
 	stream := mock.NewGatedBidiStream[*Message]()
 	t.Cleanup(stream.Close)
-	e := newEndpoint(t.Context(), 1, 4, 0, nil, nil)
+	e := newEndpoint(t.Context(), 1, 4, testDispatchSize, nil, nil)
 	t.Cleanup(e.cancel)
 	ctx, cancel := context.WithCancel(e.ctx)
 	s := newSession(ctx, cancel, &e, stream, true, true)
@@ -251,7 +251,7 @@ func TestSessionDispatchNotWedgedByReentrantReply(t *testing.T) {
 		// Capacity 0: once the send loop is occupied in Send, the queue has
 		// no slack, so a reply would have to wait for space.
 		stream := mock.NewGatedBidiStream[*Message]()
-		e := newEndpoint(context.Background(), 1, 0, 0, handler, nil)
+		e := newEndpoint(context.Background(), 1, 0, testDispatchSize, handler, nil)
 		ctx, cancel := context.WithCancel(e.ctx)
 		s := newSession(ctx, cancel, &e, stream, true, true)
 		// As in an outbound channel, the receive loop runs while the session
@@ -441,7 +441,7 @@ func (s *scriptedStream) end(err error) { s.recv <- scriptedRecv{err: err} }
 // started.
 func newScriptedSession(t *testing.T, sendErr error, requeue bool) (*session, *scriptedStream) {
 	t.Helper()
-	e := newEndpoint(t.Context(), 1, 4, 0, nil, nil)
+	e := newEndpoint(t.Context(), 1, 4, testDispatchSize, nil, nil)
 	t.Cleanup(e.cancel)
 	ctx, cancel := context.WithCancel(e.ctx)
 	stream := &scriptedStream{sendErr: sendErr, recv: make(chan scriptedRecv, 4)}

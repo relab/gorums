@@ -19,9 +19,7 @@ func TestNewServerToleratesNilOptions(t *testing.T) {
 }
 
 // TestWithDialBufferSizes verifies that WithDialBufferSizes sets both buffer
-// sizes of outbound channels, and that 0 selects the default for each: the
-// receive size resolves to the default in the stream layer and stays 0 here,
-// while the send size resolves to [conn.DefaultSendBufferSize].
+// sizes of outbound channels, and that 0 selects the default for each.
 func TestWithDialBufferSizes(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -29,8 +27,8 @@ func TestWithDialBufferSizes(t *testing.T) {
 		wantRecv uint
 		wantSend uint
 	}{
-		{name: "Unset", opt: nil, wantRecv: 0, wantSend: conn.DefaultSendBufferSize},
-		{name: "Zero", opt: WithDialBufferSizes(0, 0), wantRecv: 0, wantSend: conn.DefaultSendBufferSize},
+		{name: "Unset", opt: nil, wantRecv: conn.DefaultRecvBufferSize, wantSend: conn.DefaultSendBufferSize},
+		{name: "Zero", opt: WithDialBufferSizes(0, 0), wantRecv: conn.DefaultRecvBufferSize, wantSend: conn.DefaultSendBufferSize},
 		{name: "Explicit", opt: WithDialBufferSizes(128, 64), wantRecv: 128, wantSend: 64},
 	}
 	for _, tt := range tests {

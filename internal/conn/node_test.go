@@ -58,7 +58,7 @@ func TestNodeEnqueueWithoutChannel(t *testing.T) {
 }
 
 func TestNodeCloseCancelsAllPendingRequests(t *testing.T) {
-	ch := stream.NewInboundChannel(t.Context(), 1, mock.NewBidiStream[*stream.Message](), stream.InboundOptions{SendBufferSize: 1})
+	ch := stream.NewInboundChannel(t.Context(), 1, mock.NewBidiStream[*stream.Message](), stream.InboundOptions{SendBufferSize: 1, DispatchSize: DefaultRecvBufferSize})
 	node := newTestNode(1, ch)
 	responseChan := make(chan stream.NodeResponse[*stream.Message], 1)
 	NodeTransport(node).Enqueue(stream.Request{
@@ -197,7 +197,7 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 	// Wrap the outbound channel in a Node, adding the transport lookup that
 	// Node.Enqueue performs on every dispatch.
 	n := newInboundNode(1, addr, func() uint64 { return 0 })
-	ch := stream.NewOutboundChannel(context.Background(), 1, conn, stream.OutboundOptions{SendBufferSize: 10, Latency: NodeTransport(n).Latency()})
+	ch := stream.NewOutboundChannel(context.Background(), 1, conn, stream.OutboundOptions{SendBufferSize: 10, RecvBufferSize: DefaultRecvBufferSize, Latency: NodeTransport(n).Latency()})
 	b.Cleanup(func() { _ = ch.Close() })
 	NodeTransport(n).StoreChannel(ch)
 

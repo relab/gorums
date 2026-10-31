@@ -76,7 +76,7 @@ func TestCallContextSendSharedMessageIDs(t *testing.T) {
 		recorders[i] = &seqNoRecorder{}
 		id := uint32(i + 1)
 		transport := stream.NewTransport(id, clientGen)
-		transport.StoreChannel(stream.NewLocalChannel(id, recorders[i]))
+		transport.StoreChannel(stream.NewLocalChannel(id, recorders[i], conn.DefaultRecvBufferSize))
 		// The third node reuses an inbound stream and must use server-initiated
 		// IDs; wrap its transport as a shared transport over the same channel.
 		if i == 2 {
@@ -124,7 +124,7 @@ func TestCallContextSendSharedFanOutStart(t *testing.T) {
 		recorders[i] = &seqNoRecorder{}
 		id := uint32(i + 1)
 		transport := stream.NewTransport(id, clientGen)
-		transport.StoreChannel(stream.NewLocalChannel(id, recorders[i]))
+		transport.StoreChannel(stream.NewLocalChannel(id, recorders[i], conn.DefaultRecvBufferSize))
 		config[i] = conn.NewNodeForTest(id, stream.NewSharedTransportWithGen(transport, serverGen))
 	}
 

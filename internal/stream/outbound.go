@@ -37,7 +37,7 @@ type OutboundOptions struct {
 	// SendBufferSize is the send queue capacity.
 	SendBufferSize uint
 	// RecvBufferSize is the number of requests received from the server that
-	// can wait for the running handler.
+	// can wait for the running handler; it must be positive.
 	RecvBufferSize uint
 	// Handler serves requests the server sends on the stream; may be nil.
 	Handler RequestHandler

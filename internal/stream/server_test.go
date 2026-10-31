@@ -61,7 +61,7 @@ func TestServerNodeStreamReplyDoesNotWedgeReceiveLoop(t *testing.T) {
 	})
 	// Capacity 0: once the send loop is occupied in Send, the queue has no
 	// slack, so a reply must be dropped rather than wait for space.
-	ch := NewInboundChannel(ctx, 1, fs, InboundOptions{Handler: echo})
+	ch := NewInboundChannel(ctx, 1, fs, InboundOptions{DispatchSize: testDispatchSize, Handler: echo})
 	t.Cleanup(func() { _ = ch.Close() })
 	srv := NewServer(nil, channelAcceptor{ch: ch})
 

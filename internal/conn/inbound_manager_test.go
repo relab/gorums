@@ -28,7 +28,7 @@ func (f requestHandlerFunc) HandleRequest(ctx context.Context, _ ID, msg *stream
 // [NewInboundManager] rejects peerNodes.
 func newInboundManager(t *testing.T, myID uint32, peerNodes NodeSource, onConfigChange func(Config), handler stream.RequestHandler) *InboundManager {
 	t.Helper()
-	im, err := NewInboundManager(myID, peerNodes, 0, 0, onConfigChange, handler, nil)
+	im, err := NewInboundManager(myID, peerNodes, 0, DefaultRecvBufferSize, onConfigChange, handler, nil)
 	if err != nil {
 		t.Fatalf("NewInboundManager: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestNewInboundManager(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			im, err := NewInboundManager(1, tc.opt, 0, 0, nil, nil, nil)
+			im, err := NewInboundManager(1, tc.opt, 0, DefaultRecvBufferSize, nil, nil, nil)
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("NewInboundManager() error = %v; want it to contain %q", err, tc.wantErr)
@@ -423,7 +423,7 @@ func newVerifyingInboundManager(t *testing.T, verify PeerVerifier) *InboundManag
 		1: "127.0.0.1:9081",
 		2: "127.0.0.1:9082",
 		3: "127.0.0.1:9083",
-	}), 0, 0, nil, nil, verify)
+	}), 0, DefaultRecvBufferSize, nil, nil, verify)
 	if err != nil {
 		t.Fatalf("NewInboundManager: %v", err)
 	}
@@ -696,7 +696,7 @@ func TestInboundManagerAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 	im, err := NewInboundManager(1, WithNodes(map[uint32]mock.NodeAddr{
 		1: "127.0.0.1:9081",
 		2: "127.0.0.1:9082",
-	}), 4, 0, nil, echo, nil)
+	}), 4, DefaultRecvBufferSize, nil, echo, nil)
 	if err != nil {
 		t.Fatalf("NewInboundManager: %v", err)
 	}
