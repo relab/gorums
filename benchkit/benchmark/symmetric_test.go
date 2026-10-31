@@ -3,10 +3,14 @@ package benchmark
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"math"
 	"net"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -794,5 +798,78 @@ func TestRunSymmetricMulticastHDR(t *testing.T) {
 	}
 	if wantSamples := result.GetTotalOps() * uint64(target.numPeers); total != wantSamples {
 		t.Errorf("histogram counts sum = %d, want %d", total, wantSamples)
+	}
+}
+
+// TestSymmetricMulticastLatencySeries verifies that interval latency covers
+// every receive, including the final drain, while throughput counts sends.
+func TestSymmetricMulticastLatencySeries(t *testing.T) {
+	for _, mode := range []benchkit.StatsMode{benchkit.StatsMode_EXACT, benchkit.StatsMode_HDR} {
+		t.Run(mode.String(), func(t *testing.T) {
+			target := symmetricServers(t, 3)
+			ctx := gorumstest.Context(t, 5*time.Second)
+			if err := awaitReady(ctx, target); err != nil {
+				t.Fatal(err)
+			}
+			r, err := runSymmetricMulticast(target, benchkit.Options{
+				Workers: 1, Duration: 20 * time.Millisecond,
+				Interval: 5 * time.Millisecond, StatsMode: mode,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var samples, sends uint64
+			var lastOffset int64
+			var intervals int
+			for _, e := range r.GetEvents() {
+				if e.GetOffset() < lastOffset {
+					t.Fatal("events are not ordered by time")
+				}
+				lastOffset = e.GetOffset()
+				sends += e.GetThroughput().GetOps()
+				if lat := e.GetLatency(); lat != nil {
+					samples += lat.GetCount()
+					intervals++
+				}
+			}
+			if want := r.GetTotalOps() * uint64(target.numPeers); samples != want || samples == 0 {
+				t.Errorf("latency interval samples = %d, want %d", samples, want)
+			}
+			if sends != r.GetTotalOps() {
+				t.Errorf("throughput interval sends = %d, want %d", sends, r.GetTotalOps())
+			}
+			if intervals < 2 {
+				t.Errorf("latency intervals = %d, want multiple intervals", intervals)
+			}
+			out := t.TempDir()
+			if _, err := benchkit.WriteTimeSeriesCSVs(out, []benchkit.TimeSeriesGroup{{
+				Benchmark: "SymmetricMulticast",
+				Nodes:     []benchkit.TimeSeriesNode{{Node: "local", Events: r.GetEvents()}},
+			}}, 0); err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(filepath.Join(out, "SymmetricMulticast_latency.csv"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(rows) != intervals+1 {
+				t.Fatalf("CSV rows = %d, want %d", len(rows), intervals+1)
+			}
+			var csvSamples uint64
+			for _, row := range rows[1:] {
+				n, err := strconv.ParseUint(row[3], 10, 64)
+				if err != nil {
+					t.Fatal(err)
+				}
+				csvSamples += n
+			}
+			if csvSamples != samples {
+				t.Errorf("CSV samples = %d, want %d", csvSamples, samples)
+			}
+		})
 	}
 }

@@ -59,9 +59,9 @@ message ThroughputInterval {
   int64  duration = 2; // actual elapsed interval, nanoseconds
 }
 
-// LatencyInterval is the Welford accumulator state for one ticker interval.
-// Emitted each tick to summarize latency over time; the values are derived
-// online and retain no raw samples.
+// LatencyInterval summarizes latency over one interval without raw samples.
+// Client-measured intervals are emitted by the ticker. Symmetric server-measured
+// intervals use receive-time buckets and are corrected after the final clock sync.
 message LatencyInterval {
   double mean   = 1; // mean latency, nanoseconds
   double stddev = 2; // sample standard deviation, nanoseconds
@@ -69,13 +69,14 @@ message LatencyInterval {
 }
 
 // PhaseMarker announces a lifecycle transition in a run. There is no warmup
-// phase: START fires at t=0, STOP at the end, and RATE_STEP on each rate-ramp
-// transition. Consumers use phase offsets to trim and annotate.
+// phase: START fires at t=0, STOP at the end of the send/measurement window,
+// and RATE_STEP on each rate-ramp transition. Receive-time latency buckets may
+// follow STOP. Consumers use phase offsets to trim and annotate.
 message PhaseMarker {
   enum Phase {
     START     = 0; // t=0; rate carries the initial target ops/s (default)
     RATE_STEP = 1; // rate ramp step; rate carries the new target ops/s
-    STOP      = 2; // run finished
+    STOP      = 2; // send/measurement window finished
   }
   Phase phase = 1;
   int64 rate  = 2; // target ops/s at START and RATE_STEP; 0 = unlimited
