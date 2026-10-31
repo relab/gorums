@@ -32,7 +32,7 @@ type ServerOption func(*serverOptions)
 // waits for a reply from the sending peer before [ServerContext.Release] waits
 // until its context ends if the peer fills the queue first. Dispatching the
 // call before Release and waiting after it avoids this. A receiveSize of 0
-// selects the default of 4096.
+// selects [DefaultRecvBufferSize].
 //
 // The sendSize controls the capacity of the server's per-node send queue for
 // outgoing peer messages, with the same full-queue semantics as

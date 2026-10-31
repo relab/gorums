@@ -41,14 +41,19 @@ func WithBackoff(backoff backoff.Config) DialOption {
 // [WithDialBufferSizes] or [WithBufferSizes] is applied with a send size of 0.
 const DefaultSendBufferSize = conn.DefaultSendBufferSize
 
+// DefaultRecvBufferSize is the number of received requests per channel that
+// can wait for the running handler when [WithDialBufferSizes] or
+// [WithBufferSizes] is applied with a receive size of 0.
+const DefaultRecvBufferSize = conn.DefaultRecvBufferSize
+
 // WithDialBufferSizes sets the receive and send buffer sizes of each outbound
 // channel, as [WithBufferSizes] does for a server.
 //
 // The recvSize is the number of requests received on the stream that can wait
 // for the running handler. An outbound channel runs handlers for requests that
 // the peer sends back on the stream, such as back-channel calls. Receiving from
-// the stream waits while that many are queued. A recvSize of 0 selects the
-// default of 4096.
+// the stream waits while that many are queued. A recvSize of 0 selects
+// [DefaultRecvBufferSize].
 //
 // The sendSize is the capacity of the per-node send queue. When the queue is
 // full, two-way calls fail with [ErrSendQueueFull] and one-way calls wait for
