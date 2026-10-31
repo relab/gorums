@@ -9,9 +9,9 @@ import (
 type InboundOptions struct {
 	// SendBufferSize is the send queue capacity.
 	SendBufferSize uint
-	// DispatchSize is the number of received requests that can wait for the
+	// RecvBufferSize is the number of received requests that can wait for the
 	// running handler before receiving waits; it must be positive.
-	DispatchSize uint
+	RecvBufferSize uint
 	// Handler serves requests the client sends on the stream; may be nil.
 	Handler RequestHandler
 	// Latency receives round-trip samples; may be nil.
@@ -37,7 +37,7 @@ type InboundChannel struct {
 // Call [InboundChannel.Serve] to receive from the stream.
 func NewInboundChannel(ctx context.Context, id ID, stream BidiStream, opts InboundOptions) *InboundChannel {
 	c := &InboundChannel{
-		endpoint: newEndpoint(ctx, id, opts.SendBufferSize, opts.DispatchSize, opts.Handler, opts.Latency),
+		endpoint: newEndpoint(ctx, id, opts.SendBufferSize, opts.RecvBufferSize, opts.Handler, opts.Latency),
 	}
 	c.waitingReplies = opts.WaitingReplies
 	sessionCtx, cancel := context.WithCancel(c.ctx)

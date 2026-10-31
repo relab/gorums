@@ -172,7 +172,7 @@ func setupChannel(t testing.TB, serverFn func(Gorums_NodeStreamServer) error, op
 // stream reconnection (see [NewOutboundChannel]).
 func setupChannelEager(t testing.TB, eagerReconnect bool, serverFn func(Gorums_NodeStreamServer) error, opts ...grpc.ServerOption) *testChannel {
 	t.Helper()
-	return setupChannelOptions(t, OutboundOptions{RecvBufferSize: testDispatchSize, EagerReconnect: eagerReconnect}, serverFn, opts...)
+	return setupChannelOptions(t, OutboundOptions{RecvBufferSize: testRecvBufferSize, EagerReconnect: eagerReconnect}, serverFn, opts...)
 }
 
 // setupChannelOptions is [setupChannel] with the given channel options. A
@@ -258,7 +258,7 @@ func setupChannelWithoutServer(t testing.TB) *testChannel {
 	t.Helper()
 	conn := newUnavailableClientConn(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	c := NewOutboundChannel(ctx, 1, conn, OutboundOptions{RecvBufferSize: testDispatchSize, SendBufferSize: 10})
+	c := NewOutboundChannel(ctx, 1, conn, OutboundOptions{RecvBufferSize: testRecvBufferSize, SendBufferSize: 10})
 	t.Cleanup(func() {
 		cancel()
 		if err := c.Close(); err != nil {
@@ -567,7 +567,7 @@ func TestChannelVerifyChecksEveryStream(t *testing.T) {
 	var mu sync.Mutex
 	var checkedIDs []ID
 	opts := OutboundOptions{
-		RecvBufferSize: testDispatchSize,
+		RecvBufferSize: testRecvBufferSize,
 		EagerReconnect: true,
 		Verify: func(_ context.Context, id ID) error {
 			mu.Lock()
@@ -656,7 +656,7 @@ func TestChannelLastErrClearsOnRecovery(t *testing.T) {
 func TestChannelEagerReconnectRecordsStreamFailure(t *testing.T) {
 	conn := newUnavailableClientConn(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	c := NewOutboundChannel(ctx, 1, conn, OutboundOptions{RecvBufferSize: testDispatchSize, SendBufferSize: 10, EagerReconnect: true})
+	c := NewOutboundChannel(ctx, 1, conn, OutboundOptions{RecvBufferSize: testRecvBufferSize, SendBufferSize: 10, EagerReconnect: true})
 	t.Cleanup(func() {
 		cancel()
 		if err := c.Close(); err != nil {
@@ -675,8 +675,8 @@ func TestChannelCloseCancelsOnlyOwnedPendingRequests(t *testing.T) {
 	newStream := mock.NewBidiStream[*Message]()
 	t.Cleanup(oldStream.Close)
 	t.Cleanup(newStream.Close)
-	oldChannel := NewInboundChannel(t.Context(), 1, oldStream, InboundOptions{DispatchSize: testDispatchSize, SendBufferSize: 1})
-	newChannel := NewInboundChannel(t.Context(), 1, newStream, InboundOptions{DispatchSize: testDispatchSize, SendBufferSize: 1})
+	oldChannel := NewInboundChannel(t.Context(), 1, oldStream, InboundOptions{RecvBufferSize: testRecvBufferSize, SendBufferSize: 1})
+	newChannel := NewInboundChannel(t.Context(), 1, newStream, InboundOptions{RecvBufferSize: testRecvBufferSize, SendBufferSize: 1})
 	t.Cleanup(func() { _ = oldChannel.Close() })
 	t.Cleanup(func() { _ = newChannel.Close() })
 
@@ -865,7 +865,7 @@ func TestChannelEnqueueRespectsRequestContext(t *testing.T) {
 	stream := mock.NewGatedBidiStream[*Message]()
 	// Capacity 0: the queue has no slack, so a second request blocks in
 	// Enqueue as soon as the sender goroutine is occupied in Send.
-	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{DispatchSize: testDispatchSize, SendBufferSize: 0})
+	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{RecvBufferSize: testRecvBufferSize, SendBufferSize: 0})
 	t.Cleanup(func() {
 		stream.Close()
 		_ = c.Close()
@@ -923,7 +923,7 @@ func TestChannelEnqueueRespectsRequestContext(t *testing.T) {
 func TestChannelEnqueueTwoWayFailsFastWhenFull(t *testing.T) {
 	stream := mock.NewGatedBidiStream[*Message]()
 	// Capacity 1: one request occupies the sender, one fills the queue.
-	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{DispatchSize: testDispatchSize, SendBufferSize: 1})
+	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{RecvBufferSize: testRecvBufferSize, SendBufferSize: 1})
 	t.Cleanup(func() {
 		stream.Close()
 		_ = c.Close()
@@ -978,7 +978,7 @@ func TestChannelEnqueueTwoWayFailsFastWhenFull(t *testing.T) {
 // the message is kept.
 func TestChannelEnqueueOnewayBlocksWhenFull(t *testing.T) {
 	stream := mock.NewGatedBidiStream[*Message]()
-	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{DispatchSize: testDispatchSize, SendBufferSize: 1})
+	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{RecvBufferSize: testRecvBufferSize, SendBufferSize: 1})
 	t.Cleanup(func() {
 		stream.Close()
 		_ = c.Close()
@@ -1543,7 +1543,7 @@ func TestChannelStreamUpAfterRefusal(t *testing.T) {
 			srv := refuseStreamServer(codes.Unauthenticated)
 			srv.read, srv.hold = true, 5*time.Millisecond
 			var changes atomic.Int32
-			opts := OutboundOptions{RecvBufferSize: testDispatchSize, EagerReconnect: mode.eager, OnStreamChange: func() { changes.Add(1) }}
+			opts := OutboundOptions{RecvBufferSize: testRecvBufferSize, EagerReconnect: mode.eager, OnStreamChange: func() { changes.Add(1) }}
 			tc := setupChannelOptions(t, opts, srv.serve)
 
 			// The first stream comes up at once and goes down at its refusal.
@@ -1581,7 +1581,7 @@ func TestChannelRefusalRacesSends(t *testing.T) {
 		t.Run(mode.name, func(t *testing.T) {
 			srv := refuseStreamServer(codes.Unauthenticated)
 			srv.read = true
-			tc := setupChannelOptions(t, OutboundOptions{RecvBufferSize: testDispatchSize, SendBufferSize: 64, EagerReconnect: mode.eager}, srv.serve)
+			tc := setupChannelOptions(t, OutboundOptions{RecvBufferSize: testRecvBufferSize, SendBufferSize: 64, EagerReconnect: mode.eager}, srv.serve)
 
 			const window = 500 * time.Millisecond
 			ctx, stop := context.WithTimeout(t.Context(), window)
@@ -1634,7 +1634,7 @@ func TestChannelVerifyFailureBacksOff(t *testing.T) {
 		streams.Add(1)
 		return echoServer(stream)
 	}
-	opts := OutboundOptions{RecvBufferSize: testDispatchSize, Verify: func(context.Context, ID) error { return errors.New("certificate names another node") }}
+	opts := OutboundOptions{RecvBufferSize: testRecvBufferSize, Verify: func(context.Context, ID) error { return errors.New("certificate names another node") }}
 	tc := setupChannelOptions(t, opts, countingEcho)
 
 	const window = 500 * time.Millisecond
@@ -1754,7 +1754,7 @@ func TestChannelSessionDispatchesOnlyServerInitiatedUnknownMessages(t *testing.T
 		t.Run(tt.name, func(t *testing.T) {
 			stream := mock.NewBidiStream[*Message]()
 			handler := &signalingRequestHandler{called: make(chan *Message, 1)}
-			e := newEndpoint(t.Context(), 1, 1, testDispatchSize, handler, nil)
+			e := newEndpoint(t.Context(), 1, 1, testRecvBufferSize, handler, nil)
 			ctx, cancel := context.WithCancel(e.ctx)
 			s := newSession(ctx, cancel, &e, stream, true, true)
 			t.Cleanup(e.cancel)
@@ -1978,7 +1978,7 @@ func TestChannelSessionEndWithFullQueue(t *testing.T) {
 	const sendBufSize = 2
 	stream := mock.NewGatedBidiStream[*Message]()
 	t.Cleanup(stream.Close)
-	e := newEndpoint(t.Context(), 1, sendBufSize, testDispatchSize, nil, nil)
+	e := newEndpoint(t.Context(), 1, sendBufSize, testRecvBufferSize, nil, nil)
 	t.Cleanup(e.cancel)
 	ctx, cancel := context.WithCancel(e.ctx)
 	s := newSession(ctx, cancel, &e, stream, true, true)
@@ -2181,7 +2181,7 @@ func TestChannelReplyOnFullQueue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				stream := mock.NewGatedBidiStream[*Message]()
-				c := NewInboundChannel(context.Background(), 1, stream, InboundOptions{DispatchSize: testDispatchSize, WaitingReplies: tt.waitingReplies})
+				c := NewInboundChannel(context.Background(), 1, stream, InboundOptions{RecvBufferSize: testRecvBufferSize, WaitingReplies: tt.waitingReplies})
 				defer func() {
 					stream.Close()
 					_ = c.Close()
@@ -2241,7 +2241,7 @@ func TestChannelReplyOnFullQueue(t *testing.T) {
 func TestChannelDroppedRepliesCountsOnlyUnreportableDrops(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		stream := mock.NewGatedBidiStream[*Message]()
-		c := NewInboundChannel(context.Background(), 1, stream, InboundOptions{DispatchSize: testDispatchSize})
+		c := NewInboundChannel(context.Background(), 1, stream, InboundOptions{RecvBufferSize: testRecvBufferSize})
 		defer func() {
 			stream.Close()
 			_ = c.Close()
@@ -2292,7 +2292,7 @@ func TestChannelDroppedRepliesCountsOnlyUnreportableDrops(t *testing.T) {
 func TestChannelCancelledSendKeepsStream(t *testing.T) {
 	t.Run("Inbound", func(t *testing.T) {
 		st := mock.NewGatedBidiStream[*Message]()
-		c := NewInboundChannel(t.Context(), 1, st, InboundOptions{DispatchSize: testDispatchSize, SendBufferSize: 4})
+		c := NewInboundChannel(t.Context(), 1, st, InboundOptions{RecvBufferSize: testRecvBufferSize, SendBufferSize: 4})
 		t.Cleanup(func() {
 			st.Close()
 			_ = c.Close()

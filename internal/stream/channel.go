@@ -79,15 +79,15 @@ type endpoint struct {
 }
 
 // newEndpoint returns an endpoint that lives until parent ends or cancel is
-// called. The dispatchSize must be positive.
-func newEndpoint(parent context.Context, id ID, sendBufferSize, dispatchSize uint, handler RequestHandler, latency *Latency) endpoint {
+// called. The recvBufferSize must be positive.
+func newEndpoint(parent context.Context, id ID, sendBufferSize, recvBufferSize uint, handler RequestHandler, latency *Latency) endpoint {
 	ctx, cancel := context.WithCancel(parent)
 	return endpoint{
 		id:       id,
 		ctx:      ctx,
 		cancel:   cancel,
 		queue:    newSendQueue(id, sendBufferSize, ctx.Done()),
-		requests: newDispatcher(ctx.Done(), dispatchSize),
+		requests: newDispatcher(ctx.Done(), recvBufferSize),
 		handler:  handler,
 		latency:  latency,
 	}

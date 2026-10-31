@@ -38,7 +38,7 @@ func TestLocalChannelReentrantCall(t *testing.T) {
 			outerDone <- nil
 		}
 	})
-	c = NewLocalChannel(1, handler, testDispatchSize)
+	c = NewLocalChannel(1, handler, testRecvBufferSize)
 
 	c.Enqueue(Request{
 		Ctx:          t.Context(),
