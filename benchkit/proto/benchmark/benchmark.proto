@@ -15,11 +15,8 @@ message Echo {
 
 // TimedMsg is a message with a send time and a payload used for multicast benchmarks.
 message TimedMsg {
-  int64  send_time = 1;
-  bytes  payload   = 2;
-  uint32 sender_id = 3;  // gorums node ID of the sender; lets the receiver bucket
-                         // one-way latency samples per sender for clock-offset
-                         // correction. Zero means untagged (no per-sender bucketing).
+  int64 send_time = 1;
+  bytes payload   = 2;
 }
 
 // Benchmark is the gorums workload service benchmarked by benchkit. The
