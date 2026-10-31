@@ -156,9 +156,11 @@ func (s *session) healthy() bool {
 	return !s.suspect || s.proven()
 }
 
-// sendFailed ends the session after a send failed with err. It reports
-// whether the receive loop disposes of the pending calls, because only
-// receiving learns whether the server refused the stream.
+// sendFailed ends the session after a send failed with err. If the session
+// is outbound and receiving has ended or err is io.EOF, the receive loop
+// disposes of pending calls, and sendFailed returns true. Otherwise, pending
+// calls fail or are retried as in [session.fail], and sendFailed returns
+// false.
 func (s *session) sendFailed(err error) bool {
 	if s.requeue {
 		for {
@@ -167,8 +169,13 @@ func (s *session) sendFailed(err error) bool {
 				s.cancel()
 				return true
 			}
-			if state != streamFresh || !errors.Is(err, io.EOF) {
+			if !errors.Is(err, io.EOF) {
 				break
+			}
+			if state == streamAccepted {
+				// Send returns io.EOF once the stream has ended, so receiving
+				// ends promptly with the stream's status.
+				return true
 			}
 			if s.handoff.CompareAndSwap(streamFresh, streamSendFailed) {
 				s.cancel()

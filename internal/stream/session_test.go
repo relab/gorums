@@ -632,6 +632,63 @@ func TestSessionFailedSendLeavesCallsToReceive(t *testing.T) {
 	}
 }
 
+// TestSessionFailedSendAfterFrameLeavesCallsToReceive verifies that a send
+// that fails with io.EOF after the stream delivered a frame leaves the pending
+// calls to the receive loop, which learns the stream's status. A stream that
+// ends with ResourceExhausted fails the calls with that status; any other end
+// retries the two-way call and records the status in LastErr.
+func TestSessionFailedSendAfterFrameLeavesCallsToReceive(t *testing.T) {
+	tests := []struct {
+		name         string
+		end          error
+		wantCode     codes.Code // the code both calls fail with; OK if retried
+		wantRequeued bool
+	}{
+		{name: "ResourceExhausted", end: status.Error(codes.ResourceExhausted, "grpc: received message larger than max"), wantCode: codes.ResourceExhausted},
+		{name: "Lost", end: status.Error(codes.Unavailable, "lost"), wantRequeued: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				s, stream := newScriptedSession(t, io.EOF, true)
+				received := make(chan error, 1)
+				go func() { received <- s.receive() }()
+				stream.frame(Message_builder{MessageSeqNo: 999}.Build()) // an unknown response
+				synctest.Wait()                                          // the stream is accepted; receiving waits for more
+
+				twoWay := make(chan response, 1)
+				streaming := make(chan response, 1)
+				s.pending.add(2, Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 2}.Build(), Streaming: true, ResponseChan: streaming})
+				s.queue.push(Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), ResponseChan: twoWay}, false)
+				if req := s.sendLoop(nil); req != nil {
+					t.Fatalf("send loop returned request %d, want none", req.Msg.GetMessageSeqNo())
+				}
+				if len(twoWay) != 0 || len(streaming) != 0 || len(s.queue.ch) != 0 {
+					t.Fatal("the failed send disposed of the pending calls; want them left to the receive loop")
+				}
+
+				stream.end(tt.end)
+				if err := <-received; !errors.Is(err, tt.end) {
+					t.Fatalf("receive() = %v, want %v", err, tt.end)
+				}
+				if got := len(s.queue.ch) == 1; got != tt.wantRequeued {
+					t.Errorf("requeued = %t, want %t", got, tt.wantRequeued)
+				}
+				if tt.wantCode != codes.OK {
+					for what, ch := range map[string]chan response{"two-way call": twoWay, "streaming call": streaming} {
+						if got := status.Code(responseErr(t, ch, what)); got != tt.wantCode {
+							t.Errorf("%s failed with code %v, want %v", what, got, tt.wantCode)
+						}
+					}
+				}
+				if err := s.LastErr(); !errors.Is(err, tt.end) {
+					t.Errorf("LastErr = %v, want %v", err, tt.end)
+				}
+			})
+		})
+	}
+}
+
 // TestSessionOnewaySendFailure verifies that a one-way call whose send fails
 // with io.EOF before the stream delivered a frame fails with the server's
 // refusal if the server refused the stream, and with the send's error if the
