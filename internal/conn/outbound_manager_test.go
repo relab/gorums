@@ -67,7 +67,7 @@ func TestOutboundManagerPeerVerifier(t *testing.T) {
 			im, err := NewInboundManager(1, WithNodes(map[ID]mock.NodeAddr{
 				1: "127.0.0.1:9081",
 				2: mock.NodeAddr(addr),
-			}), 0, 0, nil, nil, verify)
+			}), 0, DefaultRecvBufferSize, nil, nil, verify)
 			if err != nil {
 				t.Fatalf("NewInboundManager: %v", err)
 			}

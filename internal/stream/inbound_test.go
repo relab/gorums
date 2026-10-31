@@ -14,7 +14,7 @@ import (
 func TestInboundChannel(t *testing.T) {
 	stream := mock.NewRecordingBidiStream[*Message]()
 	t.Cleanup(stream.Close)
-	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 10})
+	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{DispatchSize: testDispatchSize, SendBufferSize: 10})
 	t.Cleanup(func() {
 		_ = c.Close()
 	})
@@ -41,7 +41,7 @@ func TestInboundChannel(t *testing.T) {
 // requests with ErrNodeClosed.
 func TestInboundChannelClose(t *testing.T) {
 	stream := mock.NewBidiStream[*Message]()
-	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 10})
+	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{DispatchSize: testDispatchSize, SendBufferSize: 10})
 
 	if err := c.Close(); err != nil {
 		t.Errorf("Close() error: %v", err)
@@ -64,7 +64,7 @@ func TestInboundChannelClose(t *testing.T) {
 // ended fails later requests with ErrNodeClosed instead of reconnecting.
 func TestInboundChannelStreamDown(t *testing.T) {
 	stream := mock.NewBidiStream[*Message]()
-	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{SendBufferSize: 10})
+	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{DispatchSize: testDispatchSize, SendBufferSize: 10})
 
 	// Verify initial send works.
 	resp := sendRequest(t, c, Request{Oneway: true}, 1)
@@ -100,7 +100,7 @@ func TestInboundChannelStreamDown(t *testing.T) {
 func TestInboundChannelCloseReturnsWhileSendBlocked(t *testing.T) {
 	stream := mock.NewGatedBidiStream[*Message]()
 	t.Cleanup(stream.Close)
-	c := NewInboundChannel(context.Background(), 1, stream, InboundOptions{})
+	c := NewInboundChannel(context.Background(), 1, stream, InboundOptions{DispatchSize: testDispatchSize})
 	t.Cleanup(func() { _ = c.Close() })
 
 	c.Enqueue(Request{

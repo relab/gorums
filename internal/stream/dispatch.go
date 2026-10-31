@@ -5,10 +5,6 @@ import (
 	"sync"
 )
 
-// defaultRequestDispatchSize is the default number of requests a dispatcher
-// queues behind the running handler.
-const defaultRequestDispatchSize = 4096
-
 // dispatcher runs request handlers one at a time, in push order. The next
 // handler starts when the running one calls its release function or returns,
 // whichever comes first. A handler that returns without releasing hands its
@@ -23,13 +19,10 @@ type dispatcher struct {
 	running bool
 }
 
-// newDispatcher returns a dispatcher that queues up to size handlers, or
-// [defaultRequestDispatchSize] if size is 0. Closing done stops it: queued
-// handlers are discarded and pushes fail.
+// newDispatcher returns a dispatcher that queues up to size handlers; size
+// must be positive. Closing done stops it: queued handlers are discarded and
+// pushes fail.
 func newDispatcher(done <-chan struct{}, size uint) *dispatcher {
-	if size == 0 {
-		size = defaultRequestDispatchSize
-	}
 	return &dispatcher{done: done, slots: make(chan struct{}, size)}
 }
 

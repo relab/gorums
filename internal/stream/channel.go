@@ -79,7 +79,7 @@ type endpoint struct {
 }
 
 // newEndpoint returns an endpoint that lives until parent ends or cancel is
-// called. A dispatchSize of 0 selects the default.
+// called. The dispatchSize must be positive.
 func newEndpoint(parent context.Context, id ID, sendBufferSize, dispatchSize uint, handler RequestHandler, latency *Latency) endpoint {
 	ctx, cancel := context.WithCancel(parent)
 	return endpoint{

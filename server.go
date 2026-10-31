@@ -116,6 +116,9 @@ func newServer(opts ...ServerOption) (*Server, error) {
 	if serverOpts.sendBufferSize == 0 {
 		serverOpts.sendBufferSize = conn.DefaultSendBufferSize
 	}
+	if serverOpts.recvBufferSize == 0 {
+		serverOpts.recvBufferSize = conn.DefaultRecvBufferSize
+	}
 	verify, err := conn.NewPeerVerifier(serverOpts.peerNodes)
 	if err != nil {
 		return nil, err

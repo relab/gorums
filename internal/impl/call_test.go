@@ -212,7 +212,7 @@ func TestCallOnewaySkipNode(t *testing.T) {
 			transport := stream.NewTransport(id, func() uint64 { return 0 })
 			if id != down {
 				recorders[id] = &seqNoRecorder{}
-				transport.StoreChannel(stream.NewLocalChannel(id, recorders[id]))
+				transport.StoreChannel(stream.NewLocalChannel(id, recorders[id], conn.DefaultRecvBufferSize))
 			}
 			config = append(config, conn.NewNodeForTest(id, transport))
 		}

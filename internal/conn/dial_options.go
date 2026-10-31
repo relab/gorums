@@ -34,11 +34,16 @@ type DialOptions struct {
 // explicit size is configured. Each node allocates the full capacity up front.
 const DefaultSendBufferSize = 4096
 
+// DefaultRecvBufferSize is the number of received requests per channel that can
+// wait for the running handler when no explicit size is configured.
+const DefaultRecvBufferSize = 4096
+
 // NewDialOptions returns a DialOptions initialized with default values.
 func NewDialOptions() DialOptions {
 	return DialOptions{
 		Backoff:        backoff.DefaultConfig,
 		SendBufferSize: DefaultSendBufferSize,
+		RecvBufferSize: DefaultRecvBufferSize,
 	}
 }
 

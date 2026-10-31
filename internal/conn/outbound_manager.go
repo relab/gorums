@@ -123,7 +123,7 @@ func (m *outboundManager) newNode(id ID, addr string, verify PeerVerifier) (*Nod
 	if id == m.opts.LocalNodeID && m.opts.Handler != nil {
 		// Use a local (in-process) node when this ID is our own node and a handler
 		// is configured, so this server calls itself without a network round-trip.
-		n := newLocalNode(id, addr, m.nextMsgID, m.opts.Handler, m)
+		n := newLocalNode(id, addr, m.nextMsgID, m.opts.Handler, m.opts.RecvBufferSize, m)
 		if err := m.addNode(n); err != nil {
 			return nil, err
 		}

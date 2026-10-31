@@ -10,7 +10,7 @@ type InboundOptions struct {
 	// SendBufferSize is the send queue capacity.
 	SendBufferSize uint
 	// DispatchSize is the number of received requests that can wait for the
-	// running handler before receiving waits; 0 selects the default.
+	// running handler before receiving waits; it must be positive.
 	DispatchSize uint
 	// Handler serves requests the client sends on the stream; may be nil.
 	Handler RequestHandler

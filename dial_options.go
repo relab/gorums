@@ -58,6 +58,9 @@ func WithDialBufferSizes(recvSize, sendSize uint) DialOption {
 		if sendSize == 0 {
 			sendSize = conn.DefaultSendBufferSize
 		}
+		if recvSize == 0 {
+			recvSize = conn.DefaultRecvBufferSize
+		}
 		o.RecvBufferSize = recvSize
 		o.SendBufferSize = sendSize
 	}

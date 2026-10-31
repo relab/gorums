@@ -107,8 +107,8 @@ const ClientIDStart = 1 << 20
 // account for the local replica from the moment of construction. The handler is
 // installed on the self-node (if present) to enable in-process dispatch without
 // a network round-trip. Inbound channels use sendBuffer and dispatchSize as
-// their send queue and request dispatch capacities; a dispatchSize of 0
-// selects the default. It returns an error if peerNodes is invalid, for
+// their send queue and request dispatch capacities; a dispatchSize must be
+// positive. It returns an error if peerNodes is invalid, for
 // example because of an invalid address or a duplicate node.
 // If verify is non-nil, [InboundManager.AcceptPeer] attaches a stream that
 // claims a peer's node ID only after verify accepts the claim, and the
@@ -216,7 +216,7 @@ func (im *InboundManager) nextMsgID() uint64 {
 func (im *InboundManager) newNode(id ID, addr string, _ PeerVerifier) (*Node, error) {
 	var node *Node
 	if id == im.myID && im.handler != nil {
-		node = newLocalNode(id, addr, im.nextMsgID, im.handler, nil)
+		node = newLocalNode(id, addr, im.nextMsgID, im.handler, im.dispatchSize, nil)
 	} else {
 		node = newInboundNode(id, addr, im.nextMsgID)
 	}
@@ -265,7 +265,7 @@ func (im *InboundManager) isKnown(id ID) bool {
 func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream stream.BidiStream) (*stream.InboundChannel, func(), error) {
 	noop := func() {}
 	if im == nil {
-		return untrackedChannel(streamCtx, inboundStream, stream.InboundOptions{SendBufferSize: DefaultSendBufferSize})
+		return untrackedChannel(streamCtx, inboundStream, stream.InboundOptions{SendBufferSize: DefaultSendBufferSize, DispatchSize: DefaultRecvBufferSize})
 	}
 	id := nodeID(streamCtx)
 	if im.myID != 0 && id == im.myID {

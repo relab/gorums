@@ -129,10 +129,10 @@ func newInboundNode(id ID, addr string, msgIDGen func() uint64) *Node {
 // network. It is used for the self-node when a server calls its own peers,
 // which include itself. The provided handler serves requests directly without
 // a gRPC round-trip.
-func newLocalNode(id ID, addr string, msgIDGen func() uint64, handler stream.RequestHandler, mgr *outboundManager) *Node {
+func newLocalNode(id ID, addr string, msgIDGen func() uint64, handler stream.RequestHandler, recvBufferSize uint, mgr *outboundManager) *Node {
 	transport := stream.NewTransport(id, msgIDGen)
 	n := newNode(id, addr, mgr, transport)
-	transport.StoreChannel(stream.NewLocalChannel(id, handler))
+	transport.StoreChannel(stream.NewLocalChannel(id, handler, recvBufferSize))
 	return n
 }
 
