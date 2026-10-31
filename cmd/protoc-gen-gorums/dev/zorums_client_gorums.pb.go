@@ -114,8 +114,9 @@ type zorumsServiceClient struct {
 // [NewZorumsServiceNodeClient]. If that node is nil, every call returns
 // [gorums.ErrNoNode].
 type ZorumsServiceNodeClient interface {
-	// RemoteCall is a unary call to a single node; it tests the remote call
-	// method on the node client and its server handler.
+	// RemoteCall tests a method without a Gorums option. Gorums generates a
+	// remote call for it, which replaces gRPC's unary RPC; no separate
+	// _grpc.pb.go file from protoc-gen-go-grpc is needed.
 	RemoteCall(ctx context.Context, in *Request) (*Response, error)
 
 	// Unicast tests a plain unicast.
