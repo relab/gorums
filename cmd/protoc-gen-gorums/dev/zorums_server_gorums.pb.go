@@ -25,15 +25,13 @@ type ZorumsServiceServer interface {
 	QuorumCall(gorums.ServerContext, *Request) (*Response, error)
 	QuorumCallWithEmptyRequest(gorums.ServerContext, *emptypb.Empty) (*Response, error)
 	QuorumCallWithEmptyResponse(gorums.ServerContext, *Request) (*emptypb.Empty, error)
-	MulticastWithResponse(gorums.ServerContext, *Request)
-	MulticastSecondMethod(gorums.ServerContext, *Request)
 	MulticastWithEmptyResponse(gorums.ServerContext, *Request)
+	MulticastSecondMethod(gorums.ServerContext, *Request)
 	MulticastWithEmptyRequestAndResponse(gorums.ServerContext, *emptypb.Empty)
 	QuorumCallStream(gorums.ServerContext, *Request, func(*Response))
 	QuorumCallStreamWithEmptyResponse(gorums.ServerContext, *Request, func(*emptypb.Empty))
 	QuorumCallStreamWithEmptyRequest(gorums.ServerContext, *emptypb.Empty, func(*Response))
 	Unicast(gorums.ServerContext, *Request)
-	UnicastWithEmptyResponse(gorums.ServerContext, *Request)
 }
 
 func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsServiceServer) {
@@ -69,19 +67,14 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsServiceServer) {
 		}
 		return gorums.NewResponseMessage(in, resp), nil
 	})
-	srv.RegisterHandler("dev.ZorumsService.MulticastWithResponse", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("dev.ZorumsService.MulticastWithEmptyResponse", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		impl.MulticastWithResponse(ctx, req)
+		impl.MulticastWithEmptyResponse(ctx, req)
 		return nil, nil
 	})
 	srv.RegisterHandler("dev.ZorumsService.MulticastSecondMethod", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.MulticastSecondMethod(ctx, req)
-		return nil, nil
-	})
-	srv.RegisterHandler("dev.ZorumsService.MulticastWithEmptyResponse", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*Request](in)
-		impl.MulticastWithEmptyResponse(ctx, req)
 		return nil, nil
 	})
 	srv.RegisterHandler("dev.ZorumsService.MulticastWithEmptyRequestAndResponse", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
@@ -116,11 +109,6 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsServiceServer) {
 	srv.RegisterHandler("dev.ZorumsService.Unicast", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.Unicast(ctx, req)
-		return nil, nil
-	})
-	srv.RegisterHandler("dev.ZorumsService.UnicastWithEmptyResponse", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*Request](in)
-		impl.UnicastWithEmptyResponse(ctx, req)
 		return nil, nil
 	})
 }

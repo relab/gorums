@@ -43,18 +43,6 @@ type MulticastClient interface {
 	//	h := client.Multicast(ctx, in).Async()
 	//	err = h.Wait()
 	Multicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
-
-	// MulticastEmpty is testing imported message type.
-	//
-	// Example:
-	//
-	//	err := client.MulticastEmpty(ctx, in).Send()
-	//
-	// To dispatch without waiting for the sends:
-	//
-	//	h := client.MulticastEmpty(ctx, in).Async()
-	//	err = h.Wait()
-	MulticastEmpty(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
 }
 
 // NewMulticastClient returns a client whose calls execute on config.
@@ -71,25 +59,15 @@ func (c multicastClient) Multicast(ctx context.Context, in *Request) *gorums.One
 	return gorumsimpl.Multicast(ctx, c.config, in, "internal.testprotos.calltypes.multicast.Multicast.Multicast")
 }
 
-func (c multicastClient) MulticastEmpty(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
-	return gorumsimpl.Multicast(ctx, c.config, in, "internal.testprotos.calltypes.multicast.Multicast.MulticastEmpty")
-}
-
 // MulticastServer is the server-side API for the Multicast Service
 type MulticastServer interface {
 	Multicast(gorums.ServerContext, *Request)
-	MulticastEmpty(gorums.ServerContext, *Request)
 }
 
 func RegisterMulticastServer(srv *gorums.Server, impl MulticastServer) {
 	srv.RegisterHandler("internal.testprotos.calltypes.multicast.Multicast.Multicast", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.Multicast(ctx, req)
-		return nil, nil
-	})
-	srv.RegisterHandler("internal.testprotos.calltypes.multicast.Multicast.MulticastEmpty", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*Request](in)
-		impl.MulticastEmpty(ctx, req)
 		return nil, nil
 	})
 }

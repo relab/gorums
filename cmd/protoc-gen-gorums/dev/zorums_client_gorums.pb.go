@@ -37,18 +37,18 @@ type ZorumsServiceClient interface {
 	// QuorumCallWithEmptyResponse tests an imported message type as the response.
 	QuorumCallWithEmptyResponse(ctx context.Context, in *Request) *gorums.Call[*Request, *emptypb.Empty]
 
-	// MulticastWithResponse tests a multicast that declares a response type,
-	// which a multicast never returns.
+	// MulticastWithEmptyResponse tests a plain multicast, which requires
+	// google.protobuf.Empty as its response type.
 	//
 	// Example:
 	//
-	//	err := client.MulticastWithResponse(ctx, in).Send()
+	//	err := client.MulticastWithEmptyResponse(ctx, in).Send()
 	//
 	// To dispatch without waiting for the sends:
 	//
-	//	h := client.MulticastWithResponse(ctx, in).Async()
+	//	h := client.MulticastWithEmptyResponse(ctx, in).Async()
 	//	err = h.Wait()
-	MulticastWithResponse(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
+	MulticastWithEmptyResponse(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
 
 	// MulticastSecondMethod tests multiple multicast methods on one service.
 	//
@@ -62,20 +62,8 @@ type ZorumsServiceClient interface {
 	//	err = h.Wait()
 	MulticastSecondMethod(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
 
-	// MulticastWithEmptyResponse tests an imported message type as the response.
-	//
-	// Example:
-	//
-	//	err := client.MulticastWithEmptyResponse(ctx, in).Send()
-	//
-	// To dispatch without waiting for the sends:
-	//
-	//	h := client.MulticastWithEmptyResponse(ctx, in).Async()
-	//	err = h.Wait()
-	MulticastWithEmptyResponse(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
-
-	// MulticastWithEmptyRequestAndResponse tests an imported message type as both
-	// request and response.
+	// MulticastWithEmptyRequestAndResponse tests an imported message type as the
+	// request, with the same response type as the other multicasts.
 	//
 	// Example:
 	//
@@ -119,7 +107,8 @@ type ZorumsServiceNodeClient interface {
 	// _grpc.pb.go file from protoc-gen-go-grpc is needed.
 	RemoteCall(ctx context.Context, in *Request) (*Response, error)
 
-	// Unicast tests a plain unicast.
+	// Unicast tests a plain unicast, which requires google.protobuf.Empty as
+	// its response type.
 	//
 	// Example:
 	//
@@ -130,18 +119,6 @@ type ZorumsServiceNodeClient interface {
 	//	h := nodeClient.Unicast(ctx, in).Async()
 	//	err = h.Wait()
 	Unicast(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
-
-	// UnicastWithEmptyResponse tests an imported message type as the response.
-	//
-	// Example:
-	//
-	//	err := nodeClient.UnicastWithEmptyResponse(ctx, in).Send()
-	//
-	// To dispatch without waiting for the sends:
-	//
-	//	h := nodeClient.UnicastWithEmptyResponse(ctx, in).Async()
-	//	err = h.Wait()
-	UnicastWithEmptyResponse(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
 }
 
 // NewZorumsServiceNodeClient returns a node client whose calls execute on node.

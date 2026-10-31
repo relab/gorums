@@ -10,6 +10,7 @@ import (
 	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
@@ -18,6 +19,9 @@ const (
 	// Verify that the gorums runtime is sufficiently up-to-date.
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ emptypb.Empty
 
 // ClientNamesClient is the client API for the quorum calls and multicasts of
 // the ClientNames service. Its calls execute on the configuration given to
