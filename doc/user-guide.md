@@ -2781,4 +2781,7 @@ When the queue is full, the server stops reading from the stream until a handler
 Replies on that stream then wait too.
 A handler that waits for a reply from the sending peer before `Release` waits until its context ends if the peer fills the queue in the meantime.
 Dispatch such a call before `Release` and wait for the reply after `Release`, or choose a receive size larger than the number of requests the peer can send while the call is in flight.
-A client's back channel queues server-initiated requests the same way, with the default capacity of 4096.
+An outbound channel queues requests that the peer sends back on its stream the same way, for example a client's back channel or a peer's connection to another peer.
+`WithReceiveBufferSize` is the dial option that sets that capacity for outbound channels, as the receive-size argument of `WithBufferSizes` does for inbound streams.
+Zero selects the default of 4096.
+A server in a peer group passes it through `WithPeers`, together with its other dial options.

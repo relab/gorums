@@ -21,6 +21,7 @@ type DialOptions struct {
 	Logger          *log.Logger
 	Backoff         backoff.Config
 	SendBufferSize  uint
+	DispatchSize    uint // request dispatch queue capacity of outbound channels; 0 selects the default
 	Metadata        metadata.MD
 	Handler         stream.RequestHandler
 	LocalNodeID     ID              // if non-zero, skip setting handler on this node ID

@@ -45,6 +45,32 @@ func TestWithSendBufferSizeDefault(t *testing.T) {
 	}
 }
 
+// TestWithReceiveBufferSize verifies that WithReceiveBufferSize sets the
+// dispatch queue capacity of outbound channels, and that leaving it unset or
+// passing 0 keeps the default selection (0).
+func TestWithReceiveBufferSize(t *testing.T) {
+	tests := []struct {
+		name string
+		opt  DialOption
+		want uint
+	}{
+		{name: "Unset", opt: nil, want: 0},
+		{name: "Zero", opt: WithReceiveBufferSize(0), want: 0},
+		{name: "Explicit", opt: WithReceiveBufferSize(128), want: 128},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := conn.NewDialOptions()
+			if tt.opt != nil {
+				tt.opt(&opts)
+			}
+			if opts.DispatchSize != tt.want {
+				t.Errorf("DispatchSize = %d, want %d", opts.DispatchSize, tt.want)
+			}
+		})
+	}
+}
+
 // TestWithMetadataJoinsInsteadOfOverwrites verifies that WithMetadata joins its
 // argument with any previously set metadata rather than overwriting it. This is
 // important when withServer is applied before a user-supplied WithMetadata,

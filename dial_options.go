@@ -53,6 +53,18 @@ func WithSendBufferSize(size uint) DialOption {
 	}
 }
 
+// WithReceiveBufferSize sets the capacity of the request dispatch queue of each
+// outbound channel, for symmetry with the receive size of [WithBufferSizes] on
+// the server side. An outbound channel runs handlers for requests that the peer
+// sends back on the stream, such as back-channel calls. Those requests wait in
+// the queue while the previous handler runs, and receiving from the stream
+// waits while the queue is full. Size 0 selects the default of 4096.
+func WithReceiveBufferSize(size uint) DialOption {
+	return func(o *conn.DialOptions) {
+		o.DispatchSize = size
+	}
+}
+
 // WithMetadata returns a DialOption that merges md with any other metadata sent to
 // each node during connection establishment.
 // This metadata can be retrieved from the server-side method handlers.
