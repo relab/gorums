@@ -79,6 +79,7 @@ func NodeTransport(n *Node) *stream.Transport {
 type nodeOptions struct {
 	ID              ID
 	SendBufferSize  uint
+	DispatchSize    uint
 	MsgIDGen        func() uint64
 	Metadata        metadata.MD
 	GRPCDialOptions []grpc.DialOption
@@ -108,6 +109,7 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 	// Create new outbound channel and establish gRPC node stream
 	transport.StoreChannel(stream.NewOutboundChannel(ctx, n.id, conn, stream.OutboundOptions{
 		SendBufferSize: opts.SendBufferSize,
+		DispatchSize:   opts.DispatchSize,
 		Handler:        opts.Handler,
 		Latency:        transport.Latency(),
 		EagerReconnect: opts.EagerReconnect,
