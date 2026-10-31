@@ -2340,8 +2340,6 @@ ANTHROPIC_API_KEY=... ./cmd/sweep/sweep -explain-check -explain-provider claude 
               moving code that depends on the copied <code>resolveSSHConfigPath</code>.</li>
           <li><strong>CloudLab access</strong> &mdash; request a cluster and add its SSH config, as a second test
               bed.</li>
-          <li><strong>Expose sender node ID via <code>ServerCtx</code></strong> instead of the benchmark-specific
-              <code>TimedMsg.sender_id</code> field; if adopted, that wire field can be removed.</li>
           <li><strong>DNS-free <code>WithNodeList</code></strong> &mdash; configuration construction still resolves
               hostnames (<code>resolveAddr</code> uses <code>net.ResolveTCPAddr</code>) to detect duplicate
               addresses, although nodes now dial and report the configured address. The server-side path panics

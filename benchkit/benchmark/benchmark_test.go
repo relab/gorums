@@ -518,7 +518,20 @@ func TestServerMeasuredMulticastHDR(t *testing.T) {
 		t.Fatalf("awaitReady: %v", err)
 	}
 
-	run := benchkit.ServerMeasured(target.servers[0].PeerConfig(),
+	// The coordinator is a regular client, whose SenderID is 0, so the servers
+	// record into the flat samples that Stop returns. A peer's configuration
+	// would record into per-sender buckets that only a clock-corrected result reads.
+	addrs := make([]string, len(target.servers))
+	for i, srv := range target.servers {
+		addrs[i] = srv.Addr()
+	}
+	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs), gorumstest.InsecureDialOptions(t))
+	if err != nil {
+		t.Fatalf("NewConfig: %v", err)
+	}
+	t.Cleanup(closeFn)
+
+	run := benchkit.ServerMeasured(cfg,
 		func(ctx context.Context, cfg Config, _ benchkit.Options) func() error {
 			client := NewBenchmarkClient(cfg)
 			return func() error {
