@@ -83,7 +83,7 @@ type InboundManager struct {
 	connectedClients Config                // auto-updated slice of client peers, sorted by ID
 	msgIDs           atomic.Uint64         // counter for server-initiated message IDs
 	sendBufferSize   uint                  // send buffer size for inbound channels
-	dispatchSize     uint                  // request dispatch queue size for inbound channels
+	recvBufferSize   uint                  // request dispatch queue size for inbound channels
 	handler          stream.RequestHandler // handler for dispatching incoming requests on all inbound nodes
 	verify           PeerVerifier          // optional; checks peer claims in AcceptPeer and the peers this server dials
 	onConfigChange   func(Config)          // optional; called after each connected-peer config change
@@ -106,20 +106,20 @@ const ClientIDStart = 1 << 20
 // immediately included in the Config as the self-node, so that quorum thresholds
 // account for the local replica from the moment of construction. The handler is
 // installed on the self-node (if present) to enable in-process dispatch without
-// a network round-trip. Inbound channels use sendBuffer and dispatchSize as
-// their send queue and request dispatch capacities; a dispatchSize must be
-// positive. It returns an error if peerNodes is invalid, for
-// example because of an invalid address or a duplicate node.
+// a network round-trip. Inbound channels use sendBufferSize and recvBufferSize
+// as their send queue and request dispatch capacities; a recvBufferSize must
+// be positive. It returns an error if peerNodes is invalid, for example
+// because of an invalid address or a duplicate node.
 // If verify is non-nil, [InboundManager.AcceptPeer] attaches a stream that
 // claims a peer's node ID only after verify accepts the claim, and the
 // server's outbound peer nodes check the peers they dial with verify.
-func NewInboundManager(myID ID, peerNodes NodeSource, sendBufferSize, dispatchSize uint, onConfigChange func(Config), handler stream.RequestHandler, verify PeerVerifier) (*InboundManager, error) {
+func NewInboundManager(myID ID, peerNodes NodeSource, sendBufferSize, recvBufferSize uint, onConfigChange func(Config), handler stream.RequestHandler, verify PeerVerifier) (*InboundManager, error) {
 	im := &InboundManager{
 		myID:           myID,
 		knownNodes:     make(map[ID]*Node),
 		clientNodes:    make(map[ID]*Node),
 		sendBufferSize: sendBufferSize,
-		dispatchSize:   dispatchSize,
+		recvBufferSize: recvBufferSize,
 		handler:        handler,
 		verify:         verify,
 		onConfigChange: onConfigChange,
@@ -216,7 +216,7 @@ func (im *InboundManager) nextMsgID() uint64 {
 func (im *InboundManager) newNode(id ID, addr string, _ PeerVerifier) (*Node, error) {
 	var node *Node
 	if id == im.myID && im.handler != nil {
-		node = newLocalNode(id, addr, im.nextMsgID, im.handler, im.dispatchSize, nil)
+		node = newLocalNode(id, addr, im.nextMsgID, im.handler, im.recvBufferSize, nil)
 	} else {
 		node = newInboundNode(id, addr, im.nextMsgID)
 	}
@@ -265,7 +265,7 @@ func (im *InboundManager) isKnown(id ID) bool {
 func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream stream.BidiStream) (*stream.InboundChannel, func(), error) {
 	noop := func() {}
 	if im == nil {
-		return untrackedChannel(streamCtx, inboundStream, stream.InboundOptions{SendBufferSize: DefaultSendBufferSize, DispatchSize: DefaultRecvBufferSize})
+		return untrackedChannel(streamCtx, inboundStream, stream.InboundOptions{SendBufferSize: DefaultSendBufferSize, RecvBufferSize: DefaultRecvBufferSize})
 	}
 	id := nodeID(streamCtx)
 	if im.myID != 0 && id == im.myID {
@@ -501,7 +501,7 @@ func (im *InboundManager) Close() {
 func (im *InboundManager) inboundOptions() stream.InboundOptions {
 	return stream.InboundOptions{
 		SendBufferSize: im.sendBufferSize,
-		DispatchSize:   im.dispatchSize,
+		RecvBufferSize: im.recvBufferSize,
 		Handler:        im.handler,
 	}
 }

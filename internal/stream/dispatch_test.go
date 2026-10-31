@@ -7,14 +7,14 @@ import (
 	"time"
 )
 
-// testDispatchSize is the dispatch queue size tests use when they do not
+// testRecvBufferSize is the dispatch queue size tests use when they do not
 // exercise the size itself.
-const testDispatchSize = 4096
+const testRecvBufferSize = 4096
 
 // TestDispatcherOrder verifies that handlers start in push order, each after
 // the previous one released or returned.
 func TestDispatcherOrder(t *testing.T) {
-	d := newDispatcher(nil, testDispatchSize)
+	d := newDispatcher(nil, testRecvBufferSize)
 	var mu sync.Mutex
 	var order []int
 	var wg sync.WaitGroup
@@ -45,7 +45,7 @@ func TestDispatcherOrder(t *testing.T) {
 // TestDispatcherReleaseAdmitsNext verifies that a release before return starts
 // the next handler, and that without a release the next handler waits.
 func TestDispatcherReleaseAdmitsNext(t *testing.T) {
-	d := newDispatcher(nil, testDispatchSize)
+	d := newDispatcher(nil, testRecvBufferSize)
 	releaseFirst := make(chan func())
 	block := make(chan struct{})
 	t.Cleanup(func() { close(block) })
@@ -85,7 +85,7 @@ func TestDispatcherGoroutineReuse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := newDispatcher(nil, testDispatchSize)
+			d := newDispatcher(nil, testRecvBufferSize)
 			const n = 5
 			ids := make([]uint64, n)
 			queued := make(chan struct{})
