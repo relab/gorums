@@ -11,6 +11,7 @@ func TestReplayScript(t *testing.T) {
 	args := []string{
 		"./cmd/sweep/sweep",
 		"-hosts", "bb[1-25]",
+		"-detach", "bbhead",
 		"-sweep", "e3-tlcurve",
 		"-n", "5,9,17,25",
 		"-workers", "1,2,4,8,16,32",
@@ -24,7 +25,7 @@ func TestReplayScript(t *testing.T) {
 		"set -eu\n\n" +
 		"# Rebuild the sweep driver before replaying the experiment.\n" +
 		rebuildSweepCommand + "\n\n" +
-		"exec ./cmd/sweep/sweep '-hosts' 'bb[1-25]' '-sweep' 'e3-tlcurve'" +
+		"exec ./cmd/sweep/sweep '-hosts' 'bb[1-25]' '-detach' 'bbhead' '-sweep' 'e3-tlcurve'" +
 		" '-n' '5,9,17,25' '-workers' '1,2,4,8,16,32' '-duration' '13s' '-trim' '3s'" +
 		" '-verbose' '-benchmarks' 'SymmetricQuorumCall,QuorumCall'" +
 		" '-extra-args' '-label='\\''canary run'\\'''\n"

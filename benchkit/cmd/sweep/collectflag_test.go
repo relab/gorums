@@ -5,14 +5,14 @@ import (
 	"testing"
 )
 
-func TestNormalizeOptionalPathArgs(t *testing.T) {
-	got := normalizeOptionalPathArgs([]string{"sweep", "-collect", "/local/a run", "-outdir", "out"})
+func TestNormalizeOptionalArgs(t *testing.T) {
+	got := normalizeOptionalArgs([]string{"sweep", "-collect", "/local/a run", "-outdir", "out"})
 	want := []string{"sweep", "-collect=/local/a run", "-outdir", "out"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
-	got = normalizeOptionalPathArgs([]string{"sweep", "-collect-now", "-driver", "bb1"})
-	want = []string{"sweep", "-collect-now", "-driver", "bb1"}
+	got = normalizeOptionalArgs([]string{"sweep", "-collect-now", "-detach", "bb1"})
+	want = []string{"sweep", "-collect-now", "-detach=bb1"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
@@ -23,13 +23,13 @@ func TestNormalizeOptionalPathArgs(t *testing.T) {
 	// positional argument, silently collecting the latest run instead of the
 	// requested one (see the flag.NArg() check in main for the other half of
 	// this fix).
-	got = normalizeOptionalPathArgs([]string{"sweep", "--collect", "/local/a run", "-outdir", "out"})
+	got = normalizeOptionalArgs([]string{"sweep", "--collect", "/local/a run", "-outdir", "out"})
 	want = []string{"sweep", "--collect=/local/a run", "-outdir", "out"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
-	got = normalizeOptionalPathArgs([]string{"sweep", "--collect-now", "-driver", "bb1"})
-	want = []string{"sweep", "--collect-now", "-driver", "bb1"}
+	got = normalizeOptionalArgs([]string{"sweep", "--collect-now", "-detach", "bb1"})
+	want = []string{"sweep", "--collect-now", "-detach=bb1"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}

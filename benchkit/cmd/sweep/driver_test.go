@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,12 +9,6 @@ import (
 	"testing"
 	"time"
 )
-
-// mockExitStatus simulates an SSH exit error for TestFinishedRemotely.
-type mockExitStatus struct{ code int }
-
-func (e *mockExitStatus) Error() string   { return fmt.Sprintf("exit status %d", e.code) }
-func (e *mockExitStatus) ExitStatus() int { return e.code }
 
 func TestResolveDriver(t *testing.T) {
 	tests := []struct {
@@ -211,8 +204,8 @@ func TestRemoteSweepCommand(t *testing.T) {
 			t.Errorf("command missing %q\ngot: %s", want, cmd)
 		}
 	}
-	// -driver/-collect/-test/-build must never reach the driven sweep.
-	for _, bad := range []string{"-driver=", "-collect", "-test", "-build", "-collect-profiles"} {
+	// -detach/-collect/-test/-build must never reach the driven sweep.
+	for _, bad := range []string{"-detach", "-collect", "-test", "-build", "-collect-profiles"} {
 		if strings.Contains(cmd, bad) {
 			t.Errorf("command should not contain %q\ngot: %s", bad, cmd)
 		}
@@ -273,7 +266,7 @@ func TestRemoteSweepCommandExplain(t *testing.T) {
 
 func TestRemoteSweepCommandDetach(t *testing.T) {
 	cfg := &config{
-		port: 9000, duration: time.Second, sweepLabel: "e1", detach: true,
+		port: 9000, duration: time.Second, sweepLabel: "e1",
 		sweep: sweepConfig{numNodes: []int{3}, workers: []int{1}, payloads: []int{0}, rates: []int{0}, benchmarks: []string{"QuorumCall"}, reps: 1},
 	}
 	// The ready marker lives under wd (the run's own work directory), not binDir
@@ -281,12 +274,7 @@ func TestRemoteSweepCommandDetach(t *testing.T) {
 	if got := remoteSweepCommand(cfg, "/tmp/sweep-driver-e1-x", "/tmp/sweep-driver-cache", "bb1", ""); !strings.Contains(got, "'-ready-marker=/tmp/sweep-driver-e1-x/"+readyMarkerName+"'") {
 		t.Errorf("detached command missing -ready-marker\ngot: %s", got)
 	}
-	// Without -detach the launcher streams and collects itself, so the driven
-	// sweep needs no ready marker.
-	cfg.detach = false
-	if got := remoteSweepCommand(cfg, "/tmp/wd", "/tmp/wd", "bb1", ""); strings.Contains(got, "-ready-marker") {
-		t.Errorf("non-detached command should omit -ready-marker\ngot: %s", got)
-	}
+
 }
 
 func TestDriverLLMEnv(t *testing.T) {
@@ -362,18 +350,6 @@ func TestRsyncRemoteSpecPreservesPath(t *testing.T) {
 	}
 }
 
-func TestFinishedRemotely(t *testing.T) {
-	if !finishedRemotely(nil) {
-		t.Error("nil error should mean finished")
-	}
-	if !finishedRemotely(&mockExitStatus{code: 3}) {
-		t.Error("a non-zero remote exit should mean finished (with failed runs)")
-	}
-	if finishedRemotely(errors.New("connection reset")) {
-		t.Error("a transport error should mean not finished")
-	}
-}
-
 func TestMaxNodeCount(t *testing.T) {
 	if got := maxNodeCount(sweepConfig{numNodes: []int{3, 17, 9}}); got != 17 {
 		t.Errorf("maxNodeCount = %d, want 17", got)
@@ -444,34 +420,10 @@ func TestDriverCleanupCommand(t *testing.T) {
 	}
 }
 
-func TestBootstrapScript(t *testing.T) {
-	s := bootstrapScript("/tmp/wd", "'/tmp/wd/sweep' '-driven'", "", 65536)
-	for _, want := range []string{"setsid", "exit.code", "tail -n +1 -F console.log", "WD='/tmp/wd'", "ulimit -Sn 65536 2>/dev/null", "exec '/tmp/wd/sweep' '-driven'"} {
-		if !strings.Contains(s, want) {
-			t.Errorf("bootstrap script missing %q\ngot:\n%s", want, s)
-		}
-	}
-	if strings.Contains(s, "export ") {
-		t.Errorf("bootstrap script exports env with no envExport given:\n%s", s)
-	}
-}
-
-func TestBootstrapScriptNoFdLimit(t *testing.T) {
-	s := bootstrapScript("/tmp/wd", "'/tmp/wd/sweep' '-driven'", "", 0)
+func TestDetachBootstrapScriptNoFdLimit(t *testing.T) {
+	s := detachBootstrapScript("/tmp/wd", "'/tmp/wd/sweep' '-driven'", "", 0)
 	if strings.Contains(s, "ulimit") {
 		t.Errorf("bootstrap script raised fd limit with fdLimit=0\ngot:\n%s", s)
-	}
-}
-
-func TestBootstrapScriptEnvExport(t *testing.T) {
-	s := bootstrapScript("/tmp/wd", "'/tmp/wd/sweep' '-driven'", "OLLAMA_API_KEY='secret'", 65536)
-	if !strings.Contains(s, "export OLLAMA_API_KEY='secret'") {
-		t.Errorf("bootstrap script missing env export\ngot:\n%s", s)
-	}
-	// The key must reach the run via the inherited environment only — never the
-	// run.sh body (which is written to disk) nor the sweep argv.
-	if strings.Contains(s, "exec OLLAMA_API_KEY=") || strings.Contains(s, "-explain-key") {
-		t.Errorf("key leaked into run.sh body or argv\ngot:\n%s", s)
 	}
 }
 
@@ -582,7 +534,7 @@ func TestEarlyExitMessage(t *testing.T) {
 
 func TestDetachBootstrapScript(t *testing.T) {
 	s := detachBootstrapScript("/tmp/wd", "'/tmp/wd/sweep' '-driven'", "", 65536)
-	for _, want := range []string{"setsid", "run.sh", "[driver] detached sweep started in $WD", "WD='/tmp/wd'", "exec '/tmp/wd/sweep' '-driven'"} {
+	for _, want := range []string{"setsid", "run.sh", "exit.code", "ulimit -Sn 65536 2>/dev/null", "[driver] detached sweep started in $WD", "WD='/tmp/wd'", "exec '/tmp/wd/sweep' '-driven'"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("detach bootstrap script missing %q\ngot:\n%s", want, s)
 		}

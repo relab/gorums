@@ -15,7 +15,7 @@ import (
 
 func runDriverList(cfg *config) error {
 	if cfg.driver == "" {
-		return errors.New("-list requires -driver or a saved driver in .sweep-last.json")
+		return errors.New("-list requires -detach or a saved driver in .sweep-last.json")
 	}
 	group, err := dialDriverGroup(cfg.driver, cfg.sshConfig)
 	if err != nil {

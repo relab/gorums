@@ -53,38 +53,34 @@
 //
 // Cluster-local driver:
 //
-// When the controlling laptop is far from the cluster, every per-run SSH
-// round-trip and the one-time binary upload to each host cross the WAN. The
-// -driver flag moves the orchestration onto a cluster-local host so that
-// traffic stays on the LAN and the benchmark binary crosses the WAN only once:
+// -detach moves orchestration onto a cluster-local host so per-run SSH stays
+// on the LAN and the benchmark binary crosses the WAN only once:
 //
-//	-driver <host>   run the orchestration on this SSH host (LAN-local to peers)
-//	-driver first    use the first -hosts entry as the driver
+//	-detach          use the first -hosts entry as the driver
+//	-detach <host>   use this SSH host as the driver
 //
-// The driver host is excluded from the benchmark pool so the orchestrator does
-// not perturb a co-located replica; a -driver host outside -hosts (a dedicated
-// head node) leaves the pool unchanged. The laptop cross-builds sweep and the
-// benchmark binary, ships them plus a generated SSH config to the driver over
-// the user's own ssh/scp, and re-execs sweep there with -driven. The SSH agent
-// is forwarded (ssh -A) so the driver authenticates to peers with the laptop's
-// keys. The remote sweep is detached, so it survives a laptop disconnect; by
-// default the laptop streams its output live and, on completion, downloads
-// compact plot data plus any failed-run result files. Raw successful .binpb
-// files stay in the driver work dir for optional archival. Reconnect to a
-// detached run, or archive raw results after compact collection, with:
+// The driver is excluded from the benchmark pool when it appears in -hosts.
+// A dedicated head node outside -hosts leaves the pool unchanged. The laptop
+// cross-builds the binaries, uploads them and the generated SSH config, and
+// starts sweep with -driven on the driver. The launcher forwards its SSH agent
+// and waits until the driver has dialed every peer before reporting that it is
+// safe to disconnect. It then exits; collection is a separate operation.
 //
-//	-collect [remote-work-dir]
+// At launch, sweep writes sweep.sh and collect.sh in the local run directory
+// and records the run in <outdir>/.sweep-last.json. A bare -collect uses that
+// saved driver and path. An explicit path also requires a host selection:
 //
-// -detach skips the streaming and waiting: the run starts, the launcher
-// records the run in <outdir>/.sweep-last.json and exits, so closing the
-// laptop lid right away is an intentional clean exit rather than a dropped
-// connection:
+//	-collect
+//	-detach <host> -collect <remote-work-dir>
 //
-//	-driver <host> -detach
-//
-// A bare -collect uses the saved driver and path for the latest launch.
-// -collect-now [path] takes a best-effort snapshot even while a run is active,
-// and -list shows active, completed, raw-pending, and recoverable driver runs.
+// -collect checks once and exits if the run is still active. -collect-now
+// [path] takes a best-effort active snapshot and retains the remote run.
+// The first finished collection downloads compact plot data and failed-run
+// results; a later collection archives the raw results and removes the remote
+// work directory. -list shows driver runs, using the saved host by default.
+// With -check, -explain-check, -collect, -collect-now, or -list, -detach selects
+// the remote host for that operation and does not start a sweep.
+// A bare -detach (or -detach first) always requires -hosts.
 // Remote files live below <remote-dir>/sweep-$USER (default root: /tmp).
 //
 // A run whose compact transfer was built before a change to what gets exported
@@ -176,13 +172,12 @@ type config struct {
 
 	// Cluster-local driver: run the orchestration on a host inside the cluster
 	// so per-run SSH and the binary upload stay on the LAN (see [runDriver]).
-	driver       string // -driver: driver host alias, or "first" for hosts[0]; "" = run locally
+	driver       string // remote host selected by -detach or saved run state; empty = local
 	collect      string // -collect [path]: collect a finished driver run; no path selects the latest
 	collectNow   string // -collect-now [path]: snapshot a run even when it is still active
 	list         bool   // -list: list driver runs and their collection status
 	remoteDir    string // -remote-dir: remote storage root; each user gets sweep-$USER below it
 	remoteDirs   map[string]string
-	detach       bool   // -detach: with -driver, start the run and exit immediately
 	driven       bool   // -driven (internal): this process is the orchestrator on the driver
 	gitSHA       string // -git-sha (internal): HEAD forwarded by the launcher for manifests
 	readyMarker  string // -ready-marker (internal): path to touch once peers are dialed
@@ -190,7 +185,7 @@ type config struct {
 	transferMode string // -transfer: file transfer backend for driver uploads/downloads (rsync or sftp)
 
 	// LLM failure triage: when -explain is set, the failed runs are diagnosed by
-	// a model after the sweep completes. With -driver the driven sweep does this
+	// a model after the sweep completes. With -detach the driven sweep does this
 	// on the driver before exporting, so the diagnoses travel back in the manifests
 	// (see [triageFailedRuns] and [llmProvider]).
 	explain         bool   // -explain: triage failed runs after the sweep
@@ -242,7 +237,7 @@ func main() {
 	// -check exercises the same iago SSH path the sweep uses, so a clean result
 	// means the sweep will connect. It connects to each host independently, so
 	// unreachable hosts are reported rather than aborting the whole check. With
-	// -driver it ships the check to the driver so clock skew is measured against
+	// -detach it ships the check to the driver so clock skew is measured against
 	// the driver's LAN-local clock (the vantage the benchmark's own ClockSync
 	// uses) instead of the laptop's, whose WAN round-trip otherwise dominates the
 	// skew estimate and its uncertainty.
@@ -261,7 +256,7 @@ func main() {
 
 	// -explain-check verifies the triage LLM answers a trivial prompt and exits,
 	// so a misconfigured provider/model/key/endpoint is caught on demand instead
-	// of only when a failed run needs triage. With -driver it ships the check to
+	// of only when a failed run needs triage. With -detach it ships the check to
 	// the driver, the only side of the firewall that can reach the UiS Ollama
 	// server; otherwise it runs locally against a provider the laptop can reach.
 	if cfg.explainCheck {
@@ -289,7 +284,7 @@ func main() {
 		return
 	}
 	// Launch the orchestration on a cluster-local driver host: build, ship,
-	// re-exec sweep there with -driven, stream, and collect. The launcher talks
+	// start sweep there with -driven, confirm readiness, and exit. The launcher talks
 	// only to the driver; the driven sweep does all the peer SSH itself.
 	if cfg.driver != "" && !cfg.driven {
 		if err := runDriver(cfg, hosts); err != nil {
@@ -688,22 +683,21 @@ func parseFlags() (*config, []string) {
 	flag.BoolVar(&cfg.pgo, "pgo", false, "merge the collected CPU profiles into <outdir>/default.pgo for profile-guided optimization (implies -collect-profiles)")
 
 	// Cluster-local driver flags.
-	flag.StringVar(&cfg.driver, "driver", "", "run the sweep orchestration on this cluster-local SSH host ('first' = first -hosts entry); the binary crosses the WAN once and all per-run SSH stays on the cluster LAN")
+	flag.Var(optionalHostFlag{&cfg.driver}, "detach", "run remotely and exit once safe to disconnect; optional hostname defaults to the first -hosts entry; with -check, -explain-check, -collect, -collect-now, or -list, select the host for that operation")
 	flag.Var(optionalPathFlag{&cfg.collect}, "collect", "collect a finished driver run; optional path selects a run, otherwise use the latest run from <outdir>/.sweep-last.json")
 	flag.Var(optionalPathFlag{&cfg.collectNow}, "collect-now", "collect a best-effort snapshot now; optional path selects a run, otherwise use the latest run")
 	flag.BoolVar(&cfg.list, "list", false, "list active, completed, raw-pending, and recoverable driver runs")
 	flag.StringVar(&cfg.remoteDir, "remote-dir", "/tmp", "remote storage root; sweep creates and uses <root>/sweep-$USER")
-	flag.BoolVar(&cfg.detach, "detach", false, "with -driver, start the run and exit immediately without streaming or waiting; reconnect later with -driver <host> -collect <remote-work-dir>")
-	flag.StringVar(&cfg.transferMode, "transfer", "rsync", "file transfer backend for -driver uploads and downloads: rsync >=3.2.4 (default) or sftp")
+	flag.StringVar(&cfg.transferMode, "transfer", "rsync", "file transfer backend for -detach uploads and downloads: rsync >=3.2.4 (default) or sftp")
 	flag.BoolVar(&cfg.driven, "driven", false, "internal: set automatically on the cluster-local driver; relaxes laptop-only steps (repo root, build, replay script)")
-	flag.StringVar(&cfg.gitSHA, "git-sha", "", "internal: repository HEAD forwarded by -driver so the driven sweep records it in manifests")
+	flag.StringVar(&cfg.gitSHA, "git-sha", "", "internal: repository HEAD forwarded by -detach so the driven sweep records it in manifests")
 	flag.StringVar(&cfg.readyMarker, "ready-marker", "", "internal: path the driven sweep touches once its peers are dialed, so a -detach launcher knows the forwarded agent is no longer needed")
 	flag.StringVar(&cfg.selfHost, "self-host", "", "internal: set by a driver-routed -check to the driver's own alias, which is probed locally instead of over SSH (a host cannot SSH to itself)")
 
 	// LLM failure-triage flags. -explain triages the sweep's failed runs after it
-	// completes; with -driver the driven sweep does it on the driver. The rest
+	// completes; with -detach the driven sweep does it on the driver. The rest
 	// configure the model backend. API keys come from the environment, never flags.
-	flag.BoolVar(&cfg.explain, "explain", false, "after the sweep, triage failed runs with an LLM (runs on the driver when -driver is set)")
+	flag.BoolVar(&cfg.explain, "explain", false, "after the sweep, triage failed runs with an LLM (runs on the driver when -detach is set)")
 	flag.BoolVar(&cfg.explainCheck, "explain-check", false, "verify the -explain LLM answers a trivial prompt, then exit")
 	flag.StringVar(&cfg.explainProvider, "explain-provider", providerLocal, "LLM backend for -explain: local (default), openai, or claude")
 	flag.StringVar(&cfg.explainModel, "explain-model", "", "model name for -explain (e.g. llama3.3, gpt-4o, claude-opus-4-8); required with -explain")
@@ -731,7 +725,7 @@ func parseFlags() (*config, []string) {
 	)
 	flag.StringVar(&rawHosts, "hosts", "", "SSH host aliases: PREFIX[lo-hi]SUFFIX ranges (e.g. 'bb[1-30]'), glob patterns (e.g. 'bb*'), or comma-separated literals")
 	flag.IntVar(&testN, "test", 0, "quick smoke test with N nodes (0 = full sweep)")
-	os.Args = normalizeOptionalPathArgs(os.Args)
+	os.Args = normalizeOptionalArgs(os.Args)
 	flag.Parse()
 	if flag.NArg() > 0 {
 		log.Fatalf("unexpected positional argument(s): %v", flag.Args())
@@ -764,11 +758,8 @@ func parseFlags() (*config, []string) {
 	if cfg.remoteDir == "" || !filepath.IsAbs(cfg.remoteDir) || filepath.Clean(cfg.remoteDir) == "/" {
 		log.Fatal("-remote-dir must be an absolute path other than /")
 	}
-	if cfg.detach && cfg.driver == "" {
-		log.Fatal("-detach requires -driver <host>")
-	}
-	if cfg.detach && (collecting || cfg.list) {
-		log.Fatal("-detach cannot be combined with collection or listing")
+	if cfg.driver != "" && cfg.driven {
+		log.Fatal("-detach cannot be combined with -driven")
 	}
 	// Fail on the laptop before running an entire sweep if -explain is
 	// misconfigured. The key check runs here, not just at triage time, so a
@@ -801,11 +792,13 @@ func parseFlags() (*config, []string) {
 		sweepExplicit = true
 	}
 
+	var saved *lastRunState
 	if cfg.collect == latestRunSentinel || cfg.collectNow == latestRunSentinel || (cfg.list && cfg.driver == "") {
 		state, err := readLastRunState(cfg.rootDir)
 		if err != nil {
 			log.Fatal(err)
 		}
+		saved = &state
 		if cfg.driver == "" {
 			cfg.driver = state.Driver
 		}
@@ -823,8 +816,28 @@ func parseFlags() (*config, []string) {
 			cfg.transferMode = state.TransferMode
 		}
 	}
+	var hosts []string
+	if rawHosts != "" {
+		var err error
+		hosts, err = iago.ParseHosts(rawHosts, cfg.sshConfig)
+		if err != nil {
+			log.Fatalf("invalid -hosts: %v", err)
+		}
+		if len(hosts) == 0 {
+			log.Fatalf("-hosts %q matched no hosts", rawHosts)
+		}
+	}
+	var err error
+	cfg.driver, err = resolveDriverHost(cfg.driver, hosts)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if saved != nil && cfg.driver != saved.Driver {
+		log.Fatalf("latest run belongs to %s, not %s; use an explicit collection path for another host", saved.Driver, cfg.driver)
+	}
 	if collecting && cfg.driver == "" {
-		log.Fatal("an explicit collection path requires -driver <host>; omit the path to use the latest run")
+		log.Fatal("an explicit collection path requires -detach <host>; omit the path to use the latest run")
 	}
 
 	now := time.Now()
@@ -848,17 +861,6 @@ func parseFlags() (*config, []string) {
 		log.Fatalf("output directory: %v", err)
 	}
 
-	if rawHosts == "" {
-		// Collection and listing need no benchmark hosts.
-		return cfg, nil
-	}
-	hosts, err := iago.ParseHosts(rawHosts, cfg.sshConfig)
-	if err != nil {
-		log.Fatalf("invalid -hosts: %v", err)
-	}
-	if len(hosts) == 0 {
-		log.Fatalf("-hosts %q matched no hosts", rawHosts)
-	}
 	return cfg, hosts
 }
 

@@ -1334,9 +1334,8 @@
                 <tr><td><code>-extra-args</code></td><td>—</td><td>Arbitrary string appended verbatim to every node command (protocol-specific flags of foreign binaries).</td></tr>
                 <tr><td><code>-collect-profiles</code>, <code>-pgo</code></td><td><code>false</code></td><td>Profile collection and PGO merge (below).</td></tr>
                 <tr><td colspan="3"><strong>Cluster-local driver</strong> (<a href="#driver">below</a>)</td></tr>
-                <tr><td><code>-driver</code></td><td>—</td><td>Run the orchestration on this cluster-local host (<code>first</code> = first <code>-hosts</code> entry, excluded from the pool).</td></tr>
-                <tr><td><code>-detach</code></td><td><code>false</code></td><td>Start the driven run and exit once it is safe to disconnect; requires <code>-driver</code>.</td></tr>
-                <tr><td><code>-collect [path]</code></td><td>latest</td><td>Collect a finished run once. With no path, use the driver and path in <code>&lt;outdir&gt;/.sweep-last.json</code>; an explicit path requires <code>-driver</code>.</td></tr>
+                <tr><td><code>-detach [hostname]</code></td><td>off</td><td>Run remotely and exit once safe to disconnect. Without a hostname, select the first <code>-hosts</code> entry, excluded from the benchmark pool. With a check, collection, or listing operation, select its remote host instead of launching a run.</td></tr>
+                <tr><td><code>-collect [path]</code></td><td>latest</td><td>Collect a finished run once. With no path, use the driver and path in <code>&lt;outdir&gt;/.sweep-last.json</code>; an explicit path requires <code>-detach &lt;host&gt;</code>.</td></tr>
                 <tr><td><code>-collect-now [path]</code></td><td>latest</td><td>Collect a best-effort snapshot even while the run is active. Mutually exclusive with <code>-collect</code>.</td></tr>
                 <tr><td><code>-list</code></td><td><code>false</code></td><td>List active, completed, raw-pending, and recoverable driver runs, newest first.</td></tr>
                 <tr><td><code>-remote-dir</code></td><td><code>/tmp</code></td><td>Remote storage root; sweep uses <code>&lt;root&gt;/sweep-$USER</code> for binaries, results, caches, and driver runs.</td></tr>
@@ -1427,20 +1426,20 @@
             benchmark binary to every host and performs per-run launch / monitor / collect round-trips. When the
             laptop is far from the cluster (e.g. driving the Stavanger <code>bb</code> cluster from abroad), the
             binary is copied across the WAN once <em>per host</em> and every round-trip pays the full WAN RTT.
-            The <code>-driver</code> flag moves the orchestration onto a cluster-local host so that traffic stays on
+            The <code>-detach</code> flag moves the orchestration onto a cluster-local host so that traffic stays on
             the LAN and the benchmark binary crosses the WAN only once:</p>
         <pre>
 <span class="c"># Run the orchestration on a dedicated head node (outside -hosts):</span>
-./cmd/sweep/sweep -hosts <span class="s">'bb[1-9]'</span> -driver bbhead -sweep e4 -n 9 -workers 1,2,4,8,16
+./cmd/sweep/sweep -hosts <span class="s">'bb[1-9]'</span> -detach bbhead -sweep e4 -n 9 -workers 1,2,4,8,16
 
 <span class="c"># Or use the first -hosts entry as the driver (excluded from the benchmark pool):</span>
-./cmd/sweep/sweep -hosts <span class="s">'bb[1-10]'</span> -driver first -sweep e4 -n 9 -workers 1,2,4,8,16</pre>
+./cmd/sweep/sweep -hosts <span class="s">'bb[1-10]'</span> -detach -sweep e4 -n 9 -workers 1,2,4,8,16</pre>
         <p>The driver role lives in <code>sweep</code>, not the benchmark binary: the orchestration depends on
             <code>iago</code> (SSH, upload, collection) and <code>cmd/benchmark</code> must stay free of that
             dependency. The laptop cross-builds <code>sweep</code> and the benchmark binary for linux/amd64, ships
-            them plus a generated SSH config to the driver over the user's own <code>ssh</code>/<code>scp</code>,
-            and re-execs <code>sweep</code> there with the internal <code>-driven</code> flag. The driver then does
-            all the per-node SSH over the LAN. On completion, the laptop downloads the compact transfer directory:
+            them plus a generated SSH config to the driver, and starts <code>sweep</code> there with the internal
+            <code>-driven</code> flag. The driver then does all the per-node SSH over the LAN.
+            The launcher confirms startup and exits; run <code>sweep -collect</code> after completion to download the compact transfer directory:
             manifests, logs, <code>plotdata/plotdata.binpb</code>, <code>plotdata/events.binpb</code>, and any
             failed-run <code>.binpb</code> files.
             Successful raw <code>.binpb</code> files remain in the driver work directory until explicitly collected.</p>
@@ -1454,24 +1453,24 @@
         <p><code>-remote-dir</code> selects the remote storage root (for example <code>/local</code>).
             Every host uses a per-user namespace below it, such as <code>/local/sweep-meling</code>. Use
             <code>sweep -list</code> to inspect driver runs without making <code>-check</code> output unbounded.</p>
-        <p>Authentication to the peers uses the laptop's SSH agent, forwarded to the driver with <code>ssh -A</code>.
-            iago authenticates via <code>SSH_AUTH_SOCK</code> and dials every peer once at startup, so the forwarded
-            agent is only needed for the first few seconds of a run. After that the remote sweep — which is launched
-            <em>detached</em> (<code>setsid</code>) — survives a laptop disconnect. By default the launcher streams
-            its output live and prints a reconnect command; if the connection drops, reconnect and download the
-            results with <code>-driver &lt;host&gt; -collect &lt;remote-work-dir&gt;</code>. When the driver host is
-            one of <code>-hosts</code> (the <code>first</code> form), it is excluded from the benchmark pool so the
-            orchestrator does not perturb a co-located replica; a driver outside <code>-hosts</code> leaves the pool
-            unchanged.</p>
-        <p>Add <code>-detach</code> to start the run and exit immediately instead of streaming and waiting:</p>
+        <p>Every remote launch detaches and survives a laptop disconnect.
+            The launcher returns after confirming that the driver has connected to its peers; it does not stream
+            the run or collect results automatically. When the driver is one of <code>-hosts</code>, it is excluded
+            from the benchmark pool. A dedicated driver outside <code>-hosts</code> leaves the pool unchanged.</p>
+        <p>With <code>-check</code>, <code>-explain-check</code>, <code>-collect</code>, <code>-collect-now</code>, or
+            <code>-list</code>, <code>-detach [hostname]</code> selects the remote host for that operation and does
+            not launch a sweep. These operations return when their check, collection, or listing finishes.
+            A bare <code>-detach</code> (or <code>-detach first</code>) requires <code>-hosts</code>.
+            Without <code>-detach</code>, checks run locally and bare collection/listing use the saved run.</p>
         <pre>
-./cmd/sweep/sweep -hosts <span class="s">'bb[1-9]'</span> -driver bbhead -detach -sweep e4 -n 9 -workers 1,2,4,8,16</pre>
-        <p><code>-detach</code> prints the same reconnect command and then returns, so closing the laptop lid right
-            after is an intentional clean exit rather than a dropped connection that surfaces as an error. Reconnect
-            the same way as an accidentally dropped run, with
-            <code>-driver &lt;host&gt; -collect &lt;remote-work-dir&gt;</code> — the two paths differ only in what the
-            launcher does before the run finishes, not in how the detached run itself behaves or how it is collected.
-            <code>-detach</code> requires <code>-driver</code> and cannot be combined with <code>-collect</code>.</p>
+<span class="c"># Check the cluster from its first host:</span>
+./cmd/sweep/sweep -detach -hosts 'bb[1-10]' -check
+<span class="c"># Collect a particular run, or list runs on an explicit host:</span>
+./cmd/sweep/sweep -detach bbhead -collect /tmp/sweep-user/sweep-driver-e4-TIMESTAMP
+./cmd/sweep/sweep -detach bbhead -list</pre>
+        <p>If <code>-collect</code> or <code>-collect-now</code> has no path, it uses the saved run even when
+            <code>-detach</code> is supplied; an explicit host must match that saved run's host.
+            To collect from another host, supply both its hostname and the remote run path.</p>
         <p>The driven sweep authenticates to its peers using the laptop's SSH agent, forwarded to the driver; it
             needs that agent only once, for the one-time dial of every peer at startup. So <code>-detach</code> does
             not exit the instant the run starts — it keeps the laptop connected until the driven sweep signals that
@@ -1483,25 +1482,11 @@
             dialing a large cluster; it normally resolves in seconds. Waiting for the dial rather than a fixed timeout
             is what makes <code>-detach</code> reliable regardless of cluster size: leaving before the dial completes
             tears down the forwarded agent and the run fails with "no valid authentication methods".</p>
-        <div class="callout">
-            <h4>Why system <code>ssh</code>/<code>scp</code> for the laptop&#8596;driver hop, not iago?</h4>
-            <p>The driver must authenticate to the peers using the laptop's keys, which means the laptop&#8594;driver
-                connection has to forward the SSH agent. iago has no agent-forwarding support (it authenticates the
-                <em>laptop's</em> connection from <code>SSH_AUTH_SOCK</code> but never requests forwarding for the
-                remote session), so the control hop uses the system <code>ssh -A</code> / <code>scp</code> the user
-                already relies on (<code>ssh bbN</code>), which also inherits their working SSH config and
-                host-key state for free. iago is still used for everything <em>on</em> the driver (driver&#8594;peer
-                dial, upload, collection). The natural follow-up is to add agent forwarding to iago (a
-                <code>RequestAgentForwarding</code> option on the session); the laptop&#8596;driver upload/download
-                could then move to <code>iago.Upload</code>/<code>iago.Download</code> against a one-host group, and
-                the launcher would no longer shell out. Tracked as an iago enhancement.</p>
-        </div>
-        <p class="small">Mechanism note: detaching and following the run is a small shell bootstrap —
-            <code>setsid</code> puts the driven sweep in its own session (a dropped connection cannot
-            <code>SIGHUP</code> it), output is redirected to a log file, an exit-code sentinel marks completion,
-            and the launcher <code>tail -F</code>s the log until the sentinel appears. It needs nothing beyond
-            coreutils; tmux, systemd-run, or a Go-based daemon were considered and deferred as added
-            dependencies or added code for the same behavior.</p>
+        <p class="small">The launcher uses iago with SSH agent forwarding for the control connection.
+            File transfers use the selected <code>-transfer</code> backend.
+            The shell bootstrap uses <code>setsid</code> to isolate the remote sweep from disconnects,
+            redirects output to <code>console.log</code>, and writes <code>exit.code</code> on completion.
+            The launcher checks peer readiness before disconnecting; a later collection checks the exit marker.</p>
         <div class="callout">
             <h4>Requirements</h4>
             <p>Plain <code>ssh &lt;host&gt;</code> must work from the laptop to the driver and from the driver to
@@ -1702,22 +1687,22 @@
     <p>Smoke recipe:</p>
     <div class="command-block">
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
-        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -driver first -detach -test 9 -sweep stream-dedup-smoke -stream-mode dual,dedup -benchmarks SymmetricQuorumCall,SymmetricMulticast</pre>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -detach -test 9 -sweep stream-dedup-smoke -stream-mode dual,dedup -benchmarks SymmetricQuorumCall,SymmetricMulticast</pre>
     </div>
     <p>Balanced N-scale recipe:</p>
     <div class="command-block">
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
-        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -driver first -detach -sweep stream-dedup-nscale -n 5,9,15,21,27 -workers 1 -payload 0 -rate 0 -benchmarks SymmetricQuorumCall,SymmetricMulticast -stream-mode dual,dedup -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3</pre>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -detach -sweep stream-dedup-nscale -n 5,9,15,21,27 -workers 1 -payload 0 -rate 0 -benchmarks SymmetricQuorumCall,SymmetricMulticast -stream-mode dual,dedup -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3</pre>
     </div>
     <p>Offered-load recipe:</p>
     <div class="command-block">
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
-        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -driver first -detach -sweep stream-dedup-load -n 9,21,27 -workers 1,2,4,8,16,32 -payload 0 -rate 0 -benchmarks SymmetricQuorumCall -stream-mode dual,dedup -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3</pre>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -detach -sweep stream-dedup-load -n 9,21,27 -workers 1,2,4,8,16,32 -payload 0 -rate 0 -benchmarks SymmetricQuorumCall -stream-mode dual,dedup -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3</pre>
     </div>
     <p>Payload recipe:</p>
     <div class="command-block">
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
-        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -driver first -detach -sweep stream-dedup-payload -n 9,21 -workers 4 -payload 0,64,1024,16384 -rate 0 -benchmarks SymmetricQuorumCall,SymmetricMulticast -stream-mode dual,dedup -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3</pre>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -detach -sweep stream-dedup-payload -n 9,21 -workers 4 -payload 0,64,1024,16384 -rate 0 -benchmarks SymmetricQuorumCall,SymmetricMulticast -stream-mode dual,dedup -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3</pre>
     </div>
     <p>Collect recipe:</p>
     <div class="command-block">
@@ -1746,19 +1731,19 @@
     <p>Receive-side recipe:</p>
     <div class="command-block">
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
-        <pre>./cmd/sweep/sweep -hosts 'bb[1-8]' -driver first -detach -sweep recv-buffer -n 3,5,7 -workers 1,8,64 -recv-buffer 0,1,16,256 -benchmarks QuorumCall,SlowServer -duration 20s -trim 5s -reps 3</pre>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-8]' -detach -sweep recv-buffer -n 3,5,7 -workers 1,8,64 -recv-buffer 0,1,16,256 -benchmarks QuorumCall,SlowServer -duration 20s -trim 5s -reps 3</pre>
     </div>
 
     <p>Send-side recipe:</p>
     <div class="command-block">
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
-        <pre>./cmd/sweep/sweep -hosts 'bb[1-8]' -driver first -detach -sweep send-buffer -n 3,5,7 -workers 1,8 -send-buffer 64,256,1024,4096 -benchmarks Multicast,AsyncMulticast,SymmetricMulticast -duration 20s -trim 5s -reps 3 -extra-args '-max-async=8192'</pre>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-8]' -detach -sweep send-buffer -n 3,5,7 -workers 1,8 -send-buffer 64,256,1024,4096 -benchmarks Multicast,AsyncMulticast,SymmetricMulticast -duration 20s -trim 5s -reps 3 -extra-args '-max-async=8192'</pre>
     </div>
 
     <p>Both sides at once, as a grid:</p>
     <div class="command-block">
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
-        <pre>./cmd/sweep/sweep -hosts 'bb[1-8]' -driver first -detach -sweep buffers -n 5 -workers 8 -send-buffer 64,1024 -recv-buffer 0,16 -benchmarks QuorumCall,AsyncMulticast -duration 20s -trim 5s -reps 3 -extra-args '-max-async=8192'</pre>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-8]' -detach -sweep buffers -n 5 -workers 8 -send-buffer 64,1024 -recv-buffer 0,16 -benchmarks QuorumCall,AsyncMulticast -duration 20s -trim 5s -reps 3 -extra-args '-max-async=8192'</pre>
     </div>
 
     <p>Measurements on an 8-node LAN cluster found both curves flat: across
@@ -1788,8 +1773,8 @@ git worktree remove /tmp/gorums-baseline</pre>
     <p>Run the feature sweep (<code>dual,dedup</code>) and the baseline sweep with identical dimensions:</p>
     <div class="command-block">
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
-        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -driver first -detach -sweep dedup-eval -n 5,9,15,21,27 -workers 1 -payload 0 -rate 0 -benchmarks SymmetricQuorumCall,SymmetricMulticast -stream-mode dual,dedup -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3
-./cmd/sweep/sweep -hosts 'bb[1-30]' -driver first -detach -sweep dedup-eval-baseline -n 5,9,15,21,27 -workers 1 -payload 0 -rate 0 -benchmarks SymmetricQuorumCall,SymmetricMulticast -stream-mode baseline -binary /tmp/benchmark-baseline -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3</pre>
+        <pre>./cmd/sweep/sweep -hosts 'bb[1-30]' -detach -sweep dedup-eval -n 5,9,15,21,27 -workers 1 -payload 0 -rate 0 -benchmarks SymmetricQuorumCall,SymmetricMulticast -stream-mode dual,dedup -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3
+./cmd/sweep/sweep -hosts 'bb[1-30]' -detach -sweep dedup-eval-baseline -n 5,9,15,21,27 -workers 1 -payload 0 -rate 0 -benchmarks SymmetricQuorumCall,SymmetricMulticast -stream-mode baseline -binary /tmp/benchmark-baseline -duration 20s -trim 5s -interval 500ms -stats-mode hdr -reps 3</pre>
     </div>
     <p>After collecting both runs, merge their <code>plotdata.binpb</code> files into one folder; every figure then
         shows <code>baseline</code>, <code>dual</code>, and <code>dedup</code> as separate series because
@@ -2009,34 +1994,34 @@ cat out/dedup-eval/plotdata/plotdata.binpb out/dedup-eval-baseline/plotdata/plot
     <h3>LLM failure triage</h3>
     <p>Add <code>-explain</code> to a sweep to have a model diagnose its failed runs (<a href="#tasks">§17</a>).
         The diagnosis is printed and written into each failed run's <code>manifest.json</code> as a
-        <code>diagnosis</code> field. With <code>-driver</code> the triage runs on the driver, which is the only
+        <code>diagnosis</code> field. With <code>-detach</code> the triage runs on the driver, which is the only
         side of the firewall that can reach the UiS Ollama server; the diagnosed manifests then travel back with the
         results. The API key comes from the environment, never a flag: on a plain run it must be set on the laptop,
-        and with <code>-driver</code> the laptop's <code>OLLAMA_API_KEY</code> is forwarded to the driver over the
+        and with <code>-detach</code> the laptop's <code>OLLAMA_API_KEY</code> is forwarded to the driver over the
         SSH channel (never written to disk or the streamed log).</p>
     <div class="command-block">
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
         <pre>export OLLAMA_API_KEY=...   # from Open WebUI: Settings &#8594; Account
-./cmd/sweep/sweep -hosts 'bb[1-25]' -driver first -sweep nscale \
+./cmd/sweep/sweep -hosts 'bb[1-25]' -detach -sweep nscale \
     -n 3,5,9,17,25 -workers 4 -explain -explain-model llama3.3</pre>
     </div>
     <p>Because triage runs only after a sweep, a broken provider, model name, key, or endpoint would otherwise
         surface only at the very end - too late to re-triage the failed runs cheaply. Two safeguards address this.
         When <code>-explain</code> is set, the sweep runs a connectivity preflight before doing any work: it sends a
         trivial prompt to the configured model and requires a non-empty reply. This runs where triage will run - on
-        the driver for a <code>-driver</code> sweep, the side that can reach the Ollama server - so an unreachable
+        the driver for a <code>-detach</code> sweep, the side that can reach the Ollama server - so an unreachable
         endpoint, empty reply, or error page aborts the sweep at minute 0 instead of after the run. A missing key or
         model is caught even earlier, in flag validation on the laptop, before anything is built or shipped.</p>
     <p>For an on-demand check, <code>-explain-check</code> sends the same prompt and prints the reply and latency,
-        then exits. With <code>-driver</code> it ships the check to the driver - building and uploading just the
+        then exits. With <code>-detach</code> it ships the check to the driver - building and uploading just the
         sweep binary, running the check there with the forwarded key, then removing the temp dir - so the laptop can
-        verify the firewalled UiS Ollama server it cannot reach itself. Without <code>-driver</code> it runs locally
+        verify the firewalled UiS Ollama server it cannot reach itself. Without <code>-detach</code> it runs locally
         against a provider the laptop can reach (OpenAI, Claude, or a local Ollama). Either way a missing key or
         model fails fast, before anything is built or shipped.</p>
     <div class="command-block">
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
         <pre># from the laptop, checks the UiS Ollama server on the driver:
-OLLAMA_API_KEY=... ./cmd/sweep/sweep -hosts 'bb[1-25]' -driver first -explain-check -explain-model llama3.3
+OLLAMA_API_KEY=... ./cmd/sweep/sweep -hosts 'bb[1-25]' -detach -explain-check -explain-model llama3.3
 
 # locally against a provider the laptop can reach:
 ANTHROPIC_API_KEY=... ./cmd/sweep/sweep -explain-check -explain-provider claude -explain-model claude-opus-4-8</pre>
