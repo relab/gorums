@@ -22,7 +22,8 @@ type NodeAddress = conn.NodeAddress
 // supply a unique identity that a certificate SAN can match. [NewServer]
 // panics, and [NewConfig] returns an error, for an empty or duplicate
 // identity, a wildcard DNS name, a network address such as "10.0.0.1" or
-// "localhost:9000", and text that is not printable ASCII.
+// "localhost:9000", and text that is not printable ASCII. They do the same
+// when the dialer's credentials are not set with [WithTransportCredentials].
 type TLSIdentity = conn.TLSIdentity
 
 // WithNodes returns a NodeSource containing the provided mapping from
@@ -31,9 +32,10 @@ type TLSIdentity = conn.TLSIdentity
 // the node implements [TLSIdentity], its expected certificate identity.
 // Later changes to the map or its node values do not affect the source.
 // Identities enable verification when the source is passed to [WithPeers],
-// [NewConfig], or [Config.Extend]. A dialed server must present a verified
-// certificate with the node's identity, or its calls fail with
-// codes.Unauthenticated.
+// [NewConfig], or [Config.Extend], which then require
+// [WithTransportCredentials]. A dialed server must present a verified
+// certificate with the node's identity. Otherwise, the connection closes before
+// it carries any stream, and calls to the node fail with codes.Unauthenticated.
 func WithNodes[T NodeAddress](nodes map[ID]T) NodeSource {
 	return conn.WithNodes(nodes)
 }

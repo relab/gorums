@@ -44,16 +44,24 @@ func TestTLSConnection(t *testing.T) {
 		RegisterTLSServer(srv, &testSrv{})
 		return srv
 	}
-	node := gorumstest.Node(t, srvFn, gorums.WithGRPCDialOptions(
-		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
-	))
-
-	resp, err := NewTLSNodeClient(node).TestTLS(context.Background(), &Request{})
-	if err != nil {
-		t.Fatalf("RPC error: %v", err)
+	creds := credentials.NewClientTLSFromCert(cp, "")
+	tests := []struct {
+		name string
+		opt  gorums.DialOption
+	}{
+		{name: "GRPCDialOptions", opt: gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(creds))},
+		{name: "TransportCredentials", opt: gorums.WithTransportCredentials(creds)},
 	}
-
-	if !resp.GetValid() {
-		t.Fatalf("TestTLS() == %t, want %t", resp.GetValid(), true)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node := gorumstest.Node(t, srvFn, tt.opt)
+			resp, err := NewTLSNodeClient(node).TestTLS(context.Background(), &Request{})
+			if err != nil {
+				t.Fatalf("RPC error: %v", err)
+			}
+			if !resp.GetValid() {
+				t.Fatalf("TestTLS() == %t, want %t", resp.GetValid(), true)
+			}
+		})
 	}
 }

@@ -285,7 +285,7 @@ func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream st
 			return nil, noop, status.Errorf(codes.Unauthenticated, "gorums: stream claims unknown node %d", id)
 		}
 		if err := im.verify(streamCtx, id); err != nil {
-			return nil, noop, stream.VerificationError(id, err)
+			return nil, noop, verificationError{id: id, err: err}
 		}
 	}
 	if im.isKnown(id) {

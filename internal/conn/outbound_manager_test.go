@@ -33,23 +33,28 @@ func startEchoServer(tb testing.TB) string {
 }
 
 // TestOutboundManagerPeerVerifier verifies that a configuration carrying a
-// server checks each configured peer it dials with the server's peer
-// verifier, and leaves other nodes unchecked.
+// server checks each connection to a configured peer with the server's peer
+// verifier, and leaves other nodes unchecked. A peer verifier requires
+// transport credentials, because the check runs after their handshake.
 func TestOutboundManagerPeerVerifier(t *testing.T) {
 	addr := startEchoServer(t)
 	errRefused := errors.New("certificate names another node")
 	tests := []struct {
-		name        string
-		nodeID      ID // 2 is a configured peer; 5 is not
-		noVerifier  bool
-		verifyErr   error
-		wantCode    codes.Code
-		wantChecked []ID
+		name          string
+		nodeID        ID // 2 is a configured peer; 5 is not
+		noVerifier    bool
+		noCredentials bool
+		verifyErr     error
+		wantCode      codes.Code
+		wantChecked   []ID
+		wantNodeErr   string
 	}{
 		{name: "PeerAccepted", nodeID: 2, wantCode: codes.OK, wantChecked: []ID{2}},
 		{name: "PeerRefused", nodeID: 2, verifyErr: errRefused, wantCode: codes.Unauthenticated, wantChecked: []ID{2}},
 		{name: "NotAPeer", nodeID: 5, wantCode: codes.OK},
 		{name: "NoVerifier", nodeID: 2, noVerifier: true, wantCode: codes.OK},
+		{name: "NoVerifierNoCredentials", nodeID: 2, noVerifier: true, noCredentials: true, wantCode: codes.OK},
+		{name: "NoCredentials", nodeID: 2, noCredentials: true, wantNodeErr: "gorums: node 2 has a TLS identity; set the TLS credentials with WithTransportCredentials"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -75,9 +80,18 @@ func TestOutboundManagerPeerVerifier(t *testing.T) {
 				o.InboundManager = im
 				o.LocalNodeID = 1
 				o.GRPCDialOptions = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+				if !tt.noCredentials {
+					o.TransportCredentials = insecure.NewCredentials()
+				}
 			})
 			t.Cleanup(m.Close)
 			n, err := m.newNode(tt.nodeID, addr, nil)
+			if tt.wantNodeErr != "" {
+				if err == nil || err.Error() != tt.wantNodeErr {
+					t.Fatalf("newNode(%d) error = %v; want %q", tt.nodeID, err, tt.wantNodeErr)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("newNode(%d): %v", tt.nodeID, err)
 			}
@@ -96,7 +110,7 @@ func TestOutboundManagerPeerVerifier(t *testing.T) {
 
 			mu.Lock()
 			defer mu.Unlock()
-			// The channel checks each stream it opens, and it may open more
+			// The node checks each connection it makes, and it may make more
 			// than one, so compare the distinct IDs.
 			if got := slices.Compact(checked); !slices.Equal(got, tt.wantChecked) {
 				t.Errorf("verifier checked %v; want %v", got, tt.wantChecked)

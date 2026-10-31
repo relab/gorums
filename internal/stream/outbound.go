@@ -22,16 +22,6 @@ const (
 // before it counts as viable.
 const viableStreamAge = 2 * time.Second
 
-// PeerVerifier reports whether the remote end of the stream with context ctx
-// is the node with ID id. It returns nil to accept the stream, and an error
-// that explains the refusal otherwise. ctx is the stream's context, which
-// carries the connection's [google.golang.org/grpc/peer.Peer] and, on a
-// server, the stream's incoming metadata. A PeerVerifier must be safe for
-// concurrent use. It should return promptly, and return when ctx ends: on a
-// dialing node it runs on the channel's goroutine, so a verifier that blocks
-// delays the channel's sends and its Close.
-type PeerVerifier func(ctx context.Context, id ID) error
-
 // OutboundOptions configures an [OutboundChannel].
 type OutboundOptions struct {
 	// SendBufferSize is the send queue capacity.
@@ -51,9 +41,6 @@ type OutboundOptions struct {
 	// time the stream comes up or goes down; [OutboundChannel.StreamUp]
 	// reports the new state.
 	OnStreamChange func()
-	// Verify, if non-nil, checks the remote end of each new stream against
-	// the channel's ID before the stream carries requests.
-	Verify PeerVerifier
 }
 
 // OutboundChannel is a [Channel] over a stream that this node opens to a
@@ -82,14 +69,14 @@ type OutboundOptions struct {
 // codes.PermissionDenied, codes.InvalidArgument, or codes.Unimplemented
 // before delivering a frame. Calls on it fail with that status and are not
 // sent again. The channel then backs off before opening a new stream, and
-// requests fail with the refusal in the meantime. A stream that fails
-// [OutboundOptions.Verify] is treated the same way.
+// requests fail with the refusal in the meantime. A stream that cannot be
+// opened because of one of these codes is treated the same way, for example
+// when the connection's credentials refuse the server.
 type OutboundChannel struct {
 	endpoint
 	conn           *grpc.ClientConn
 	eagerReconnect bool
 	onStreamChange func()
-	verify         PeerVerifier
 	streamUp       atomic.Bool
 
 	mu       sync.Mutex
@@ -108,7 +95,6 @@ func NewOutboundChannel(ctx context.Context, id ID, conn *grpc.ClientConn, opts 
 		conn:           conn,
 		eagerReconnect: opts.EagerReconnect,
 		onStreamChange: opts.OnStreamChange,
-		verify:         opts.Verify,
 		sessions:       make(map[*session]struct{}),
 	}
 	c.closeOnce = sync.OnceValue(func() error {
@@ -281,25 +267,14 @@ func (b *backoff) next() time.Time {
 	return until
 }
 
-// open returns a session on a new stream, after checking its remote end if the
-// channel has a verifier. A suspect session follows a refused stream.
+// open returns a session on a new stream. A suspect session follows a refused
+// stream.
 func (c *OutboundChannel) open(suspect bool) (*session, error) {
 	ctx, cancel := context.WithCancel(c.ctx)
 	st, err := NewGorumsClient(c.conn).NodeStream(ctx)
 	if err != nil {
 		cancel()
 		return nil, err
-	}
-	if c.verify != nil {
-		// st.Context carries the server's peer information, including
-		// its TLS state. The call also commits st to its connection:
-		// gRPC will not retry st on another connection, so every
-		// request sent on st reaches the peer checked here. If st
-		// fails, the run loop opens a new stream and checks it again.
-		if err := c.verify(st.Context(), c.id); err != nil {
-			cancel()
-			return nil, VerificationError(c.id, err)
-		}
 	}
 	s := newSession(ctx, cancel, &c.endpoint, st, true, true)
 	s.suspect = suspect

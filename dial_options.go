@@ -6,6 +6,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/relab/gorums/internal/conn"
@@ -19,6 +20,22 @@ type DialOption = conn.DialOption
 func WithGRPCDialOptions(opts ...grpc.DialOption) DialOption {
 	return func(o *conn.DialOptions) {
 		o.GRPCDialOptions = append(o.GRPCDialOptions, opts...)
+	}
+}
+
+// WithTransportCredentials returns a DialOption that sets the transport
+// credentials for the connection to each node, such as TLS credentials from
+// [credentials.NewTLS]. They replace any credentials set with
+// [WithGRPCDialOptions].
+//
+// Nodes that declare a [TLSIdentity] require this option. After each TLS
+// handshake, and before the connection carries any stream, Gorums checks that
+// the server's verified certificate names the dialed node. If the check
+// fails, Gorums closes the connection, and calls to the node fail with
+// codes.Unauthenticated.
+func WithTransportCredentials(creds credentials.TransportCredentials) DialOption {
+	return func(o *conn.DialOptions) {
+		o.TransportCredentials = creds
 	}
 }
 

@@ -1700,6 +1700,7 @@ This allows you to filter nodes based on the underlying cause of their failures,
 A server refuses a stream when it ends the stream before it sends any message on it.
 For example, a server refuses a peer that fails its identity check (see [Authenticating Peers](#authenticating-peers)), and a server stream interceptor can refuse a client.
 A node treats a stream as refused when the stream ends with `codes.Unauthenticated`, `codes.PermissionDenied`, `codes.InvalidArgument`, or `codes.Unimplemented` before it delivered a message.
+A node that dials a server with the wrong certificate treats its own failed identity check the same way, although that check closes the connection before any stream opens.
 A new stream to the same server would fail the same way, so the node fails its calls and waits before it tries again:
 
 | After a refusal | Behavior |
@@ -2633,7 +2634,9 @@ nodes := map[gorums.ID]replica{
     3: {"10.0.0.3:9000", "spiffe://relab/node/3"},
 }
 srv := gorums.NewServer(
-    gorums.WithPeers(myID, gorums.WithNodes(nodes), dialOpts...),
+    gorums.WithPeers(myID, gorums.WithNodes(nodes),
+        gorums.WithTransportCredentials(dialCreds), // TLS credentials; see below
+    ),
 )
 ```
 
@@ -2642,6 +2645,7 @@ Later changes to the map or its node values do not affect that source.
 `WithPeers` automatically enables identity checks if any captured node implements `gorums.TLSIdentity`; no separate verification option is needed.
 Every node in that peer set, including the local node, must then implement the method and return an identity that a certificate can match.
 `NewServer` panics if a node lacks an identity, if an identity cannot match any certificate, or if two node IDs have the same identity.
+It also panics if the dial options lack `WithTransportCredentials`, because the server could not check the peers it dials.
 An empty identity never disables authentication.
 
 ```mermaid
@@ -2650,24 +2654,25 @@ flowchart TD
     nodes --> source["WithNodes captures both"]
     source --> server["WithPeers enables authentication"]
     server --> inbound["Check claimed peer ID on inbound streams"]
-    server --> outbound["Check dialed peer ID on outbound streams"]
+    server --> outbound["Check dialed peer ID in each TLS handshake"]
 ```
 
-Identity checks run once per stream, before a peer's connect callback or handler runs and before the dialer sends any request.
+The inbound check runs once per stream, before a peer's connect callback or handler runs.
+The dial-side check runs once per connection, right after the TLS handshake and before the connection carries any stream.
 When the server refuses a stream that claims a peer's node ID, the refusal sent to the remote end includes the reason.
-When a stream that the server opened fails the check, the reason is in the error of the waiting call.
+When a peer that the server dials fails the check, the reason is in the error of the waiting call.
 The checks require mutually authenticated TLS; see [Binding Node IDs to TLS Certificates](#binding-node-ids-to-tls-certificates).
 
 | Stream | Check | When the check fails |
 | --- | --- | --- |
 | Claims the node ID of a configured peer | Certificate identity matches the claimed ID before the stream is attached to the peer | The stream ends with `codes.Unauthenticated`; no connect callback or handler runs |
 | Claims a node ID outside the peer configuration | None; there is no identity to check | The stream ends with `codes.Unauthenticated` |
-| Opened by this server to a configured peer | Certificate identity matches the dialed ID before any request is sent | The waiting call fails with `codes.Unauthenticated`; the server backs off before it opens a new stream to the peer, as after a refused stream |
+| A connection this server dials to a configured peer | Certificate identity matches the dialed ID, right after the TLS handshake | The connection closes before it carries any stream; the waiting call fails with `codes.Unauthenticated`; the server backs off as after a refused stream, and gRPC's reconnect backoff paces the handshakes |
 | Claims no peer node ID (a client) | None | Served without peer identity checks |
 
 A peer that this server refuses sees the refusal, with the reason, in `Node.LastErr` of its node for this server, and its calls to this server fail with `codes.Unauthenticated`.
 [Refused Streams](#refused-streams) describes how the refused peer backs off, and what its `LastErr` and connection state report meanwhile.
-When a stream that this server opened fails this server's own check, the peer at the other end can count this server as connected until the stream is closed.
+When a peer fails this server's dial-side check, it never receives a stream from this server, so it never counts this server as connected over that connection.
 
 With TLS peer identities, `ServerContext.SenderID` is authenticated for every configured peer, with and without stream deduplication:
 
@@ -2685,7 +2690,8 @@ Address-only node types and `WithNodeList` preserve the unauthenticated behavior
 Identity metadata enables the checks for a source passed to `WithPeers`.
 It also enables the dial-side check for a source passed to `NewConfig` or `Config.Extend`.
 A client built that way needs no certificate of its own: it checks the certificate of each server it dials, and a mismatch fails the call with `codes.Unauthenticated`.
-A client that dials without TLS also fails, because no certificate is verified.
+It must set its credentials with `WithTransportCredentials`; `NewConfig` returns an error otherwise.
+A client whose credentials do not use TLS also fails, because no certificate is verified.
 `NewConfig` returns an error if the identities are invalid, with the same rules as `NewServer`.
 `Config.Extend` returns an error if the configuration and the new source disagree: one declares identities and the other does not.
 A configuration therefore never mixes checked and unchecked nodes.
@@ -2721,19 +2727,30 @@ srv := gorums.NewServer(
         ClientAuth:   tls.VerifyClientCertIfGiven, // clients without a certificate are still served
     }))),
     gorums.WithPeers(2, gorums.WithNodes(nodes),
-        gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+        gorums.WithTransportCredentials(credentials.NewTLS(&tls.Config{
             Certificates: []tls.Certificate{cert}, // presented to the peers this server dials
             RootCAs:      caPool,
-        }))),
+        })),
     ),
 )
 ```
+
+`WithTransportCredentials` replaces any credentials set with `WithGRPCDialOptions`.
+Gorums wraps the credentials for each node, so it can check which replica answers at each address.
+A shared `tls.Config` cannot do this alone: gRPC checks the host name, and several replicas can share a host.
+A call to a node that fails the check returns an error with code `codes.Unauthenticated` and this text:
+
+```text
+connection error: desc = "transport: authentication handshake failed: gorums: node 2 failed verification: certificate has no URI SAN equal to \"spiffe://relab/node/2\""
+```
+
+Other TLS failures, such as an untrusted certificate chain, fail the handshake with `codes.Unavailable`, as in plain gRPC.
 
 With `ClientAuth: tls.RequireAndVerifyClientCert`, clients without a certificate are refused as well.
 The check is only as strong as the CA pools.
 Set `ClientCAs` on the server and `RootCAs` on the dialer to a pool that holds only the cluster's CA; a nil pool means the system roots.
 That CA must issue each identity only to its replica.
-With `InsecureSkipVerify` on the dialer, or `ClientAuth` set to `tls.RequestClientCert` or `tls.RequireAnyClientCert` on the server, no chain is verified and every peer stream is refused.
+With `InsecureSkipVerify` on the dialer, or `ClientAuth` set to `tls.RequestClientCert` or `tls.RequireAnyClientCert` on the server, no chain is verified, and every peer connection or stream is refused.
 
 For a local cluster, `NewLocalServers` takes options that differ per server: `WithLocalServerOptionsFunc` and `WithLocalDialOptionsFunc` take a function that returns the options for a given node ID, such as that server's certificate.
 Use `WithLocalNodes` to keep each expected identity with its allocated listener address:

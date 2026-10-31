@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -12,8 +13,10 @@ import (
 	"testing"
 
 	"github.com/relab/gorums/internal/testutils/mock"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 )
 
 // tlsPeerContext returns a context whose peer presented cert over TLS. If
@@ -281,5 +284,112 @@ func TestPeerVerifierWrappedSource(t *testing.T) {
 	verify, err := NewPeerVerifier(nodes)
 	if err != nil || verify == nil {
 		t.Fatalf("NewPeerVerifier on an embedded source = %v, %v; want a verifier", verify != nil, err)
+	}
+}
+
+// fakeCredentials completes each client handshake on the raw connection with
+// authInfo, or fails it with err. Clone counts its calls in clones.
+type fakeCredentials struct {
+	credentials.TransportCredentials // nil; the tests use only ClientHandshake and Clone
+	authInfo                         credentials.AuthInfo
+	err                              error
+	clones                           *int
+}
+
+func (c fakeCredentials) ClientHandshake(_ context.Context, _ string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	if c.err != nil {
+		return nil, nil, c.err
+	}
+	return rawConn, c.authInfo, nil
+}
+
+func (c fakeCredentials) Clone() credentials.TransportCredentials {
+	*c.clones++
+	return c
+}
+
+// closeRecorder is a connection that records whether it was closed.
+type closeRecorder struct {
+	net.Conn // nil; the tests use only Close
+	closed   bool
+}
+
+func (c *closeRecorder) Close() error {
+	c.closed = true
+	return nil
+}
+
+// TestPeerVerifierCredentials verifies that verifiedCredentials checks the
+// handshake result of each connection against the dialed node's ID, and that
+// a failed check closes the connection and returns a codes.Unauthenticated
+// error that names the node.
+func TestPeerVerifierCredentials(t *testing.T) {
+	errHandshake := errors.New("bad certificate chain")
+	errRefused := errors.New("certificate names another node")
+	var authInfo credentials.AuthInfo = otherAuthInfo{}
+	tests := []struct {
+		name         string
+		handshakeErr error
+		verifyErr    error
+		clone        bool
+		wantErr      string // empty means the connection is accepted
+		wantCode     codes.Code
+		wantChecked  bool
+	}{
+		{name: "Accepted", wantChecked: true},
+		{name: "Refused", verifyErr: errRefused, wantErr: "gorums: node 2 failed verification: certificate names another node", wantCode: codes.Unauthenticated, wantChecked: true},
+		{name: "HandshakeFailed", handshakeErr: errHandshake, wantErr: errHandshake.Error(), wantCode: codes.Unknown},
+		{name: "CloneRefused", clone: true, verifyErr: errRefused, wantErr: "gorums: node 2 failed verification", wantCode: codes.Unauthenticated, wantChecked: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var clones int
+			var checkedID ID
+			var checkedAuth credentials.AuthInfo
+			var creds credentials.TransportCredentials = verifiedCredentials{
+				TransportCredentials: fakeCredentials{authInfo: authInfo, err: tt.handshakeErr, clones: &clones},
+				id:                   2,
+				verify: func(ctx context.Context, id ID) error {
+					checkedID = id
+					if p, ok := peer.FromContext(ctx); ok {
+						checkedAuth = p.AuthInfo
+					}
+					return tt.verifyErr
+				},
+			}
+			if tt.clone {
+				creds = creds.Clone()
+				if clones != 1 {
+					t.Errorf("Clone cloned the wrapped credentials %d times; want 1", clones)
+				}
+			}
+			raw := &closeRecorder{}
+			conn, gotAuth, err := creds.ClientHandshake(t.Context(), "node2", raw)
+
+			if tt.wantChecked != (checkedID != 0) {
+				t.Errorf("verifier called = %t; want %t", checkedID != 0, tt.wantChecked)
+			}
+			if tt.wantChecked && (checkedID != 2 || checkedAuth != authInfo) {
+				t.Errorf("verifier checked node %d with %v; want node 2 with the handshake's AuthInfo", checkedID, checkedAuth)
+			}
+			if tt.wantErr == "" {
+				if err != nil || conn != raw || gotAuth != authInfo || raw.closed {
+					t.Errorf("ClientHandshake = %v, %v, %v (closed %t); want the open connection, its AuthInfo, and no error", conn, gotAuth, err, raw.closed)
+				}
+				return
+			}
+			if err == nil || !strings.HasPrefix(err.Error(), tt.wantErr) {
+				t.Fatalf("ClientHandshake error = %v; want %q", err, tt.wantErr)
+			}
+			if got := status.Code(err); got != tt.wantCode {
+				t.Errorf("ClientHandshake error code = %v; want %v", got, tt.wantCode)
+			}
+			if conn != nil || gotAuth != nil {
+				t.Errorf("ClientHandshake returned %v, %v with an error; want nil, nil", conn, gotAuth)
+			}
+			if tt.handshakeErr == nil && !raw.closed {
+				t.Error("connection is open after a failed check; want it closed")
+			}
+		})
 	}
 }
