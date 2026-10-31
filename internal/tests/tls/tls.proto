@@ -12,5 +12,5 @@ service TLS {
 message Request {}
 
 message Response {
-    bool ok = 1;
+    bool valid = 1;
 }
