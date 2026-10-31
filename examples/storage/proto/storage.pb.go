@@ -84,7 +84,7 @@ func (b0 ReadRequest_builder) Build() *ReadRequest {
 // ReadResponse is the response message for Read RPCs and Read quorum calls.
 type ReadResponse struct {
 	state            protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Ok    bool                   `protobuf:"varint,1,opt,name=ok"`
+	xxx_hidden_Found bool                   `protobuf:"varint,1,opt,name=found"`
 	xxx_hidden_Value string                 `protobuf:"bytes,2,opt,name=value"`
 	xxx_hidden_Time  *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=time"`
 	unknownFields    protoimpl.UnknownFields
@@ -116,9 +116,9 @@ func (x *ReadResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *ReadResponse) GetOk() bool {
+func (x *ReadResponse) GetFound() bool {
 	if x != nil {
-		return x.xxx_hidden_Ok
+		return x.xxx_hidden_Found
 	}
 	return false
 }
@@ -137,8 +137,8 @@ func (x *ReadResponse) GetTime() *timestamppb.Timestamp {
 	return nil
 }
 
-func (x *ReadResponse) SetOk(v bool) {
-	x.xxx_hidden_Ok = v
+func (x *ReadResponse) SetFound(v bool) {
+	x.xxx_hidden_Found = v
 }
 
 func (x *ReadResponse) SetValue(v string) {
@@ -163,7 +163,7 @@ func (x *ReadResponse) ClearTime() {
 type ReadResponse_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	Ok    bool
+	Found bool
 	Value string
 	Time  *timestamppb.Timestamp
 }
@@ -172,7 +172,7 @@ func (b0 ReadResponse_builder) Build() *ReadResponse {
 	m0 := &ReadResponse{}
 	b, x := &b0, m0
 	_, _ = b, x
-	x.xxx_hidden_Ok = b.Ok
+	x.xxx_hidden_Found = b.Found
 	x.xxx_hidden_Value = b.Value
 	x.xxx_hidden_Time = b.Time
 	return m0
@@ -339,9 +339,9 @@ const file_storage_proto_storage_proto_rawDesc = "" +
 	"\n" +
 	"\x1bstorage/proto/storage.proto\x12\x05proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\fgorums.proto\"\x1f\n" +
 	"\vReadRequest\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\"d\n" +
-	"\fReadResponse\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\"j\n" +
+	"\fReadResponse\x12\x14\n" +
+	"\x05found\x18\x01 \x01(\bR\x05found\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12.\n" +
 	"\x04time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\"f\n" +
 	"\fWriteRequest\x12\x10\n" +

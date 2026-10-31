@@ -64,10 +64,10 @@ func (b0 Request_builder) Build() *Request {
 }
 
 type Response struct {
-	state         protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Ok bool                   `protobuf:"varint,1,opt,name=ok"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Valid bool                   `protobuf:"varint,1,opt,name=valid"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Response) Reset() {
@@ -95,28 +95,28 @@ func (x *Response) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *Response) GetOk() bool {
+func (x *Response) GetValid() bool {
 	if x != nil {
-		return x.xxx_hidden_Ok
+		return x.xxx_hidden_Valid
 	}
 	return false
 }
 
-func (x *Response) SetOk(v bool) {
-	x.xxx_hidden_Ok = v
+func (x *Response) SetValid(v bool) {
+	x.xxx_hidden_Valid = v
 }
 
 type Response_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	Ok bool
+	Valid bool
 }
 
 func (b0 Response_builder) Build() *Response {
 	m0 := &Response{}
 	b, x := &b0, m0
 	_, _ = b, x
-	x.xxx_hidden_Ok = b.Ok
+	x.xxx_hidden_Valid = b.Valid
 	return m0
 }
 
@@ -125,9 +125,9 @@ var File_tls_tls_proto protoreflect.FileDescriptor
 const file_tls_tls_proto_rawDesc = "" +
 	"\n" +
 	"\rtls/tls.proto\x12\x03tls\"\t\n" +
-	"\aRequest\"\x1a\n" +
-	"\bResponse\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok2/\n" +
+	"\aRequest\" \n" +
+	"\bResponse\x12\x14\n" +
+	"\x05valid\x18\x01 \x01(\bR\x05valid2/\n" +
 	"\x03TLS\x12(\n" +
 	"\aTestTLS\x12\f.tls.Request\x1a\r.tls.Response\"\x00B1Z*github.com/relab/gorums/internal/tests/tls\x92\x03\x02\b\x02b\beditionsp\xe8\a"
 
