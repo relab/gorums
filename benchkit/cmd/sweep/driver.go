@@ -86,7 +86,7 @@ func resolveDriver(driverFlag string, hosts []string) (driver string, benchHosts
 func resolveDriverHost(driverFlag string, hosts []string) (string, error) {
 	if driverFlag == "first" {
 		if len(hosts) == 0 {
-			return "", errors.New("-detach requires -hosts to select the first host; supply -detach <hostname> instead")
+			return "", errors.New("-detach without a hostname requires -hosts")
 		}
 		return hosts[0], nil
 	}
@@ -288,6 +288,8 @@ func runDriver(cfg *config, hosts []string) error {
 		return err
 	}
 	log.Printf("detached sweep started on %s:%s; laptop is free to disconnect", driver, wd)
+	log.Printf("follow progress with:")
+	log.Printf("  %s", driverSSHCommand(driver, cfg.sshConfig, "tail -F "+iago.Quote(wd+"/console.log")))
 	log.Printf("collect results with:")
 	log.Printf("  ./cmd/sweep/sweep -collect -outdir %s", cfg.rootDir)
 	log.Printf("collect a snapshot before completion with:")
@@ -300,7 +302,7 @@ func runDriver(cfg *config, hosts []string) error {
 // agent because the driver has long since dialed its peers.
 func runDriverCollect(cfg *config) error {
 	if cfg.driver == "" {
-		return errors.New("-collect requires -detach <host>")
+		return errors.New("-collect requires <host>:<remote-work-dir> or a saved run in .sweep-last.json")
 	}
 	driverGroup, err := dialDriverGroup(cfg.driver, cfg.sshConfig)
 	if err != nil {
@@ -613,7 +615,7 @@ func collectDriverSalvage(cfg *config, host iago.Host, wd, remoteOut, runDir str
 	updateLastRunCollection(cfg.rootDir, wd, "recoverable")
 	printProblemManifests(cfg.outDir)
 	log.Printf("driver work dir retained on %s:%s for inspection; to discard it:", host.Name(), wd)
-	log.Printf("  %s", driverCleanupCommand(host.Name(), cfg.sshConfig, wd))
+	log.Printf("  %s", driverSSHCommand(host.Name(), cfg.sshConfig, "rm -rf "+iago.Quote(wd)))
 	return nil
 }
 
@@ -657,9 +659,9 @@ func collectDriverCompactResults(cfg *config, host iago.Host, wd, remoteOut, run
 	log.Printf("raw .binpb results retained on %s:%s", host.Name(), wd)
 	updateLastRunCollection(cfg.rootDir, wd, "compact")
 	log.Printf("to archive raw results and remove the driver work dir:")
-	log.Printf("  ./cmd/sweep/sweep -detach %s -collect %s -outdir %s", host.Name(), wd, cfg.rootDir)
+	log.Printf("  ./cmd/sweep/sweep -collect %s:%s -outdir %s", host.Name(), wd, cfg.rootDir)
 	log.Printf("to discard raw driver results without archiving:")
-	log.Printf("  %s", driverCleanupCommand(host.Name(), cfg.sshConfig, wd))
+	log.Printf("  %s", driverSSHCommand(host.Name(), cfg.sshConfig, "rm -rf "+iago.Quote(wd)))
 	autoReport(cfg)
 	return nil
 }
@@ -801,12 +803,14 @@ func earlyExitMessage(driver, wd, consoleTail string) string {
 	return msg
 }
 
-func driverCleanupCommand(driver, sshConfig, wd string) string {
+// driverSSHCommand returns a command line, for the user to run, that executes
+// remoteCmd on the driver through the same SSH config the launcher used.
+func driverSSHCommand(driver, sshConfig, remoteCmd string) string {
 	args := []string{"ssh"}
 	if sshConfig != "" {
 		args = append(args, "-F", sshConfig)
 	}
-	args = append(args, driver, "rm -rf "+iago.Quote(wd))
+	args = append(args, driver, remoteCmd)
 	return strings.Join(args, " ")
 }
 
@@ -1029,17 +1033,17 @@ exit 0
 }
 
 // driverKeepAlive is how often the launcher pings the driver control channel.
-// Build/upload, startup confirmation, and collection can leave it idle.
-// crypto/ssh does not honor ServerAliveInterval, so
-// without these pings a NAT or firewall idle timeout could silently drop the
-// connection mid-sweep.
+// The channel can sit idle for minutes while rsync uploads binaries or
+// downloads results over its own SSH connection. crypto/ssh does not honor
+// ServerAliveInterval, so without these pings a NAT or firewall idle timeout
+// could silently drop the channel during a long transfer.
 const driverKeepAlive = 30 * time.Second
 
 // dialDriverGroup connects to the driver host using the user's SSH config.
 // Agent forwarding is always requested (equivalent to ssh -A) so that the
 // driven sweep on the driver can authenticate to its peers using the
-// laptop's keys via the forwarded agent. Keepalives hold the long-lived
-// control channel open across quiet stretches of a run.
+// laptop's keys via the forwarded agent. Keepalives hold the control channel
+// open while rsync transfers run on a separate connection.
 func dialDriverGroup(driver, sshConfigFile string) (iago.Group, error) {
 	return iago.NewSSHGroup([]string{driver}, sshConfigFile,
 		iago.FailFast(), iago.ForwardAgent(), iago.KeepAlive(driverKeepAlive))

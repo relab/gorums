@@ -64,23 +64,23 @@
 // cross-builds the binaries, uploads them and the generated SSH config, and
 // starts sweep with -driven on the driver. The launcher forwards its SSH agent
 // and waits until the driver has dialed every peer before reporting that it is
-// safe to disconnect. It then exits; collection is a separate operation.
+// safe to disconnect. It then exits and prints commands to follow and collect
+// the run. Adding -check or -explain-check to a launch command runs that check
+// from the same driver instead of launching.
 //
 // At launch, sweep writes sweep.sh and collect.sh in the local run directory
 // and records the run in <outdir>/.sweep-last.json. A bare -collect uses that
-// saved driver and path. An explicit path also requires a host selection:
+// saved driver and path; an explicit run names both:
 //
 //	-collect
-//	-detach <host> -collect <remote-work-dir>
+//	-collect <host>:<remote-work-dir>
 //
 // -collect checks once and exits if the run is still active. -collect-now
-// [path] takes a best-effort active snapshot and retains the remote run.
-// The first finished collection downloads compact plot data and failed-run
-// results; a later collection archives the raw results and removes the remote
-// work directory. -list shows driver runs, using the saved host by default.
-// With -check, -explain-check, -collect, -collect-now, or -list, -detach selects
-// the remote host for that operation and does not start a sweep.
-// A bare -detach (or -detach first) always requires -hosts.
+// [<host>:<remote-work-dir>] takes a best-effort active snapshot and retains
+// the remote run. The first finished collection downloads compact plot data
+// and failed-run results; a later collection archives the raw results and
+// removes the remote work directory. -list [host] shows driver runs on host,
+// or on the saved driver when bare.
 // Remote files live below <remote-dir>/sweep-$USER (default root: /tmp).
 //
 // A run whose compact transfer was built before a change to what gets exported
@@ -172,10 +172,11 @@ type config struct {
 
 	// Cluster-local driver: run the orchestration on a host inside the cluster
 	// so per-run SSH and the binary upload stay on the LAN (see [runDriver]).
-	driver       string // remote host selected by -detach or saved run state; empty = local
-	collect      string // -collect [path]: collect a finished driver run; no path selects the latest
-	collectNow   string // -collect-now [path]: snapshot a run even when it is still active
-	list         bool   // -list: list driver runs and their collection status
+	driver       string // driver host from -detach, a -collect/-collect-now/-list value, or saved run state; empty = local
+	collect      string // -collect [host:path]: remote work dir of a finished driver run to collect
+	collectNow   string // -collect-now [host:path]: remote work dir to snapshot even while active
+	list         string // -list [host]: host whose driver runs to list
+
 	remoteDir    string // -remote-dir: remote storage root; each user gets sweep-$USER below it
 	remoteDirs   map[string]string
 	driven       bool   // -driven (internal): this process is the orchestrator on the driver
@@ -277,15 +278,15 @@ func main() {
 		}
 		return
 	}
-	if cfg.list {
+	if cfg.list != "" {
 		if err := runDriverList(cfg); err != nil {
 			log.Fatalf("driver list: %v", err)
 		}
 		return
 	}
 	// Launch the orchestration on a cluster-local driver host: build, ship,
-	// start sweep there with -driven, confirm readiness, and exit. The launcher talks
-	// only to the driver; the driven sweep does all the peer SSH itself.
+	// start sweep there with -driven, confirm readiness, and exit. The launcher
+	// talks only to the driver; the driven sweep does all the peer SSH itself.
 	if cfg.driver != "" && !cfg.driven {
 		if err := runDriver(cfg, hosts); err != nil {
 			log.Fatalf("driver: %v", err)
@@ -683,10 +684,10 @@ func parseFlags() (*config, []string) {
 	flag.BoolVar(&cfg.pgo, "pgo", false, "merge the collected CPU profiles into <outdir>/default.pgo for profile-guided optimization (implies -collect-profiles)")
 
 	// Cluster-local driver flags.
-	flag.Var(optionalHostFlag{&cfg.driver}, "detach", "run remotely and exit once safe to disconnect; optional hostname defaults to the first -hosts entry; with -check, -explain-check, -collect, -collect-now, or -list, select the host for that operation")
-	flag.Var(optionalPathFlag{&cfg.collect}, "collect", "collect a finished driver run; optional path selects a run, otherwise use the latest run from <outdir>/.sweep-last.json")
-	flag.Var(optionalPathFlag{&cfg.collectNow}, "collect-now", "collect a best-effort snapshot now; optional path selects a run, otherwise use the latest run")
-	flag.BoolVar(&cfg.list, "list", false, "list active, completed, raw-pending, and recoverable driver runs")
+	flag.Var(optionalValueFlag{&cfg.driver, "first"}, "detach", "run the sweep on a cluster-local `[hostname]` (default: first -hosts entry) and exit once safe to disconnect; -check and -explain-check run from that host")
+	flag.Var(optionalValueFlag{&cfg.collect, latestRunSentinel}, "collect", "collect a finished driver run `[host:path]` (default: latest run in <outdir>/.sweep-last.json)")
+	flag.Var(optionalValueFlag{&cfg.collectNow, latestRunSentinel}, "collect-now", "collect a best-effort snapshot of run `[host:path]` now (default: latest run)")
+	flag.Var(optionalValueFlag{&cfg.list, latestRunSentinel}, "list", "list active, completed, raw-pending, and recoverable driver runs on `[host]` (default: driver of the latest run)")
 	flag.StringVar(&cfg.remoteDir, "remote-dir", "/tmp", "remote storage root; sweep creates and uses <root>/sweep-$USER")
 	flag.StringVar(&cfg.transferMode, "transfer", "rsync", "file transfer backend for -detach uploads and downloads: rsync >=3.2.4 (default) or sftp")
 	flag.BoolVar(&cfg.driven, "driven", false, "internal: set automatically on the cluster-local driver; relaxes laptop-only steps (repo root, build, replay script)")
@@ -725,7 +726,10 @@ func parseFlags() (*config, []string) {
 	)
 	flag.StringVar(&rawHosts, "hosts", "", "SSH host aliases: PREFIX[lo-hi]SUFFIX ranges (e.g. 'bb[1-30]'), glob patterns (e.g. 'bb*'), or comma-separated literals")
 	flag.IntVar(&testN, "test", 0, "quick smoke test with N nodes (0 = full sweep)")
-	os.Args = normalizeOptionalArgs(os.Args)
+	if err := removedFlagError(os.Args[1:]); err != nil {
+		log.Fatal(err)
+	}
+	os.Args = normalizeOptionalArgs(flag.CommandLine, os.Args)
 	flag.Parse()
 	if flag.NArg() > 0 {
 		log.Fatalf("unexpected positional argument(s): %v", flag.Args())
@@ -743,16 +747,20 @@ func parseFlags() (*config, []string) {
 		}
 	})
 
-	// -collect only reconnects to a detached run on the driver, -plot and
-	// -export-csv only read an existing output directory, and a local
-	// -explain-check talks only to the LLM, so none needs host selection. A
-	// driver-routed -explain-check still needs a host (to resolve the driver),
-	// which resolveDriverHost reports if it is missing.
+	// -collect, -collect-now, and -list address an existing driver run, -plot
+	// and -export-csv only read an existing output directory, and a local
+	// -explain-check talks only to the LLM, so none needs -hosts. A
+	// driver-routed -explain-check without a hostname still needs -hosts to
+	// pick the driver, which resolveDriverHost reports if it is missing.
 	collecting := cfg.collect != "" || cfg.collectNow != ""
+	listing := cfg.list != ""
 	if cfg.collect != "" && cfg.collectNow != "" {
 		log.Fatal("only one of -collect and -collect-now may be passed")
 	}
-	if rawHosts == "" && !collecting && !cfg.list && cfg.plotDir == "" && cfg.exportCSVDir == "" && !cfg.explainCheck {
+	if (collecting || listing) && cfg.driver != "" {
+		log.Fatal("-detach launches a run; name the host with -collect <host>:<path>, -collect-now <host>:<path>, or -list <host>")
+	}
+	if rawHosts == "" && !collecting && !listing && cfg.plotDir == "" && cfg.exportCSVDir == "" && !cfg.explainCheck {
 		log.Fatal("-hosts is required; use 'bb[1-30]' for range expansion or 'bb*' to match SSH config entries")
 	}
 	if cfg.remoteDir == "" || !filepath.IsAbs(cfg.remoteDir) || filepath.Clean(cfg.remoteDir) == "/" {
@@ -792,13 +800,28 @@ func parseFlags() (*config, []string) {
 		sweepExplicit = true
 	}
 
-	var saved *lastRunState
-	if cfg.collect == latestRunSentinel || cfg.collectNow == latestRunSentinel || (cfg.list && cfg.driver == "") {
+	// An explicit -collect or -collect-now value names its run as host:path,
+	// and an explicit -list value names its host.
+	for _, ref := range []*string{&cfg.collect, &cfg.collectNow} {
+		if *ref == "" || *ref == latestRunSentinel {
+			continue
+		}
+		host, workDir, err := splitRemoteRun(*ref)
+		if err != nil {
+			log.Fatal(err)
+		}
+		cfg.driver, *ref = host, workDir
+	}
+	if listing && cfg.list != latestRunSentinel && cfg.driver == "" {
+		cfg.driver = cfg.list
+	}
+	// A bare -collect, -collect-now, or -list addresses the latest launch
+	// recorded in .sweep-last.json.
+	if cfg.collect == latestRunSentinel || cfg.collectNow == latestRunSentinel || (cfg.list == latestRunSentinel && cfg.driver == "") {
 		state, err := readLastRunState(cfg.rootDir)
 		if err != nil {
 			log.Fatal(err)
 		}
-		saved = &state
 		if cfg.driver == "" {
 			cfg.driver = state.Driver
 		}
@@ -833,13 +856,6 @@ func parseFlags() (*config, []string) {
 		log.Fatal(err)
 	}
 
-	if saved != nil && cfg.driver != saved.Driver {
-		log.Fatalf("latest run belongs to %s, not %s; use an explicit collection path for another host", saved.Driver, cfg.driver)
-	}
-	if collecting && cfg.driver == "" {
-		log.Fatal("an explicit collection path requires -detach <host>; omit the path to use the latest run")
-	}
-
 	now := time.Now()
 	if cfg.outDir == "" {
 		collectPath := cfg.collect
@@ -848,7 +864,7 @@ func parseFlags() (*config, []string) {
 		}
 		cfg.outDir = resolveOutputDir(cfg.rootDir, now, cfg.sweepLabel, sweepExplicit, collectPath)
 	}
-	readOnlyMode := cfg.check || cfg.list || cfg.explainCheck || cfg.plotDir != "" || cfg.exportCSVDir != ""
+	readOnlyMode := cfg.check || listing || cfg.explainCheck || cfg.plotDir != "" || cfg.exportCSVDir != ""
 	if collecting {
 		if err := os.MkdirAll(cfg.outDir, 0o755); err != nil {
 			log.Fatalf("output directory: %v", err)
@@ -857,7 +873,7 @@ func parseFlags() (*config, []string) {
 		if err := prepareOutputDir(cfg.outDir); err != nil {
 			log.Fatalf("output directory: %v", err)
 		}
-	} else if err := os.MkdirAll(cfg.rootDir, 0o755); err != nil && cfg.list {
+	} else if err := os.MkdirAll(cfg.rootDir, 0o755); err != nil && listing {
 		log.Fatalf("output directory: %v", err)
 	}
 

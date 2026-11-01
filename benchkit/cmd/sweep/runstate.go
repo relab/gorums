@@ -97,7 +97,7 @@ func updateLastRunCollection(rootDir, remoteWorkDir, collection string) {
 func writeCollectScript(outDir string, state lastRunState) (string, error) {
 	path := filepath.Join(outDir, collectScriptName)
 	var args []string
-	args = append(args, "-detach", state.Driver, "-collect="+state.RemoteWorkDir, "-outdir", filepath.Dir(state.LocalRunDir))
+	args = append(args, "-collect="+state.Driver+":"+state.RemoteWorkDir, "-outdir", filepath.Dir(state.LocalRunDir))
 	if state.SSHConfig != "" {
 		args = append(args, "-config", state.SSHConfig)
 	}
