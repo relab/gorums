@@ -143,9 +143,10 @@ func (s *session) send(req Request) bool {
 	return true
 }
 
-// healthy reports whether a completed send shows that the stream works. A send
-// on a stream that the server will refuse completes locally, so a suspect
-// session counts only once the server has accepted its stream.
+// healthy returns true if a completed send shows that the stream works. A
+// send completes locally, even on a stream that the server will refuse. So for
+// a suspect session, which follows a refused stream, a send shows that the
+// stream works only after the server has accepted the stream.
 func (s *session) healthy() bool {
 	return !s.suspect || s.accepted.Load()
 }
@@ -298,9 +299,9 @@ func (s *session) refused() error {
 	}
 }
 
-// outcome reports whether the server accepted the stream, and the refusal that
-// ended it, if any. A refusal is nil for a live stream and for one that ended
-// without a refusal. A refused stream was never accepted.
+// outcome returns true if the server accepted the stream, and the refusal if
+// the server refused the stream. A refused stream was never accepted. If the
+// session has ended, outcome first waits until receiving has decided.
 func (s *session) outcome() (accepted bool, refusal error) {
 	if s.ended() {
 		// The session canceled the stream, so receiving ends promptly. It may

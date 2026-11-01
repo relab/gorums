@@ -296,7 +296,6 @@ There are three channel kinds:
   The receive goroutine of each session waits for the response headers before it starts receiving.
   A refused stream ends without the `gorums-accepted` header, although a server interceptor may have sent other headers.
   Only the channel's live session can bring the stream up, so a late acceptance of a session that a GOAWAY replaced has no effect.
-  A server without the header, from an older version, brings the stream up with its first frame.
 * `InboundChannel` runs over one `InboundStream` that the server accepted; its single `session` ends with the stream.
   An `InboundStream` is a `BidiStream` that can also send response headers, as a server stream can and a client stream cannot.
   Its send loop first sends the `gorums-accepted` header, before any message.

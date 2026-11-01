@@ -1698,7 +1698,8 @@ This allows you to filter nodes based on the underlying cause of their failures,
 ## Refused Streams
 
 A server accepts a stream by sending the `gorums-accepted` response header before any message on it.
-If a server stream interceptor has already sent the response headers, the server sends an empty message instead, and the node counts that message as the acceptance.
+A stream sends its response headers only once.
+If a gRPC stream interceptor on the server, such as one set with `grpc.StreamInterceptor` in `WithGRPCServerOptions`, has already sent them, the server sends an empty message instead, and the node counts that message as the acceptance.
 A server refuses a stream when it ends the stream without accepting it.
 For example, a server refuses a peer that fails its identity check (see [Authenticating Peers](#authenticating-peers)), and a server stream interceptor can refuse a client.
 A node treats a stream as refused when the stream ends with `codes.Unauthenticated`, `codes.PermissionDenied`, `codes.InvalidArgument`, or `codes.Unimplemented` before the server accepted it.
@@ -1732,10 +1733,6 @@ sequenceDiagram
 ```
 
 So a refused peer's `ConnectedPeers` view never includes the refusing server, `WithPeerChange` reports no up/down pair for it, and `WaitForAll` waits until the server accepts.
-A server from an older Gorums version sends no acceptance header.
-A node counts a stream to such a server as accepted only when the server's first message on it arrives, such as a reply to a two-way call.
-Until then, the stream counts as down, and `Node.LastErr` keeps an earlier refusal.
-So a stream to such a server that carries only one-way calls stays down.
 
 A stream that ends with any other status (except `codes.ResourceExhausted`; see [Oversized Requests](#oversized-requests)), or that ends after the server accepted it, is lost, not refused: the node resends its two-way calls on a new stream.
 
