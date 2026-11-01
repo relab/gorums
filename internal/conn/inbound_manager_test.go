@@ -869,8 +869,8 @@ func TestInboundManagerOnConfigChangeIdempotentCleanup(t *testing.T) {
 	}
 }
 
-// stuckSendStream is a [stream.BidiStream] whose Send blocks until closed, as a
-// send to a peer that stopped reading does.
+// stuckSendStream is a [stream.InboundStream] whose Send blocks until closed,
+// as a send to a peer that stopped reading does.
 type stuckSendStream struct {
 	entered chan struct{}
 	closed  chan struct{}
@@ -889,6 +889,8 @@ func (s *stuckSendStream) Recv() (*stream.Message, error) {
 	<-s.closed
 	return nil, io.EOF
 }
+
+func (*stuckSendStream) SendHeader(metadata.MD) error { return nil }
 
 // TestInboundManagerAcceptPeerCleanupDoesNotHoldManagerLock verifies that a stream's cleanup,
 // which waits for the channel's send loop, does not block the manager while

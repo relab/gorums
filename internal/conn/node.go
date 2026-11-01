@@ -220,7 +220,7 @@ func (n *Node) activeChannel() stream.Channel {
 // detach removes the channel from the node without closing it. It is
 // idempotent and returns true only when it removed the node's last live
 // channel (the peer left the configuration).
-func (n *Node) attachStream(streamCtx context.Context, inboundStream stream.BidiStream, opts stream.InboundOptions) (newCh *stream.InboundChannel, detach func() bool) {
+func (n *Node) attachStream(streamCtx context.Context, inboundStream stream.InboundStream, opts stream.InboundOptions) (newCh *stream.InboundChannel, detach func() bool) {
 	transport := NodeTransport(n)
 	opts.Latency = transport.Latency()
 	newCh = stream.NewInboundChannel(streamCtx, n.id, inboundStream, opts)

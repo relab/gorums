@@ -297,9 +297,11 @@ There are three channel kinds:
   A refused stream ends without the `gorums-accepted` header, although a server interceptor may have sent other headers.
   Only the channel's live session can bring the stream up, so a late acceptance of a session that a GOAWAY replaced has no effect.
   A server without the header, from an older version, brings the stream up with its first frame.
-* `InboundChannel` runs over one stream that the server accepted; its single `session` ends with the stream.
+* `InboundChannel` runs over one `InboundStream` that the server accepted; its single `session` ends with the stream.
+  An `InboundStream` is a `BidiStream` that can also send response headers, as a server stream can and a client stream cannot.
   Its send loop first sends the `gorums-accepted` header, before any message.
-  If a stream interceptor has already sent the response headers, the send loop sends an empty acceptance frame instead.
+  A stream sends its response headers only once, so the header fails if a gRPC stream interceptor on the server has already sent them.
+  The send loop then sends an empty acceptance frame instead.
   Message IDs start at 1, so the dialer drops that frame after it counts it as the server's first frame.
 * `LocalChannel` serves requests in-process through the handler, with no stream.
 

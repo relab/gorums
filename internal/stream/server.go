@@ -23,7 +23,7 @@ type PeerAcceptor interface {
 	// AcceptPeer returns the channel for an accepted stream and a cleanup
 	// function to call when the stream ends, or an error that rejects the
 	// stream. ctx is the stream's context.
-	AcceptPeer(ctx context.Context, stream BidiStream) (*InboundChannel, func(), error)
+	AcceptPeer(ctx context.Context, stream InboundStream) (*InboundChannel, func(), error)
 }
 
 // Server handles NodeStream connections.
