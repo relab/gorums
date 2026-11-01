@@ -262,6 +262,7 @@ syncrq
 synctest
 TAILPID
 tcpstats
+testdata
 testprotos
 testrace
 testutils
@@ -285,6 +286,7 @@ underflowing
 unexport
 Unexported
 unicast
+unicasts
 unmarshal
 unmarshaled
 unmarshaling
