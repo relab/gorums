@@ -27,16 +27,17 @@ var ErrStreamDown = stream.ErrStreamDown
 // is a gRPC status error with the Unavailable code; match it with [errors.Is].
 var ErrNodeClosed = stream.ErrNodeClosed
 
-// ErrNoNode is returned by a remote call or unicast on a nil node, such as
-// the node that [Config.Node] returns for an ID outside the configuration.
+// ErrNoNode is returned by a remote call on a nil node, or reported when a
+// unicast handle for a nil node is consumed. [Config.Node] returns nil for an
+// ID outside the configuration.
 // It is a gRPC status error with the InvalidArgument code; match it with
 // [errors.Is].
 var ErrNoNode = impl.ErrNoNode
 
-// ErrEmptyConfig is returned by a quorum call or multicast on an empty
-// configuration, such as one that [Config.Remove] or [Config.WithoutErrors]
-// emptied. It is a gRPC status error with the InvalidArgument code; match it
-// with [errors.Is].
+// ErrEmptyConfig is reported when a quorum call or multicast handle on an
+// empty configuration is consumed. [Config.Remove] and
+// [Config.WithoutErrors] can produce an empty configuration. It is a gRPC
+// status error with the InvalidArgument code; match it with [errors.Is].
 var ErrEmptyConfig = impl.ErrEmptyConfig
 
 // ErrSendQueueFull is returned for a two-way call enqueued while the node's
