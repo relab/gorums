@@ -3,6 +3,8 @@ package stream
 import (
 	"context"
 	"sync"
+
+	"google.golang.org/grpc/metadata"
 )
 
 // InboundOptions configures an [InboundChannel].
@@ -35,6 +37,10 @@ type InboundChannel struct {
 // NewInboundChannel returns a channel over stream and starts its send loop.
 // ctx must be the stream's context; handlers receive contexts derived from it.
 // Call [InboundChannel.Serve] to receive from the stream.
+//
+// A channel exists only for an accepted stream. So if stream can send response
+// headers, as a gRPC server stream can, the send loop first sends the
+// acceptance header, before any message.
 func NewInboundChannel(ctx context.Context, id ID, stream BidiStream, opts InboundOptions) *InboundChannel {
 	c := &InboundChannel{
 		endpoint: newEndpoint(ctx, id, opts.SendBufferSize, opts.RecvBufferSize, opts.Handler, opts.Latency),
@@ -49,6 +55,12 @@ func NewInboundChannel(ctx context.Context, id ID, stream BidiStream, opts Inbou
 		return nil
 	})
 	go func() {
+		if hs, ok := stream.(interface{ SendHeader(metadata.MD) error }); ok {
+			// An error means that the stream has ended, or that an
+			// interceptor sent headers; then the dialer counts the
+			// stream as up at its first frame.
+			_ = hs.SendHeader(metadata.Pairs(acceptedKey, "1"))
+		}
 		if req := c.session.sendLoop(nil); req != nil {
 			c.queue.fail(*req, ErrStreamDown)
 		}

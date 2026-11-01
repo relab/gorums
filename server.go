@@ -48,9 +48,9 @@ func (s *Server) NodeID() ID {
 }
 
 // ConnectedPeers returns the subset of [Server.PeerConfig] whose peers are
-// currently reachable: the local node, every peer whose connection this
-// server established, and, under [WithStreamDedup], every peer whose shared
-// connection is attached. It equals [Server.PeerConfig] when all peers are
+// currently reachable: the local node, every peer that accepted the stream
+// this server opened to it, and, under [WithStreamDedup], every peer whose
+// shared connection is attached. It equals [Server.PeerConfig] when all peers are
 // connected, and always includes the local node, even before any peers have
 // connected. A returned configuration remains valid across connectivity changes.
 func (s *Server) ConnectedPeers() Config {

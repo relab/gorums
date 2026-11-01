@@ -4,6 +4,11 @@ import (
 	"context"
 )
 
+// acceptedKey is the response header that a server sends on each stream it
+// accepts, before any message. A dialer counts its stream as up when this
+// header or the first frame arrives. A refused stream ends without it.
+const acceptedKey = "gorums-accepted"
+
 // PeerAcceptor identifies and registers incoming peers on a stream.
 // It is implemented by [github.com/relab/gorums/internal/conn.InboundManager].
 type PeerAcceptor interface {

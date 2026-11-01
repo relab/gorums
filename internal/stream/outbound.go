@@ -18,10 +18,6 @@ const (
 	eagerReconnectMaxDelay  = 2 * time.Second
 )
 
-// viableStreamAge is how long a stream that delivered no frame must live
-// before it counts as viable.
-const viableStreamAge = 2 * time.Second
-
 // OutboundOptions configures an [OutboundChannel].
 type OutboundOptions struct {
 	// SendBufferSize is the send queue capacity.
@@ -37,9 +33,9 @@ type OutboundOptions struct {
 	// exponential backoff, instead of on the next request. It also opens the
 	// next stream when the backoff after a refusal ends.
 	EagerReconnect bool
-	// OnStreamChange, if non-nil, is called on the channel's goroutine each
-	// time the stream comes up or goes down; [OutboundChannel.StreamUp]
-	// reports the new state.
+	// OnStreamChange, if non-nil, is called each time the stream comes up or
+	// goes down, on one of the channel's goroutines and without holding the
+	// channel's locks; [OutboundChannel.StreamUp] reports the current state.
 	OnStreamChange func()
 }
 
@@ -47,6 +43,11 @@ type OutboundOptions struct {
 // server. It opens the stream when it is created. If the stream fails, for
 // example because the connection breaks or the server stops, the channel
 // opens a new stream; [OutboundOptions.EagerReconnect] controls how soon.
+//
+// The channel sends requests on a new stream at once, but it counts the
+// stream as up only once the server accepts it: when the server's acceptance
+// header or first frame arrives. A server that sends no acceptance header,
+// such as an older Gorums server, brings the stream up with its first frame.
 //
 // Calls still awaiting responses when the stream fails are sent again on the
 // new stream. Calls that do not fit in the send queue fail with
@@ -81,6 +82,7 @@ type OutboundChannel struct {
 
 	mu       sync.Mutex
 	sessions map[*session]struct{} // sessions still receiving; two during a GOAWAY handover
+	live     *session              // the session whose acceptance brings the stream up
 
 	wg        sync.WaitGroup
 	closeOnce func() error
@@ -137,11 +139,9 @@ func (c *OutboundChannel) run() {
 		// Send until the stream ends or starts draining. A request taken
 		// from the queue but not sent comes back in req.
 		req = s.sendLoop(req)
-		c.setStreamUp(false)
-		// If the stream ended while sending, it may still be viable if it
-		// delivered a frame, or if it lived long enough.
-		streamViable, refusalErr := s.outcome()
-		if streamViable {
+		c.setStreamUp(s, false)
+		accepted, refusalErr := s.outcome()
+		if accepted {
 			b.recovered()
 		}
 		if refusalErr != nil {
@@ -202,12 +202,12 @@ func (c *OutboundChannel) failRequest(req *Request, err error) {
 // backoff paces the attempts to open a stream. A refusal always imposes a
 // delay; other failures impose one only under eager reconnect, where the
 // delay is the time to the next attempt. The delay doubles up to
-// eagerReconnectMaxDelay and starts over when a stream proves viable.
+// eagerReconnectMaxDelay and starts over when the server accepts a stream.
 type backoff struct {
 	eager   bool
 	delay   time.Duration
 	retry   <-chan time.Time // fires when to attempt again; nil unless eager
-	refusal error            // the latest refusal, until a stream proves viable
+	refusal error            // the latest refusal, until the server accepts a stream
 	until   time.Time        // when the delay after refusal ends
 }
 
@@ -220,12 +220,13 @@ func (b *backoff) attempt() {
 	b.retry = nil
 }
 
-// suspect reports whether no stream has proven viable since the latest refusal.
+// suspect reports whether the server has accepted no stream since the latest
+// refusal.
 func (b *backoff) suspect() bool {
 	return b.refusal != nil
 }
 
-// recovered starts over after a stream proved viable.
+// recovered starts over after the server accepted a stream.
 func (b *backoff) recovered() {
 	b.delay = eagerReconnectBaseDelay
 	b.refusal = nil
@@ -278,11 +279,18 @@ func (c *OutboundChannel) open(suspect bool) (*session, error) {
 	}
 	s := newSession(ctx, cancel, &c.endpoint, st, true, true)
 	s.suspect = suspect
+	s.onAccept = func() { c.setStreamUp(s, true) }
 	c.mu.Lock()
 	c.sessions[s] = struct{}{}
+	c.live = s
 	c.mu.Unlock()
-	c.setStreamUp(true)
 	c.wg.Go(func() {
+		// Header waits for the response headers, which a refused stream
+		// never sends; receive then gets the refusal.
+		if md, err := st.Header(); err == nil && len(md.Get(acceptedKey)) > 0 {
+			s.recordHealth(nil)
+			s.accept()
+		}
 		_ = s.receive()
 		c.mu.Lock()
 		delete(c.sessions, s)
@@ -313,16 +321,28 @@ func (c *OutboundChannel) watchGoAway(ctx context.Context, s *session) {
 	s.startDrain()
 }
 
-// setStreamUp records whether a stream is accepting requests and calls the
-// stream-change callback on transitions.
-func (c *OutboundChannel) setStreamUp(up bool) {
-	if c.streamUp.CompareAndSwap(!up, up) && c.onStreamChange != nil {
+// setStreamUp records that the stream of session s came up or went down, and
+// calls the stream-change callback on transitions. Only the live session can
+// bring the stream up, so a late acceptance of a replaced session, as after a
+// GOAWAY, has no effect.
+func (c *OutboundChannel) setStreamUp(s *session, up bool) {
+	c.mu.Lock()
+	if up && c.live != s {
+		c.mu.Unlock()
+		return
+	}
+	if !up && c.live == s {
+		c.live = nil
+	}
+	changed := c.streamUp.CompareAndSwap(!up, up)
+	c.mu.Unlock()
+	if changed && c.onStreamChange != nil {
 		c.onStreamChange()
 	}
 }
 
-// StreamUp reports whether a stream is open for sending. A stream counts as up
-// until its refusal, if any, arrives.
+// StreamUp reports whether the server has accepted the channel's current
+// stream, and the stream has neither ended nor started draining.
 func (c *OutboundChannel) StreamUp() bool {
 	return c.streamUp.Load()
 }

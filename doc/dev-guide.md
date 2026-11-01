@@ -291,9 +291,13 @@ There are three channel kinds:
   Its pending two-way and streaming calls fail with the refusal, as does a one-way call whose send fails on it.
   The channel then backs off before it opens the next stream, failing requests at once with the refusal until then.
   A stream that cannot be opened because of a refusal code is handled the same way, for example when the connection failed the dial-side identity check.
-  A stream opened after a refusal is suspect for health reporting: its sends do not clear `LastErr` until it delivers a frame or lives 2 s.
-  Connection reporting is optimistic: each stream counts as up when opened, before the server accepts or refuses it.
+  A stream opened after a refusal is suspect for health reporting: its sends do not clear `LastErr` until the server accepts it.
+  The channel sends on a new stream at once, but the stream counts as up only once the server accepts it: when the `gorums-accepted` response header or the first frame arrives.
+  The receive goroutine of each session waits for the response headers before it starts receiving; a refused stream never sends headers.
+  Only the channel's live session can bring the stream up, so a late acceptance of a session that a GOAWAY replaced has no effect.
+  A server without the header, from an older version, brings the stream up with its first frame.
 * `InboundChannel` runs over one stream that the server accepted; its single `session` ends with the stream.
+  Its send loop first sends the `gorums-accepted` header, before any message.
 * `LocalChannel` serves requests in-process through the handler, with no stream.
 
 The two stream channels embed an `endpoint` with the send queue, the request dispatcher, the optional `RequestHandler`, and the `Latency` estimate.
@@ -371,19 +375,19 @@ classDiagram
 ```
 
 Only the receive loop of an outbound session learns whether the server refused its stream: when the server ends a stream, a concurrent `Send` returns `io.EOF`, and only `Recv` returns the server's status.
-So a send that fails with `io.EOF` before the stream delivered a frame only cancels the stream, and the receive loop disposes of the pending calls.
+So a send that fails with `io.EOF` before the server accepted the stream only cancels the stream, and the receive loop disposes of the pending calls.
 The session's `handoff` state ensures that exactly one goroutine disposes of them.
-The session's `verdict` channel closes when the stream delivers its first frame or receiving ends; the run loop waits for it after a session ends, and then reads whether the server refused the stream.
+The session's `verdict` channel closes when the server accepts the stream or receiving ends; the run loop waits for it after a session ends, and then reads whether the server refused the stream.
 A one-way send that fails this way also waits for the verdict, so that it fails with the refusal too.
-If a frame arrives after the failed send, the stream was accepted: receiving delivers the frames that the stream buffered, and retries the calls still pending when `Recv` fails.
+If the acceptance header or a frame arrives after the failed send, the stream was accepted: receiving delivers the frames that the stream buffered, and retries the calls still pending when `Recv` fails.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Fresh: stream opened
-    Fresh --> Accepted: first frame arrives
+    Fresh --> Accepted: acceptance header or first frame arrives
     Fresh --> SendFailed: a send fails with io.EOF
     Fresh --> Closed: Recv fails
-    SendFailed --> Accepted: a buffered frame arrives, so deliver the buffered frames
+    SendFailed --> Accepted: a buffered header or frame arrives, so deliver the buffered frames
     SendFailed --> Closed: Recv fails
     Accepted --> Closed: Recv fails
     Closed --> [*]

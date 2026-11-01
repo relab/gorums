@@ -266,6 +266,44 @@ func TestPeerIdentityRefusalIsPaced(t *testing.T) {
 	}
 }
 
+// TestPeerIdentityRefusedPeerNeverConnected verifies that a server whose
+// streams a peer refuses never counts that peer as connected: its peer-change
+// callback never reports the peer, though it keeps opening new streams.
+func TestPeerIdentityRefusedPeerNeverConnected(t *testing.T) {
+	for _, mode := range peerIdentityModes {
+		t.Run(mode.name, func(t *testing.T) {
+			var reported atomic.Bool
+			watchServer2 := gorums.WithLocalServerOptionsFunc(func(id gorums.ID) []gorums.ServerOption {
+				if id != 2 {
+					return nil
+				}
+				return []gorums.ServerOption{gorums.WithPeerChange(func(cfg gorums.Config) {
+					if slices.Contains(cfg.NodeIDs(), 3) {
+						reported.Store(true)
+					}
+				})}
+			})
+			// Server 2 presents node 3's certificate, so server 3 refuses
+			// server 2's streams.
+			servers, _ := peerGroup(t, newTestCA(t), 3, []gorums.ID{1, 3, 3}, append(mode.opts, watchServer2)...)
+			node3 := servers[1].PeerConfig().Node(3)
+			awaitLastErrCode(t, node3, codes.Unauthenticated)
+			// Calls open new streams, which server 3 refuses too.
+			for deadline := time.Now().Add(500 * time.Millisecond); time.Now().Before(deadline); {
+				if _, err := remoteCall(t, node3, 3*time.Second); status.Code(err) != codes.Unauthenticated {
+					t.Fatalf("call from server 2 to node 3: err = %v; want code %v", err, codes.Unauthenticated)
+				}
+			}
+			if reported.Load() {
+				t.Error("server 2 reported node 3 as connected; want it never connected")
+			}
+			if slices.Contains(servers[1].ConnectedPeers().NodeIDs(), 3) {
+				t.Error("server 2's connected peers include node 3; want it never connected")
+			}
+		})
+	}
+}
+
 // TestPeerIdentityReadyAfterRefusal verifies optimistic readiness for idle
 // accepted streams, even when GOAWAY keeps their lifetimes below two seconds.
 func TestPeerIdentityReadyAfterRefusal(t *testing.T) {
