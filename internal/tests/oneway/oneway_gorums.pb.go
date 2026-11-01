@@ -23,10 +23,9 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// OnewayTestClient is the client API for the quorum calls and multicasts of
-// the OnewayTest service. Its calls execute on the configuration given to
-// [NewOnewayTestClient]. If that configuration is empty, every call returns
-// [gorums.ErrEmptyConfig].
+// OnewayTestClient is the client API for OnewayTest quorum calls and
+// multicasts on the client's configuration. If the configuration is empty, no
+// message is sent and the call fails with [gorums.ErrEmptyConfig].
 type OnewayTestClient interface {
 	// Multicast starts a one-way call on the client's configuration; no reply
 	// is returned. Use gorums.MapRequest to send a different message to each node.
@@ -55,10 +54,9 @@ type onewayTestClient struct {
 	config Config
 }
 
-// OnewayTestNodeClient is the client API for the remote calls and unicasts
-// of the OnewayTest service. Its calls execute on the node given to
-// [NewOnewayTestNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// OnewayTestNodeClient is the client API for OnewayTest remote calls and
+// unicasts on the client's node. If the node is nil, no message is sent and the
+// call fails with [gorums.ErrNoNode].
 type OnewayTestNodeClient interface {
 	// Unicast starts a one-way call on the client's node; no reply is
 	// returned.
@@ -96,7 +94,7 @@ func (c onewayTestClient) Multicast(ctx context.Context, in *Request) *gorums.On
 	return gorumsimpl.Multicast(ctx, c.config, in, "oneway.OnewayTest.Multicast")
 }
 
-// OnewayTestServer is the server-side API for the OnewayTest Service
+// OnewayTestServer is the server API for OnewayTest.
 type OnewayTestServer interface {
 	Unicast(gorums.ServerContext, *Request)
 	Multicast(gorums.ServerContext, *Request)

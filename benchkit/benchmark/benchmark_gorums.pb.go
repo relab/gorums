@@ -23,10 +23,13 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// BenchmarkClient is the client API for the quorum calls and multicasts of
-// the Benchmark service. Its calls execute on the configuration given to
-// [NewBenchmarkClient]. If that configuration is empty, every call returns
-// [gorums.ErrEmptyConfig].
+// BenchmarkClient is the client API for Benchmark quorum calls and
+// multicasts on the client's configuration. If the configuration is empty, no
+// message is sent and the call fails with [gorums.ErrEmptyConfig].
+//
+// Benchmark is the gorums workload service benchmarked by benchkit. The
+// measurement control plane (Start, Stop, ClockSync, Done) lives in benchkit's
+// Control service; this service carries only the operations under test.
 type BenchmarkClient interface {
 	// QuorumCall performs an echo quorum call on all servers.
 	QuorumCall(ctx context.Context, in *Echo) *gorums.Call[*Echo, *Echo]
@@ -69,7 +72,11 @@ func (c benchmarkClient) Multicast(ctx context.Context, in *TimedMsg) *gorums.On
 	return gorumsimpl.Multicast(ctx, c.config, in, "benchmark.Benchmark.Multicast")
 }
 
-// BenchmarkServer is the server-side API for the Benchmark Service
+// BenchmarkServer is the server API for Benchmark.
+//
+// Benchmark is the gorums workload service benchmarked by benchkit. The
+// measurement control plane (Start, Stop, ClockSync, Done) lives in benchkit's
+// Control service; this service carries only the operations under test.
 type BenchmarkServer interface {
 	QuorumCall(gorums.ServerContext, *Echo) (*Echo, error)
 	SlowServer(gorums.ServerContext, *Echo) (*Echo, error)

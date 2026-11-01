@@ -23,10 +23,11 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// StorageClient is the client API for the quorum calls and multicasts of
-// the Storage service. Its calls execute on the configuration given to
-// [NewStorageClient]. If that configuration is empty, every call returns
-// [gorums.ErrEmptyConfig].
+// StorageClient is the client API for Storage quorum calls and
+// multicasts on the client's configuration. If the configuration is empty, no
+// message is sent and the call fails with [gorums.ErrEmptyConfig].
+//
+// Storage is a simple key-value storage service
 type StorageClient interface {
 	// WriteMulticast executes a Write multicast call on a configuration of nodes.
 	// It does not wait for any responses.
@@ -72,10 +73,11 @@ type storageClient struct {
 	config Config
 }
 
-// StorageNodeClient is the client API for the remote calls and unicasts
-// of the Storage service. Its calls execute on the node given to
-// [NewStorageNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// StorageNodeClient is the client API for Storage remote calls and
+// unicasts on the client's node. If the node is nil, no message is sent and the
+// call fails with [gorums.ErrNoNode].
+//
+// Storage is a simple key-value storage service
 type StorageNodeClient interface {
 	// ReadRPC executes a Read RPC on a single node and
 	// returns the value for the provided key.
@@ -146,7 +148,9 @@ func (c storageClient) ReadCorrectable(ctx context.Context, in *ReadRequest) *go
 	return gorumsimpl.QuorumCallStream[*ReadRequest, *ReadResponse](ctx, c.config, in, "proto.Storage.ReadCorrectable")
 }
 
-// StorageServer is the server-side API for the Storage Service
+// StorageServer is the server API for Storage.
+//
+// Storage is a simple key-value storage service
 type StorageServer interface {
 	ReadRPC(gorums.ServerContext, *ReadRequest) (*ReadResponse, error)
 	WriteRPC(gorums.ServerContext, *WriteRequest) (*WriteResponse, error)

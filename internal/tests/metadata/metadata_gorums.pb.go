@@ -20,10 +20,9 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// MetadataTestNodeClient is the client API for the remote calls and unicasts
-// of the MetadataTest service. Its calls execute on the node given to
-// [NewMetadataTestNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// MetadataTestNodeClient is the client API for MetadataTest remote calls and
+// unicasts on the client's node. If the node is nil, no message is sent and the
+// call fails with [gorums.ErrNoNode].
 type MetadataTestNodeClient interface {
 	// IDFromMD returns the 'id' field from the metadata.
 	IDFromMD(ctx context.Context, in *emptypb.Empty) (*NodeID, error)
@@ -51,7 +50,7 @@ func (c metadataTestNodeClient) WhatIP(ctx context.Context, in *emptypb.Empty) (
 	return gorumsimpl.RemoteCall[*emptypb.Empty, *IPAddr](ctx, c.node, in, "metadata.MetadataTest.WhatIP")
 }
 
-// MetadataTestServer is the server-side API for the MetadataTest Service
+// MetadataTestServer is the server API for MetadataTest.
 type MetadataTestServer interface {
 	IDFromMD(gorums.ServerContext, *emptypb.Empty) (*NodeID, error)
 	WhatIP(gorums.ServerContext, *emptypb.Empty) (*IPAddr, error)

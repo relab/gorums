@@ -19,10 +19,9 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// AlphaClient is the client API for the quorum calls and multicasts of
-// the Alpha service. Its calls execute on the configuration given to
-// [NewAlphaClient]. If that configuration is empty, every call returns
-// [gorums.ErrEmptyConfig].
+// AlphaClient is the client API for Alpha quorum calls and
+// multicasts on the client's configuration. If the configuration is empty, no
+// message is sent and the call fails with [gorums.ErrEmptyConfig].
 type AlphaClient interface {
 	// Heartbeat executes a quorum call on the client's configuration. Use
 	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
@@ -44,10 +43,9 @@ type alphaClient struct {
 	config Config
 }
 
-// AlphaNodeClient is the client API for the remote calls and unicasts
-// of the Alpha service. Its calls execute on the node given to
-// [NewAlphaNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// AlphaNodeClient is the client API for Alpha remote calls and
+// unicasts on the client's node. If the node is nil, no message is sent and the
+// call fails with [gorums.ErrNoNode].
 type AlphaNodeClient interface {
 	// Read executes a remote call on the client's node and returns its
 	// reply.
@@ -69,10 +67,9 @@ type alphaNodeClient struct {
 	node *Node
 }
 
-// BetaClient is the client API for the quorum calls and multicasts of
-// the Beta service. Its calls execute on the configuration given to
-// [NewBetaClient]. If that configuration is empty, every call returns
-// [gorums.ErrEmptyConfig].
+// BetaClient is the client API for Beta quorum calls and
+// multicasts on the client's configuration. If the configuration is empty, no
+// message is sent and the call fails with [gorums.ErrEmptyConfig].
 type BetaClient interface {
 	// Heartbeat executes a quorum call on the client's configuration. Use
 	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
@@ -119,13 +116,13 @@ func (c betaClient) Write(ctx context.Context, in *Request) *gorums.Call[*Reques
 	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "multiservice.Beta.Write")
 }
 
-// AlphaServer is the server-side API for the Alpha Service
+// AlphaServer is the server API for Alpha.
 type AlphaServer interface {
 	Heartbeat(gorums.ServerContext, *Request) (*Response, error)
 	Read(gorums.ServerContext, *Request) (*Response, error)
 }
 
-// BetaServer is the server-side API for the Beta Service
+// BetaServer is the server API for Beta.
 type BetaServer interface {
 	Heartbeat(gorums.ServerContext, *Request) (*Response, error)
 	Write(gorums.ServerContext, *Request) (*Response, error)

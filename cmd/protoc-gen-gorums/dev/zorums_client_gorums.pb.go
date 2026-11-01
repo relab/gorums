@@ -23,10 +23,18 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// ZorumsServiceClient is the client API for the quorum calls and multicasts of
-// the ZorumsService service. Its calls execute on the configuration given to
-// [NewZorumsServiceClient]. If that configuration is empty, every call returns
-// [gorums.ErrEmptyConfig].
+// ZorumsServiceClient is the client API for ZorumsService quorum calls and
+// multicasts on the client's configuration. If the configuration is empty, no
+// message is sent and the call fails with [gorums.ErrEmptyConfig].
+//
+// ZorumsService is not meant to be implemented.
+// The zorums generated code is placed alongside Gorums static code files
+// (without the zorums prefix) because they depend on the generated code.
+// The generated code must pass compilation, but no further tests are performed.
+// Other tests are provided to test the actual generated code.
+// The RPCs in this service aims to test various uses of Gorums's
+// options and call types, including imported message types and
+// multiple RPCs reusing the same input and output types.
 type ZorumsServiceClient interface {
 	// QuorumCall tests a plain quorum call.
 	QuorumCall(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
@@ -97,10 +105,18 @@ type zorumsServiceClient struct {
 	config Config
 }
 
-// ZorumsServiceNodeClient is the client API for the remote calls and unicasts
-// of the ZorumsService service. Its calls execute on the node given to
-// [NewZorumsServiceNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// ZorumsServiceNodeClient is the client API for ZorumsService remote calls and
+// unicasts on the client's node. If the node is nil, no message is sent and the
+// call fails with [gorums.ErrNoNode].
+//
+// ZorumsService is not meant to be implemented.
+// The zorums generated code is placed alongside Gorums static code files
+// (without the zorums prefix) because they depend on the generated code.
+// The generated code must pass compilation, but no further tests are performed.
+// Other tests are provided to test the actual generated code.
+// The RPCs in this service aims to test various uses of Gorums's
+// options and call types, including imported message types and
+// multiple RPCs reusing the same input and output types.
 type ZorumsServiceNodeClient interface {
 	// RemoteCall tests a method without a Gorums option. Gorums generates a
 	// remote call for it, which replaces gRPC's unary RPC; no separate

@@ -19,10 +19,9 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// UnresponsiveNodeClient is the client API for the remote calls and unicasts
-// of the Unresponsive service. Its calls execute on the node given to
-// [NewUnresponsiveNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// UnresponsiveNodeClient is the client API for Unresponsive remote calls and
+// unicasts on the client's node. If the node is nil, no message is sent and the
+// call fails with [gorums.ErrNoNode].
 type UnresponsiveNodeClient interface {
 	// TestUnresponsive executes a remote call on the client's node and returns its
 	// reply.
@@ -48,7 +47,7 @@ func (c unresponsiveNodeClient) TestUnresponsive(ctx context.Context, in *Empty)
 	return gorumsimpl.RemoteCall[*Empty, *Empty](ctx, c.node, in, "unresponsive.Unresponsive.TestUnresponsive")
 }
 
-// UnresponsiveServer is the server-side API for the Unresponsive Service
+// UnresponsiveServer is the server API for Unresponsive.
 type UnresponsiveServer interface {
 	TestUnresponsive(gorums.ServerContext, *Empty) (*Empty, error)
 }
