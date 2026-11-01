@@ -1503,11 +1503,20 @@ func TestChannelStreamUpOnAcceptance(t *testing.T) {
 }
 
 // TestChannelStreamUpOnAcceptanceFrame verifies that a stream counts as up
-// once the server's acceptance frame arrives, without the acceptance header. A
-// server sends that frame when a stream interceptor has already sent the
-// response headers. The channel drops the frame, so a later call succeeds.
+// once the server's acceptance frame arrives, without the acceptance header,
+// and not before. A server sends that frame when a stream interceptor has
+// already sent the response headers. The channel drops the frame, so a later
+// call succeeds.
 func TestChannelStreamUpOnAcceptanceFrame(t *testing.T) {
+	opened := make(chan struct{}, 1)
+	release := make(chan struct{})
 	serverFn := func(stream Gorums_NodeStreamServer) error {
+		opened <- struct{}{}
+		select {
+		case <-release:
+		case <-stream.Context().Done():
+			return nil
+		}
 		if err := stream.Send(acceptFrame()); err != nil {
 			return err
 		}
@@ -1515,6 +1524,15 @@ func TestChannelStreamUpOnAcceptanceFrame(t *testing.T) {
 	}
 	tc := setupChannelEager(t, true, serverFn)
 
+	select {
+	case <-opened:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("the eager channel opened no stream")
+	}
+	if tc.StreamUp() {
+		t.Fatal("StreamUp() = true before the acceptance frame arrived, want false")
+	}
+	close(release)
 	if !waitUntil(defaultTestTimeout, tc.StreamUp) {
 		t.Fatal("StreamUp() = false after the acceptance frame arrived, want true")
 	}
