@@ -1709,16 +1709,30 @@ A new stream to the same server would fail the same way, so the node fails its c
 | Calls on the refused stream | Two-way and streaming calls fail with the refusal's status; they are not resent. A one-way call whose send fails on the refused stream also fails with the refusal. A one-way call sent before the refusal arrived counts as sent. |
 | New streams | The node backs off: 50 ms after the first refusal, doubling after each further refusal up to 2 s. With eager reconnection, the node opens the next stream when the backoff ends; otherwise, the first call after the backoff opens it. |
 | Calls during the backoff | They fail at once with the refusal. |
-| `Node.LastErr` | It reports the refusal. A newer error, such as `Unavailable`, may replace it. It reverts to nil only once a stream proves viable: the stream delivers a message, or a send succeeds on a stream that has lived 2 s. |
-| Connection state | Each new stream counts as connected as soon as it opens, before the server accepts or refuses it. |
+| `Node.LastErr` | It reports the refusal. A newer error, such as `Unavailable`, may replace it. It reverts to nil once the server accepts a new stream. |
+| Connection state | A refused stream never counts as connected. |
 
-Connection state is optimistic, so it does not confirm that the server accepted a stream:
+A node sends its calls on a new stream at once, but it counts the stream as connected only once the server accepts it.
+The server accepts a stream by sending the `gorums-accepted` response header before any message on it.
+A refused stream ends without that header:
 
-* A refused stream counts as connected until its refusal arrives; a slow server or network extends this interval.
-* Once per backoff period, a refused peer's `ConnectedPeers` view can include the refusing server, and `WithPeerChange` can report an up/down pair.
-* Under `WithStreamDedup`, `WaitForAll` can return even if the server refuses every stream.
+```mermaid
+sequenceDiagram
+    participant N as Node
+    participant S as Server
+    N->>S: open stream, send queued calls
+    alt server accepts
+        S->>N: headers (gorums-accepted: 1)
+        Note over N: stream counts as connected
+    else server refuses
+        S->>N: refusal status, no headers
+        Note over N: stream never counts as connected
+    end
+```
 
-With one-way-only traffic and GOAWAY rotation that keeps every stream shorter than 2 s, `LastErr` can keep a stale refusal after the server accepts again, even while messages reach the server.
+So a refused peer's `ConnectedPeers` view never includes the refusing server, `WithPeerChange` reports no up/down pair for it, and `WaitForAll` waits until the server accepts.
+A server from an older Gorums version sends no acceptance header.
+A stream to such a server counts as connected only once its first message arrives, so an idle stream to it counts as down.
 
 A stream that ends with any other status (except `codes.ResourceExhausted`; see [Oversized Requests](#oversized-requests)), or that ends after it delivered a message, is lost, not refused: the node resends its two-way calls on a new stream.
 

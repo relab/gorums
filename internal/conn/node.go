@@ -314,9 +314,8 @@ func (n *Node) Detail() string {
 // It reports current node health, not the outcome of any particular call: it is
 // last-write-wins across concurrent requests and reverts to nil once traffic
 // flows to the node again. After a refused stream, it reverts to nil only
-// once a stream delivers a message, or a send succeeds on a stream that has
-// lived 2 s. Use the [ByLastError] comparator with [Config.Sort] to order
-// nodes by whether they are currently failing.
+// once the server accepts a new stream. Use the [ByLastError] comparator with
+// [Config.Sort] to order nodes by whether they are currently failing.
 func (n *Node) LastErr() error {
 	if ch := n.activeChannel(); ch != nil {
 		return ch.LastErr()

@@ -40,27 +40,28 @@ type session struct {
 	drain       chan struct{} // closed when the session starts draining
 	draining    atomic.Bool
 	sendStopped atomic.Bool
-	received    atomic.Bool // a frame has been received
+	accepted    atomic.Bool // the server accepted the stream
 
-	// verdict is closed when the stream delivers its first frame or receiving
+	// verdict is closed when the server accepts the stream or receiving
 	// ends. refusal is set before that if the server refused the stream.
 	verdict chan struct{}
 	refusal error
 	// handoff decides which goroutine disposes of the pending calls when a
-	// stream ends before it delivered a frame.
+	// stream ends before the server accepted it.
 	handoff atomic.Int32
+	// onAccept, if non-nil, is called when the server accepts the stream.
+	onAccept func()
 
-	// suspect is set on a session opened after a refusal, before any stream
-	// proved viable. opened is when the session was created.
+	// suspect is set on a session opened after a refusal, before the server
+	// accepted any stream.
 	suspect bool
-	opened  time.Time
 }
 
 // Values of [session.handoff].
 const (
-	streamFresh      int32 = iota // no frame yet, and neither a send nor receiving failed
+	streamFresh      int32 = iota // not accepted yet, and neither a send nor receiving failed
 	streamSendFailed              // a send failed first; receiving disposes of the pending calls
-	streamAccepted                // a frame arrived
+	streamAccepted                // the server accepted the stream
 	streamClosed                  // receiving ended; receiving disposes of the pending calls
 )
 
@@ -76,7 +77,6 @@ func newSession(ctx context.Context, cancel context.CancelFunc, e *endpoint, str
 		requeue:        requeue,
 		drain:          make(chan struct{}),
 		verdict:        make(chan struct{}),
-		opened:         time.Now(),
 	}
 }
 
@@ -143,17 +143,11 @@ func (s *session) send(req Request) bool {
 	return true
 }
 
-// proven reports whether the stream delivered a frame or lived
-// [viableStreamAge].
-func (s *session) proven() bool {
-	return s.received.Load() || time.Since(s.opened) >= viableStreamAge
-}
-
 // healthy reports whether a completed send shows that the stream works. A send
 // on a stream that the server will refuse completes locally, so a suspect
-// session counts only once its stream is proven.
+// session counts only once the server has accepted its stream.
 func (s *session) healthy() bool {
-	return !s.suspect || s.proven()
+	return !s.suspect || s.accepted.Load()
 }
 
 // sendFailed ends the session after a send failed with err. If the session
@@ -197,8 +191,7 @@ func (s *session) receive() error {
 			return err
 		}
 		s.recordHealth(nil)
-		s.received.Store(true)
-		if s.handoff.Load() != streamAccepted {
+		if !s.accepted.Load() {
 			s.accept()
 		}
 		s.handle(msg)
@@ -206,10 +199,15 @@ func (s *session) receive() error {
 	}
 }
 
-// accept records that the stream delivered its first frame.
+// accept records that the server accepted the stream: its acceptance header or
+// its first frame arrived. Only the receiving goroutine calls it, once.
 func (s *session) accept() {
+	s.accepted.Store(true)
 	s.handoff.Store(streamAccepted)
 	close(s.verdict)
+	if s.onAccept != nil {
+		s.onAccept()
+	}
 }
 
 // receiveFailed ends the session after a receive failed with err. If the
@@ -300,18 +298,17 @@ func (s *session) refused() error {
 	}
 }
 
-// outcome reports whether the stream proved viable, and the refusal that ended
-// it, if any. A refusal is nil for a live stream and for one that ended
-// without a refusal. A refused stream can also be viable, if it lived long
-// enough.
-func (s *session) outcome() (viable bool, refusal error) {
+// outcome reports whether the server accepted the stream, and the refusal that
+// ended it, if any. A refusal is nil for a live stream and for one that ended
+// without a refusal. A refused stream was never accepted.
+func (s *session) outcome() (accepted bool, refusal error) {
 	if s.ended() {
 		// The session canceled the stream, so receiving ends promptly. It may
-		// still deliver a buffered frame, which proves the stream viable.
+		// still deliver a buffered header or frame, which accepts the stream.
 		<-s.verdict
 		refusal = s.refusal
 	}
-	return s.proven(), refusal
+	return s.accepted.Load(), refusal
 }
 
 // retryOrFail queues a call that was pending when the session ended after err, to

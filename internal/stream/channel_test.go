@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -67,8 +68,22 @@ type testChannel struct {
 	srv *grpc.Server
 }
 
-// echoServer serves as a generic server that echoes back any message.
+// acceptStream sends the acceptance header on stream, as a server does once
+// it accepts a stream. A test server that skips it acts like a server that
+// sends no acceptance header, such as an older Gorums server.
+func acceptStream(stream Gorums_NodeStreamServer) {
+	_ = stream.SendHeader(metadata.Pairs(acceptedKey, "1"))
+}
+
+// echoServer serves as a generic server that accepts the stream and echoes
+// back any message.
 func echoServer(stream Gorums_NodeStreamServer) error {
+	acceptStream(stream)
+	return echo(stream)
+}
+
+// echo echoes back any message on stream.
+func echo(stream Gorums_NodeStreamServer) error {
 	for {
 		in, err := stream.Recv()
 		if err != nil {
@@ -84,6 +99,7 @@ func echoServer(stream Gorums_NodeStreamServer) error {
 // delayServer serves a server that delays each message by delay
 func delayServer(delay time.Duration) func(stream Gorums_NodeStreamServer) error {
 	return func(stream Gorums_NodeStreamServer) error {
+		acceptStream(stream)
 		for {
 			in, err := stream.Recv()
 			if err != nil {
@@ -99,6 +115,7 @@ func delayServer(delay time.Duration) func(stream Gorums_NodeStreamServer) error
 
 // A server that drops the stream after first message
 func breakStreamServer(stream Gorums_NodeStreamServer) error {
+	acceptStream(stream)
 	msg, err := stream.Recv()
 	if err != nil {
 		return err
@@ -107,8 +124,10 @@ func breakStreamServer(stream Gorums_NodeStreamServer) error {
 	return errors.New("stream broken")
 }
 
-// holdServer hangs, effectively blocking the stream until context cancellation.
+// holdServer accepts the stream and hangs, effectively blocking the stream
+// until context cancellation.
 func holdServer(stream Gorums_NodeStreamServer) error {
+	acceptStream(stream)
 	<-stream.Context().Done()
 	return nil
 }
@@ -130,6 +149,7 @@ func rejectFirstStreamServer() func(Gorums_NodeStreamServer) error {
 // order, so that responses arrive in a different order than the requests.
 func reverseEchoServer(n int) func(Gorums_NodeStreamServer) error {
 	return func(stream Gorums_NodeStreamServer) error {
+		acceptStream(stream)
 		msgs := make([]*Message, 0, n)
 		for range n {
 			in, err := stream.Recv()
@@ -143,7 +163,7 @@ func reverseEchoServer(n int) func(Gorums_NodeStreamServer) error {
 				return err
 			}
 		}
-		return echoServer(stream)
+		return echo(stream)
 	}
 }
 
@@ -1196,11 +1216,14 @@ func TestChannelEagerReconnectBacksOffRejectedStreams(t *testing.T) {
 // refusingServer is a NodeStream server that refuses streams with code. If
 // read is set, it first reads one request from a stream and then waits hold,
 // so that the requests sent meanwhile are pending on the stream when it is
-// refused. Once accept is set, it echoes on new streams instead.
+// refused. If headers is set, it sends response headers without the
+// acceptance header before it refuses, as an interceptor can. Once accept is
+// set, it accepts new streams and echoes on them instead.
 type refusingServer struct {
 	code    codes.Code
 	read    bool
 	hold    time.Duration
+	headers bool
 	accept  atomic.Bool
 	streams atomic.Int32 // the number of streams opened to the server
 }
@@ -1221,6 +1244,9 @@ func (r *refusingServer) serve(stream Gorums_NodeStreamServer) error {
 			return err
 		}
 		time.Sleep(r.hold)
+	}
+	if r.headers {
+		_ = stream.SendHeader(metadata.Pairs("test-header", "1"))
 	}
 	return status.Error(r.code, "stream refused by test server")
 }
@@ -1405,38 +1431,116 @@ func TestChannelRefusalKeepsLastErr(t *testing.T) {
 	}
 }
 
-// TestChannelStreamUpAfterRefusal verifies that connection reporting remains
-// optimistic: each new stream counts as up until its refusal arrives.
-func TestChannelStreamUpAfterRefusal(t *testing.T) {
+// TestChannelRefusedStreamStaysDown verifies that a stream that the server
+// refuses never counts as up, also when the refusal follows response headers
+// without the acceptance header.
+func TestChannelRefusedStreamStaysDown(t *testing.T) {
 	for _, mode := range refusalModes {
-		t.Run(mode.name, func(t *testing.T) {
-			srv := refuseStreamServer(codes.Unauthenticated)
-			srv.read, srv.hold = true, 5*time.Millisecond
-			var changes atomic.Int32
-			opts := OutboundOptions{RecvBufferSize: testRecvBufferSize, EagerReconnect: mode.eager, OnStreamChange: func() { changes.Add(1) }}
-			tc := setupChannelOptions(t, opts, srv.serve)
-
-			// The first stream comes up at once and goes down at its refusal.
-			if resp := sendRequest(t, tc.OutboundChannel, Request{}, 1); status.Code(resp.Err) != codes.Unauthenticated {
-				t.Fatalf("call failed with %v, want code %v", resp.Err, codes.Unauthenticated)
+		for _, headers := range []bool{false, true} {
+			name := mode.name + "/TrailersOnly"
+			if headers {
+				name = mode.name + "/OtherHeaders"
 			}
-			if !waitUntil(defaultTestTimeout, func() bool { return changes.Load() == 2 }) {
-				t.Fatalf("OnStreamChange called %d times for the first stream, want 2", changes.Load())
-			}
+			t.Run(name, func(t *testing.T) {
+				srv := refuseStreamServer(codes.Unauthenticated)
+				srv.read, srv.hold, srv.headers = true, 5*time.Millisecond, headers
+				var changes atomic.Int32
+				opts := OutboundOptions{RecvBufferSize: testRecvBufferSize, EagerReconnect: mode.eager, OnStreamChange: func() { changes.Add(1) }}
+				tc := setupChannelOptions(t, opts, srv.serve)
 
-			// Later attempts also count as up before their refusals arrive.
-			for deadline, msgID := time.Now().Add(400*time.Millisecond), uint64(2); time.Now().Before(deadline); msgID++ {
-				if resp := sendRequest(t, tc.OutboundChannel, Request{}, msgID); status.Code(resp.Err) != codes.Unauthenticated {
-					t.Fatalf("call failed with %v, want code %v", resp.Err, codes.Unauthenticated)
+				for deadline, msgID := time.Now().Add(400*time.Millisecond), uint64(1); time.Now().Before(deadline); msgID++ {
+					if resp := sendRequest(t, tc.OutboundChannel, Request{}, msgID); status.Code(resp.Err) != codes.Unauthenticated {
+						t.Fatalf("call failed with %v, want code %v", resp.Err, codes.Unauthenticated)
+					}
+					if tc.StreamUp() {
+						t.Fatal("StreamUp() = true while the server refuses every stream, want false")
+					}
 				}
-			}
-			if got := srv.streams.Load(); got < 3 {
-				t.Fatalf("server saw %d streams, want at least 3", got)
-			}
-			if got := changes.Load(); got <= 2 {
-				t.Errorf("OnStreamChange called %d times, want later streams to count as up too", got)
-			}
-		})
+				if got := srv.streams.Load(); got < 3 {
+					t.Fatalf("server saw %d streams, want at least 3", got)
+				}
+				if got := changes.Load(); got != 0 {
+					t.Errorf("OnStreamChange called %d times, want 0 since no stream came up", got)
+				}
+			})
+		}
+	}
+}
+
+// TestChannelStreamUpOnAcceptance verifies that a stream counts as up once the
+// server accepts it, with no request sent, and not before.
+func TestChannelStreamUpOnAcceptance(t *testing.T) {
+	opened := make(chan struct{}, 1)
+	release := make(chan struct{})
+	serverFn := func(stream Gorums_NodeStreamServer) error {
+		opened <- struct{}{}
+		select {
+		case <-release:
+		case <-stream.Context().Done():
+			return nil
+		}
+		return holdServer(stream)
+	}
+	var changes atomic.Int32
+	opts := OutboundOptions{RecvBufferSize: testRecvBufferSize, EagerReconnect: true, OnStreamChange: func() { changes.Add(1) }}
+	tc := setupChannelOptions(t, opts, serverFn)
+
+	select {
+	case <-opened:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("the eager channel opened no stream")
+	}
+	if tc.StreamUp() || changes.Load() != 0 {
+		t.Fatalf("StreamUp() = %t after %d changes before the server accepted, want false after 0", tc.StreamUp(), changes.Load())
+	}
+	close(release)
+	if !waitUntil(defaultTestTimeout, tc.StreamUp) {
+		t.Fatal("StreamUp() = false after the server accepted the stream, want true")
+	}
+	if got := changes.Load(); got != 1 {
+		t.Errorf("OnStreamChange called %d times, want 1", got)
+	}
+}
+
+// TestChannelStreamUpWithoutAcceptedHeader verifies that a stream to a server
+// that sends no acceptance header, such as an older Gorums server, counts as
+// up once its first frame arrives.
+func TestChannelStreamUpWithoutAcceptedHeader(t *testing.T) {
+	opened := make(chan struct{}, 1)
+	serverFn := func(stream Gorums_NodeStreamServer) error {
+		opened <- struct{}{}
+		return echo(stream)
+	}
+	tc := setupChannelEager(t, true, serverFn)
+
+	select {
+	case <-opened:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("the eager channel opened no stream")
+	}
+	if tc.StreamUp() {
+		t.Fatal("StreamUp() = true before the server sent anything, want false")
+	}
+	if resp := sendRequest(t, tc.OutboundChannel, Request{}, 1); resp.Err != nil {
+		t.Fatalf("call failed with %v, want success", resp.Err)
+	}
+	if !waitUntil(defaultTestTimeout, tc.StreamUp) {
+		t.Fatal("StreamUp() = false after the first frame arrived, want true")
+	}
+}
+
+// TestChannelAcceptanceClearsLastErr verifies that LastErr reverts to nil once
+// the server accepts a stream after a refusal, even if no request is sent.
+func TestChannelAcceptanceClearsLastErr(t *testing.T) {
+	srv := refuseStreamServer(codes.Unauthenticated)
+	tc := setupChannelEager(t, true, srv.serve)
+	if !waitUntil(defaultTestTimeout, func() bool { return status.Code(tc.LastErr()) == codes.Unauthenticated }) {
+		t.Fatalf("LastErr = %v, want code %v", tc.LastErr(), codes.Unauthenticated)
+	}
+	srv.accept.Store(true)
+	// The channel opens the next stream when the backoff ends.
+	if !waitUntil(defaultTestTimeout, func() bool { return tc.LastErr() == nil }) {
+		t.Fatalf("LastErr = %v after the server accepted an idle stream, want nil", tc.LastErr())
 	}
 }
 
@@ -2198,11 +2302,12 @@ func TestChannelCancelledSendKeepsStream(t *testing.T) {
 	})
 }
 
-// holdFirstServer echoes every message immediately, except message 1, which it
-// answers only after delay. The delayed send stays off the receive loop and is
-// serialized with the other sends.
+// holdFirstServer accepts the stream and echoes every message immediately,
+// except message 1, which it answers only after delay. The delayed send stays
+// off the receive loop and is serialized with the other sends.
 func holdFirstServer(delay time.Duration) func(Gorums_NodeStreamServer) error {
 	return func(stream Gorums_NodeStreamServer) error {
+		acceptStream(stream)
 		var mu sync.Mutex
 		for {
 			in, err := stream.Recv()

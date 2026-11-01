@@ -2,11 +2,14 @@ package stream
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/relab/gorums/internal/testutils/mock"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 // fakeNodeStream is a minimal Gorums_NodeStreamServer for driving
@@ -40,6 +43,52 @@ type channelAcceptor struct {
 
 func (a channelAcceptor) AcceptPeer(context.Context, BidiStream) (*InboundChannel, func(), error) {
 	return a.ch, func() {}, nil
+}
+
+// inboundAcceptor is a [PeerAcceptor] that accepts each stream on a new
+// inbound channel, or refuses it if refuse is set.
+type inboundAcceptor struct {
+	refuse bool
+}
+
+func (a inboundAcceptor) AcceptPeer(ctx context.Context, stream BidiStream) (*InboundChannel, func(), error) {
+	if a.refuse {
+		return nil, func() {}, status.Error(codes.Unauthenticated, "stream refused by test acceptor")
+	}
+	ch := NewInboundChannel(ctx, 0, stream, InboundOptions{RecvBufferSize: testRecvBufferSize})
+	return ch, func() { _ = ch.Close() }, nil
+}
+
+// TestServerNodeStreamAcceptance verifies that a dialer's stream counts as up
+// once the server's acceptor accepts it, with no request sent, and never if
+// the acceptor refuses it.
+func TestServerNodeStreamAcceptance(t *testing.T) {
+	tests := []struct {
+		name   string
+		refuse bool
+	}{
+		{name: "Accepted"},
+		{name: "Refused", refuse: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var changes atomic.Int32
+			opts := OutboundOptions{RecvBufferSize: testRecvBufferSize, EagerReconnect: true, OnStreamChange: func() { changes.Add(1) }}
+			tc := setupChannelOptions(t, opts, NewServer(nil, inboundAcceptor{refuse: tt.refuse}).NodeStream)
+			if !tt.refuse {
+				if !waitUntil(defaultTestTimeout, tc.StreamUp) {
+					t.Fatal("StreamUp() = false for a stream the server accepted, want true")
+				}
+				return
+			}
+			if !waitUntil(defaultTestTimeout, func() bool { return status.Code(tc.LastErr()) == codes.Unauthenticated }) {
+				t.Fatalf("LastErr = %v, want code %v", tc.LastErr(), codes.Unauthenticated)
+			}
+			if tc.StreamUp() || changes.Load() != 0 {
+				t.Errorf("StreamUp() = %t after %d changes for a refused stream, want false after 0", tc.StreamUp(), changes.Load())
+			}
+		})
+	}
 }
 
 // TestServerNodeStreamReplyDoesNotWedgeReceiveLoop checks the server-side half of

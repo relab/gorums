@@ -20,8 +20,7 @@ type Channel interface {
 	// LastErr returns [ErrSendStalled] while a send has been blocked for
 	// [stallReportDelay] or longer, and otherwise the error of the most recent
 	// stream operation, or nil if it succeeded. After a refusal, it reverts to
-	// nil only once a stream delivers a frame, or a send succeeds on a stream
-	// that has lived [viableStreamAge].
+	// nil only once the server accepts a new stream.
 	LastErr() error
 	// DroppedReplies returns the number of handler replies dropped because
 	// the send queue was full or closed, or during a refusal backoff.
