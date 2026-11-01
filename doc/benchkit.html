@@ -1311,7 +1311,7 @@
                 <tr><td><code>-stream-mode</code></td><td><code>dual</code></td><td>Symmetric stream topology to sweep: <code>dual</code> or <code>dedup</code>. The default <code>dual</code> mode preserves existing behavior. The special <code>baseline</code> mode labels runs of a prebuilt pre-dedup binary (requires <code>-binary</code>, cannot be mixed with other modes, and is never passed to the node command line).</td></tr>
                 <tr><td><code>-reps</code></td><td><code>1</code></td><td>Repetitions per parameter combination.</td></tr>
                 <tr><td colspan="3"><strong>Run setup</strong></td></tr>
-                <tr><td><code>-hosts</code></td><td>—</td><td>SSH host aliases: <code>bb[1-30]</code> ranges, globs, or comma-separated literals. Required except with <code>-collect</code> or a local <code>-explain-check</code>.</td></tr>
+                <tr><td><code>-hosts</code></td><td>—</td><td>SSH host aliases: <code>bb[1-30]</code> ranges, globs, or comma-separated literals. Required except with <code>-collect</code>, <code>-collect-now</code>, <code>-list</code>, or a local <code>-explain-check</code>.</td></tr>
                 <tr><td><code>-config</code></td><td><code>~/.ssh/config</code></td><td>SSH config file used to resolve <code>-hosts</code> aliases.</td></tr>
                 <tr><td><code>-port</code></td><td><code>9000</code></td><td>Base port for benchmark nodes (extra nodes on a host use successive ports).</td></tr>
                 <tr><td><code>-duration</code></td><td><code>10s</code></td><td>Measurement duration per run (forwarded as the binary's <code>-time</code>).</td></tr>
@@ -1334,10 +1334,10 @@
                 <tr><td><code>-extra-args</code></td><td>—</td><td>Arbitrary string appended verbatim to every node command (protocol-specific flags of foreign binaries).</td></tr>
                 <tr><td><code>-collect-profiles</code>, <code>-pgo</code></td><td><code>false</code></td><td>Profile collection and PGO merge (below).</td></tr>
                 <tr><td colspan="3"><strong>Cluster-local driver</strong> (<a href="#driver">below</a>)</td></tr>
-                <tr><td><code>-detach [hostname]</code></td><td>off</td><td>Run remotely and exit once safe to disconnect. Without a hostname, select the first <code>-hosts</code> entry, excluded from the benchmark pool. With a check, collection, or listing operation, select its remote host instead of launching a run.</td></tr>
-                <tr><td><code>-collect [path]</code></td><td>latest</td><td>Collect a finished run once. With no path, use the driver and path in <code>&lt;outdir&gt;/.sweep-last.json</code>; an explicit path requires <code>-detach &lt;host&gt;</code>.</td></tr>
-                <tr><td><code>-collect-now [path]</code></td><td>latest</td><td>Collect a best-effort snapshot even while the run is active. Mutually exclusive with <code>-collect</code>.</td></tr>
-                <tr><td><code>-list</code></td><td><code>false</code></td><td>List active, completed, raw-pending, and recoverable driver runs, newest first.</td></tr>
+                <tr><td><code>-detach [hostname]</code></td><td>off</td><td>Run the sweep on a cluster-local host and exit once safe to disconnect. Without a hostname, use the first <code>-hosts</code> entry, excluded from the benchmark pool. With <code>-check</code> or <code>-explain-check</code>, run that check from the same host instead of launching.</td></tr>
+                <tr><td><code>-collect [host:path]</code></td><td>latest</td><td>Collect a finished run once. With no value, use the driver and path in <code>&lt;outdir&gt;/.sweep-last.json</code>.</td></tr>
+                <tr><td><code>-collect-now [host:path]</code></td><td>latest</td><td>Collect a best-effort snapshot even while the run is active. Mutually exclusive with <code>-collect</code>.</td></tr>
+                <tr><td><code>-list [host]</code></td><td>off</td><td>List active, completed, raw-pending, and recoverable driver runs on the host, newest first. With no host, use the driver in <code>&lt;outdir&gt;/.sweep-last.json</code>. The <code>PATH</code> column shows each run as <code>host:path</code>, ready for <code>-collect</code>.</td></tr>
                 <tr><td><code>-remote-dir</code></td><td><code>/tmp</code></td><td>Remote storage root; sweep uses <code>&lt;root&gt;/sweep-$USER</code> for binaries, results, caches, and driver runs.</td></tr>
                 <tr><td><code>-transfer</code></td><td><code>rsync</code></td><td>Transfer backend for driver uploads/downloads: rsync &ge;3.2.4 (default) or <code>sftp</code>.</td></tr>
                 <tr><td colspan="3"><strong>LLM failure triage</strong> (<a href="#recipes">§15</a>)</td></tr>
@@ -1455,22 +1455,22 @@
             <code>sweep -list</code> to inspect driver runs without making <code>-check</code> output unbounded.</p>
         <p>Every remote launch detaches and survives a laptop disconnect.
             The launcher returns after confirming that the driver has connected to its peers; it does not stream
-            the run or collect results automatically. When the driver is one of <code>-hosts</code>, it is excluded
-            from the benchmark pool. A dedicated driver outside <code>-hosts</code> leaves the pool unchanged.</p>
-        <p>With <code>-check</code>, <code>-explain-check</code>, <code>-collect</code>, <code>-collect-now</code>, or
-            <code>-list</code>, <code>-detach [hostname]</code> selects the remote host for that operation and does
-            not launch a sweep. These operations return when their check, collection, or listing finishes.
-            A bare <code>-detach</code> (or <code>-detach first</code>) requires <code>-hosts</code>.
-            Without <code>-detach</code>, checks run locally and bare collection/listing use the saved run.</p>
+            the run or collect results automatically. Instead it prints an <code>ssh &hellip; tail -F</code> command
+            that follows the run's <code>console.log</code>. When the driver is one of <code>-hosts</code>, it is
+            excluded from the benchmark pool. A dedicated driver outside <code>-hosts</code> leaves the pool unchanged.</p>
+        <p><code>-detach</code> describes a launch. Add <code>-check</code> or <code>-explain-check</code> to a launch
+            command to run that check from the same driver instead of launching.
+            <code>-collect</code>, <code>-collect-now</code>, and <code>-list</code> address existing runs, so they name
+            the host in their own value. Bare, they use the saved run.</p>
         <pre>
 <span class="c"># Check the cluster from its first host:</span>
 ./cmd/sweep/sweep -detach -hosts 'bb[1-10]' -check
-<span class="c"># Collect a particular run, or list runs on an explicit host:</span>
-./cmd/sweep/sweep -detach bbhead -collect /tmp/sweep-user/sweep-driver-e4-TIMESTAMP
-./cmd/sweep/sweep -detach bbhead -list</pre>
-        <p>If <code>-collect</code> or <code>-collect-now</code> has no path, it uses the saved run even when
-            <code>-detach</code> is supplied; an explicit host must match that saved run's host.
-            To collect from another host, supply both its hostname and the remote run path.</p>
+<span class="c"># List runs on a host, then collect one of them:</span>
+./cmd/sweep/sweep -list bbhead
+./cmd/sweep/sweep -collect bbhead:/tmp/sweep-user/sweep-driver-e4-TIMESTAMP</pre>
+        <p>Scripts from older versions pass <code>-driver</code>, which sweep now rejects with a migration hint.
+            Replace <code>-driver &lt;host&gt; [-detach]</code> with <code>-detach &lt;host&gt;</code>, and
+            <code>-driver &lt;host&gt; -collect &lt;path&gt;</code> with <code>-collect &lt;host&gt;:&lt;path&gt;</code>.</p>
         <p>The driven sweep authenticates to its peers using the laptop's SSH agent, forwarded to the driver; it
             needs that agent only once, for the one-time dial of every peer at startup. So <code>-detach</code> does
             not exit the instant the run starts — it keeps the laptop connected until the driven sweep signals that

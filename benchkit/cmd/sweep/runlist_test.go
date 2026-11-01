@@ -71,8 +71,8 @@ func TestWriteDriverListAlignsColumns(t *testing.T) {
 
 	columns := [][]string{
 		{"STARTED", "LABEL", "STATUS", "EXIT", "SIZE", "PATH"},
-		{"2026-07-29 16:37:33", "dedup-qc-v3", "completed", "0", "117M", latest},
-		{"2026-07-28 13:54:33", "symmetric-qc-dedup-eval-v14", "raw-pending", "0", "1.2G", namespace + "/sweep-driver-symmetric-qc-dedup-eval-v14-20260728_135433"},
+		{"2026-07-29 16:37:33", "dedup-qc-v3", "completed", "0", "117M", "bb1:" + latest},
+		{"2026-07-28 13:54:33", "symmetric-qc-dedup-eval-v14", "raw-pending", "0", "1.2G", "bb1:" + namespace + "/sweep-driver-symmetric-qc-dedup-eval-v14-20260728_135433"},
 	}
 	starts := columnStarts(t, lines[1], columns[0])
 	for i, fields := range columns[1:] {
@@ -80,7 +80,7 @@ func TestWriteDriverListAlignsColumns(t *testing.T) {
 			t.Errorf("line %d column starts = %v, want %v:\n%s", i+3, got, starts, lines[i+2])
 		}
 	}
-	if !strings.HasSuffix(lines[2], latest+"  (latest)") {
+	if !strings.HasSuffix(lines[2], " bb1:"+latest+"  (latest)") {
 		t.Errorf("latest row missing marker:\n%s", lines[2])
 	}
 }

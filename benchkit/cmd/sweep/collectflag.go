@@ -2,68 +2,96 @@ package main
 
 import (
 	"errors"
+	"flag"
+	"fmt"
+	"path"
+	"slices"
 	"strings"
 )
 
-// optionalPathFlag behaves as a boolean flag when no value is supplied and as
-// a path flag for both "-collect path" and "-collect=path".
-type optionalPathFlag struct {
+// optionalValueFlag is a flag whose value is optional. A bare flag stores
+// bare; "-name value" and "-name=value" store value. Empty and "false" values
+// are rejected, so a bare flag never collides with an explicit value.
+type optionalValueFlag struct {
 	value *string
+	bare  string
 }
 
-func (f optionalPathFlag) String() string {
+func (f optionalValueFlag) String() string {
 	if f.value == nil {
 		return ""
 	}
 	return *f.value
 }
 
-func (f optionalPathFlag) Set(value string) error {
-	if value == "true" {
-		value = latestRunSentinel
+func (f optionalValueFlag) Set(value string) error {
+	switch value {
+	case "true":
+		value = f.bare
+	case "", "false":
+		return errors.New("omit the flag, or pass it bare or with a value")
 	}
 	*f.value = value
 	return nil
 }
 
-func (optionalPathFlag) IsBoolFlag() bool { return true }
+func (optionalValueFlag) IsBoolFlag() bool { return true }
 
-func normalizeOptionalArgs(args []string) []string {
-	out := append([]string(nil), args...)
+// normalizeOptionalArgs rewrites "-name value" to "-name=value" for every
+// optionalValueFlag registered in fs. The flag package parses a bool-like
+// flag's value only in the "-name=value" form.
+func normalizeOptionalArgs(fs *flag.FlagSet, args []string) []string {
+	out := slices.Clone(args)
 	for i := 0; i < len(out); i++ {
 		if out[i] == "--" {
 			break
 		}
-		if out[i] != "-detach" && out[i] != "--detach" && out[i] != "-collect" && out[i] != "-collect-now" && out[i] != "--collect" && out[i] != "--collect-now" {
+		// Accept "-name" and "--name", like the flag package.
+		name, ok := strings.CutPrefix(out[i], "-")
+		if !ok {
+			continue
+		}
+		f := fs.Lookup(strings.TrimPrefix(name, "-"))
+		if f == nil {
+			continue
+		}
+		if _, ok := f.Value.(optionalValueFlag); !ok {
 			continue
 		}
 		if i+1 < len(out) && !strings.HasPrefix(out[i+1], "-") {
 			out[i] += "=" + out[i+1]
-			out = append(out[:i+1], out[i+2:]...)
+			out = slices.Delete(out, i+1, i+2)
 		}
 	}
 	return out
 }
 
-// optionalHostFlag selects the first host when -detach has no argument.
-type optionalHostFlag struct{ value *string }
-
-func (f optionalHostFlag) String() string {
-	if f.value == nil {
-		return ""
+// removedFlagError reports a flag that sweep no longer accepts, with the
+// replacement to use. Replay and collect scripts from older runs still pass
+// -driver, so they get a migration hint instead of a bare usage error.
+func removedFlagError(args []string) error {
+	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
+		name, ok := strings.CutPrefix(arg, "-")
+		if !ok {
+			continue
+		}
+		name, _, _ = strings.Cut(strings.TrimPrefix(name, "-"), "=")
+		if name == "driver" {
+			return errors.New("-driver was removed: launch with -detach <host> (remote runs always detach), and collect with -collect <host>:<path>")
+		}
 	}
-	return *f.value
-}
-
-func (f optionalHostFlag) Set(value string) error {
-	switch value {
-	case "true":
-		value = "first"
-	case "", "false":
-		return errors.New("use -detach [hostname], or omit -detach for local execution")
-	}
-	*f.value = value
 	return nil
 }
 
-func (optionalHostFlag) IsBoolFlag() bool { return true }
+// splitRemoteRun splits a "host:path" run reference, as taken by -collect and
+// -collect-now, into the driver host and its absolute remote work directory.
+func splitRemoteRun(ref string) (host, workDir string, err error) {
+	host, workDir, ok := strings.Cut(ref, ":")
+	if !ok || host == "" || !path.IsAbs(workDir) {
+		return "", "", fmt.Errorf("run %q: want <host>:<remote-work-dir> with an absolute path", ref)
+	}
+	return host, workDir, nil
+}

@@ -15,7 +15,7 @@ import (
 
 func runDriverList(cfg *config) error {
 	if cfg.driver == "" {
-		return errors.New("-list requires -detach or a saved driver in .sweep-last.json")
+		return errors.New("-list requires a host or a saved driver in .sweep-last.json")
 	}
 	group, err := dialDriverGroup(cfg.driver, cfg.sshConfig)
 	if err != nil {
@@ -67,6 +67,7 @@ find "$ns" -mindepth 1 -maxdepth 1 -type d -name 'sweep-driver-*' -print0 |
 }
 
 // writeDriverList renders tab-delimited driver run data as aligned columns.
+// The PATH column shows each run as driver:path, the form -collect takes.
 func writeDriverList(w io.Writer, driver, namespace, latest, rows string) error {
 	if _, err := fmt.Fprintf(w, "DRIVER %s  NAMESPACE %s\n", driver, namespace); err != nil {
 		return err
@@ -82,8 +83,12 @@ func writeDriverList(w io.Writer, driver, namespace, latest, rows string) error 
 		if started, rest, ok := strings.Cut(line, "\t"); ok {
 			line = formatRunListTimestamp(started) + "\t" + rest
 		}
-		if latest != "" && strings.HasSuffix(line, "\t"+latest) {
-			line += "  (latest)"
+		if i := strings.LastIndex(line, "\t"); i >= 0 {
+			wd := line[i+1:]
+			line = line[:i+1] + driver + ":" + wd
+			if latest != "" && wd == latest {
+				line += "  (latest)"
+			}
 		}
 		if _, err := fmt.Fprintln(tw, line); err != nil {
 			return err

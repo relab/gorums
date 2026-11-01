@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -178,6 +179,8 @@ func TestRemoteSweepCommand(t *testing.T) {
 		"'-binary=/tmp/sweep-driver-cache/benchmark'",
 		"'-config=/tmp/sweep-driver-cache/ssh.config'",
 		"'-outdir=/tmp/sweep-driver-e1-x/out'",
+		// The ready marker is per-run state, so it lives under wd, not binDir.
+		"'-ready-marker=/tmp/sweep-driver-e1-x/" + readyMarkerName + "'",
 		"'-port=9000'",
 		"'-duration=10s'",
 		"'-trim=1s'",
@@ -262,19 +265,6 @@ func TestRemoteSweepCommandExplain(t *testing.T) {
 	if got := remoteSweepCommand(cfg, "/tmp/wd", "/tmp/wd", "bb1", ""); strings.Contains(got, "-explain") {
 		t.Errorf("command should omit -explain when disabled\ngot: %s", got)
 	}
-}
-
-func TestRemoteSweepCommandDetach(t *testing.T) {
-	cfg := &config{
-		port: 9000, duration: time.Second, sweepLabel: "e1",
-		sweep: sweepConfig{numNodes: []int{3}, workers: []int{1}, payloads: []int{0}, rates: []int{0}, benchmarks: []string{"QuorumCall"}, reps: 1},
-	}
-	// The ready marker lives under wd (the run's own work directory), not binDir
-	// (the driver's persistent binary cache), since it is per-run state.
-	if got := remoteSweepCommand(cfg, "/tmp/sweep-driver-e1-x", "/tmp/sweep-driver-cache", "bb1", ""); !strings.Contains(got, "'-ready-marker=/tmp/sweep-driver-e1-x/"+readyMarkerName+"'") {
-		t.Errorf("detached command missing -ready-marker\ngot: %s", got)
-	}
-
 }
 
 func TestDriverLLMEnv(t *testing.T) {
@@ -405,8 +395,8 @@ func TestDriverCompactMarkerPath(t *testing.T) {
 	}
 }
 
-func TestDriverCleanupCommand(t *testing.T) {
-	cmd := driverCleanupCommand("bb1", "/home/me/ssh.config", "/tmp/sweep-driver-e1")
+func TestDriverSSHCommand(t *testing.T) {
+	cmd := driverSSHCommand("bb1", "/home/me/ssh.config", "rm -rf '/tmp/sweep-driver-e1'")
 	for _, want := range []string{"ssh", "-F", "/home/me/ssh.config", "bb1", "rm -rf"} {
 		if !strings.Contains(cmd, want) {
 			t.Errorf("cleanup command missing %q\ngot: %s", want, cmd)
@@ -420,13 +410,6 @@ func TestDriverCleanupCommand(t *testing.T) {
 	}
 }
 
-func TestDetachBootstrapScriptNoFdLimit(t *testing.T) {
-	s := detachBootstrapScript("/tmp/wd", "'/tmp/wd/sweep' '-driven'", "", 0)
-	if strings.Contains(s, "ulimit") {
-		t.Errorf("bootstrap script raised fd limit with fdLimit=0\ngot:\n%s", s)
-	}
-}
-
 // pollTestWindow and pollTestInterval keep the poll-logic tests fast and
 // deterministic (real time.Sleep, but on the order of milliseconds).
 const (
@@ -436,6 +419,7 @@ const (
 
 // pollCheck helpers build the dialed/crashed closures the tests inject.
 func constCheck(v bool) func() (bool, error) { return func() (bool, error) { return v, nil } }
+
 func errCheck() func() (bool, error) {
 	return func() (bool, error) { return false, errors.New("transient session error") }
 }
@@ -534,7 +518,7 @@ func TestEarlyExitMessage(t *testing.T) {
 
 func TestDetachBootstrapScript(t *testing.T) {
 	s := detachBootstrapScript("/tmp/wd", "'/tmp/wd/sweep' '-driven'", "", 65536)
-	for _, want := range []string{"setsid", "run.sh", "exit.code", "ulimit -Sn 65536 2>/dev/null", "[driver] detached sweep started in $WD", "WD='/tmp/wd'", "exec '/tmp/wd/sweep' '-driven'"} {
+	for _, want := range []string{"setsid", "run.sh", "exit.code", "[driver] detached sweep started in $WD", "WD='/tmp/wd'", "exec '/tmp/wd/sweep' '-driven'"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("detach bootstrap script missing %q\ngot:\n%s", want, s)
 		}
@@ -546,6 +530,25 @@ func TestDetachBootstrapScript(t *testing.T) {
 	}
 	if strings.Contains(s, "export ") {
 		t.Errorf("detach bootstrap script exports env with no envExport given:\n%s", s)
+	}
+}
+
+func TestDetachBootstrapScriptFdLimit(t *testing.T) {
+	tests := []struct {
+		fdLimit int
+		want    bool
+	}{
+		{fdLimit: 65536, want: true},
+		{fdLimit: 0, want: false},
+	}
+	for _, tt := range tests {
+		s := detachBootstrapScript("/tmp/wd", "'/tmp/wd/sweep' '-driven'", "", tt.fdLimit)
+		if got := strings.Contains(s, fmt.Sprintf("ulimit -Sn %d 2>/dev/null", tt.fdLimit)); got != tt.want {
+			t.Errorf("fdLimit=%d: raises fd limit = %v, want %v\ngot:\n%s", tt.fdLimit, got, tt.want, s)
+		}
+		if !tt.want && strings.Contains(s, "ulimit") {
+			t.Errorf("fdLimit=0 raised the fd limit\ngot:\n%s", s)
+		}
 	}
 }
 

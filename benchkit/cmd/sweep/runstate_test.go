@@ -40,7 +40,7 @@ func TestLastRunStateRoundTripAndCollectScript(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) == "" || !containsAll(string(data), "'-collect=/local/sweep-me/run one'", "'-detach'", "'bb1'") {
+	if string(data) == "" || !containsAll(string(data), "'-collect=bb1:/local/sweep-me/run one'") || strings.Contains(string(data), "-detach") {
 		t.Fatalf("unexpected collect script:\n%s", data)
 	}
 }
