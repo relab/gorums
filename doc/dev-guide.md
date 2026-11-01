@@ -287,13 +287,14 @@ It holds a `channelRef`, an atomically replaceable reference to the node's curre
 There are three channel kinds:
 
 * `OutboundChannel` runs over streams this node dials; it opens a new `session` for each stream and requeues pending calls when a stream is lost, as far as the send queue has space.
-  A stream that the server refuses is not lost: it ends with a refusal code (`Unauthenticated`, `PermissionDenied`, `InvalidArgument`, or `Unimplemented`) before it delivered a frame.
+  A stream that the server refuses is not lost: it ends with a refusal code (`Unauthenticated`, `PermissionDenied`, `InvalidArgument`, or `Unimplemented`) before the server accepted it.
   Its pending two-way and streaming calls fail with the refusal, as does a one-way call whose send fails on it.
   The channel then backs off before it opens the next stream, failing requests at once with the refusal until then.
   A stream that cannot be opened because of a refusal code is handled the same way, for example when the connection failed the dial-side identity check.
   A stream opened after a refusal is suspect for health reporting: its sends do not clear `LastErr` until the server accepts it.
   The channel sends on a new stream at once, but the stream counts as up only once the server accepts it: when the `gorums-accepted` response header or the first frame arrives.
-  The receive goroutine of each session waits for the response headers before it starts receiving; a refused stream never sends headers.
+  The receive goroutine of each session waits for the response headers before it starts receiving.
+  A refused stream ends without the `gorums-accepted` header, although a server interceptor may have sent other headers.
   Only the channel's live session can bring the stream up, so a late acceptance of a session that a GOAWAY replaced has no effect.
   A server without the header, from an older version, brings the stream up with its first frame.
 * `InboundChannel` runs over one stream that the server accepted; its single `session` ends with the stream.
