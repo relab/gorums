@@ -20,9 +20,9 @@ const (
 )
 
 // UnresponsiveNodeClient is the client API for the remote calls and unicasts
-// of the Unresponsive service. Its calls execute on the node given to
-// [NewUnresponsiveNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// of the Unresponsive service. Its methods use the node given to
+// [NewUnresponsiveNodeClient]. If the node is nil, remote calls return
+// [gorums.ErrNoNode], and unicast handles report that error when consumed.
 type UnresponsiveNodeClient interface {
 	// TestUnresponsive executes a remote call on the client's node and returns its
 	// reply.

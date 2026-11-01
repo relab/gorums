@@ -24,8 +24,9 @@ const (
 var _ emptypb.Empty
 
 // ZorumsServiceClient is the client API for the quorum calls and multicasts of
-// the ZorumsService service. Its calls execute on the configuration given to
-// [NewZorumsServiceClient]. If that configuration is empty, every call returns
+// the ZorumsService service. Its methods return handles for the configuration
+// given to [NewZorumsServiceClient]. Consuming a handle dispatches the call.
+// If the configuration is empty, it sends nothing and the handle reports
 // [gorums.ErrEmptyConfig].
 type ZorumsServiceClient interface {
 	// QuorumCall tests a plain quorum call.
@@ -98,9 +99,9 @@ type zorumsServiceClient struct {
 }
 
 // ZorumsServiceNodeClient is the client API for the remote calls and unicasts
-// of the ZorumsService service. Its calls execute on the node given to
-// [NewZorumsServiceNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// of the ZorumsService service. Its methods use the node given to
+// [NewZorumsServiceNodeClient]. If the node is nil, remote calls return
+// [gorums.ErrNoNode], and unicast handles report that error when consumed.
 type ZorumsServiceNodeClient interface {
 	// RemoteCall tests a method without a Gorums option. Gorums generates a
 	// remote call for it, which replaces gRPC's unary RPC; no separate

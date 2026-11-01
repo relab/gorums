@@ -20,9 +20,9 @@ const (
 )
 
 // TLSNodeClient is the client API for the remote calls and unicasts
-// of the TLS service. Its calls execute on the node given to
-// [NewTLSNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// of the TLS service. Its methods use the node given to
+// [NewTLSNodeClient]. If the node is nil, remote calls return
+// [gorums.ErrNoNode], and unicast handles report that error when consumed.
 type TLSNodeClient interface {
 	// TestTLS executes a remote call on the client's node and returns its
 	// reply.

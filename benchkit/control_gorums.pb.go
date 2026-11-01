@@ -24,8 +24,9 @@ const (
 var _ emptypb.Empty
 
 // ControlClient is the client API for the quorum calls and multicasts of
-// the Control service. Its calls execute on the configuration given to
-// [NewControlClient]. If that configuration is empty, every call returns
+// the Control service. Its methods return handles for the configuration
+// given to [NewControlClient]. Consuming a handle dispatches the call.
+// If the configuration is empty, it sends nothing and the handle reports
 // [gorums.ErrEmptyConfig].
 type ControlClient interface {
 	// Start resets the server-side op counter and Stats baseline.

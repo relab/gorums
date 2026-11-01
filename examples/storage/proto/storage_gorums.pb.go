@@ -24,8 +24,9 @@ const (
 var _ emptypb.Empty
 
 // StorageClient is the client API for the quorum calls and multicasts of
-// the Storage service. Its calls execute on the configuration given to
-// [NewStorageClient]. If that configuration is empty, every call returns
+// the Storage service. Its methods return handles for the configuration
+// given to [NewStorageClient]. Consuming a handle dispatches the call.
+// If the configuration is empty, it sends nothing and the handle reports
 // [gorums.ErrEmptyConfig].
 type StorageClient interface {
 	// WriteMulticast executes a Write multicast call on a configuration of nodes.
@@ -73,9 +74,9 @@ type storageClient struct {
 }
 
 // StorageNodeClient is the client API for the remote calls and unicasts
-// of the Storage service. Its calls execute on the node given to
-// [NewStorageNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// of the Storage service. Its methods use the node given to
+// [NewStorageNodeClient]. If the node is nil, remote calls return
+// [gorums.ErrNoNode], and unicast handles report that error when consumed.
 type StorageNodeClient interface {
 	// ReadRPC executes a Read RPC on a single node and
 	// returns the value for the provided key.

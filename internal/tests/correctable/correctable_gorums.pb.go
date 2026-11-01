@@ -20,8 +20,9 @@ const (
 )
 
 // CorrectableTestClient is the client API for the quorum calls and multicasts of
-// the CorrectableTest service. Its calls execute on the configuration given to
-// [NewCorrectableTestClient]. If that configuration is empty, every call returns
+// the CorrectableTest service. Its methods return handles for the configuration
+// given to [NewCorrectableTestClient]. Consuming a handle dispatches the call.
+// If the configuration is empty, it sends nothing and the handle reports
 // [gorums.ErrEmptyConfig].
 type CorrectableTestClient interface {
 	// Correctable executes a quorum call on the client's configuration. Use
