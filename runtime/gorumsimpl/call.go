@@ -11,23 +11,26 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// QuorumCall executes a quorum-call on the nodes in config and returns
-// a handle for consuming the responses. It panics if config is empty.
+// QuorumCall returns a quorum-call handle for the nodes in config.
+// The call is dispatched when the handle is consumed. If config is empty,
+// the handle sends nothing and reports [gorums.ErrEmptyConfig].
 // It is used by generated code.
 func QuorumCall[Req, Resp proto.Message](ctx context.Context, config gorums.Config, req Req, method string) *gorums.Call[Req, Resp] {
 	return impl.QuorumCall[Req, Resp](ctx, config, req, method)
 }
 
-// QuorumCallStream executes a streaming quorum-call on the nodes in config and
-// returns a handle for consuming the responses. It panics if config is empty.
+// QuorumCallStream returns a streaming quorum-call handle for the nodes in
+// config. The call is dispatched when the handle is consumed. If config is
+// empty, the handle sends nothing and reports [gorums.ErrEmptyConfig].
 // It is used by generated code.
 func QuorumCallStream[Req, Resp proto.Message](ctx context.Context, config gorums.Config, req Req, method string) *gorums.Call[Req, Resp] {
 	return impl.QuorumCallStream[Req, Resp](ctx, config, req, method)
 }
 
-// Multicast executes a one-way call on every node in config. No reply is
-// returned. Send errors are reported by [gorums.OnewayCall.Send] or
-// [gorums.OnewayAsync.Wait]. It panics if config is empty.
+// Multicast returns a one-way call handle for every node in config.
+// [gorums.OnewayCall.Send] or [gorums.OnewayCall.Async] dispatches the call;
+// Send errors are reported by Send or [gorums.OnewayAsync.Wait]. If config is
+// empty, the handle sends nothing and reports [gorums.ErrEmptyConfig].
 // It is used by generated code.
 func Multicast[Req proto.Message](ctx context.Context, config gorums.Config, req Req, method string) *gorums.OnewayCall[Req] {
 	return impl.Multicast(ctx, config, req, method)

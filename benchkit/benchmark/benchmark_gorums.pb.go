@@ -24,8 +24,9 @@ const (
 var _ emptypb.Empty
 
 // BenchmarkClient is the client API for the quorum calls and multicasts of
-// the Benchmark service. Its calls execute on the configuration given to
-// [NewBenchmarkClient]. If that configuration is empty, every call returns
+// the Benchmark service. Its methods return handles for the configuration
+// given to [NewBenchmarkClient]. Consuming a handle dispatches the call.
+// If the configuration is empty, it sends nothing and the handle reports
 // [gorums.ErrEmptyConfig].
 type BenchmarkClient interface {
 	// QuorumCall performs an echo quorum call on all servers.

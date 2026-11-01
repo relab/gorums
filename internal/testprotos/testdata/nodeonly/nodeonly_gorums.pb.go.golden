@@ -24,9 +24,9 @@ const (
 var _ emptypb.Empty
 
 // NodeOnlyNodeClient is the client API for the remote calls and unicasts
-// of the NodeOnly service. Its calls execute on the node given to
-// [NewNodeOnlyNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// of the NodeOnly service. Its methods use the node given to
+// [NewNodeOnlyNodeClient]. If the node is nil, remote calls return
+// [gorums.ErrNoNode], and unicast handles report that error when consumed.
 type NodeOnlyNodeClient interface {
 	// Read executes a remote call on the client's node and returns its
 	// reply.

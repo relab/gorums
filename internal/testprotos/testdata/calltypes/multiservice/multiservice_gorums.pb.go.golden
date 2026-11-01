@@ -24,8 +24,9 @@ const (
 var _ emptypb.Empty
 
 // AlphaClient is the client API for the quorum calls and multicasts of
-// the Alpha service. Its calls execute on the configuration given to
-// [NewAlphaClient]. If that configuration is empty, every call returns
+// the Alpha service. Its methods return handles for the configuration
+// given to [NewAlphaClient]. Consuming a handle dispatches the call.
+// If the configuration is empty, it sends nothing and the handle reports
 // [gorums.ErrEmptyConfig].
 type AlphaClient interface {
 	// Heartbeat executes a quorum call on the client's configuration. Use
@@ -49,9 +50,9 @@ type alphaClient struct {
 }
 
 // AlphaNodeClient is the client API for the remote calls and unicasts
-// of the Alpha service. Its calls execute on the node given to
-// [NewAlphaNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// of the Alpha service. Its methods use the node given to
+// [NewAlphaNodeClient]. If the node is nil, remote calls return
+// [gorums.ErrNoNode], and unicast handles report that error when consumed.
 type AlphaNodeClient interface {
 	// Read executes a remote call on the client's node and returns its
 	// reply.
@@ -74,8 +75,9 @@ type alphaNodeClient struct {
 }
 
 // BetaClient is the client API for the quorum calls and multicasts of
-// the Beta service. Its calls execute on the configuration given to
-// [NewBetaClient]. If that configuration is empty, every call returns
+// the Beta service. Its methods return handles for the configuration
+// given to [NewBetaClient]. Consuming a handle dispatches the call.
+// If the configuration is empty, it sends nothing and the handle reports
 // [gorums.ErrEmptyConfig].
 type BetaClient interface {
 	// Heartbeat executes a quorum call on the client's configuration. Use

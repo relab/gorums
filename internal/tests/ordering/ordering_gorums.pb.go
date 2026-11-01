@@ -20,8 +20,9 @@ const (
 )
 
 // OrderingClient is the client API for the quorum calls and multicasts of
-// the Ordering service. Its calls execute on the configuration given to
-// [NewOrderingClient]. If that configuration is empty, every call returns
+// the Ordering service. Its methods return handles for the configuration
+// given to [NewOrderingClient]. Consuming a handle dispatches the call.
+// If the configuration is empty, it sends nothing and the handle reports
 // [gorums.ErrEmptyConfig].
 type OrderingClient interface {
 	// QuorumCall executes a quorum call on the client's configuration. Use
@@ -45,9 +46,9 @@ type orderingClient struct {
 }
 
 // OrderingNodeClient is the client API for the remote calls and unicasts
-// of the Ordering service. Its calls execute on the node given to
-// [NewOrderingNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// of the Ordering service. Its methods use the node given to
+// [NewOrderingNodeClient]. If the node is nil, remote calls return
+// [gorums.ErrNoNode], and unicast handles report that error when consumed.
 type OrderingNodeClient interface {
 	// UnaryRPC executes a remote call on the client's node and returns its
 	// reply.

@@ -21,9 +21,9 @@ const (
 )
 
 // MetadataTestNodeClient is the client API for the remote calls and unicasts
-// of the MetadataTest service. Its calls execute on the node given to
-// [NewMetadataTestNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// of the MetadataTest service. Its methods use the node given to
+// [NewMetadataTestNodeClient]. If the node is nil, remote calls return
+// [gorums.ErrNoNode], and unicast handles report that error when consumed.
 type MetadataTestNodeClient interface {
 	// IDFromMD returns the 'id' field from the metadata.
 	IDFromMD(ctx context.Context, in *emptypb.Empty) (*NodeID, error)

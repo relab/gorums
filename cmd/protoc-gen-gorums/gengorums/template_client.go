@@ -107,8 +107,9 @@ var configClient = `
 {{$errEmptyConfig := use "gorums.ErrEmptyConfig" .GenFile}}
 {{$service := .Service.GoName}}
 // {{.Names.Interface}} is the client API for the quorum calls and multicasts of
-// the {{$service}} service. Its calls execute on the configuration given to
-// [{{.Names.Constructor}}]. If that configuration is empty, every call returns
+// the {{$service}} service. Its methods return handles for the configuration
+// given to [{{.Names.Constructor}}]. Consuming a handle dispatches the call.
+// If the configuration is empty, it sends nothing and the handle reports
 // [{{$errEmptyConfig}}].
 type {{.Names.Interface}} interface {
 {{.Methods}}
@@ -131,9 +132,9 @@ var nodeClient = `
 {{$errNoNode := use "gorums.ErrNoNode" .GenFile}}
 {{$service := .Service.GoName}}
 // {{.Names.Interface}} is the client API for the remote calls and unicasts
-// of the {{$service}} service. Its calls execute on the node given to
-// [{{.Names.Constructor}}]. If that node is nil, every call returns
-// [{{$errNoNode}}].
+// of the {{$service}} service. Its methods use the node given to
+// [{{.Names.Constructor}}]. If the node is nil, remote calls return
+// [{{$errNoNode}}], and unicast handles report that error when consumed.
 type {{.Names.Interface}} interface {
 {{.Methods}}
 }
