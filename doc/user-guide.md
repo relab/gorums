@@ -1700,7 +1700,8 @@ This allows you to filter nodes based on the underlying cause of their failures,
 A server refuses a stream when it ends the stream before it sends any message on it.
 For example, a server refuses a peer that fails its identity check (see [Authenticating Peers](#authenticating-peers)), and a server stream interceptor can refuse a client.
 A node treats a stream as refused when the stream ends with `codes.Unauthenticated`, `codes.PermissionDenied`, `codes.InvalidArgument`, or `codes.Unimplemented` before it delivered a message.
-A node that dials a server with the wrong certificate treats its own failed identity check the same way, although that check closes the connection before any stream opens.
+A node also checks the identity of each server it dials (see [Authenticating Peers](#authenticating-peers)).
+If that check fails, no stream opens, and the node treats the failure as a refusal.
 A new stream to the same server would fail the same way, so the node fails its calls and waits before it tries again:
 
 | After a refusal | Behavior |
@@ -2667,10 +2668,11 @@ The checks require mutually authenticated TLS; see [Binding Node IDs to TLS Cert
 | --- | --- | --- |
 | Claims the node ID of a configured peer | Certificate identity matches the claimed ID before the stream is attached to the peer | The stream ends with `codes.Unauthenticated`; no connect callback or handler runs |
 | Claims a node ID outside the peer configuration | None; there is no identity to check | The stream ends with `codes.Unauthenticated` |
-| A connection this server dials to a configured peer | Certificate identity matches the dialed ID, right after the TLS handshake | The connection closes before it carries any stream; the waiting call fails with `codes.Unauthenticated`; the server backs off as after a refused stream, and gRPC's reconnect backoff paces the handshakes |
+| A connection this server dials to a configured peer | Certificate identity matches the dialed ID, right after the TLS handshake | The connection closes before any stream opens; calls to the peer fail with `codes.Unauthenticated`, as after a refused stream |
 | Claims no peer node ID (a client) | None | Served without peer identity checks |
 
-A peer that this server refuses sees the refusal, with the reason, in `Node.LastErr` of its node for this server, and its calls to this server fail with `codes.Unauthenticated`.
+A refused peer's calls to this server fail with `codes.Unauthenticated`.
+The peer's `Node.LastErr` for this server reports the reason.
 [Refused Streams](#refused-streams) describes how the refused peer backs off, and what its `LastErr` and connection state report meanwhile.
 When a peer fails this server's dial-side check, it never receives a stream from this server, so it never counts this server as connected over that connection.
 
