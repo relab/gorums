@@ -16,6 +16,7 @@ import (
 	"github.com/relab/gorums/internal/testutils/mockcall"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/metadata"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -102,6 +103,27 @@ func TestStreamDedupWaitForAllConcurrent(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestStreamDedupWaitForAllHeaderInterceptor verifies that WaitForAll returns
+// on every server when a stream interceptor sends response headers before the
+// handler runs, so the servers cannot send the acceptance header. The peer
+// streams stay idle.
+func TestStreamDedupWaitForAllHeaderInterceptor(t *testing.T) {
+	const n = 3
+	interceptor := grpc.StreamInterceptor(func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if err := ss.SendHeader(metadata.Pairs("x-trace-id", "test")); err != nil {
+			return err
+		}
+		return handler(srv, ss)
+	})
+	servers := gorumstest.LocalServers(t, n, gorums.WithStreamDedup(), gorums.WithGRPCServerOptions(interceptor))
+	ctx := gorumstest.Context(t, 3*time.Second)
+	for _, srv := range servers {
+		if _, err := srv.WaitForAll(ctx); err != nil {
+			t.Fatalf("server %d: WaitForAll: %v; connected peers %v", srv.NodeID(), err, srv.ConnectedPeers().NodeIDs())
+		}
 	}
 }
 

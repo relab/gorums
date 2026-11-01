@@ -40,7 +40,8 @@ type InboundChannel struct {
 //
 // A channel exists only for an accepted stream. So if stream can send response
 // headers, as a gRPC server stream can, the send loop first sends the
-// acceptance header, before any message.
+// acceptance header, or an acceptance frame if a stream interceptor has
+// already sent the headers, before any message.
 func NewInboundChannel(ctx context.Context, id ID, stream BidiStream, opts InboundOptions) *InboundChannel {
 	c := &InboundChannel{
 		endpoint: newEndpoint(ctx, id, opts.SendBufferSize, opts.RecvBufferSize, opts.Handler, opts.Latency),
@@ -55,12 +56,7 @@ func NewInboundChannel(ctx context.Context, id ID, stream BidiStream, opts Inbou
 		return nil
 	})
 	go func() {
-		if hs, ok := stream.(interface{ SendHeader(metadata.MD) error }); ok {
-			// An error means that the stream has ended, or that an
-			// interceptor sent headers; then the dialer counts the
-			// stream as up at its first frame.
-			_ = hs.SendHeader(metadata.Pairs(acceptedKey, "1"))
-		}
+		c.accept(stream)
 		if req := c.session.sendLoop(nil); req != nil {
 			c.queue.fail(*req, ErrStreamDown)
 		}
@@ -68,6 +64,20 @@ func NewInboundChannel(ctx context.Context, id ID, stream BidiStream, opts Inbou
 		c.queue.close()
 	}()
 	return c
+}
+
+// accept tells the dialer that this server accepted stream, if stream can
+// send response headers. It sends the acceptance header. If a stream
+// interceptor has already sent the response headers, it sends an acceptance
+// frame instead, which the dialer counts as the server's first frame.
+func (c *InboundChannel) accept(stream BidiStream) {
+	hs, ok := stream.(interface{ SendHeader(metadata.MD) error })
+	if !ok {
+		return
+	}
+	if err := hs.SendHeader(metadata.Pairs(acceptedKey, "1")); err != nil && c.ctx.Err() == nil {
+		_ = stream.Send(acceptFrame())
+	}
 }
 
 // Serve receives from the stream and routes what it receives until receiving
