@@ -1309,6 +1309,53 @@ func TestServerIdentityConfiguration(t *testing.T) {
 	}
 }
 
+// TestServerIdentityPeerConfigExtend verifies that a peer configuration with
+// TLS identities accepts only extensions with TLS identities, also when it
+// holds no dialed node. Under stream deduplication, the highest-ID server
+// holds only shared nodes and its local node.
+func TestServerIdentityPeerConfigExtend(t *testing.T) {
+	peers := gorums.WithNodes(map[gorums.ID]tlsNode{
+		1: {"127.0.0.1:9001", "spiffe://relab/node/1"},
+		2: {"127.0.0.1:9002", "spiffe://relab/node/2"},
+	})
+	withIdentity := gorums.WithNodes(map[gorums.ID]tlsNode{5: {"127.0.0.1:9005", "spiffe://relab/node/5"}})
+	addressOnly := gorums.WithNodes(map[gorums.ID]mock.NodeAddr{5: "127.0.0.1:9005"})
+	tests := []struct {
+		name    string
+		opts    []gorums.ServerOption
+		extend  gorums.NodeSource
+		wantErr string
+	}{
+		{name: "DualWithIdentity", extend: withIdentity},
+		{name: "DualWithAddressOnly", extend: addressOnly, wantErr: "with nodes without TLS identities"},
+		{name: "DedupWithIdentity", opts: []gorums.ServerOption{gorums.WithStreamDedup()}, extend: withIdentity},
+		{name: "DedupWithAddressOnly", opts: []gorums.ServerOption{gorums.WithStreamDedup()}, extend: addressOnly, wantErr: "with nodes without TLS identities"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := append([]gorums.ServerOption{gorums.WithPeers(2, peers,
+				gorumstest.InsecureDialOptions(t),
+				gorums.WithTransportCredentials(insecure.NewCredentials()),
+			)}, tt.opts...)
+			srv := gorums.NewServer(opts...)
+			t.Cleanup(srv.Stop)
+			got, err := srv.PeerConfig().Extend(tt.extend)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("Extend() error = %v; want it to contain %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Extend() error = %v; want nil", err)
+			}
+			if got.Size() != 3 {
+				t.Errorf("extended configuration size = %d; want 3", got.Size())
+			}
+		})
+	}
+}
+
 // TestServerIdentityRequiresTLS verifies that node identities activate the
 // inbound check without a separate option, before callbacks and handlers run.
 func TestServerIdentityRequiresTLS(t *testing.T) {
