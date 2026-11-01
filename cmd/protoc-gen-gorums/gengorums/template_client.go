@@ -106,11 +106,12 @@ func genClients(g *protogen.GeneratedFile, services []*protogen.Service) {
 var configClient = `
 {{$errEmptyConfig := use "gorums.ErrEmptyConfig" .GenFile}}
 {{$service := .Service.GoName}}
-// {{.Names.Interface}} is the client API for the quorum calls and multicasts of
-// the {{$service}} service. Its calls execute on the configuration given to
-// [{{.Names.Constructor}}]. If that configuration is empty, every call returns
-// [{{$errEmptyConfig}}].
-type {{.Names.Interface}} interface {
+{{$serviceComments := .Service.Comments.Leading}}
+// {{.Names.Interface}} is the client API for {{$service}} quorum calls and
+// multicasts on the client's configuration. If the configuration is empty, no
+// message is sent and the call fails with [{{$errEmptyConfig}}].
+{{if ne $serviceComments ""}}//
+{{$serviceComments}}{{end}}type {{.Names.Interface}} interface {
 {{.Methods}}
 }
 
@@ -130,11 +131,12 @@ type {{.Names.Impl}} struct {
 var nodeClient = `
 {{$errNoNode := use "gorums.ErrNoNode" .GenFile}}
 {{$service := .Service.GoName}}
-// {{.Names.Interface}} is the client API for the remote calls and unicasts
-// of the {{$service}} service. Its calls execute on the node given to
-// [{{.Names.Constructor}}]. If that node is nil, every call returns
-// [{{$errNoNode}}].
-type {{.Names.Interface}} interface {
+{{$serviceComments := .Service.Comments.Leading}}
+// {{.Names.Interface}} is the client API for {{$service}} remote calls and
+// unicasts on the client's node. If the node is nil, no message is sent and the
+// call fails with [{{$errNoNode}}].
+{{if ne $serviceComments ""}}//
+{{$serviceComments}}{{end}}type {{.Names.Interface}} interface {
 {{.Methods}}
 }
 

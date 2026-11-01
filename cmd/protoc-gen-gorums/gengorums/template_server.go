@@ -53,8 +53,10 @@ var serverInterface = `
 {{$genFile := .GenFile}}
 {{range .Services -}}
 {{$service := .Service.GoName}}
-// {{.Names.Interface}} is the server-side API for the {{$service}} Service
-type {{.Names.Interface}} interface {
+{{$serviceComments := .Service.Comments.Leading}}
+// {{.Names.Interface}} is the server API for {{$service}}.
+{{if ne $serviceComments ""}}//
+{{$serviceComments}}{{end}}type {{.Names.Interface}} interface {
 	{{- range .Service.Methods}}
 	{{- if isOneway .}}
 	{{.GoName}}({{$context}}, *{{in $genFile .}})
