@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/relab/iago"
@@ -175,13 +176,11 @@ func runDriver(cfg *config, hosts []string) error {
 		return err
 	}
 	sha := gitHeadSHA()
-	if line := sweepEstimateLine(cfg.sweep, cfg.duration); line != "" {
-		log.Print(line)
-	}
+	logSweepEstimate(cfg.sweep, cfg.duration)
 
 	// Stage the binaries and SSH config in a local temp dir; they are uploaded
 	// to the driver and not needed afterward.
-	stage, err := os.MkdirTemp("", "sweep-driver-")
+	stage, err := os.MkdirTemp("/tmp", "sweep-driver-")
 	if err != nil {
 		return fmt.Errorf("staging dir: %w", err)
 	}
@@ -287,7 +286,7 @@ func runDriver(cfg *config, hosts []string) error {
 	if err := awaitDetachedStartup(ctx, host, driver, wd); err != nil {
 		return err
 	}
-	log.Printf("detached sweep started on %s:%s; laptop is free to disconnect", driver, wd)
+	log.Printf("detached sweep started on %s; laptop is free to disconnect", driver)
 	log.Printf("follow progress with:")
 	log.Printf("  %s", driverSSHCommand(driver, cfg.sshConfig, "tail -F "+iago.Quote(wd+"/console.log")))
 	log.Printf("collect results with:")
@@ -1027,7 +1026,7 @@ SWEEP_EOF
 chmod +x run.sh
 setsid sh -c './run.sh >> console.log 2>&1; echo $? > exit.code' </dev/null >/dev/null 2>&1 &
 echo $! > run.pid
-echo "[driver] detached sweep started in $WD"
+echo "$(date '+%%Y/%%m/%%d %%H:%%M:%%S') [driver] detached sweep started in $WD"
 exit 0
 `, export, iago.Quote(wd), ulimit, sweepCmd)
 }
@@ -1163,8 +1162,9 @@ func rsyncUploadFile(driver, sshConfig, localPath, remotePath string) error {
 	}
 	args := append(rsyncArgs(sshConfig), localPath, rsyncRemoteSpec(driver, remotePath))
 	cmd := exec.Command("rsync", args...)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	output := &rsyncLogWriter{out: os.Stderr, lineStart: true}
+	cmd.Stdout = output
+	cmd.Stderr = output
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("rsync: %w", err)
 	}
@@ -1186,13 +1186,52 @@ func rsyncDownloadDir(driver, sshConfig, remoteDir, localDir string) error {
 	args := append(rsyncArgs(sshConfig), rsyncRemoteSpec(driver, remoteDir+"/"), localDir+"/")
 	log.Printf("downloading results from %s:%s via rsync (compressed, resumable)...", driver, remoteDir)
 	cmd := exec.Command("rsync", args...)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	output := &rsyncLogWriter{out: os.Stderr, lineStart: true}
+	cmd.Stdout = output
+	cmd.Stderr = output
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("rsync: %w", err)
 	}
 	log.Printf("downloaded results from %s:%s → %s", driver, remoteDir, displayPath(localDir))
 	return nil
+}
+
+// rsyncLogWriter prefixes rsync lines while preserving carriage returns used
+// by its live transfer-rate display.
+type rsyncLogWriter struct {
+	mu        sync.Mutex
+	out       io.Writer
+	lineStart bool
+}
+
+func (w *rsyncLogWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for i := 0; i < len(p); {
+		if w.lineStart {
+			if _, err := fmt.Fprintf(w.out, "%s [rsync] ", time.Now().Format("2006/01/02 15:04:05")); err != nil {
+				return i, err
+			}
+			w.lineStart = false
+		}
+		j := i
+		for j < len(p) && p[j] != '\n' && p[j] != '\r' {
+			j++
+		}
+		if j < len(p) {
+			j++
+			w.lineStart = true
+		}
+		n, err := w.out.Write(p[i:j])
+		if err != nil {
+			return i + n, err
+		}
+		if n != j-i {
+			return i + n, io.ErrShortWrite
+		}
+		i = j
+	}
+	return len(p), nil
 }
 
 // formatSize formats n as a human-readable byte count (e.g. "12.3 MiB").
