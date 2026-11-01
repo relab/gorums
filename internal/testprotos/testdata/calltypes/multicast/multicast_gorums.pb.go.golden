@@ -10,14 +10,15 @@ import (
 	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
+	proto "google.golang.org/protobuf/proto"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
 	// Verify that this generated code is sufficiently up-to-date.
-	_ = gorumsimpl.EnforceVersion(12 - gorumsimpl.MinVersion)
+	_ = gorumsimpl.EnforceVersion(13 - gorumsimpl.MinVersion)
 	// Verify that the gorums runtime is sufficiently up-to-date.
-	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
+	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 13)
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -66,7 +67,7 @@ type MulticastServer interface {
 }
 
 func RegisterMulticastServer(srv *gorums.Server, impl MulticastServer) {
-	srv.RegisterHandler("internal.testprotos.calltypes.multicast.Multicast.Multicast", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.multicast.Multicast.Multicast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.Multicast(ctx, req)
 		return nil, nil

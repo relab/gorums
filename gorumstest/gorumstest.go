@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/stream"
 	"github.com/relab/gorums/internal/testutils/mock"
@@ -42,7 +43,7 @@ func ServerContext(t testing.TB, senderID gorums.ID) gorums.ServerContext {
 		ran    bool
 	)
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
 		srvCtx, ran = ctx, true
 		return nil, nil
 	})

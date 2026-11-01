@@ -17,12 +17,13 @@ import (
 )
 
 type (
-	// Handler processes a request and returns a response.
-	Handler func(ServerContext, *Message) (*Message, error)
+	// Handler processes a request and returns a response. The send callback
+	// sends each response of a streaming call.
+	Handler func(ServerContext, *Message, func(proto.Message)) (*Message, error)
 	// ServerInterceptor intercepts and may modify incoming requests and outgoing responses.
-	// It receives a ServerContext, the incoming Message, and a Handler representing
-	// the next element in the chain. It returns a Message and an error.
-	ServerInterceptor func(ServerContext, *Message, Handler) (*Message, error)
+	// It receives a ServerContext, the incoming Message, a streaming response
+	// sender, and the next Handler. It returns a Message and an error.
+	ServerInterceptor func(ServerContext, *Message, func(proto.Message), Handler) (*Message, error)
 )
 
 // Server serves Gorums calls on registered handlers, and can call its peers
@@ -174,8 +175,8 @@ func (s *Server) newPeerConfig(nodes NodeSource, dialOpts []DialOption) (Config,
 }
 
 // RegisterHandler registers a request handler for the specified method name.
-//
-// This function should only be used by generated code.
+// Generated registration functions use it; applications can also register
+// handlers for back-channel calls.
 func (s *Server) RegisterHandler(method string, handler Handler) {
 	s.handlers[method] = chainInterceptors(handler, s.interceptors...)
 }
@@ -191,8 +192,8 @@ func chainInterceptors(final Handler, interceptors ...ServerInterceptor) Handler
 	handler := final
 	for _, curr := range slices.Backward(interceptors) {
 		next := handler
-		handler = func(ctx ServerContext, in *Message) (*Message, error) {
-			return curr(ctx, in, next)
+		handler = func(ctx ServerContext, in *Message, send func(proto.Message)) (*Message, error) {
+			return curr(ctx, in, send, next)
 		}
 	}
 	return handler
@@ -224,25 +225,27 @@ func (s *Server) HandleRequest(ctx context.Context, senderID ID, reqMsg *stream.
 	handler, ok := s.handlers[reqMsg.GetMethod()]
 	if !ok {
 		in := &Message{Message: reqMsg}
-		srvCtx.SendMessage(messageWithError(in, nil, status.Errorf(codes.Unimplemented, "no handler registered for method %s", reqMsg.GetMethod())))
+		srvCtx.sendMessage(messageWithError(in, nil, status.Errorf(codes.Unimplemented, "no handler registered for method %s", reqMsg.GetMethod())))
 		return
 	}
 
 	msg, err := impl.UnmarshalRequest(reqMsg)
 	in := &Message{Proto: msg, Message: reqMsg}
 	if err != nil {
-		srvCtx.SendMessage(messageWithError(in, nil, err))
+		srvCtx.sendMessage(messageWithError(in, nil, err))
 		return
 	}
 
-	out, err := handler(srvCtx, in)
+	out, err := handler(srvCtx, in, func(resp proto.Message) {
+		srvCtx.sendMessage(newResponseMessage(in, resp))
+	})
 	// If there is no response and no error, we do not send anything back to the client.
 	// This corresponds to a unidirectional message from client to server, where clients
 	// are not expected to receive a response.
 	if out == nil && err == nil {
 		return
 	}
-	srvCtx.SendMessage(messageWithError(in, out, err))
+	srvCtx.sendMessage(messageWithError(in, out, err))
 }
 
 // Serve serves on the externally supplied listener and records it so that
@@ -429,12 +432,10 @@ func (ctx *ServerContext) Release() {
 	}
 }
 
-// SendMessage sends the given message to the client.
+// sendMessage sends the given message to the client.
 // If marshaling fails, the error is encoded into the response envelope
 // and sent to the client; the stream is not closed.
-//
-// This function should only be used by generated code.
-func (ctx *ServerContext) SendMessage(out *Message) {
+func (ctx *ServerContext) sendMessage(out *Message) {
 	// If Proto is set, marshal it to payload before sending.
 	if out.Proto != nil && len(out.GetPayload()) == 0 {
 		payload, err := proto.Marshal(out.Proto)

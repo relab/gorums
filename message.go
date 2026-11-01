@@ -18,29 +18,15 @@ type Message struct {
 // MetadataEntry is a type alias for [stream.MetadataEntry].
 type MetadataEntry = stream.MetadataEntry
 
-// NewResponseMessage creates a new response envelope based on the provided proto
-// message. The response includes the message ID and method from the request
-// to facilitate routing the response back to the caller on the client side.
-// The payload, error status, and metadata entries are left empty;
-// [ServerContext.SendMessage] marshals the payload. This function is safe for
-// concurrent use.
-//
-// This function should only be used in generated code.
-func NewResponseMessage(in *Message, resp proto.Message) *Message {
+// newResponseMessage creates a response envelope for the given request and
+// proto message. The sender marshals its payload before transmission.
+func newResponseMessage(in *Message, resp proto.Message) *Message {
 	if in == nil {
 		return nil
 	}
-	// Create a new Message to avoid race conditions when the sender
-	// goroutine marshals while the handler creates the next response.
-	msgBuilder := stream.Message_builder{
-		MessageSeqNo: in.GetMessageSeqNo(), // needed in RouteResponse to lookup the response channel
-		Method:       in.GetMethod(),       // needed in UnmarshalResponse to look up the response type in the proto registry
-		// Payload is left empty; SendMessage will marshal resp into the payload when sending the message
-		// Status is left empty; it can be set by messageWithError if needed
-	}
 	return &Message{
 		Proto:   resp,
-		Message: msgBuilder.Build(),
+		Message: stream.NewResponseEnvelope(in.Message),
 	}
 }
 
@@ -50,7 +36,7 @@ func NewResponseMessage(in *Message, resp proto.Message) *Message {
 // responses back to the client.
 func messageWithError(in, out *Message, err error) *Message {
 	if out == nil {
-		out = NewResponseMessage(in, nil)
+		out = newResponseMessage(in, nil)
 	}
 	if err != nil {
 		errStatus, ok := status.FromError(err)

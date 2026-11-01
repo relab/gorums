@@ -11,6 +11,8 @@ import (
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"github.com/relab/gorums/internal/testutils/mockcall"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
+	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -68,7 +70,7 @@ func TestTreeMulticast(t *testing.T) {
 
 			for i, srv := range servers {
 				tree := trees[i]
-				srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+				srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
 					ctx.Release()
 					if children := tree.ChildrenOf(srv.NodeID()); len(children) > 0 {
 						req := gorums.AsProto[*pb.StringValue](in)
@@ -133,7 +135,7 @@ func TestTreeMulticastRelayOrder(t *testing.T) {
 					tree := trees[i]
 					children := tree.ChildrenOf(srv.NodeID())
 					relayedOne := make(chan struct{}) // closed when this node has relayed "1"
-					srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+					srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
 						defer wg.Done()
 						req := gorums.AsProto[*pb.StringValue](in)
 						if len(children) == 0 {
@@ -215,7 +217,7 @@ func TestTreeQuorumCall(t *testing.T) {
 
 			for i, srv := range servers {
 				tree := trees[i]
-				srv.RegisterHandler(mock.GetValueMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+				srv.RegisterHandler(mock.GetValueMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
 					// Release before blocking on the children, so that the
 					// next request on this stream can start meanwhile.
 					ctx.Release()
@@ -223,7 +225,7 @@ func TestTreeQuorumCall(t *testing.T) {
 					if err != nil {
 						return nil, err
 					}
-					return gorums.NewResponseMessage(in, pb.Int32(total)), nil
+					return gorumsimpl.NewResponseMessage(in, pb.Int32(total)), nil
 				})
 			}
 
@@ -253,7 +255,7 @@ func TestTreeExternalCaller(t *testing.T) {
 
 	for i, srv := range servers {
 		tree := trees[i]
-		srv.RegisterHandler(mock.GetValueMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+		srv.RegisterHandler(mock.GetValueMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
 			ctx.Release()
 			total := int32(srv.NodeID())
 			if children := tree.ChildrenOf(srv.NodeID()); len(children) > 0 {
@@ -264,7 +266,7 @@ func TestTreeExternalCaller(t *testing.T) {
 					total += r.Value.GetValue()
 				}
 			}
-			return gorums.NewResponseMessage(in, pb.Int32(total)), nil
+			return gorumsimpl.NewResponseMessage(in, pb.Int32(total)), nil
 		})
 	}
 

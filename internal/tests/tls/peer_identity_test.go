@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums/internal/testutils/mockcall"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
@@ -21,6 +22,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	proto "google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -59,11 +61,11 @@ func peerGroup(t *testing.T, ca *testCA, n int, certIDs []gorums.ID, opts ...gor
 		count := new(atomic.Int32)
 		calls = append(calls, count)
 		self := srv.NodeID()
-		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
 			count.Add(1)
 			req := gorums.AsProto[*pb.StringValue](in)
 			reply := fmt.Sprintf("server %d from %d: %s", self, ctx.SenderID(), req.GetValue())
-			return gorums.NewResponseMessage(in, pb.String(reply)), nil
+			return gorumsimpl.NewResponseMessage(in, pb.String(reply)), nil
 		})
 	}
 	return servers, calls

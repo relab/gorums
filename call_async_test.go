@@ -10,6 +10,7 @@ import (
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"github.com/relab/gorums/internal/testutils/mockcall"
+	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -180,9 +181,9 @@ func TestCallAsyncSendsBeforeReturn(t *testing.T) {
 	config := gorumstest.Config(t, numNodes, func(int) gorumstest.ServerIface {
 		srv := gorums.NewServer()
 		echo := gorumstest.EchoHandler("echo")
-		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) (*gorums.Message, error) {
 			received <- struct{}{}
-			return echo(ctx, in)
+			return echo(ctx, in, send)
 		})
 		return srv
 	})
