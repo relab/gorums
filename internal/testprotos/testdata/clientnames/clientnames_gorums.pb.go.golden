@@ -24,8 +24,9 @@ const (
 var _ emptypb.Empty
 
 // ClientNamesClient is the client API for the quorum calls and multicasts of
-// the ClientNames service. Its calls execute on the configuration given to
-// [NewClientNamesClient]. If that configuration is empty, every call returns
+// the ClientNames service. Its methods return handles for the configuration
+// given to [NewClientNamesClient]. Consuming a handle dispatches the call.
+// If the configuration is empty, it sends nothing and the handle reports
 // [gorums.ErrEmptyConfig].
 type ClientNamesClient interface {
 	// Config is a quorum call.
@@ -55,9 +56,9 @@ type clientNamesClient struct {
 }
 
 // ClientNamesNodeClient is the client API for the remote calls and unicasts
-// of the ClientNames service. Its calls execute on the node given to
-// [NewClientNamesNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// of the ClientNames service. Its methods use the node given to
+// [NewClientNamesNodeClient]. If the node is nil, remote calls return
+// [gorums.ErrNoNode], and unicast handles report that error when consumed.
 type ClientNamesNodeClient interface {
 	// Node is a remote call.
 	Node(ctx context.Context, in *Request) (*Response, error)
