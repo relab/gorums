@@ -19,10 +19,9 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// OrderingClient is the client API for the quorum calls and multicasts of
-// the Ordering service. Its calls execute on the configuration given to
-// [NewOrderingClient]. If that configuration is empty, every call returns
-// [gorums.ErrEmptyConfig].
+// OrderingClient is the client API for Ordering quorum calls and
+// multicasts on the client's configuration. If the configuration is empty, no
+// message is sent and the call fails with [gorums.ErrEmptyConfig].
 type OrderingClient interface {
 	// QuorumCall executes a quorum call on the client's configuration. Use
 	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
@@ -44,10 +43,9 @@ type orderingClient struct {
 	config Config
 }
 
-// OrderingNodeClient is the client API for the remote calls and unicasts
-// of the Ordering service. Its calls execute on the node given to
-// [NewOrderingNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// OrderingNodeClient is the client API for Ordering remote calls and
+// unicasts on the client's node. If the node is nil, no message is sent and the
+// call fails with [gorums.ErrNoNode].
 type OrderingNodeClient interface {
 	// UnaryRPC executes a remote call on the client's node and returns its
 	// reply.
@@ -77,7 +75,7 @@ func (c orderingNodeClient) UnaryRPC(ctx context.Context, in *Request) (*Respons
 	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "ordering.Ordering.UnaryRPC")
 }
 
-// OrderingServer is the server-side API for the Ordering Service
+// OrderingServer is the server API for Ordering.
 type OrderingServer interface {
 	QuorumCall(gorums.ServerContext, *Request) (*Response, error)
 	UnaryRPC(gorums.ServerContext, *Request) (*Response, error)

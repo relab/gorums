@@ -19,10 +19,9 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// CorrectableTestClient is the client API for the quorum calls and multicasts of
-// the CorrectableTest service. Its calls execute on the configuration given to
-// [NewCorrectableTestClient]. If that configuration is empty, every call returns
-// [gorums.ErrEmptyConfig].
+// CorrectableTestClient is the client API for CorrectableTest quorum calls and
+// multicasts on the client's configuration. If the configuration is empty, no
+// message is sent and the call fails with [gorums.ErrEmptyConfig].
 type CorrectableTestClient interface {
 	// Correctable executes a quorum call on the client's configuration. Use
 	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
@@ -63,7 +62,7 @@ func (c correctableTestClient) CorrectableStream(ctx context.Context, in *Reques
 	return gorumsimpl.QuorumCallStream[*Request, *Response](ctx, c.config, in, "correctable.CorrectableTest.CorrectableStream")
 }
 
-// CorrectableTestServer is the server-side API for the CorrectableTest Service
+// CorrectableTestServer is the server API for CorrectableTest.
 type CorrectableTestServer interface {
 	Correctable(gorums.ServerContext, *Request) (*Response, error)
 	CorrectableStream(gorums.ServerContext, *Request, func(*Response))

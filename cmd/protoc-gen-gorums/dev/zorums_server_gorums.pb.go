@@ -19,7 +19,16 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// ZorumsServiceServer is the server-side API for the ZorumsService Service
+// ZorumsServiceServer is the server API for ZorumsService.
+//
+// ZorumsService is not meant to be implemented.
+// The zorums generated code is placed alongside Gorums static code files
+// (without the zorums prefix) because they depend on the generated code.
+// The generated code must pass compilation, but no further tests are performed.
+// Other tests are provided to test the actual generated code.
+// The RPCs in this service aims to test various uses of Gorums's
+// options and call types, including imported message types and
+// multiple RPCs reusing the same input and output types.
 type ZorumsServiceServer interface {
 	RemoteCall(gorums.ServerContext, *Request) (*Response, error)
 	QuorumCall(gorums.ServerContext, *Request) (*Response, error)

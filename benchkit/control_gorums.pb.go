@@ -23,10 +23,14 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// ControlClient is the client API for the quorum calls and multicasts of
-// the Control service. Its calls execute on the configuration given to
-// [NewControlClient]. If that configuration is empty, every call returns
-// [gorums.ErrEmptyConfig].
+// ControlClient is the client API for Control quorum calls and
+// multicasts on the client's configuration. If the configuration is empty, no
+// message is sent and the call fails with [gorums.ErrEmptyConfig].
+//
+// Control is the protocol-neutral measurement control plane. Any gorums-based
+// protocol embeds it alongside its own workload service on the same listener.
+// The four RPCs never reference a workload, so they are shared by every
+// protocol that benchkit measures.
 type ControlClient interface {
 	// Start resets the server-side op counter and Stats baseline.
 	Start(ctx context.Context, in *StartRequest) *gorums.Call[*StartRequest, *StartResponse]
@@ -83,7 +87,12 @@ func (c controlClient) Done(ctx context.Context, in *DoneRequest) *gorums.Oneway
 	return gorumsimpl.Multicast(ctx, c.config, in, "benchkit.Control.Done")
 }
 
-// ControlServer is the server-side API for the Control Service
+// ControlServer is the server API for Control.
+//
+// Control is the protocol-neutral measurement control plane. Any gorums-based
+// protocol embeds it alongside its own workload service on the same listener.
+// The four RPCs never reference a workload, so they are shared by every
+// protocol that benchkit measures.
 type ControlServer interface {
 	Start(gorums.ServerContext, *StartRequest) (*StartResponse, error)
 	Stop(gorums.ServerContext, *StopRequest) (*Result, error)

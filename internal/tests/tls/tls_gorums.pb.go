@@ -19,10 +19,9 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// TLSNodeClient is the client API for the remote calls and unicasts
-// of the TLS service. Its calls execute on the node given to
-// [NewTLSNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// TLSNodeClient is the client API for TLS remote calls and
+// unicasts on the client's node. If the node is nil, no message is sent and the
+// call fails with [gorums.ErrNoNode].
 type TLSNodeClient interface {
 	// TestTLS executes a remote call on the client's node and returns its
 	// reply.
@@ -48,7 +47,7 @@ func (c tlsNodeClient) TestTLS(ctx context.Context, in *Request) (*Response, err
 	return gorumsimpl.RemoteCall[*Request, *Response](ctx, c.node, in, "tls.TLS.TestTLS")
 }
 
-// TLSServer is the server-side API for the TLS Service
+// TLSServer is the server API for TLS.
 type TLSServer interface {
 	TestTLS(gorums.ServerContext, *Request) (*Response, error)
 }
