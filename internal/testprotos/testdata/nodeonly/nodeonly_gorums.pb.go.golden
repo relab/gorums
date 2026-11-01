@@ -23,10 +23,9 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// NodeOnlyNodeClient is the client API for the remote calls and unicasts
-// of the NodeOnly service. Its calls execute on the node given to
-// [NewNodeOnlyNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// NodeOnlyNodeClient is the client API for NodeOnly remote calls and
+// unicasts on the client's node. If the node is nil, no message is sent and the
+// call fails with [gorums.ErrNoNode].
 type NodeOnlyNodeClient interface {
 	// Read executes a remote call on the client's node and returns its
 	// reply.
@@ -72,7 +71,7 @@ func (c nodeOnlyNodeClient) Write(ctx context.Context, in *Request) *gorums.Onew
 	return gorumsimpl.Unicast(ctx, c.node, in, "internal.testprotos.nodeonly.NodeOnly.Write")
 }
 
-// NodeOnlyServer is the server-side API for the NodeOnly Service
+// NodeOnlyServer is the server API for NodeOnly.
 type NodeOnlyServer interface {
 	Read(gorums.ServerContext, *Request) (*Response, error)
 	Write(gorums.ServerContext, *Request)
