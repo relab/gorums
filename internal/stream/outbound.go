@@ -68,7 +68,7 @@ type OutboundOptions struct {
 //
 // A stream the server refuses ends with codes.Unauthenticated,
 // codes.PermissionDenied, codes.InvalidArgument, or codes.Unimplemented
-// before delivering a frame. Calls on it fail with that status and are not
+// before the server accepts it. Calls on it fail with that status and are not
 // sent again. The channel then backs off before opening a new stream, and
 // requests fail with the refusal in the meantime. A stream that cannot be
 // opened because of one of these codes is treated the same way, for example
@@ -285,8 +285,8 @@ func (c *OutboundChannel) open(suspect bool) (*session, error) {
 	c.live = s
 	c.mu.Unlock()
 	c.wg.Go(func() {
-		// Header waits for the response headers, which a refused stream
-		// never sends; receive then gets the refusal.
+		// Header waits for the response headers. A refused stream ends
+		// without the acceptance header; receive then gets the refusal.
 		if md, err := st.Header(); err == nil && len(md.Get(acceptedKey)) > 0 {
 			s.recordHealth(nil)
 			s.accept()
