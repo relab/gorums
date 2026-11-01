@@ -368,6 +368,18 @@ func Descriptions() []benchkit.Bench {
 	return descs
 }
 
+// DistributedDescriptions returns benchmarks available to each peer in a
+// distributed symmetric run. It uses the same descriptors as [Descriptions].
+func DistributedDescriptions() []benchkit.Bench {
+	var descs []benchkit.Bench
+	for _, d := range benchDescs {
+		if d.Needs == needsSymmetric {
+			descs = append(descs, benchkit.Bench{Name: d.Name, Description: d.Description})
+		}
+	}
+	return descs
+}
+
 // benchmarks returns runnable benchmarks for the given targets. Traditional
 // (needsConfig) benchmarks are included when t.Config is set, or when
 // t.Symmetric is a single-process local target, in which case server 0's

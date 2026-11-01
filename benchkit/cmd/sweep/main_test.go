@@ -37,6 +37,27 @@ func TestValidateStreamModes(t *testing.T) {
 	}
 }
 
+func TestValidateDistributedBenchmarks(t *testing.T) {
+	tests := []struct {
+		name    string
+		benches []string
+		wantErr string
+	}{
+		{name: "Symmetric", benches: []string{"SymmetricQuorumCall", "SymmetricMulticast"}},
+		{name: "Coordinator", benches: []string{"QuorumCall"}, wantErr: "requires coordinator mode"},
+		{name: "Mixed", benches: []string{"SymmetricQuorumCall", "Multicast"}, wantErr: "Multicast requires coordinator mode"},
+		{name: "Unknown", benches: []string{"Missing"}, wantErr: "unknown benchmark"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateDistributedBenchmarks(tt.benches)
+			if tt.wantErr == "" && err != nil || tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
+				t.Errorf("validateDistributedBenchmarks(%v) = %v, want %q", tt.benches, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // TestMainParseFlags exercises the actual CLI parser in a child process because
 // invalid flags and validation failures exit the process.
 func TestMainParseFlags(t *testing.T) {
@@ -73,6 +94,9 @@ func TestMainParseFlags(t *testing.T) {
 		check, list, explainCheck            bool
 	}{
 		{name: "Local", args: []string{"-hosts", "bb1,bb2"}, hosts: bb12},
+		{name: "CoordinatorBenchmarkRejected", args: []string{"-hosts", "bb1,bb2", "-benchmarks", "QuorumCall"}, wantErr: "QuorumCall requires coordinator mode"},
+		{name: "CustomBinaryNamesAllowed", args: []string{"-hosts", "bb1,bb2", "-binary", "/tmp/custom-benchmark", "-benchmarks", "QuorumCall"}, hosts: bb12},
+		{name: "CustomBuildNamesAllowed", args: []string{"-hosts", "bb1,bb2", "-build", "go build ./cmd/custom", "-benchmarks", "QuorumCall"}, hosts: bb12},
 		// parseFlags keeps the driver in hosts; runDriver removes it from the pool.
 		{name: "BareDetach", args: []string{"-hosts", "bb1,bb2", "-detach"}, driver: "bb1", hosts: bb12},
 		{name: "ExplicitDetach", args: []string{"-detach", "head", "-hosts", "bb1,bb2"}, driver: "head", hosts: bb12},

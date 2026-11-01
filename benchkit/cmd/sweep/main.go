@@ -50,6 +50,8 @@
 // token, and otherwise falls back to the built-in default
 // "go build -o <output> ./cmd/benchmark". The custom command is run via "sh -c"
 // from the benchkit module root with GOOS=linux GOARCH=amd64 in its environment.
+// With the built-in binary, -benchmarks accepts only symmetric benchmark names
+// because every host runs as a peer rather than as a coordinator.
 //
 // Cluster-local driver:
 //
@@ -104,6 +106,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/relab/gorums/benchkit/benchmark"
 	"github.com/relab/iago"
 )
 
@@ -172,10 +175,10 @@ type config struct {
 
 	// Cluster-local driver: run the orchestration on a host inside the cluster
 	// so per-run SSH and the binary upload stay on the LAN (see [runDriver]).
-	driver       string // driver host from -detach, a -collect/-collect-now/-list value, or saved run state; empty = local
-	collect      string // -collect [host:path]: remote work dir of a finished driver run to collect
-	collectNow   string // -collect-now [host:path]: remote work dir to snapshot even while active
-	list         string // -list [host]: host whose driver runs to list
+	driver     string // driver host from -detach, a -collect/-collect-now/-list value, or saved run state; empty = local
+	collect    string // -collect [host:path]: remote work dir of a finished driver run to collect
+	collectNow string // -collect-now [host:path]: remote work dir to snapshot even while active
+	list       string // -list [host]: host whose driver runs to list
 
 	remoteDir    string // -remote-dir: remote storage root; each user gets sweep-$USER below it
 	remoteDirs   map[string]string
@@ -716,7 +719,7 @@ func parseFlags() (*config, []string) {
 	flag.Var(intListFlag(&cfg.sweep.rates), "rate", "comma-separated target sends/sec per node to sweep; 0 = unlimited (saturating)")
 	flag.Var(intListFlag(&cfg.sweep.sendBuffers), "send-buffer", "comma-separated per-node send queue capacities to sweep (default: the binary's own)")
 	flag.Var(intListFlag(&cfg.sweep.recvBuffers), "recv-buffer", "comma-separated server receive queue capacities to sweep (default: the binary's own)")
-	flag.Var(stringListFlag(&cfg.sweep.benchmarks), "benchmarks", "comma-separated benchmark names to run")
+	flag.Var(stringListFlag(&cfg.sweep.benchmarks), "benchmarks", "comma-separated benchmark names to run (built-in binary: symmetric benchmarks only)")
 	flag.Var(stringListFlag(&cfg.sweep.streamModes), "stream-mode", "comma-separated stream modes to sweep: dual,dedup; or baseline alone (requires -binary)")
 	flag.IntVar(&cfg.sweep.reps, "reps", 1, "repetitions per parameter combination")
 
@@ -798,6 +801,15 @@ func parseFlags() (*config, []string) {
 		cfg.duration = 5 * time.Second
 		cfg.sweepLabel = "test"
 		sweepExplicit = true
+	}
+	// A custom binary or build command may provide different benchmark names.
+	// The built-in binary always runs each host in distributed symmetric mode.
+	if !collecting && !listing && !cfg.check && !cfg.explainCheck && cfg.plotDir == "" &&
+		cfg.exportCSVDir == "" && cfg.exportCompactDir == "" && cfg.binaryPath == "" &&
+		cfg.buildCmd == "" && os.Getenv("BENCHKIT_BUILD") == "" {
+		if err := validateDistributedBenchmarks(cfg.sweep.benchmarks); err != nil {
+			log.Fatalf("-benchmarks: %v", err)
+		}
 	}
 
 	// An explicit -collect or -collect-now value names its run as host:path,
@@ -888,6 +900,28 @@ func countRuns(sc sweepConfig) int {
 	return max(sc.reps, 1) * len(sc.numNodes) * len(sc.workers) * len(sc.payloads) *
 		len(sc.rates) * len(bufferValues(sc.sendBuffers)) * len(bufferValues(sc.recvBuffers)) *
 		len(sc.benchmarks) * len(streamModes)
+}
+
+// validateDistributedBenchmarks rejects built-in benchmarks that cannot run
+// on a distributed symmetric target before any host is launched.
+func validateDistributedBenchmarks(names []string) error {
+	known := make(map[string]bool)
+	for _, desc := range benchmark.Descriptions() {
+		known[desc.Name] = false
+	}
+	for _, desc := range benchmark.DistributedDescriptions() {
+		known[desc.Name] = true
+	}
+	for _, name := range names {
+		available, exists := known[name]
+		if !exists {
+			return fmt.Errorf("unknown benchmark %q (see benchmark -list)", name)
+		}
+		if !available {
+			return fmt.Errorf("%s requires coordinator mode; use a symmetric benchmark with -hosts", name)
+		}
+	}
+	return nil
 }
 
 // validateStreamModes checks the swept stream modes. The baseline mode runs a
