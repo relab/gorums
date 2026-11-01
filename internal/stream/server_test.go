@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums/internal/testutils/mock"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -59,22 +60,35 @@ func (a inboundAcceptor) AcceptPeer(ctx context.Context, stream BidiStream) (*In
 	return ch, func() { _ = ch.Close() }, nil
 }
 
+// headerInterceptor sends response headers before the handler runs, as
+// tracing middleware may do, so the handler cannot send headers of its own.
+func headerInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	if err := ss.SendHeader(metadata.Pairs("x-trace-id", "test")); err != nil {
+		return err
+	}
+	return handler(srv, ss)
+}
+
 // TestServerNodeStreamAcceptance verifies that a dialer's stream counts as up
 // once the server's acceptor accepts it, with no request sent, and never if
-// the acceptor refuses it.
+// the acceptor refuses it. This holds also when an interceptor has already
+// sent the response headers.
 func TestServerNodeStreamAcceptance(t *testing.T) {
 	tests := []struct {
-		name   string
-		refuse bool
+		name    string
+		refuse  bool
+		srvOpts []grpc.ServerOption
 	}{
 		{name: "Accepted"},
 		{name: "Refused", refuse: true},
+		{name: "AcceptedAfterInterceptorHeaders", srvOpts: []grpc.ServerOption{grpc.StreamInterceptor(headerInterceptor)}},
+		{name: "RefusedAfterInterceptorHeaders", refuse: true, srvOpts: []grpc.ServerOption{grpc.StreamInterceptor(headerInterceptor)}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var changes atomic.Int32
 			opts := OutboundOptions{RecvBufferSize: testRecvBufferSize, EagerReconnect: true, OnStreamChange: func() { changes.Add(1) }}
-			tc := setupChannelOptions(t, opts, NewServer(nil, inboundAcceptor{refuse: tt.refuse}).NodeStream)
+			tc := setupChannelOptions(t, opts, NewServer(nil, inboundAcceptor{refuse: tt.refuse}).NodeStream, tt.srvOpts...)
 			if !tt.refuse {
 				if !waitUntil(defaultTestTimeout, tc.StreamUp) {
 					t.Fatal("StreamUp() = false for a stream the server accepted, want true")

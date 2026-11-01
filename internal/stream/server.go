@@ -9,6 +9,14 @@ import (
 // header or the first frame arrives. A refused stream ends without it.
 const acceptedKey = "gorums-accepted"
 
+// acceptFrame returns the frame that a server sends on an accepted stream in
+// place of the acceptance header, when a stream interceptor has already sent
+// the response headers. Message IDs start at 1, so the frame answers no call:
+// a dialer counts it as the server's first frame and then drops it.
+func acceptFrame() *Message {
+	return Message_builder{}.Build()
+}
+
 // PeerAcceptor identifies and registers incoming peers on a stream.
 // It is implemented by [github.com/relab/gorums/internal/conn.InboundManager].
 type PeerAcceptor interface {

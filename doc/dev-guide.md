@@ -299,6 +299,8 @@ There are three channel kinds:
   A server without the header, from an older version, brings the stream up with its first frame.
 * `InboundChannel` runs over one stream that the server accepted; its single `session` ends with the stream.
   Its send loop first sends the `gorums-accepted` header, before any message.
+  If a stream interceptor has already sent the response headers, the send loop sends an empty acceptance frame instead.
+  Message IDs start at 1, so the dialer drops that frame after it counts it as the server's first frame.
 * `LocalChannel` serves requests in-process through the handler, with no stream.
 
 The two stream channels embed an `endpoint` with the send queue, the request dispatcher, the optional `RequestHandler`, and the `Latency` estimate.

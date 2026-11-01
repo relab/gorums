@@ -1698,6 +1698,7 @@ This allows you to filter nodes based on the underlying cause of their failures,
 ## Refused Streams
 
 A server accepts a stream by sending the `gorums-accepted` response header before any message on it.
+If a server stream interceptor has already sent the response headers, the server sends an empty message instead, and the node counts that message as the acceptance.
 A server refuses a stream when it ends the stream without accepting it.
 For example, a server refuses a peer that fails its identity check (see [Authenticating Peers](#authenticating-peers)), and a server stream interceptor can refuse a client.
 A node treats a stream as refused when the stream ends with `codes.Unauthenticated`, `codes.PermissionDenied`, `codes.InvalidArgument`, or `codes.Unimplemented` before the server accepted it.
@@ -1713,8 +1714,8 @@ A new stream to the same server would fail the same way, so the node fails its c
 | `Node.LastErr` | It reports the refusal. A newer error, such as `Unavailable`, may replace it. It reverts to nil once the server accepts a new stream. |
 | Connection state | A refused stream never counts as connected. |
 
-A node sends its calls on a new stream at once, but it counts the stream as connected only once the `gorums-accepted` header arrives.
-A refused stream ends without that header:
+A node sends its calls on a new stream at once, but it counts the stream as connected only once the server accepts it.
+A refused stream ends without the acceptance header:
 
 ```mermaid
 sequenceDiagram
