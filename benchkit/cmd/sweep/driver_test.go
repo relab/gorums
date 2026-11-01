@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +11,22 @@ import (
 	"testing"
 	"time"
 )
+
+func TestRsyncLogWriterPreservesProgress(t *testing.T) {
+	var out bytes.Buffer
+	w := &rsyncLogWriter{out: &out, lineStart: true}
+	for _, part := range []string{"sending incre", "mental file list\n  10% 1MB/s\r", "  20% 2MB/s\n"} {
+		if _, err := w.Write([]byte(part)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := out.String()
+	for _, want := range []string{"[rsync] sending incremental file list\n", "[rsync]   10% 1MB/s\r", "[rsync]   20% 2MB/s\n"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output %q does not contain %q", got, want)
+		}
+	}
+}
 
 func TestResolveDriver(t *testing.T) {
 	tests := []struct {

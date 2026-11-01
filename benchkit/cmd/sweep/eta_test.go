@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -108,10 +109,22 @@ func TestSweepEstimateLine(t *testing.T) {
 			reps:        1,
 		}
 		got := sweepEstimateLine(sc, 20*time.Second)
-		if !strings.HasPrefix(got, "estimated sweep time: 2 run(s) (n:2): 40s–") {
+		lines := strings.Split(got, "\n")
+		if !strings.HasPrefix(got, "estimated sweep time: 2 run(s) (n:2): 40s–") ||
+			len(lines) != 4 ||
+			!regexp.MustCompile(`^earliest–latest finish [0-9]{2}:[0-9]{2}–[0-9]{2}:[0-9]{2}$`).MatchString(lines[1]) ||
+			!strings.Contains(got, "\nstatic estimate: 20s measurement + up to 15s overhead/run\n------") {
 			t.Errorf("sweepEstimateLine() = %q", got)
 		}
 	})
+}
+
+func TestSweepProgressLineOmitsTimeZone(t *testing.T) {
+	now := time.Date(2026, 11, 1, 10, 0, 0, 0, time.FixedZone("CET", 3600))
+	got := sweepProgressLine(now, 5*time.Second, 0, 2)
+	if !strings.Contains(got, "finish 10:00–10:00") || strings.Contains(got, "CET") {
+		t.Errorf("sweepProgressLine() = %q", got)
+	}
 }
 
 func TestFormatETA(t *testing.T) {

@@ -348,9 +348,7 @@ func main() {
 		}
 	}
 
-	if line := sweepEstimateLine(cfg.sweep, cfg.duration); line != "" {
-		log.Print(line)
-	}
+	logSweepEstimate(cfg.sweep, cfg.duration)
 
 	// Build the benchmark binary if a pre-built path was not provided.
 	// Precedence: -binary (prebuilt) > -build flag > $BENCHKIT_BUILD > the
