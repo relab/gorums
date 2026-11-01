@@ -211,7 +211,7 @@ protoc -I="$(go list -m -f {{.Dir}} github.com/relab/gorums):." \
 The above step should produce three files named `storage.pb.go`, `storage_gorums.pb.go`, and `gorums.pb.go` in your package directory.
 The first contains the Protobuf definitions of our messages.
 The second contains the Gorums generated client and server interfaces.
-The third declares the `Config`, `ID`, and `Node` type aliases of the Go package.
+The third declares the `Config`, `ID`, `Node`, and `Correctable` type aliases of the Go package.
 
 ### Examining the Gorums Generated Code
 
@@ -228,7 +228,7 @@ func NewStorageClient(config gorums.Config) StorageClient
 func NewStorageNodeClient(node *gorums.Node) StorageNodeClient
 ```
 
-The `StorageClient` methods send a request to every node in the configuration.
+The `StorageClient` methods target every node in the configuration.
 A quorum call method returns a `*gorums.Call[*ReadRequest, *ReadResponse]` handle.
 The handle embeds `*gorums.Responses[*ReadResponse]`, which provides the terminal methods.
 The `Call` type also has an `Intercept` method, which registers client interceptors before the call is sent.
@@ -246,7 +246,7 @@ type StorageClient interface {
 }
 ```
 
-The `StorageNodeClient` methods send a request to the node of the client:
+The `StorageNodeClient` methods target the client's node:
 
 ```go
 type StorageNodeClient interface {
@@ -280,16 +280,17 @@ err = leader.WriteUnicast(ctx, req).Send()
 Follow these rules when you use the clients:
 
 * **Build node clients where you need them.**
-  A node client holds one pointer and owns nothing, so building one allocates nothing.
-  Do not keep node clients in a struct or a map.
+  A node client holds one pointer and owns nothing.
 * **A nil node does not panic.**
   `cfg.Node(id)` returns nil if the configuration has no node with that ID.
-  `NewStorageNodeClient(nil)` is legal, and every call on that client returns `gorums.ErrNoNode`.
+  `NewStorageNodeClient(nil)` is legal.
+  Remote calls return `gorums.ErrNoNode`; unicast handles report it from `Send` or `Wait` after `Async`.
   This error is a gRPC status error with the `InvalidArgument` code, because retrying cannot fix it.
 * **Any node works.**
   The node can also be a node that is not in a configuration that you use for quorum calls.
 * **An empty configuration does not panic.**
-  A quorum call or multicast on an empty configuration sends nothing and returns `gorums.ErrEmptyConfig`.
+  A quorum call or multicast on an empty configuration sends nothing.
+  Its handle reports `gorums.ErrEmptyConfig` when consumed.
   This error is a gRPC status error with the `InvalidArgument` code.
   `Results()` yields one response whose `Err` is `gorums.ErrEmptyConfig`, and `Correctable` completes at once with this error.
 * **Build a new client for a new configuration.**
@@ -322,10 +323,8 @@ type StorageServer interface {
 }
 ```
 
-It is worth noting that unicast and multicast methods do not return a response or error, as they are one-way calls.
-On the client side, `Send` returns an error if the request could not be sent.
-`Async` returns a handle at once; `Wait` on that handle returns the same send errors.
-Neither reports the success or failure of the request at the server side.
+Unicast and multicast server methods return no response or error.
+The client-side `Send` method and `Wait` after `Async` report local send errors, but do not report the server handler's result.
 
 **Note:**
 You may decide to keep the `.proto` file and the generated `.pb.go` files in a separate directory/package and import that package (the generated Gorums API) into your application.
@@ -831,9 +830,9 @@ Collecting the replies one call after the other takes about as long as the slowe
 The call is not dispatched until the caller calls `.Send()` or `.Async()` on the handle.
 If the caller drops the handle without calling either method, the call is never dispatched.
 
-`.Send()` and the `.Wait()` of an `.Async()` handle report every send failure, so a one-way call cannot fail silently.
-Each send completes when the message reaches the stream of its node.
-A one-way call has no reply, so there is nothing more to wait for.
+`.Send()` and `.Wait()` after `.Async()` report whether the local transport accepted each send.
+They cannot report errors that occur later in the server handler.
+A one-way call has no reply to await.
 
 A server handler that multicasts calls `.Async()` before `ServerContext.Release()` and `.Wait()` after it.
 The sends then keep the order of the requests.
@@ -2278,7 +2277,7 @@ Nested calls follow the rule in [Request Ordering and ServerContext.Release](#re
 `ReadNestedQC` below calls `Release` first, because the nested reads of different requests may run in any order; the next request starts while the nested calls are in flight.
 `WriteNestedMulticast` dispatches its multicast before `Release`, so the peers receive the writes in the order the requests arrived.
 
-A quorum call or a multicast on an empty configuration returns `gorums.ErrEmptyConfig`.
+A quorum call or a multicast on an empty configuration reports `gorums.ErrEmptyConfig` when its handle is consumed.
 The `len(config) == 0` checks below return a clearer error for a server that has no peers.
 
 ```go
@@ -2525,7 +2524,7 @@ This is how a protocol can use a new tree for each view, or fall back to a star 
 The root is simply the first node of the configuration, and it is a node like any other: it holds the data and runs the same handlers.
 A caller that is not in the configuration starts a tree call by sending to the root, with a one-node configuration, for example `gorums.Config{tree.Root()}`.
 The root's handler then relays to `tree.ChildrenOf(root.ID())` like every other internal node, so the root's own work is done too.
-Do not start at `tree.ChildrenOf(tree.Root().ID())` from outside: that skips the root, and a call on an empty configuration, which is what `ChildrenOf` returns for a one-node tree, returns `gorums.ErrEmptyConfig`.
+Do not start at `tree.ChildrenOf(tree.Root().ID())` from outside: that skips the root, and a call on an empty configuration, which is what `ChildrenOf` returns for a one-node tree, reports `gorums.ErrEmptyConfig` when consumed.
 When the process that starts the call is itself the root, it does its local work and then sends to `tree.ChildrenOf(id)` with its own ID.
 
 ### Relaying in a Server
