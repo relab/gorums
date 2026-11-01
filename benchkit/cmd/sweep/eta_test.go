@@ -110,9 +110,9 @@ func TestSweepEstimateLine(t *testing.T) {
 		}
 		got := sweepEstimateLine(sc, 20*time.Second)
 		lines := strings.Split(got, "\n")
-		if !strings.HasPrefix(got, "estimated sweep time: 2 run(s) (n:2): 40s–") ||
+		if !strings.HasPrefix(got, "estimated sweep time: 2 run(s) (n:2): 40s - ") ||
 			len(lines) != 4 ||
-			!regexp.MustCompile(`^earliest–latest finish [0-9]{2}:[0-9]{2}–[0-9]{2}:[0-9]{2}$`).MatchString(lines[1]) ||
+			!regexp.MustCompile(`^earliest–latest finish [0-9]{2}:[0-9]{2} - [0-9]{2}:[0-9]{2}$`).MatchString(lines[1]) ||
 			!strings.Contains(got, "\nstatic estimate: 20s measurement + up to 15s overhead/run\n------") {
 			t.Errorf("sweepEstimateLine() = %q", got)
 		}
@@ -122,7 +122,7 @@ func TestSweepEstimateLine(t *testing.T) {
 func TestSweepProgressLineOmitsTimeZone(t *testing.T) {
 	now := time.Date(2026, 11, 1, 10, 0, 0, 0, time.FixedZone("CET", 3600))
 	got := sweepProgressLine(now, 5*time.Second, 0, 2)
-	if !strings.Contains(got, "finish 10:00–10:00") || strings.Contains(got, "CET") {
+	if !strings.Contains(got, "finish 10:00 - 10:00") || strings.Contains(got, "CET") {
 		t.Errorf("sweepProgressLine() = %q", got)
 	}
 }

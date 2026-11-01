@@ -1026,7 +1026,7 @@ SWEEP_EOF
 chmod +x run.sh
 setsid sh -c './run.sh >> console.log 2>&1; echo $? > exit.code' </dev/null >/dev/null 2>&1 &
 echo $! > run.pid
-echo "$(date '+%%Y/%%m/%%d %%H:%%M:%%S') [driver] detached sweep started in $WD"
+echo "$(date '+%%Y-%%m-%%d %%H:%%M:%%S') [driver] detached sweep started in $WD"
 exit 0
 `, export, iago.Quote(wd), ulimit, sweepCmd)
 }
@@ -1209,7 +1209,7 @@ func (w *rsyncLogWriter) Write(p []byte) (int, error) {
 	defer w.mu.Unlock()
 	for i := 0; i < len(p); {
 		if w.lineStart {
-			if _, err := fmt.Fprintf(w.out, "%s [rsync] ", time.Now().Format("2006/01/02 15:04:05")); err != nil {
+			if _, err := fmt.Fprintf(w.out, "%s [rsync] ", time.Now().Format(time.DateTime)); err != nil {
 				return i, err
 			}
 			w.lineStart = false

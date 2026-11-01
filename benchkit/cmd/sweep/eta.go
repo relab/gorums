@@ -70,7 +70,7 @@ func sweepEstimateLine(sc sweepConfig, duration time.Duration) string {
 	if breakdown != "" {
 		breakdown = " (" + breakdown + ")"
 	}
-	return fmt.Sprintf("estimated sweep time: %d run(s)%s: %s–%s\nearliest–latest finish %s–%s\nstatic estimate: %s measurement + up to %s overhead/run\n------",
+	return fmt.Sprintf("estimated sweep time: %d run(s)%s: %s - %s\nearliest–latest finish %s - %s\nstatic estimate: %s measurement + up to %s overhead/run\n------",
 		total, breakdown, formatETA(earliest), formatETA(latest),
 		earliestFinish.Format("15:04"), latestFinish.Format("15:04"),
 		formatETA(duration), formatETA(perRunOverhead))
@@ -87,7 +87,7 @@ func logSweepEstimate(sc sweepConfig, duration time.Duration) {
 
 func sweepProgressLine(now time.Time, duration time.Duration, completed, total int) string {
 	earliest, latest, earliestFinish, latestFinish := sweepForecast(now, completed, total, duration)
-	return fmt.Sprintf("  %s–%s remaining, finish %s–%s (%d/%d done; static estimate)",
+	return fmt.Sprintf("  %s - %s remaining, finish %s - %s (%d/%d done; static estimate)",
 		formatETA(earliest), formatETA(latest),
 		earliestFinish.Format("15:04"), latestFinish.Format("15:04"),
 		completed, total)
