@@ -22,7 +22,7 @@ type outboundManager struct {
 	logger    *log.Logger
 	opts      DialOptions
 	msgIDs    atomic.Uint64
-	verifies  atomic.Bool // set once a node dials with a [PeerVerifier]
+	verifies  atomic.Bool // set once the pool holds a node with a [PeerVerifier]
 }
 
 // newOutboundManager returns a new outboundManager for managing connection to
@@ -126,8 +126,13 @@ func (m *outboundManager) newNode(id ID, addr string, verify PeerVerifier) (*Nod
 		// The server's peer verifier checks each configured peer it dials.
 		verify = im.verify
 	}
-	if verify != nil && m.opts.TransportCredentials == nil {
-		return nil, fmt.Errorf("gorums: node %d has a TLS identity; set the TLS credentials with WithTransportCredentials", id)
+	if verify != nil {
+		if m.opts.TransportCredentials == nil {
+			return nil, fmt.Errorf("gorums: node %d has a TLS identity; set the TLS credentials with WithTransportCredentials", id)
+		}
+		// Local and shared nodes count too, so that [Config.Extend] keeps
+		// the pool in identity mode even if it never dials a node.
+		m.verifies.Store(true)
 	}
 	if id == m.opts.LocalNodeID && m.opts.Handler != nil {
 		// Use a local (in-process) node when this ID is our own node and a handler
@@ -163,7 +168,6 @@ func (m *outboundManager) newNode(id ID, addr string, verify PeerVerifier) (*Nod
 	}
 	creds := m.opts.TransportCredentials
 	if verify != nil {
-		m.verifies.Store(true)
 		creds = verifiedCredentials{TransportCredentials: creds, id: id, verify: verify}
 	}
 	opts := nodeOptions{
