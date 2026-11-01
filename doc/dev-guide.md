@@ -512,13 +512,13 @@ flowchart LR
 ### Call Engine (`internal/impl`)
 
 A call constructor takes the call's `context.Context` and its target directly: a `Config` for quorum calls and multicasts, and a `*Node` for remote calls and unicasts.
-On an empty `Config`, the `CallContext` holds `ErrEmptyConfig`: a quorum call sends nothing, its terminal methods return the error, and its response iterator yields one response that holds the error; `Multicast` returns a `OnewayCall` that sends nothing and reports the error.
-On a nil `*Node`, `RemoteCall` returns `ErrNoNode`, and `Unicast` returns a `OnewayCall` whose `CallContext` holds `ErrNoNode` and that sends nothing.
+On an empty `Config`, the `CallContext` holds `ErrEmptyConfig`: a quorum call sends nothing, its terminal methods return the error, and its response iterator yields one response that holds the error; `Multicast` returns an `OnewayCall` that sends nothing and reports the error.
+On a nil `*Node`, `RemoteCall` returns `ErrNoNode`, and `Unicast` returns an `OnewayCall` whose `CallContext` holds `ErrNoNode` and that sends nothing.
 Each call constructor except `RemoteCall` builds a `CallContext` that holds the request, the target `Config`, the response channel, and the response iterator (`ResponseSeq`).
 A unicast's `CallContext` holds a one-node `Config`.
 A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`), as well as the `Correctable` future.
 `Call.Async` sends the requests at once and returns the dispatched `Responses`, so any terminal method collects the replies later.
-A one-way call (`Multicast`, `Unicast`) returns a `OnewayCall`, whose `Send` waits for the send confirmations and whose `Async` returns an `OnewayAsync`.
+A one-way call (`Multicast`, `Unicast`) returns an `OnewayCall`, whose `Send` waits for local send confirmations and whose `Async` returns an `OnewayAsync`.
 A `ClientInterceptor` wraps the response iterator and may register per-node request transformations before the call is dispatched.
 `CallContext` reaches each node's send path through `conn.NodeTransport`.
 

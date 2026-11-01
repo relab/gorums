@@ -27,8 +27,7 @@ var ErrTypeMismatch = errors.New("response type mismatch")
 // cannot succeed until the caller passes a node.
 var ErrNoNode = status.Error(codes.InvalidArgument, "no such node")
 
-// ErrEmptyConfig is returned by a quorum call or multicast on an empty
-// configuration, such as one that [Config.Remove] or [Config.WithoutErrors]
-// emptied. It is a gRPC status error with the InvalidArgument code, because
-// the call cannot succeed until the caller passes a node.
+// ErrEmptyConfig is reported when a quorum call or multicast handle on an
+// empty configuration is consumed. It is a gRPC status error with the
+// InvalidArgument code.
 var ErrEmptyConfig = status.Error(codes.InvalidArgument, "empty configuration")
