@@ -24,18 +24,18 @@ const (
 // multicasts on the client's configuration. If the configuration is empty, no
 // message is sent and the call fails with [gorums.ErrEmptyConfig].
 type CorrectableTestClient interface {
-	// Correctable executes a quorum call on the client's configuration. Use
-	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
-	// aggregated result.
+	// Correctable returns a quorum-call handle for the client's configuration.
+	// A terminal method such as Majority(), First(), or Threshold(n) dispatches
+	// the call and retrieves the aggregated result.
 	//
 	// Example:
 	//
 	//	resp, err := client.Correctable(ctx, in).Majority()
 	Correctable(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
 
-	// CorrectableStream executes a streaming quorum call on the client's configuration.
-	// The server can send multiple responses, and the response iterator continues
-	// until the context is canceled.
+	// CorrectableStream returns a streaming quorum-call handle for the client's
+	// configuration. The server can send multiple responses, and the response
+	// iterator continues until the context is canceled.
 	//
 	// Example:
 	//

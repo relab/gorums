@@ -24,9 +24,9 @@ const (
 // multicasts on the client's configuration. If the configuration is empty, no
 // message is sent and the call fails with [gorums.ErrEmptyConfig].
 type AlphaClient interface {
-	// Heartbeat executes a quorum call on the client's configuration. Use
-	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
-	// aggregated result.
+	// Heartbeat returns a quorum-call handle for the client's configuration.
+	// A terminal method such as Majority(), First(), or Threshold(n) dispatches
+	// the call and retrieves the aggregated result.
 	//
 	// Example:
 	//
@@ -72,18 +72,18 @@ type alphaNodeClient struct {
 // multicasts on the client's configuration. If the configuration is empty, no
 // message is sent and the call fails with [gorums.ErrEmptyConfig].
 type BetaClient interface {
-	// Heartbeat executes a quorum call on the client's configuration. Use
-	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
-	// aggregated result.
+	// Heartbeat returns a quorum-call handle for the client's configuration.
+	// A terminal method such as Majority(), First(), or Threshold(n) dispatches
+	// the call and retrieves the aggregated result.
 	//
 	// Example:
 	//
 	//	resp, err := client.Heartbeat(ctx, in).Majority()
 	Heartbeat(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
 
-	// Write executes a quorum call on the client's configuration. Use
-	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
-	// aggregated result.
+	// Write returns a quorum-call handle for the client's configuration.
+	// A terminal method such as Majority(), First(), or Threshold(n) dispatches
+	// the call and retrieves the aggregated result.
 	//
 	// Example:
 	//
