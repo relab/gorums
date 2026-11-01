@@ -69,8 +69,8 @@ type testChannel struct {
 }
 
 // acceptStream sends the acceptance header on stream, as a server does once
-// it accepts a stream. A test server that skips it acts like a server that
-// sends no acceptance header, such as an older Gorums server.
+// it accepts a stream. A test server that skips it leaves the stream down
+// until the server's first frame arrives.
 func acceptStream(stream Gorums_NodeStreamServer) {
 	_ = stream.SendHeader(metadata.Pairs(acceptedKey, "1"))
 }
@@ -1502,30 +1502,24 @@ func TestChannelStreamUpOnAcceptance(t *testing.T) {
 	}
 }
 
-// TestChannelStreamUpWithoutAcceptedHeader verifies that a stream to a server
-// that sends no acceptance header, such as an older Gorums server, counts as
-// up once its first frame arrives.
-func TestChannelStreamUpWithoutAcceptedHeader(t *testing.T) {
-	opened := make(chan struct{}, 1)
+// TestChannelStreamUpOnAcceptanceFrame verifies that a stream counts as up
+// once the server's acceptance frame arrives, without the acceptance header. A
+// server sends that frame when a stream interceptor has already sent the
+// response headers. The channel drops the frame, so a later call succeeds.
+func TestChannelStreamUpOnAcceptanceFrame(t *testing.T) {
 	serverFn := func(stream Gorums_NodeStreamServer) error {
-		opened <- struct{}{}
+		if err := stream.Send(acceptFrame()); err != nil {
+			return err
+		}
 		return echo(stream)
 	}
 	tc := setupChannelEager(t, true, serverFn)
 
-	select {
-	case <-opened:
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("the eager channel opened no stream")
-	}
-	if tc.StreamUp() {
-		t.Fatal("StreamUp() = true before the server sent anything, want false")
+	if !waitUntil(defaultTestTimeout, tc.StreamUp) {
+		t.Fatal("StreamUp() = false after the acceptance frame arrived, want true")
 	}
 	if resp := sendRequest(t, tc.OutboundChannel, Request{}, 1); resp.Err != nil {
 		t.Fatalf("call failed with %v, want success", resp.Err)
-	}
-	if !waitUntil(defaultTestTimeout, tc.StreamUp) {
-		t.Fatal("StreamUp() = false after the first frame arrived, want true")
 	}
 }
 

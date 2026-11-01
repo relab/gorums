@@ -48,14 +48,14 @@ func (s *Server) NodeID() ID {
 }
 
 // ConnectedPeers returns the subset of [Server.PeerConfig] whose peers are
-// currently reachable: the local node, every peer that accepted the stream
-// this server opened to it, and, under [WithStreamDedup], every peer whose
-// shared connection is attached. It equals [Server.PeerConfig] when all peers are
-// connected, and always includes the local node, even before any peers have
-// connected. A returned configuration remains valid across connectivity changes.
+// currently connected. It always includes the local node, and it equals
+// [Server.PeerConfig] when all peers are connected. A returned configuration
+// remains valid across connectivity changes.
 //
-// A peer from an older Gorums version does not send the acceptance header.
-// It counts as connected only once it sends its first message on the stream.
+// A peer is connected while the stream that this server uses to call it is
+// open and accepted. Without [WithStreamDedup], this server opens that stream,
+// and the peer accepts it. With it, the server with the lower ID opens the
+// stream, and the other server accepts it.
 func (s *Server) ConnectedPeers() Config {
 	return s.im.ConnectedPeers()
 }
@@ -315,10 +315,6 @@ func (s *Server) PeerConfig() Config {
 // It waits only under [WithStreamDedup]. Without stream dedup, or without
 // [WithPeers], it returns the current peer [Config] immediately (nil if
 // none), since this server dials each of its peers itself.
-//
-// A higher-ID peer from an older Gorums version counts as connected only once
-// it sends its first message to this server, so WaitForAll may wait for an
-// idle older peer until ctx ends.
 //
 // It returns an error without waiting if the server has no node ID, or if that
 // node ID is not one of its configured peers.

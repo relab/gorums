@@ -45,9 +45,9 @@ type OutboundOptions struct {
 // opens a new stream; [OutboundOptions.EagerReconnect] controls how soon.
 //
 // The channel sends requests on a new stream at once, but it counts the
-// stream as up only once the server accepts it: when the server's acceptance
-// header or first frame arrives. A server that sends no acceptance header,
-// such as an older Gorums server, brings the stream up with its first frame.
+// stream as up only once the server accepts it. A server accepts a stream with
+// the gorums-accepted response header, or, if a stream interceptor on the
+// server has already sent the response headers, with an empty first frame.
 //
 // Calls still awaiting responses when the stream fails are sent again on the
 // new stream. Calls that do not fit in the send queue fail with
