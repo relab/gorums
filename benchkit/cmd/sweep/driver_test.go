@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -21,6 +22,9 @@ func TestRsyncLogWriterPreservesProgress(t *testing.T) {
 		}
 	}
 	got := out.String()
+	if !regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[rsync\] `).MatchString(got) {
+		t.Errorf("rsync output lacks a time.DateTime prefix: %q", got)
+	}
 	for _, want := range []string{"[rsync] sending incremental file list\n", "[rsync]   10% 1MB/s\r", "[rsync]   20% 2MB/s\n"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output %q does not contain %q", got, want)
@@ -535,7 +539,7 @@ func TestEarlyExitMessage(t *testing.T) {
 
 func TestDetachBootstrapScript(t *testing.T) {
 	s := detachBootstrapScript("/tmp/wd", "'/tmp/wd/sweep' '-driven'", "", 65536)
-	for _, want := range []string{"setsid", "run.sh", "exit.code", "[driver] detached sweep started in $WD", "WD='/tmp/wd'", "exec '/tmp/wd/sweep' '-driven'"} {
+	for _, want := range []string{"setsid", "run.sh", "exit.code", "date '+%Y-%m-%d %H:%M:%S'", "[driver] detached sweep started in $WD", "WD='/tmp/wd'", "exec '/tmp/wd/sweep' '-driven'"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("detach bootstrap script missing %q\ngot:\n%s", want, s)
 		}

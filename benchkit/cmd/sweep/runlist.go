@@ -102,5 +102,5 @@ func formatRunListTimestamp(timestamp string) string {
 	if err != nil {
 		return timestamp
 	}
-	return started.Format("2006-01-02 15:04:05")
+	return started.Format(time.DateTime)
 }
