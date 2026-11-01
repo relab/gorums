@@ -1725,7 +1725,7 @@ sequenceDiagram
         S->>N: headers (gorums-accepted: 1)
         Note over N: stream counts as connected
     else server refuses
-        S->>N: refusal status, no headers
+        S->>N: refusal status, no gorums-accepted header
         Note over N: stream never counts as connected
     end
 ```
