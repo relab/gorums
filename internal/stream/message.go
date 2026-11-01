@@ -43,6 +43,15 @@ func NewMessageFromPayload(ctx context.Context, msgID uint64, method string, pay
 	return msgBuilder.Build()
 }
 
+// NewResponseEnvelope returns a fresh response envelope with the request's
+// message ID and method. The payload and status are left empty.
+func NewResponseEnvelope(in *Message) *Message {
+	return Message_builder{
+		MessageSeqNo: in.GetMessageSeqNo(),
+		Method:       in.GetMethod(),
+	}.Build()
+}
+
 // appendToIncomingContext appends client-specific metadata from the [Message] proto message
 // to the incoming gRPC context, allowing server implementations to extract and use said
 // metadata directly from the server method's context. It never modifies ctx's own metadata,

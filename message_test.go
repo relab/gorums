@@ -8,6 +8,7 @@ import (
 	"github.com/relab/gorums/cmd/protoc-gen-gorums/dev"
 	"github.com/relab/gorums/internal/stream"
 	"github.com/relab/gorums/internal/testutils/mock"
+	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	"google.golang.org/protobuf/testing/protocmp"
 )
 
@@ -69,7 +70,7 @@ func TestNewResponseMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := gorums.NewResponseMessage(tt.in, tt.resp)
+			got := gorumsimpl.NewResponseMessage(tt.in, tt.resp)
 			if tt.want == nil {
 				if got != nil {
 					t.Errorf("NewResponseMessage returned %v, want nil", got)
@@ -104,7 +105,7 @@ func TestAsProto(t *testing.T) {
 	}{
 		{
 			name:       "Success",
-			msg:        gorums.NewResponseMessage(&gorums.Message{}, dev.Response_builder{Result: 42}.Build()),
+			msg:        gorumsimpl.NewResponseMessage(&gorums.Message{}, dev.Response_builder{Result: 42}.Build()),
 			wantNil:    false,
 			wantResult: 42,
 		},
@@ -115,7 +116,7 @@ func TestAsProto(t *testing.T) {
 		},
 		{
 			name:    "WrongType",
-			msg:     gorums.NewResponseMessage(&gorums.Message{}, dev.Request_builder{Value: "request"}.Build()),
+			msg:     gorumsimpl.NewResponseMessage(&gorums.Message{}, dev.Request_builder{Value: "request"}.Build()),
 			wantNil: true,
 		},
 	}

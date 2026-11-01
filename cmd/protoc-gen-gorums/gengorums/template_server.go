@@ -71,8 +71,9 @@ type {{.Names.Interface}} interface {
 var registerInterface = `
 {{$genFile := .GenFile}}
 {{$gorumsMessage := use "gorums.Message" .GenFile}}
+{{$protoMessage := use "proto.Message" .GenFile}}
 {{$asProto := use "gorums.AsProto" .GenFile}}
-{{$newMessage := use "gorums.NewResponseMessage" $genFile}}
+{{$newMessage := use "gorumsimpl.NewResponseMessage" $genFile}}
 {{$gorumsServer := use "gorums.Server" $genFile}}
 {{range .Services -}}
 {{$names := .Names}}
@@ -80,16 +81,15 @@ var registerInterface = `
 
 func {{$names.Register}}({{$reg.srv}} *{{$gorumsServer}}, {{$reg.impl}} {{$names.Interface}}) {
 	{{- range .Service.Methods}}
-	{{- $local := localNames "ctx in req resp err out" $context $gorumsMessage $asProto $newMessage (in $genFile .) (out $genFile .) $reg.impl}}
-	{{$reg.srv}}.RegisterHandler("{{.Desc.FullName}}", func({{$local.ctx}} {{$context}}, {{$local.in}} *{{$gorumsMessage}}) (*{{$gorumsMessage}}, error) {
+	{{- $local := localNames "ctx in req resp err send" $context $gorumsMessage $protoMessage $asProto $newMessage (in $genFile .) (out $genFile .) $reg.impl}}
+	{{$reg.srv}}.RegisterHandler("{{.Desc.FullName}}", func({{$local.ctx}} {{$context}}, {{$local.in}} *{{$gorumsMessage}}, {{if isStreamingServer .}}{{$local.send}}{{else}}_{{end}} func({{$protoMessage}})) (*{{$gorumsMessage}}, error) {
 		{{$local.req}} := {{$asProto}}[*{{in $genFile .}}]({{$local.in}})
 		{{- if isOneway .}}
 		{{$reg.impl}}.{{.GoName}}({{$local.ctx}}, {{$local.req}})
 		return nil, nil
 		{{- else if isStreamingServer .}}
 		{{$reg.impl}}.{{.GoName}}({{$local.ctx}}, {{$local.req}}, func({{$local.resp}} *{{out $genFile .}}) {
-			{{$local.out}} := {{$newMessage}}({{$local.in}}, {{$local.resp}})
-			{{$local.ctx}}.SendMessage({{$local.out}})
+			{{$local.send}}({{$local.resp}})
 		})
 		return nil, nil
 		{{- else }}

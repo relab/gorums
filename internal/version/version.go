@@ -10,8 +10,8 @@ import (
 // The release guide describes how to change them when cutting a release.
 const (
 	Major      = 0
-	Minor      = 12
-	Patch      = 1
+	Minor      = 13
+	Patch      = 0
 	PreRelease = ""
 )
 

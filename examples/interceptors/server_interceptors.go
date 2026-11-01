@@ -15,11 +15,11 @@ import (
 // LoggingInterceptor returns an interceptor that logs each request and its
 // response, tagged with addr, together with the time the handler took.
 func LoggingInterceptor(addr string) gorums.ServerInterceptor {
-	return func(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+	return func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (*gorums.Message, error) {
 		req := gorums.AsProto[proto.Message](in)
 		log.Printf("[%s]: LoggingInterceptor(incoming): Method=%s, Message=%s", addr, in.GetMethod(), req)
 		start := time.Now()
-		out, err := next(ctx, in)
+		out, err := next(ctx, in, send)
 
 		duration := time.Since(start)
 		resp := gorums.AsProto[proto.Message](out)
@@ -29,10 +29,10 @@ func LoggingInterceptor(addr string) gorums.ServerInterceptor {
 }
 
 // LoggingSimpleInterceptor logs each request and its response.
-func LoggingSimpleInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func LoggingSimpleInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (*gorums.Message, error) {
 	req := gorums.AsProto[proto.Message](in)
 	log.Printf("LoggingSimpleInterceptor(incoming): Method=%s, Message=%v)", in.GetMethod(), req)
-	out, err := next(ctx, in)
+	out, err := next(ctx, in, send)
 	resp := gorums.AsProto[proto.Message](out)
 	log.Printf("LoggingSimpleInterceptor(outgoing): Method=%s, Err=%v, Message=%v", in.GetMethod(), err, resp)
 	return out, err
@@ -41,7 +41,7 @@ func LoggingSimpleInterceptor(ctx gorums.ServerContext, in *gorums.Message, next
 // DelayedInterceptor delays each request before passing it on. The delay grows
 // with the length of the sender's network address; without a known sender
 // address there is no delay.
-func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (*gorums.Message, error) {
 	// delay based on sending node address
 	delay := 0 * time.Millisecond
 	p, ok := peer.FromContext(ctx)
@@ -57,13 +57,13 @@ func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorum
 
 	time.Sleep(delay)
 	// Call the next handler in the chain
-	out, err := next(ctx, in)
+	out, err := next(ctx, in, send)
 	log.Printf("DelayedInterceptor: Finished processing message after %s", delay)
 	return out, err
 }
 
 // NoFooAllowedInterceptor rejects requests for messages with key "foo".
-func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (*gorums.Message, error) {
 	if req, ok := gorums.AsProto[proto.Message](in).(T); ok {
 		log.Printf("NoFooAllowedInterceptor: Received request for key '%s'", req.GetKey())
 		if req.GetKey() == "foo" {
@@ -71,12 +71,12 @@ func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCo
 			return nil, errors.New("requests for key 'foo' are not allowed")
 		}
 	}
-	return next(ctx, in)
+	return next(ctx, in, send)
 }
 
 // MetadataInterceptor sets each request's metadata to the single entry
 // customKey=customValue before passing the request on.
-func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (*gorums.Message, error) {
 	log.Printf("MetadataInterceptor: Adding custom metadata to message(customKey=customValue)")
 	// Add a custom metadata field
 	entry := &gorums.MetadataEntry{}
@@ -85,7 +85,7 @@ func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, next goru
 	in.SetEntry([]*gorums.MetadataEntry{entry})
 
 	// Call the next handler in the chain
-	out, err := next(ctx, in)
+	out, err := next(ctx, in, send)
 	log.Printf("MetadataInterceptor: Finished processing message with custom metadata")
 	return out, err
 }
