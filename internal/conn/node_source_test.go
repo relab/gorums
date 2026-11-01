@@ -11,7 +11,7 @@ import (
 // insecureDial sets the transport credentials that nodes with TLS identities
 // require. They are insecure, since these tests never connect.
 func insecureDial(o *DialOptions) {
-	o.TransportCredentials = insecure.NewCredentials()
+	o.Credentials = insecure.NewCredentials()
 }
 
 // TestNodeSourceHasIdentity verifies that any declared identity enables checks,

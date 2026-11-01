@@ -411,8 +411,10 @@ The outbound manager uses the same verifier for the configured peers that it dia
 It wraps the node's transport credentials in `verifiedCredentials`, which run the verifier right after each TLS handshake, with the handshake's `AuthInfo` in the context.
 A failed check closes the connection before it carries any stream.
 The handshake error carries `codes.Unauthenticated`, and gRPC passes that code on to the stream that the `OutboundChannel` tries to open.
-The channel treats it as a refusal and backs off, while gRPC's reconnect backoff paces the handshakes.
-A node with a verifier therefore requires `DialOptions.TransportCredentials`, which `WithTransportCredentials` sets.
+The channel treats it as a refusal and waits before it opens the next stream.
+gRPC's own connection backoff, which `WithBackoff` sets, decides when the next handshake runs.
+A node with a verifier needs transport credentials for `verifiedCredentials` to wrap.
+`WithTransportCredentials` sets them in `DialOptions.Credentials`.
 Both managers implement `nodeRegistry`, which a `NodeSource` uses to build a configuration.
 `WithNodes` captures each node's address and optional `TLSIdentity` together.
 When a server uses that source through `WithPeers`, `conn.NewPeerVerifier` validates the identity set and creates the internal TLS verifier.

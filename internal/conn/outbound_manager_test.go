@@ -54,7 +54,7 @@ func TestOutboundManagerPeerVerifier(t *testing.T) {
 		{name: "NotAPeer", nodeID: 5, wantCode: codes.OK},
 		{name: "NoVerifier", nodeID: 2, noVerifier: true, wantCode: codes.OK},
 		{name: "NoVerifierNoCredentials", nodeID: 2, noVerifier: true, noCredentials: true, wantCode: codes.OK},
-		{name: "NoCredentials", nodeID: 2, noCredentials: true, wantNodeErr: "gorums: node 2 has a TLS identity; set the TLS credentials with WithTransportCredentials"},
+		{name: "NoCredentials", nodeID: 2, noCredentials: true, wantNodeErr: "gorums: node 2 has a TLS identity; set using WithTransportCredentials"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -81,7 +81,7 @@ func TestOutboundManagerPeerVerifier(t *testing.T) {
 				o.LocalNodeID = 1
 				o.GRPCDialOptions = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 				if !tt.noCredentials {
-					o.TransportCredentials = insecure.NewCredentials()
+					o.Credentials = insecure.NewCredentials()
 				}
 			})
 			t.Cleanup(m.Close)

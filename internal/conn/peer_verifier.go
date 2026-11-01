@@ -17,13 +17,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// PeerVerifier reports whether the remote end of a connection is the node
-// with ID id. ctx carries the remote end's [peer.Peer]. On a server, ctx is
-// the stream's context, which also carries the stream's incoming metadata. On
-// a dialer, the peer holds the AuthInfo of the TLS handshake. A PeerVerifier
-// returns nil to accept the remote end, and an error that explains the
-// refusal otherwise. It must be safe for concurrent use and should return
-// promptly.
+// PeerVerifier returns nil if the remote end of a connection is the node with
+// id, and an error that explains the refusal otherwise. ctx carries the remote
+// end's [peer.Peer]. On a server, ctx is the stream's context, which also
+// carries the stream's incoming metadata. On a dialer, the peer holds the
+// AuthInfo of the TLS handshake. It must be safe for concurrent use and should
+// return promptly.
 type PeerVerifier func(ctx context.Context, id ID) error
 
 // verificationError is the error for a remote end that failed a

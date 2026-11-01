@@ -1296,7 +1296,7 @@ func TestServerIdentityConfiguration(t *testing.T) {
 				1: tlsNode{"127.0.0.1:9001", "spiffe://relab/node/1"},
 				2: tlsNode{"127.0.0.1:9002", "spiffe://relab/node/2"},
 			},
-			want: "gorums: node 1 has a TLS identity; set the TLS credentials with WithTransportCredentials",
+			want: "gorums: node 1 has a TLS identity; set using WithTransportCredentials",
 		},
 	}
 	for _, tt := range tests {
@@ -1426,7 +1426,7 @@ func TestServerIdentityStandaloneConfig(t *testing.T) {
 	}{
 		{name: "Valid", identity: "spiffe://relab/node/1"},
 		{name: "Empty", wantErr: "node 1 has an empty TLS identity"},
-		{name: "MissingCredentials", identity: "spiffe://relab/node/1", noCredentials: true, wantErr: "gorums: node 1 has a TLS identity; set the TLS credentials with WithTransportCredentials"},
+		{name: "MissingCredentials", identity: "spiffe://relab/node/1", noCredentials: true, wantErr: "gorums: node 1 has a TLS identity; set using WithTransportCredentials"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
