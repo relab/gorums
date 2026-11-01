@@ -11,18 +11,8 @@ var pkgIdentMap = map[string]string{"github.com/relab/gorums": "Config"}
 // These identifiers cannot be used to define message types in a proto file.
 var reservedIdents = []string{"Config", "Correctable", "ID", "Node"}
 
-var staticCode = `// The type aliases below are useful Gorums types that we make accessible
-// from generated code. These names therefore become reserved identifiers,
-// meaning that proto message types with these names would collide with the
-// generated aliases and cause a compile error.
-//
-// The protoc-gen-gorums bundler is responsible for discovering these
-// aliases and any other identifiers defined herein, and adding them to
-// the reserved identifiers list.
-//
-// If necessary, additional aliases and other identifiers should be added in
-// the generator's cmd/protoc-gen-gorums/dev directory, and the bundler will
-// automatically discover them and add them to the reserved identifiers list.
+var staticCode = `// These aliases make common Gorums types available to application code.
+// Their names are reserved in packages with generated Gorums code.
 
 type (
 	Config                = gorums.Config

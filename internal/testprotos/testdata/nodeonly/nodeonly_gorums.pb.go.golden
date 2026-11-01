@@ -37,7 +37,7 @@ type NodeOnlyNodeClient interface {
 	//	resp, err := nodeClient.Read(ctx, in)
 	Read(ctx context.Context, in *Request) (*Response, error)
 
-	// Write starts a one-way call on the client's node; no reply is
+	// Write returns a one-way call handle for the client's node; no reply is
 	// returned.
 	//
 	// Send blocks until the send completes and returns any send error.

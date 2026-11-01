@@ -27,9 +27,9 @@ const (
 // If the configuration is empty, it sends nothing and the handle reports
 // [gorums.ErrEmptyConfig].
 type QuorumCallClient interface {
-	// QuorumCall executes a quorum call on the client's configuration. Use
-	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
-	// aggregated result.
+	// QuorumCall returns a quorum-call handle for the client's configuration.
+	// A terminal method such as Majority(), First(), or Threshold(n) dispatches
+	// the call and retrieves the aggregated result.
 	//
 	// Example:
 	//
