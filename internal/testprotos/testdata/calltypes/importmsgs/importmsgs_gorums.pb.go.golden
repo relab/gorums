@@ -20,10 +20,9 @@ const (
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 12)
 )
 
-// QuorumCallClient is the client API for the quorum calls and multicasts of
-// the QuorumCall service. Its calls execute on the configuration given to
-// [NewQuorumCallClient]. If that configuration is empty, every call returns
-// [gorums.ErrEmptyConfig].
+// QuorumCallClient is the client API for QuorumCall quorum calls and
+// multicasts on the client's configuration. If the configuration is empty, no
+// message is sent and the call fails with [gorums.ErrEmptyConfig].
 type QuorumCallClient interface {
 	// QuorumCall executes a quorum call on the client's configuration. Use
 	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
@@ -49,7 +48,7 @@ func (c quorumCallClient) QuorumCall(ctx context.Context, in *msgs.Request) *gor
 	return gorumsimpl.QuorumCall[*msgs.Request, *msgs.Response](ctx, c.config, in, "internal.testprotos.calltypes.importmsgs.QuorumCall.QuorumCall")
 }
 
-// QuorumCallServer is the server-side API for the QuorumCall Service
+// QuorumCallServer is the server API for QuorumCall.
 type QuorumCallServer interface {
 	QuorumCall(gorums.ServerContext, *msgs.Request) (*msgs.Response, error)
 }

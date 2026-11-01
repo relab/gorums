@@ -23,10 +23,9 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// ClientNamesClient is the client API for the quorum calls and multicasts of
-// the ClientNames service. Its calls execute on the configuration given to
-// [NewClientNamesClient]. If that configuration is empty, every call returns
-// [gorums.ErrEmptyConfig].
+// ClientNamesClient is the client API for ClientNames quorum calls and
+// multicasts on the client's configuration. If the configuration is empty, no
+// message is sent and the call fails with [gorums.ErrEmptyConfig].
 type ClientNamesClient interface {
 	// Config is a quorum call.
 	Config(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
@@ -54,10 +53,9 @@ type clientNamesClient struct {
 	config Config
 }
 
-// ClientNamesNodeClient is the client API for the remote calls and unicasts
-// of the ClientNames service. Its calls execute on the node given to
-// [NewClientNamesNodeClient]. If that node is nil, every call returns
-// [gorums.ErrNoNode].
+// ClientNamesNodeClient is the client API for ClientNames remote calls and
+// unicasts on the client's node. If the node is nil, no message is sent and the
+// call fails with [gorums.ErrNoNode].
 type ClientNamesNodeClient interface {
 	// Node is a remote call.
 	Node(ctx context.Context, in *Request) (*Response, error)
@@ -102,7 +100,7 @@ func (c clientNamesNodeClient) ForNode(ctx context.Context, in *Request) *gorums
 	return gorumsimpl.Unicast(ctx, c.node, in, "internal.testprotos.clientnames.ClientNames.ForNode")
 }
 
-// ClientNamesServer is the server-side API for the ClientNames Service
+// ClientNamesServer is the server API for ClientNames.
 type ClientNamesServer interface {
 	Config(gorums.ServerContext, *Request) (*Response, error)
 	WithConfig(gorums.ServerContext, *Request)

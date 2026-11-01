@@ -23,10 +23,9 @@ const (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// MulticastClient is the client API for the quorum calls and multicasts of
-// the Multicast service. Its calls execute on the configuration given to
-// [NewMulticastClient]. If that configuration is empty, every call returns
-// [gorums.ErrEmptyConfig].
+// MulticastClient is the client API for Multicast quorum calls and
+// multicasts on the client's configuration. If the configuration is empty, no
+// message is sent and the call fails with [gorums.ErrEmptyConfig].
 type MulticastClient interface {
 	// Multicast starts a one-way call on the client's configuration; no reply
 	// is returned. Use gorums.MapRequest to send a different message to each node.
@@ -59,7 +58,7 @@ func (c multicastClient) Multicast(ctx context.Context, in *Request) *gorums.One
 	return gorumsimpl.Multicast(ctx, c.config, in, "internal.testprotos.calltypes.multicast.Multicast.Multicast")
 }
 
-// MulticastServer is the server-side API for the Multicast Service
+// MulticastServer is the server API for Multicast.
 type MulticastServer interface {
 	Multicast(gorums.ServerContext, *Request)
 }
