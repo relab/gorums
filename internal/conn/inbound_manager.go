@@ -262,7 +262,7 @@ func (im *InboundManager) isKnown(id ID) bool {
 // that peer's node. If the stream includes peer metadata with node ID 0,
 // AcceptPeer creates a client peer node with an assigned ID. Otherwise, the
 // channel serves the connection without being tracked in any configuration.
-func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream stream.BidiStream) (*stream.InboundChannel, func(), error) {
+func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream stream.InboundStream) (*stream.InboundChannel, func(), error) {
 	noop := func() {}
 	if im == nil {
 		return untrackedChannel(streamCtx, inboundStream, stream.InboundOptions{SendBufferSize: DefaultSendBufferSize, RecvBufferSize: DefaultRecvBufferSize})
@@ -311,7 +311,7 @@ func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream st
 // as active while keeping the prior one live until its own stream ends, so the
 // node never goes dark mid-handover; see [Node.attachStream]. The returned
 // cleanup function detaches and closes this registration's channel.
-func (im *InboundManager) registerPeer(streamCtx context.Context, inboundStream stream.BidiStream, id ID) (*stream.InboundChannel, func(), error) {
+func (im *InboundManager) registerPeer(streamCtx context.Context, inboundStream stream.InboundStream, id ID) (*stream.InboundChannel, func(), error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	node := im.knownNodes[id]
@@ -334,7 +334,7 @@ func (im *InboundManager) registerPeer(streamCtx context.Context, inboundStream 
 // connecting client. The node is added to clientNodes and the configuration
 // is rebuilt. The returned cleanup function removes the client node entirely
 // when the stream ends (unlike known peers which persist for reconnection).
-func (im *InboundManager) acceptClient(streamCtx context.Context, inboundStream stream.BidiStream) (*stream.InboundChannel, func(), error) {
+func (im *InboundManager) acceptClient(streamCtx context.Context, inboundStream stream.InboundStream) (*stream.InboundChannel, func(), error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	id, err := im.nextAvailableClientID()
@@ -509,7 +509,7 @@ func (im *InboundManager) inboundOptions() stream.InboundOptions {
 // untrackedChannel returns a channel for a stream that is not tracked in any
 // configuration, and a cleanup function that closes it. Replies on it wait for
 // send queue space.
-func untrackedChannel(streamCtx context.Context, inboundStream stream.BidiStream, opts stream.InboundOptions) (*stream.InboundChannel, func(), error) {
+func untrackedChannel(streamCtx context.Context, inboundStream stream.InboundStream, opts stream.InboundOptions) (*stream.InboundChannel, func(), error) {
 	opts.WaitingReplies = true
 	ch := stream.NewInboundChannel(streamCtx, 0, inboundStream, opts)
 	return ch, func() { _ = ch.Close() }, nil

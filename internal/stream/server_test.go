@@ -29,11 +29,10 @@ func newFakeNodeStream(ctx context.Context) *fakeNodeStream {
 func (f *fakeNodeStream) Context() context.Context { return f.ctx }
 
 // The remaining methods satisfy grpc.ServerStream; NodeStream never calls them.
-func (*fakeNodeStream) SetHeader(metadata.MD) error  { return nil }
-func (*fakeNodeStream) SendHeader(metadata.MD) error { return nil }
-func (*fakeNodeStream) SetTrailer(metadata.MD)       {}
-func (*fakeNodeStream) SendMsg(any) error            { return nil }
-func (*fakeNodeStream) RecvMsg(any) error            { return nil }
+func (*fakeNodeStream) SetHeader(metadata.MD) error { return nil }
+func (*fakeNodeStream) SetTrailer(metadata.MD)      {}
+func (*fakeNodeStream) SendMsg(any) error           { return nil }
+func (*fakeNodeStream) RecvMsg(any) error           { return nil }
 
 var _ Gorums_NodeStreamServer = (*fakeNodeStream)(nil)
 
@@ -42,7 +41,7 @@ type channelAcceptor struct {
 	ch *InboundChannel
 }
 
-func (a channelAcceptor) AcceptPeer(context.Context, BidiStream) (*InboundChannel, func(), error) {
+func (a channelAcceptor) AcceptPeer(context.Context, InboundStream) (*InboundChannel, func(), error) {
 	return a.ch, func() {}, nil
 }
 
@@ -52,7 +51,7 @@ type inboundAcceptor struct {
 	refuse bool
 }
 
-func (a inboundAcceptor) AcceptPeer(ctx context.Context, stream BidiStream) (*InboundChannel, func(), error) {
+func (a inboundAcceptor) AcceptPeer(ctx context.Context, stream InboundStream) (*InboundChannel, func(), error) {
 	if a.refuse {
 		return nil, func() {}, status.Error(codes.Unauthenticated, "stream refused by test acceptor")
 	}

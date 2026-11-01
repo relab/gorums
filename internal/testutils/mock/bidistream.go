@@ -3,6 +3,8 @@ package mock
 import (
 	"io"
 	"sync"
+
+	"google.golang.org/grpc/metadata"
 )
 
 // BidiStream is a bidirectional stream double for message type M. Recv
@@ -14,7 +16,7 @@ import (
 //     for [BidiStream.Release], and then records it for [BidiStream.Sent].
 //
 // Close ends every wait. The type *BidiStream[*stream.Message] satisfies
-// stream.BidiStream.
+// stream.BidiStream and stream.InboundStream.
 type BidiStream[M any] struct {
 	in          chan M        // messages for Recv
 	out         chan M        // sent messages; nil unless the stream records
@@ -55,6 +57,12 @@ func NewGatedBidiStream[M any]() *BidiStream[M] {
 	s.entered = make(chan M, bufferSize)
 	s.released = make(chan struct{})
 	return s
+}
+
+// SendHeader discards md and returns nil, like a server stream that has not
+// yet sent its response headers.
+func (*BidiStream[M]) SendHeader(metadata.MD) error {
+	return nil
 }
 
 // Send discards, records, or holds msg, as selected by the constructor.

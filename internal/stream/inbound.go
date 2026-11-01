@@ -25,6 +25,13 @@ type InboundOptions struct {
 	WaitingReplies bool
 }
 
+// InboundStream is the server side of a stream that a dialer opened to this
+// node. grpc.BidiStreamingServer[Message, Message] satisfies it.
+type InboundStream interface {
+	BidiStream
+	SendHeader(metadata.MD) error
+}
+
 // InboundChannel is a [Channel] over one stream accepted by this node's
 // server. It cannot re-establish its stream: once the stream ends, pending
 // calls fail with [ErrStreamDown] and later requests with [ErrNodeClosed].
@@ -38,11 +45,10 @@ type InboundChannel struct {
 // ctx must be the stream's context; handlers receive contexts derived from it.
 // Call [InboundChannel.Serve] to receive from the stream.
 //
-// A channel exists only for an accepted stream. So if stream can send response
-// headers, as a gRPC server stream can, the send loop first sends the
-// acceptance header, or an acceptance frame if a stream interceptor has
-// already sent the headers, before any message.
-func NewInboundChannel(ctx context.Context, id ID, stream BidiStream, opts InboundOptions) *InboundChannel {
+// Create a channel only for a stream that the server accepts. Before it sends
+// any message, the send loop tells the dialer that the server accepted the
+// stream.
+func NewInboundChannel(ctx context.Context, id ID, stream InboundStream, opts InboundOptions) *InboundChannel {
 	c := &InboundChannel{
 		endpoint: newEndpoint(ctx, id, opts.SendBufferSize, opts.RecvBufferSize, opts.Handler, opts.Latency),
 	}
@@ -66,16 +72,14 @@ func NewInboundChannel(ctx context.Context, id ID, stream BidiStream, opts Inbou
 	return c
 }
 
-// accept tells the dialer that this server accepted stream, if stream can
-// send response headers. It sends the acceptance header. If a stream
-// interceptor has already sent the response headers, it sends an acceptance
-// frame instead, which the dialer counts as the server's first frame.
-func (c *InboundChannel) accept(stream BidiStream) {
-	hs, ok := stream.(interface{ SendHeader(metadata.MD) error })
-	if !ok {
-		return
-	}
-	if err := hs.SendHeader(metadata.Pairs(acceptedKey, "1")); err != nil && c.ctx.Err() == nil {
+// accept tells the dialer that the server accepted stream. It sends the
+// gorums-accepted response header. A stream can send its response headers only
+// once, so the header fails if a gRPC stream interceptor on the server, such as
+// one set with grpc.StreamInterceptor, has already sent them. accept then sends
+// an empty acceptance frame instead. The dialer treats either one as the
+// acceptance.
+func (c *InboundChannel) accept(stream InboundStream) {
+	if err := stream.SendHeader(metadata.Pairs(acceptedKey, "1")); err != nil && c.ctx.Err() == nil {
 		_ = stream.Send(acceptFrame())
 	}
 }

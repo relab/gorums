@@ -9,7 +9,7 @@
 // the peer's requests through a handler one at a time. The package also
 // provides the per-node [Transport] that bundles a channel reference, a
 // [Latency] estimate, and a message-ID generator; the server side ([Server],
-// [BidiStream]) that accepts inbound streams; and the [Message] envelope and
+// [InboundStream]) that accepts inbound streams; and the [Message] envelope and
 // message-ID space shared by both directions.
 //
 // It sits below the connectivity layer in
