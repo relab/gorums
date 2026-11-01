@@ -14,7 +14,7 @@ var unicastComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-// {{$method}} starts a one-way call on the client's node; no reply is
+// {{$method}} returns a one-way call handle for the client's node; no reply is
 // returned.
 //
 // Send blocks until the send completes and returns any send error.

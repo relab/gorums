@@ -6,35 +6,16 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// QuorumCall performs a quorum call on the nodes in config and returns a
-// [Call] handle that provides access to node responses via terminal methods
-// and fluent iteration. If config is empty, the call sends nothing and
-// reports [ErrEmptyConfig].
-//
-// Type parameters:
-//   - Req: The request message type
-//   - Resp: The response message type from individual nodes
-//
-// Register interceptors with [Call.Intercept] before invoking a terminal
-// method. Messages are sent to nodes when a terminal method (like
-// [Responses.Majority] or [Responses.First]) or an iterator method (like
-// [Responses.Results]) is first called, applying any registered request
-// transformations.
-//
-// This function should only be used by generated code.
+// QuorumCall returns a lazy [Call] for the nodes in config.
+// Consuming a call on an empty config sends nothing and reports
+// [ErrEmptyConfig].
 func QuorumCall[Req, Resp proto.Message](ctx context.Context, config Config, req Req, method string) *Call[Req, Resp] {
 	return invokeQuorumCall[Req, Resp](ctx, config, req, method, false)
 }
 
-// QuorumCallStream performs a streaming quorum call on the nodes in config and
-// returns a [Call] handle. If config is empty, the call sends nothing and
+// QuorumCallStream returns a lazy [Call] that accepts multiple responses per
+// node until ctx ends. Consuming a call on an empty config sends nothing and
 // reports [ErrEmptyConfig].
-// This is used for correctable stream methods where the server sends multiple responses.
-//
-// In streaming mode, the response iterator continues indefinitely until the context
-// is canceled, allowing the server to send multiple responses over time.
-//
-// This function should only be used by generated code.
 func QuorumCallStream[Req, Resp proto.Message](ctx context.Context, config Config, req Req, method string) *Call[Req, Resp] {
 	return invokeQuorumCall[Req, Resp](ctx, config, req, method, true)
 }

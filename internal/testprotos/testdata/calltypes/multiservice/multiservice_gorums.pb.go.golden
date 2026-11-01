@@ -30,9 +30,9 @@ var _ emptypb.Empty
 // If the configuration is empty, it sends nothing and the handle reports
 // [gorums.ErrEmptyConfig].
 type AlphaClient interface {
-	// Heartbeat executes a quorum call on the client's configuration. Use
-	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
-	// aggregated result.
+	// Heartbeat returns a quorum-call handle for the client's configuration.
+	// A terminal method such as Majority(), First(), or Threshold(n) dispatches
+	// the call and retrieves the aggregated result.
 	//
 	// Example:
 	//
@@ -81,17 +81,18 @@ type alphaNodeClient struct {
 // If the configuration is empty, it sends nothing and the handle reports
 // [gorums.ErrEmptyConfig].
 type BetaClient interface {
-	// Heartbeat executes a quorum call on the client's configuration. Use
-	// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
-	// aggregated result.
+	// Heartbeat returns a quorum-call handle for the client's configuration.
+	// A terminal method such as Majority(), First(), or Threshold(n) dispatches
+	// the call and retrieves the aggregated result.
 	//
 	// Example:
 	//
 	//	resp, err := client.Heartbeat(ctx, in).Majority()
 	Heartbeat(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
 
-	// Write starts a one-way call on the client's configuration; no reply
-	// is returned. Use gorums.MapRequest to send a different message to each node.
+	// Write returns a one-way call handle for the client's configuration.
+	// No reply is returned. Use gorums.MapRequest to send a different message to
+	// each node.
 	//
 	// Send blocks until every send completes and returns any send errors.
 	// Async returns a handle at once; Wait on the handle returns the send errors.

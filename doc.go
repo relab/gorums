@@ -18,9 +18,8 @@
 //   - multicast: a one-way call to every node in a configuration.
 //   - unicast: a one-way call to a single node.
 //
-// Calls are dispatched lazily: the request is sent on the first consuming
-// operation, such as a terminal method, [Call.Async], or a range over the
-// response sequence.
+// Quorum calls and one-way calls return handles that dispatch when consumed.
+// Remote calls execute immediately.
 // Lazy dispatch is what lets a call site attach client interceptors before the
 // request is sent. [Call.Async] sends the request at once and leaves the
 // replies to a later terminal method, and [Responses.Correctable] reports
@@ -42,13 +41,13 @@
 //	leader := pb.NewStorageNodeClient(cfg.Node(leaderID))
 //	reply, err = leader.ReadRPC(ctx, req)
 //
-// A node client holds only its node, so building one allocates nothing.
-// Build a node client where you need it, and do not keep it. The node may be
-// any node, also one outside cfg. If the node is nil, every call returns
-// [ErrNoNode]. A quorum call or multicast on an empty configuration sends
-// nothing and returns [ErrEmptyConfig]. To call another configuration, build
-// a new SClient from it. A client does not own its configuration or node;
-// the close function returned by [NewConfig] closes the connections.
+// A node client holds only its node, which may be outside cfg.
+// If the node is nil, remote calls return [ErrNoNode] and unicast handles
+// report it when consumed. A quorum call or multicast on an empty
+// configuration sends nothing and reports [ErrEmptyConfig] when consumed.
+// To call another configuration, build a new SClient from it.
+// A client does not own its configuration or node; the close function returned
+// by [NewConfig] closes the connections.
 //
 // A Go package may hold several services, in one proto file or in several.
 // Each service gets its own clients, server interface, and register function.
@@ -59,8 +58,8 @@
 //
 // # Configurations and nodes
 //
-// A [Node] is a client-side handle to a remote (or co-located) peer, not the
-// local process. A configuration is an immutable, ordered set of nodes built
+// A [Node] is a client-side handle to a peer reached through a network or
+// local transport. A configuration is an immutable, ordered set of nodes built
 // with [NewConfig] from a node source, e.g., [WithNodes] or [WithNodeList].
 // Set operations such as [Config.Add], [Config.Remove], and [Config.Union]
 // derive new configurations that share the underlying node connections, so

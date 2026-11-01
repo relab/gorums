@@ -30,8 +30,9 @@ var _ emptypb.Empty
 // If the configuration is empty, it sends nothing and the handle reports
 // [gorums.ErrEmptyConfig].
 type OnewayTestClient interface {
-	// Multicast starts a one-way call on the client's configuration; no reply
-	// is returned. Use gorums.MapRequest to send a different message to each node.
+	// Multicast returns a one-way call handle for the client's configuration.
+	// No reply is returned. Use gorums.MapRequest to send a different message to
+	// each node.
 	//
 	// Send blocks until every send completes and returns any send errors.
 	// Async returns a handle at once; Wait on the handle returns the send errors.
@@ -62,7 +63,7 @@ type onewayTestClient struct {
 // [NewOnewayTestNodeClient]. If the node is nil, remote calls return
 // [gorums.ErrNoNode], and unicast handles report that error when consumed.
 type OnewayTestNodeClient interface {
-	// Unicast starts a one-way call on the client's node; no reply is
+	// Unicast returns a one-way call handle for the client's node; no reply is
 	// returned.
 	//
 	// Send blocks until the send completes and returns any send error.

@@ -17,9 +17,9 @@ var quorumCallComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-// {{$method}} executes a quorum call on the client's configuration. Use
-// terminal methods like Majority(), First(), or Threshold(n) to retrieve the
-// aggregated result.
+// {{$method}} returns a quorum-call handle for the client's configuration.
+// A terminal method such as Majority(), First(), or Threshold(n) dispatches
+// the call and retrieves the aggregated result.
 //
 // Example:
 //
@@ -59,9 +59,9 @@ var quorumCallStreamComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-// {{$method}} executes a streaming quorum call on the client's configuration.
-// The server can send multiple responses, and the response iterator continues
-// until the context is canceled.
+// {{$method}} returns a streaming quorum-call handle for the client's
+// configuration. The server can send multiple responses, and the response
+// iterator continues until the context is canceled.
 //
 // Example:
 //
