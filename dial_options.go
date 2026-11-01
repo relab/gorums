@@ -35,7 +35,7 @@ func WithGRPCDialOptions(opts ...grpc.DialOption) DialOption {
 // codes.Unauthenticated.
 func WithTransportCredentials(creds credentials.TransportCredentials) DialOption {
 	return func(o *conn.DialOptions) {
-		o.TransportCredentials = creds
+		o.Credentials = creds
 	}
 }
 

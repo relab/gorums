@@ -121,39 +121,35 @@ func (m *outboundManager) newNode(id ID, addr string, verify PeerVerifier) (*Nod
 		return nil, fmt.Errorf("gorums: node %d already exists", id)
 	}
 	im := m.opts.InboundManager
-	knownPeer := im != nil && im.isKnown(id)
-	if knownPeer {
-		// The server's peer verifier checks each configured peer it dials.
+	peer := im.knownPeer(id)
+	var onStreamChange func()
+	if peer != nil {
+		// The server checks each configured peer that it dials, and the peer's
+		// stream changes feed the server's connected-peer view.
 		verify = im.verify
+		onStreamChange = im.onStreamChange
 	}
 	if verify != nil {
-		if m.opts.TransportCredentials == nil {
-			return nil, fmt.Errorf("gorums: node %d has a TLS identity; set the TLS credentials with WithTransportCredentials", id)
+		if m.opts.Credentials == nil {
+			return nil, fmt.Errorf("gorums: node %d has a TLS identity; set using WithTransportCredentials", id)
 		}
 		// Local and shared nodes count too, so that [Config.Extend] keeps
 		// the pool in identity mode even if it never dials a node.
 		m.verifies.Store(true)
 	}
-	if id == m.opts.LocalNodeID && m.opts.Handler != nil {
-		// Use a local (in-process) node when this ID is our own node and a handler
-		// is configured, so this server calls itself without a network round-trip.
+	if m.opts.inProcess(id) {
+		// This server calls itself without a network round-trip.
 		n := newLocalNode(id, addr, m.nextMsgID, m.opts.Handler, m.opts.RecvBufferSize, m)
 		if err := m.addNode(n); err != nil {
 			return nil, err
 		}
 		return n, nil
 	}
-	if m.opts.StreamDedup && im != nil && id < m.opts.LocalNodeID {
-		// A lower-ID peer dials this node, and this node sends its calls over
-		// that peer's inbound connection. Its calls fail with
-		// [stream.ErrStreamDown] until the peer connects; the server's
-		// WaitForAll waits for the peer.
-		//
-		// The borrowed peer must be the process this node addresses, so the
-		// borrow requires a known peer with the same address, compared by
-		// resolved address. [Config.Extend] can add outbound nodes from a
-		// source other than the peer set.
-		peer := im.knownPeer(id)
+	if m.opts.borrowsStream(id) {
+		// [Config.Extend] can add nodes from a source other than the peer
+		// set, so the borrowed stream must come from a known peer with the
+		// same resolved address. Calls fail with [stream.ErrStreamDown] until
+		// the peer connects; the server's WaitForAll waits for the peer.
 		if peer == nil {
 			return nil, fmt.Errorf("gorums: stream dedup outbound node %d (%s) is not a configured peer", id, addr)
 		}
@@ -166,7 +162,7 @@ func (m *outboundManager) newNode(id ID, addr string, verify PeerVerifier) (*Nod
 		}
 		return n, nil
 	}
-	creds := m.opts.TransportCredentials
+	creds := m.opts.Credentials
 	if verify != nil {
 		creds = verifiedCredentials{TransportCredentials: creds, id: id, verify: verify}
 	}
@@ -177,19 +173,15 @@ func (m *outboundManager) newNode(id ID, addr string, verify PeerVerifier) (*Nod
 		MsgIDGen:        m.nextMsgID,
 		Metadata:        m.opts.Metadata,
 		GRPCDialOptions: m.opts.GRPCDialOptions,
+		Credentials:     creds,
 		Handler:         m.opts.Handler,
 		// A configuration that carries a server, as a peer or as a back-channel
 		// client, reconnects eagerly: the remote side keeps this node in its
 		// connected configuration, or sends its own calls on this stream under
 		// stream deduplication, only while the stream is up.
 		EagerReconnect: im != nil,
-		Credentials:    creds,
+		OnStreamChange: onStreamChange,
 		Manager:        m,
-	}
-	if knownPeer {
-		// Stream-state changes on a dialed peer feed the server's
-		// connected-peer view.
-		opts.OnStreamChange = im.onStreamChange
 	}
 	n, err := newOutboundNode(addr, opts)
 	if err != nil {

@@ -80,11 +80,11 @@ type nodeOptions struct {
 	MsgIDGen        func() uint64
 	Metadata        metadata.MD
 	GRPCDialOptions []grpc.DialOption
-	Handler         stream.RequestHandler
-	EagerReconnect  bool                             // re-establish a lost stream proactively; see [stream.OutboundOptions]
-	OnStreamChange  func()                           // optional; invoked on outbound stream transitions
 	Credentials     credentials.TransportCredentials // optional; replaces the credentials in GRPCDialOptions
-	Manager         *outboundManager                 // owning manager
+	Handler         stream.RequestHandler
+	EagerReconnect  bool             // re-establish a lost stream proactively; see [stream.OutboundOptions]
+	OnStreamChange  func()           // optional; invoked on outbound stream transitions
+	Manager         *outboundManager // owning manager
 }
 
 // newOutboundNode creates a new node using the provided options. It establishes
@@ -95,6 +95,8 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 
 	// Create gRPC connection to the node without connecting (lazy dial).
 	// The node's credentials come last, so they replace any earlier ones.
+	// Clip makes append copy the options that all nodes share, so that nodes
+	// created concurrently never write to the same array.
 	dialOpts := opts.GRPCDialOptions
 	if opts.Credentials != nil {
 		dialOpts = append(slices.Clip(dialOpts), grpc.WithTransportCredentials(opts.Credentials))
