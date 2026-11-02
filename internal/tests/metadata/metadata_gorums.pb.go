@@ -10,6 +10,7 @@ import (
 	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
+	proto "google.golang.org/protobuf/proto"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -57,20 +58,20 @@ type MetadataTestServer interface {
 }
 
 func RegisterMetadataTestServer(srv *gorums.Server, impl MetadataTestServer) {
-	srv.RegisterHandler("metadata.MetadataTest.IDFromMD", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("metadata.MetadataTest.IDFromMD", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
 		req := gorums.AsProto[*emptypb.Empty](in)
 		resp, err := impl.IDFromMD(ctx, req)
 		if err != nil {
 			return nil, err
 		}
-		return gorums.NewResponseMessage(in, resp), nil
+		return gorumsimpl.NewResponseMessage(in, resp), nil
 	})
-	srv.RegisterHandler("metadata.MetadataTest.WhatIP", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("metadata.MetadataTest.WhatIP", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
 		req := gorums.AsProto[*emptypb.Empty](in)
 		resp, err := impl.WhatIP(ctx, req)
 		if err != nil {
 			return nil, err
 		}
-		return gorums.NewResponseMessage(in, resp), nil
+		return gorumsimpl.NewResponseMessage(in, resp), nil
 	})
 }

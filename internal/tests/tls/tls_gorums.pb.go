@@ -10,6 +10,7 @@ import (
 	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
+	proto "google.golang.org/protobuf/proto"
 )
 
 const (
@@ -53,12 +54,12 @@ type TLSServer interface {
 }
 
 func RegisterTLSServer(srv *gorums.Server, impl TLSServer) {
-	srv.RegisterHandler("tls.TLS.TestTLS", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("tls.TLS.TestTLS", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		resp, err := impl.TestTLS(ctx, req)
 		if err != nil {
 			return nil, err
 		}
-		return gorums.NewResponseMessage(in, resp), nil
+		return gorumsimpl.NewResponseMessage(in, resp), nil
 	})
 }
