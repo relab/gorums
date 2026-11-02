@@ -36,6 +36,17 @@ func LoggingSimpleInterceptor(ctx gorums.ServerContext, in *gorums.Message, send
 	return out, err
 }
 
+// StreamLoggingInterceptor logs each response that a streaming handler sends.
+// It passes next a send function that logs the response and then calls the
+// original send.
+func StreamLoggingInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
+	logAndSend := func(resp proto.Message) {
+		log.Printf("StreamLoggingInterceptor: Method=%s, Message=%v", in.GetMethod(), resp)
+		send(resp)
+	}
+	return next(ctx, in, logAndSend)
+}
+
 // DelayedInterceptor delays each request before passing it on. The delay grows
 // with the length of the sender's network address; without a known sender
 // address there is no delay.

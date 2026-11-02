@@ -626,8 +626,13 @@ The root `gorums.Server` ties the layers together on the server side.
 It registers a `stream.Server` with its gRPC server, uses its `conn.InboundManager` as the server's `stream.PeerAcceptor`, and serves as the `stream.RequestHandler` for inbound streams, for its local node, and for back-channel requests on its outbound peer configuration.
 `Server.HandleRequest` creates a `ServerContext` per request, records the sender ID that the channel passes in, and runs the registered `Handler`, wrapped by any `ServerInterceptor`s.
 A `gorums.Message` wraps a request's `stream.Message` together with its decoded proto payload.
-A handler returns its response as a `proto.Message`, and sends each response of a streaming call through its `send func(proto.Message)` callback.
-`Server.HandleRequest` builds the response envelope for both, so handlers never touch envelopes.
+How a handler delivers its responses depends on the call type:
+
+* A unary handler returns its response as a `proto.Message`.
+* A streaming handler calls its `send func(proto.Message)` callback once for each response, and returns `nil, nil`.
+* A one-way handler returns `nil, nil`, and the server sends no response.
+
+`Server.HandleRequest` builds the response envelope for the returned response and for each sent response, so handlers never touch envelopes.
 
 ```mermaid
 classDiagram
