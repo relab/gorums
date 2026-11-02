@@ -2168,10 +2168,9 @@ on it:
   continue to look fast until new responses arrive and update the average,
   even if network conditions have since changed.
 
-* **Slow convergence.** The moving average uses a smoothing factor of 0.2, so
-  a sudden step-change in latency takes roughly five round trips to be reflected
-  in the estimate.  Short-lived spikes are smoothed away, which is usually
-  desirable but means the estimate lags behind rapid fluctuations.
+* **Slow convergence.** The moving average uses a smoothing factor of 0.2, so each new sample contributes 20% of the estimate.
+  After a step change in latency, the estimate reflects about two-thirds of the change after five round trips, and about 90% after ten.
+  Short-lived spikes are smoothed away, which is usually desirable but means the estimate lags behind rapid fluctuations.
 
 * **RPC compute time included.** The measurement covers the full round-trip
   from sending the request to receiving the response.  For long-running RPCs,
