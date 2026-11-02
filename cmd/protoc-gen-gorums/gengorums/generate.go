@@ -73,9 +73,9 @@ const packageFileName = "gorums.pb.go"
 // generatePackageFile generates the gorums.pb.go file of file's Go package,
 // in the output directory of file's generated files. The file holds the
 // static code, which declares package-level names, such as the Config, ID,
-// and Node aliases. Its content depends only on the Go package name and the
-// tool versions, so every protoc run that generates Gorums code for the
-// package writes the same file. It returns an error if protoc-gen-go writes a
+// Node, and Correctable aliases. Its content depends only on the Go package
+// name and the tool versions, so every protoc run that generates Gorums code
+// for the package writes the same file. It returns an error if protoc-gen-go writes a
 // file with the same path for a proto file of the package, such as
 // gorums.proto in the same directory.
 func generatePackageFile(gen *protogen.Plugin, pkg *goPackage, file *protogen.File) error {
