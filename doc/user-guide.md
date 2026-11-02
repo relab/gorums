@@ -1522,7 +1522,8 @@ defer closeFn()
 ### WithPeerChange
 
 `WithPeerChange` registers a `func(gorums.Config)` callback.
-The callback is called after every change to the known-peer configuration — that is, each time a pre-configured peer connects or disconnects.
+The callback is called after every change to the connected-peer configuration, that is, each time a peer from `WithPeers` connects or disconnects.
+It never runs without `WithPeers`.
 
 **Signature:**
 
@@ -1530,16 +1531,16 @@ The callback is called after every change to the known-peer configuration — th
 gorums.WithPeerChange(func(cfg gorums.Config) { ... })
 ```
 
-**When it runs:** after every change to the known-peer configuration.
-For peer connect/disconnect events, the callback runs inside the server's internal configuration lock, immediately after the configuration slice has been replaced.
-The callback also fires during `NewServer` construction with the initial configuration, which contains only the self-node when no peers have connected yet.
+**When it runs:** after every change to the connected-peer configuration.
+For a peer connect or disconnect, the callback runs while the server holds the lock that guards its peer and client views, immediately after the configuration has been replaced.
+The callback also runs once during `NewServer`, with a configuration that contains only the self-node.
 
-**What is available:** a configuration of connected known peers, sorted by node ID.
+**What is available:** a configuration of the connected peers, sorted by node ID.
 The self-node (this server's own ID) is always included regardless of connectivity.
 
 **Safe side effects:** signaling a channel, writing to an atomic, or copying the slice.
-For connect/disconnect-triggered callbacks, the callback is invoked while holding the internal lock, so it must **not** call `srv.ConnectedPeers()` or any other method that acquires the same lock.
-Do not perform blocking or long-running work inside the callback, including during the initial construction-time call.
+For a peer connect or disconnect, the callback holds that lock, so it must **not** call `ConnectedPeers`, `ConnectedClients`, `WaitForPeers`, `WaitForClients`, `WaitForAll`, or any other blocking method.
+Do not perform blocking or long-running work inside the callback, also not during the call from `NewServer`.
 
 #### Example: Reacting to Peer Membership Changes
 
@@ -2875,9 +2876,12 @@ The per-node send queue defaults to 4096 entries.
 Passing zero as the send-size argument of `WithBufferSizes` or `WithDialBufferSizes` selects that default.
 Two-way requests fail fast with an unavailable error when a real buffered queue is full.
 One-way client calls (`Unicast`, `Multicast`) wait for space instead, since backpressure on the caller is what paces them.
-A reply sent from a receive or dispatch loop, whether a back-channel reply from a client or a server's reply to an inbound request, never waits either, so the connection keeps reading further messages.
+A reply to a node that this side can also send requests to never waits either, so the connection keeps reading further messages.
+This covers a server's reply to a peer from `WithPeers` or to a client in `ConnectedClients`, and a client's back-channel reply to a server.
 A reply that does not fit the queue is dropped, and the remote caller waits until its context ends.
 `Node.DroppedReplies` counts these drops for a given node, so a deployment can monitor for sustained backpressure.
+A server's reply to any other client waits for space in the queue.
+The server sends no requests to such a client, so the waiting reply cannot block the client's receiving.
 Sweeps from 64 to 4096 entries showed no throughput difference, so the default rests on failure behavior: it keeps a peer that stops draining for a while from making two-way requests fail, at a cost of about 256 KiB per channel.
 Choose an explicit positive capacity when a smaller backlog is required.
 
