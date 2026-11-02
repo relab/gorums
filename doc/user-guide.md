@@ -791,17 +791,26 @@ So read the replies of a streaming call soon after `Async`, or use `Correctable`
 
 | Method            | Description                | Returns           |
 | ----------------- | -------------------------- | ----------------- |
-| `.Correctable(n)` | Progressive updates from n | `*Correctable[T]` |
+| `.Correctable(n)` | Progressive updates until n successful responses | `*Correctable[T]` |
 
 ```go
-corr := client.ReadCorrectable(ctx, ReadRequest_builder{Key: "x"}.Build()).Correctable(2)  // Initial threshold
+corr := client.ReadCorrectable(ctx, ReadRequest_builder{Key: "x"}.Build()).Correctable(3)
+<-corr.Watch(1) // Wait for the first response
 reply, level, err := corr.Get()
-<-corr.Watch(3)  // Wait for higher level
+<-corr.Done() // Wait until the call completes
 reply, level, err = corr.Get()
 ```
 
+The level is the number of successful responses so far.
+A node of a streaming call can send several responses, and each one counts.
+The call completes when the level reaches `n`.
+If the responses end before that, for example because the context ends, the call completes with an error that matches `gorums.ErrIncomplete`.
+
+`Get` does not wait: it returns the latest response, the current level, and the error.
+Before the first response, the level is `gorums.LevelNotSet`.
 `Watch(level)` closes when the call reaches that level or completes, including when it completes with an error.
 If the call has already completed, `Watch` returns a closed channel.
+`Done` closes when the call completes.
 
 `Correctable(n)` panics if `n` is not positive.
 It panics before it sends any request.
@@ -1665,10 +1674,10 @@ func handleQuorumCall(client StorageClient, req *ReadRequest) {
       }
     }
 
-    // Check for context errors
-    if errors.Is(err, context.DeadlineExceeded) {
+    // Check the context to find out if the call timed out or was canceled
+    if errors.Is(ctx.Err(), context.DeadlineExceeded) {
       log.Println("Quorum call timed out")
-    } else if errors.Is(err, context.Canceled) {
+    } else if errors.Is(ctx.Err(), context.Canceled) {
       log.Println("Quorum call was canceled")
     }
     return
@@ -1678,6 +1687,11 @@ func handleQuorumCall(client StorageClient, req *ReadRequest) {
   log.Printf("Read successful: %v", reply)
 }
 ```
+
+When the context ends before the threshold is met, the call fails with a `QuorumCallError` whose cause is `gorums.ErrIncomplete`.
+The call stops collecting replies at once, so the error does not hold an error for each node that did not reply in time.
+Thus, `errors.Is(err, context.DeadlineExceeded)` is usually false after a timeout.
+Check `ctx.Err()` instead, as the example does.
 
 ### Checking for Specific Error Types
 
@@ -1689,9 +1703,14 @@ if errors.Is(err, gorums.ErrIncomplete) {
   // Handle incomplete quorum
 }
 
-// Check if any node returned a specific gRPC error
-if errors.Is(err, status.Error(codes.Unavailable, "")) {
-  // Handle unavailable nodes
+// Check if any node returned a specific gRPC status code
+var qcErr gorums.QuorumCallError
+if errors.As(err, &qcErr) {
+  for _, nodeErr := range qcErr.Unwrap() {
+    if status.Code(nodeErr) == codes.Unavailable {
+      // Handle an unavailable node
+    }
+  }
 }
 
 // Extract custom error types from node failures
@@ -1701,16 +1720,21 @@ if errors.As(err, &customErr) {
 }
 ```
 
+Do not match a status code with `errors.Is(err, status.Error(codes.Unavailable, ""))`.
+A gRPC status error matches another status error only if the code, the message, and the details are all equal.
+Use `status.Code` on each node error instead.
+`errors.Is` works for the Gorums sentinel errors, such as `gorums.ErrSendQueueFull`, also inside a `QuorumCallError`.
+
 ## Handling Failed Nodes in Configurations
 
 When a quorum call fails, you can create a new configuration that excludes the failed nodes.
-The `WithoutErrors` method allows you to filter nodes based on the errors they returned:
+The `WithoutErrors` method allows you to filter nodes based on the errors they returned.
+It excludes only nodes that have an error in the `QuorumCallError`.
+A node that had not replied when the call ended has no error there, so `WithoutErrors` keeps it.
 
 ```go
 import (
-  "context"
   "errors"
-  "io"
 
   "github.com/relab/gorums"
 )
@@ -1725,14 +1749,14 @@ if err != nil {
     newConfig := config.WithoutErrors(qcErr)
 
     // Option 2: Exclude only nodes with specific error types
-    // For example, exclude only nodes that timed out
-    newConfig = config.WithoutErrors(qcErr, context.DeadlineExceeded)
+    // For example, exclude only nodes whose send queue was full
+    newConfig = config.WithoutErrors(qcErr, gorums.ErrSendQueueFull)
 
     // Option 3: Exclude nodes with multiple specific error types
     newConfig = config.WithoutErrors(qcErr,
-      context.DeadlineExceeded,
-      context.Canceled,
-      io.EOF,
+      gorums.ErrSendQueueFull,
+      gorums.ErrStreamDown,
+      gorums.ErrNodeClosed,
     )
 
     // Retry the operation with the new configuration
@@ -1781,7 +1805,8 @@ sequenceDiagram
     end
 ```
 
-So a refused peer's `ConnectedPeers` view never includes the refusing server, `WithPeerChange` reports no up/down pair for it, and `WaitForAll` waits until the server accepts.
+So a refused peer's `ConnectedPeers` view never includes the refusing server, and `WithPeerChange` reports no up/down pair for it.
+With `WithStreamDedup`, `WaitForAll` waits until the server accepts; without it, `WaitForAll` does not wait.
 
 A stream that ends with any other status (except `codes.ResourceExhausted`; see [Oversized Requests](#oversized-requests)), or that ends after the server accepted it, is lost, not refused: the node resends its two-way calls on a new stream.
 
@@ -1855,8 +1880,8 @@ func ExampleConfigClient() {
       // Create a new configuration excluding all nodes that failed.
       c7 := c1.WithoutErrors(qcErr)
 
-      // Or exclude only nodes with specific error types (e.g., timeout errors).
-      c8 := c1.WithoutErrors(qcErr, context.DeadlineExceeded)
+      // Or exclude only nodes with specific error types (e.g., a full send queue).
+      c8 := c1.WithoutErrors(qcErr, gorums.ErrSendQueueFull)
     }
   }
 }
