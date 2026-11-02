@@ -166,7 +166,7 @@ message ReadRequest {
 
 // ReadResponse is the response message for Read RPCs and Read quorum calls.
 message ReadResponse {
-  bool                      OK    = 1;
+  bool                      found = 1;
   string                    value = 2;
   google.protobuf.Timestamp time  = 3;
 }
@@ -210,6 +210,8 @@ protoc -I="$(go list -m -f {{.Dir}} github.com/relab/gorums):." \
 
 The above step should produce three files named `storage.pb.go`, `storage_gorums.pb.go`, and `gorums.pb.go` in your package directory.
 The first contains the Protobuf definitions of our messages.
+The messages use the Opaque API, which is the default for edition 2024, so their fields are not exported.
+Build a message with its builder type, for example `ReadRequest_builder{Key: "x"}.Build()`, and access its fields with getters and setters, such as `GetKey` and `SetKey`.
 The second contains the Gorums generated client and server interfaces.
 The third declares the `Config`, `ID`, `Node`, and `Correctable` type aliases of the Go package.
 
@@ -354,7 +356,7 @@ func (srv *storageSrv) WriteUnicast(_ gorums.ServerContext, req *WriteRequest) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   if req.GetTime().AsTime().After(srv.state.GetTime().AsTime()) {
-    srv.state = &ReadResponse{OK: true, Value: req.GetValue(), Time: req.GetTime()}
+    srv.state = ReadResponse_builder{Found: true, Value: req.GetValue(), Time: req.GetTime()}.Build()
   }
 }
 
@@ -362,7 +364,7 @@ func (srv *storageSrv) WriteMulticast(_ gorums.ServerContext, req *WriteRequest)
   srv.mut.Lock()
   defer srv.mut.Unlock()
   if req.GetTime().AsTime().After(srv.state.GetTime().AsTime()) {
-    srv.state = &ReadResponse{OK: true, Value: req.GetValue(), Time: req.GetTime()}
+    srv.state = ReadResponse_builder{Found: true, Value: req.GetValue(), Time: req.GetTime()}.Build()
   }
 }
 
@@ -533,11 +535,11 @@ A unicast call executes on the node of a `StorageNodeClient`.
 We can now invoke the WriteUnicast RPC on each node in the configuration:
 
 ```go
-  req := &WriteRequest{
+  req := WriteRequest_builder{
     Key:   "mykey",
     Value: "42",
     Time:  timestamppb.Now(),
-  }
+  }.Build()
 
   // Invoke WriteUnicast RPC on all nodes in config
   ctx := context.Background()
@@ -601,19 +603,20 @@ For a read that must return the newest value, use `Aggregate` or `Reduce`.
 func ExampleTerminalMethods(config gorums.Config) {
   ctx := context.Background()
   client := NewStorageClient(config)
+  req := ReadRequest_builder{Key: "x"}.Build()
 
   // Fast reads: return first successful response
-  reply, err := client.ReadQC(ctx, &ReadRequest{Key: "x"}).First()
+  reply, err := client.ReadQC(ctx, req).First()
 
   // Crash fault tolerance: require simple majority
-  reply, err = client.ReadQC(ctx, &ReadRequest{Key: "x"}).Majority()
+  reply, err = client.ReadQC(ctx, req).Majority()
 
   // Wait for all nodes (useful for debugging)
-  reply, err = client.ReadQC(ctx, &ReadRequest{Key: "x"}).All()
+  reply, err = client.ReadQC(ctx, req).All()
 
   // Custom threshold (e.g., f+1 for crash tolerance)
   f := 1
-  reply, err = client.ReadQC(ctx, &ReadRequest{Key: "x"}).Threshold(f + 1)
+  reply, err = client.ReadQC(ctx, req).Threshold(f + 1)
 }
 ```
 
@@ -631,7 +634,7 @@ The result type does not have to be the response type.
 This lets you write the call from left to right, with the aggregation function last:
 
 ```go
-resp, err := client.ReadQC(ctx, &ReadRequest{Key: "x"}).Aggregate(newestReply)
+resp, err := client.ReadQC(ctx, ReadRequest_builder{Key: "x"}.Build()).Aggregate(newestReply)
 
 func newestReply(
   seq gorums.ResponseSeq[*ReadResponse],
@@ -702,7 +705,7 @@ func addPromise(
 }
 
 quorum := config.Size()/2 + 1
-acc, err := client.PromiseQC(ctx, &PromiseRequest{Round: round}).
+acc, err := client.PromiseQC(ctx, PromiseRequest_builder{Round: round}.Build()).
   Reduce(quorum, promises{}, addPromise)
 ```
 
@@ -747,7 +750,7 @@ func digestKey(resp *PrepareResponse) string {
 }
 
 quorum := 2*f + 1
-agreement, err := client.PrepareQC(ctx, &PrepareRequest{View: view, Sequence: seq, Digest: digest}).
+agreement, err := client.PrepareQC(ctx, PrepareRequest_builder{View: view, Sequence: seq, Digest: digest}.Build()).
   Matching(quorum, digestKey)
 if err != nil {
   return err
@@ -769,7 +772,7 @@ This error also holds the node errors, but not the nodes that a request transfor
 Any terminal method then collects the replies later:
 
 ```go
-responses := client.ReadQC(ctx, &ReadRequest{Key: "x"}).Async()
+responses := client.ReadQC(ctx, ReadRequest_builder{Key: "x"}.Build()).Async()
 // Do other work...
 reply, err := responses.Majority()
 ```
@@ -791,7 +794,7 @@ So read the replies of a streaming call soon after `Async`, or use `Correctable`
 | `.Correctable(n)` | Progressive updates from n | `*Correctable[T]` |
 
 ```go
-corr := client.ReadCorrectable(ctx, &ReadRequest{Key: "x"}).Correctable(2)  // Initial threshold
+corr := client.ReadCorrectable(ctx, ReadRequest_builder{Key: "x"}.Build()).Correctable(2)  // Initial threshold
 reply, level, err := corr.Get()
 <-corr.Watch(3)  // Wait for higher level
 reply, level, err = corr.Get()
@@ -908,10 +911,10 @@ func newestValue(seq gorums.ResponseSeq[*ReadResponse]) (*ReadResponse, error) {
   return newest, nil
 }
 
-reply, err := client.ReadQC(ctx, &ReadRequest{Key: "x"}).Aggregate(newestValue)
+reply, err := client.ReadQC(ctx, ReadRequest_builder{Key: "x"}.Build()).Aggregate(newestValue)
 
 // The same function works after Async.
-reply, err = client.ReadQC(ctx, &ReadRequest{Key: "x"}).Async().Aggregate(newestValue)
+reply, err = client.ReadQC(ctx, ReadRequest_builder{Key: "x"}.Build()).Async().Aggregate(newestValue)
 ```
 
 `Aggregate` comes after `Intercept` in the chain, so the function sees the responses that the interceptors produce.
@@ -1118,7 +1121,7 @@ Bind a client of each service to the same configuration:
 ```go
 storageClient := pb.NewStorageClient(cfg)
 adminClient := pb.NewAdminClient(cfg)
-reply, err := storageClient.ReadQC(ctx, &pb.ReadRequest{Key: "x"}).Majority()
+reply, err := storageClient.ReadQC(ctx, pb.ReadRequest_builder{Key: "x"}.Build()).Majority()
 status, err := adminClient.StatusQC(ctx, &pb.StatusRequest{}).Majority()
 ```
 
@@ -1162,7 +1165,11 @@ resp, err := client.WriteQC(ctx, req).
     Intercept(
         gorums.MapRequest[*WriteRequest, *WriteResponse](func(req *WriteRequest, node *gorums.Node) *WriteRequest {
             // Customize request for each node
-            return &WriteRequest{Value: fmt.Sprintf("%s-node-%d", req.Value, node.ID())}
+            return WriteRequest_builder{
+                Key:   req.GetKey(),
+                Value: fmt.Sprintf("%s-node-%d", req.GetValue(), node.ID()),
+                Time:  req.GetTime(),
+            }.Build()
         }),
     ).
     Majority()
@@ -1179,9 +1186,12 @@ Transform responses received from each node:
 resp, err := client.ReadQC(ctx, req).
     Intercept(
         gorums.MapResponse[*ReadRequest](func(resp *ReadResponse, node *gorums.Node) *ReadResponse {
-            // Transform response, e.g., add node ID
-            resp.NodeID = node.ID()
-            return resp
+            // Transform response, e.g., tag the value with the node ID
+            return ReadResponse_builder{
+                Found: resp.GetFound(),
+                Value: fmt.Sprintf("%s@node-%d", resp.GetValue(), node.ID()),
+                Time:  resp.GetTime(),
+            }.Build()
         }),
     ).
     Majority()
@@ -1195,7 +1205,7 @@ client := NewStorageClient(config)
 client.WriteMulticast(ctx, &WriteRequest{}).
     Intercept(
         gorums.MapRequest[*WriteRequest, *emptypb.Empty](func(msg *WriteRequest, node *gorums.Node) *WriteRequest {
-            return &WriteRequest{Value: fmt.Sprintf("node-%d", node.ID())}
+            return WriteRequest_builder{Value: fmt.Sprintf("node-%d", node.ID())}.Build()
         }),
     ).
     Send()
@@ -2028,7 +2038,7 @@ quorumSize := n/2 + 1  // simple majority for crash-fault tolerance = 3
 fastCfg := allNodesCfg.Sort(gorums.ByLatency)[:quorumSize]
 fastClient := NewStorageClient(fastCfg)
 
-reply, err := fastClient.ReadQC(ctx, &ReadRequest{Key: "x"}).Majority()
+reply, err := fastClient.ReadQC(ctx, ReadRequest_builder{Key: "x"}.Build()).Majority()
 ```
 
 Combining with error-based filtering is straightforward: drop failed nodes
