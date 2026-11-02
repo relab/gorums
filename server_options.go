@@ -37,10 +37,12 @@ type ServerOption func(*serverOptions)
 // The sendSize controls the capacity of the server's per-node send queue for
 // outgoing peer messages, with the same full-queue semantics as
 // [WithDialBufferSizes]. Two-way requests fail fast when the queue is full.
-// One-way requests wait for space. A reply never waits: it fails fast, or is
-// dropped when it has no channel to report the error on. A sendSize of 0
-// selects [DefaultSendBufferSize]. Larger values may increase throughput at
-// the cost of higher latency.
+// One-way requests wait for space. A reply to a peer from [WithPeers], or to
+// a client in [Server.ConnectedClients], never waits: if the queue is full,
+// the reply is dropped and counted by [Node.DroppedReplies]. A reply to any
+// other client waits for space. A sendSize of 0 selects
+// [DefaultSendBufferSize]. Larger values may increase throughput at the cost
+// of higher latency.
 func WithBufferSizes(receiveSize, sendSize uint) ServerOption {
 	return func(o *serverOptions) {
 		o.recvBufferSize = receiveSize
@@ -118,10 +120,17 @@ func WithPeers(myID ID, nodes NodeSource, opts ...DialOption) ServerOption {
 	}
 }
 
-// WithPeerChange registers a callback invoked after each change to the
-// connected-peer [Config] (peer connect or disconnect). The callback runs
-// while internal locks are held, so it must not call [Server.ConnectedPeers]
-// or other blocking methods; use it only to signal or copy, not for long work.
+// WithPeerChange registers a callback that runs after each change to the
+// connected-peer [Config], that is, when a peer connects or disconnects. The
+// [Config] is sorted by node ID and always holds this server's own node. The
+// callback also runs once during [NewServer], with a [Config] that holds only
+// this server's own node. It never runs without [WithPeers].
+//
+// For a peer connect or disconnect, the callback runs while the server holds
+// the lock that guards its peer and client views. So it must not call
+// [Server.ConnectedPeers], [Server.ConnectedClients], [Server.WaitForPeers],
+// [Server.WaitForClients], [Server.WaitForAll], or other blocking methods.
+// Use it only to signal or copy, not for long work.
 func WithPeerChange(callback func(Config)) ServerOption {
 	return func(o *serverOptions) {
 		o.onConfigChange = callback
