@@ -219,25 +219,24 @@ func (s *Server) HandleRequest(ctx context.Context, senderID ID, reqMsg *stream.
 		Context:  ctx,
 		senderID: senderID,
 		release:  release,
-		send:     send,
 		srv:      s,
 	}
 
 	handler, ok := s.handlers[reqMsg.GetMethod()]
 	if !ok {
-		srvCtx.reply(reqMsg, nil, status.Errorf(codes.Unimplemented, "no handler registered for method %s", reqMsg.GetMethod()))
+		send(newResponse(reqMsg, nil, status.Errorf(codes.Unimplemented, "no handler registered for method %s", reqMsg.GetMethod())))
 		return
 	}
 
 	msg, err := impl.UnmarshalRequest(reqMsg)
 	if err != nil {
-		srvCtx.reply(reqMsg, nil, err)
+		send(newResponse(reqMsg, nil, err))
 		return
 	}
 
 	in := &Message{Proto: msg, Message: reqMsg}
 	out, err := handler(srvCtx, in, func(resp proto.Message) {
-		srvCtx.reply(reqMsg, resp, nil)
+		send(newResponse(reqMsg, resp, nil))
 	})
 	// If there is no response and no error, we do not send anything back to the client.
 	// This corresponds to a unidirectional message from client to server, where clients
@@ -245,7 +244,7 @@ func (s *Server) HandleRequest(ctx context.Context, senderID ID, reqMsg *stream.
 	if out == nil && err == nil {
 		return
 	}
-	srvCtx.reply(reqMsg, out, err)
+	send(newResponse(reqMsg, out, err))
 }
 
 // Serve serves on the externally supplied listener and records it so that
@@ -381,7 +380,6 @@ type ServerContext struct {
 	context.Context
 	senderID ID
 	release  func()
-	send     func(*stream.Message)
 	srv      *Server
 }
 
@@ -429,15 +427,6 @@ func (ctx *ServerContext) SenderID() ID {
 func (ctx *ServerContext) Release() {
 	if ctx.release != nil {
 		ctx.release()
-	}
-}
-
-// reply sends resp, or the status of err, to the client as the response to
-// the request in. A marshal failure is sent as the response status; the
-// stream is not closed.
-func (ctx *ServerContext) reply(in *stream.Message, resp proto.Message, err error) {
-	if ctx.send != nil {
-		ctx.send(newResponse(in, resp, err))
 	}
 }
 

@@ -47,12 +47,12 @@ type Channel interface {
 // the stream start before HandleRequest returns; otherwise the next request
 // starts when HandleRequest returns.
 //
-// The send function delivers a response message to the peer. On a stream, it
-// does not wait for send queue space, except on an [InboundChannel] created
-// with [InboundOptions.WaitingReplies]. For two-way call types, send may be
-// called zero or more times (e.g., for streaming correctable calls). For
-// one-way call types, the peer has no pending call to receive a response, so
-// it is dropped.
+// The send function must be non-nil and delivers a response message to the
+// peer. On a stream, the send function does not wait for queue space, except
+// on an [InboundChannel] created with [InboundOptions.WaitingReplies].
+// For two-way call types, send may be called zero or more times (e.g., for
+// streaming correctable calls). For one-way call types, the peer has no
+// pending call to receive a response, so it is dropped.
 type RequestHandler interface {
 	HandleRequest(ctx context.Context, senderID ID, msg *Message, release func(), send func(*Message))
 }
