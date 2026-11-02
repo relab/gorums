@@ -63,7 +63,7 @@ func staticBundle() ([]byte, error) {
 
 	package gengorums
 
-	// pkgIdentMap maps from package name to one of the package's identifiers.
+	// pkgIdentMap maps the import path of each package to one of its identifiers.
 	// These identifiers are used by the Gorums protoc plugin to generate import statements.
 	var pkgIdentMap = %#v
 
@@ -152,7 +152,7 @@ func formatLoadErrors(dir string, errs []packages.Error) error {
 	return errors.New(b.String())
 }
 
-// findIdentifiers returns the imported packages as a map from package name to one of its identifiers,
+// findIdentifiers returns the imported packages as a map from import path to one of its identifiers,
 // and a slice of Gorums reserved identifiers that cannot be used in proto files.
 // The returned map is used by the Gorums protoc plugin to generate import statements.
 func findIdentifiers(pkgInfo *packages.Package) (map[string]string, []string) {
