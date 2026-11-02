@@ -18,6 +18,7 @@ var importMap = map[string]protogen.GoImportPath{
 	"context":    protogen.GoImportPath("context"),
 	"gorums":     protogen.GoImportPath("github.com/relab/gorums"),
 	"gorumsimpl": protogen.GoImportPath("github.com/relab/gorums/runtime/gorumsimpl"),
+	"proto":      protogen.GoImportPath("google.golang.org/protobuf/proto"),
 }
 
 func addImport(path, ident string, g *protogen.GeneratedFile) string {

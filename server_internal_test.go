@@ -257,10 +257,10 @@ func TestSelfNodeIDStreamRejectedEndToEnd(t *testing.T) {
 	var srv *Server
 	addrs := testStartServers(t, 1, func(_ int) servers.ServerIface {
 		srv = NewServer(WithPeers(1, peerNodes(), insecureDialOpts))
-		srv.RegisterHandler(mock.TestMethod, func(_ ServerContext, in *Message) (*Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(_ ServerContext, in *Message, _ func(proto.Message)) (*Message, error) {
 			handlerCalls.Add(1)
 			req := AsProto[*pb.StringValue](in)
-			return NewResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
+			return newResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
 		})
 		return srv
 	})
@@ -372,9 +372,9 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 
 	// Client connects as peer 2 with handlers registered on a server via withServer.
 	clientSrv := NewServer()
-	clientSrv.RegisterHandler(mock.TestMethod, func(_ ServerContext, in *Message) (*Message, error) {
+	clientSrv.RegisterHandler(mock.TestMethod, func(_ ServerContext, in *Message, _ func(proto.Message)) (*Message, error) {
 		req := AsProto[*pb.StringValue](in)
-		return NewResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
+		return newResponseMessage(in, pb.String("echo: "+req.GetValue())), nil
 	})
 	peerMD := conn.MetadataWithNodeID(2)
 	_, closeFn, err := NewConfig(WithNodeList(addrs), testDialOptions(t), WithMetadata(peerMD), withServer(clientSrv))
@@ -537,7 +537,7 @@ func TestConnectedClientsMixedMode(t *testing.T) {
 func TestConnectedClientsServerCallsClient(t *testing.T) {
 	// Register the server handler before starting so it is present before clients arrive.
 	srv := NewServer()
-	srv.RegisterHandler(mock.TestMethod, func(ctx ServerContext, _ *Message) (*Message, error) {
+	srv.RegisterHandler(mock.TestMethod, func(ctx ServerContext, _ *Message, _ func(proto.Message)) (*Message, error) {
 		if cfg := ctx.ConnectedClients(); len(cfg) > 0 {
 			// Release before the back-channel send: Wait blocks until every
 			// client's send completes, and holding the dispatch lock across
@@ -557,7 +557,7 @@ func TestConnectedClientsServerCallsClient(t *testing.T) {
 
 	// Client: a Server whose back-channel mock.StreamMethod handler is wired in via withServer.
 	clientSrv := NewServer()
-	clientSrv.RegisterHandler(mock.StreamMethod, func(_ ServerContext, _ *Message) (*Message, error) {
+	clientSrv.RegisterHandler(mock.StreamMethod, func(_ ServerContext, _ *Message, _ func(proto.Message)) (*Message, error) {
 		wg.Done()
 		return nil, nil
 	})

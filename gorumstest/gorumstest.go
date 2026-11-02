@@ -19,6 +19,7 @@ import (
 	"go.uber.org/goleak"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 )
 
 // Context creates a context with timeout for testing.
@@ -42,7 +43,7 @@ func ServerContext(t testing.TB, senderID gorums.ID) gorums.ServerContext {
 		ran    bool
 	)
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
 		srvCtx, ran = ctx, true
 		return nil, nil
 	})
