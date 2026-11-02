@@ -14,8 +14,8 @@ var unicastComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-// {{$method}} returns a one-way call handle for the client's node; no reply is
-// returned.
+// {{$method}} returns a one-way call handle for the client's node.
+// No reply is returned.
 //
 // Send blocks until the send completes and returns any send error.
 // Async returns a handle at once; Wait on the handle returns the send error.

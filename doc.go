@@ -18,12 +18,20 @@
 //   - multicast: a one-way call to every node in a configuration.
 //   - unicast: a one-way call to a single node.
 //
-// Quorum calls and one-way calls return handles that dispatch when consumed.
-// Remote calls execute immediately.
+// A quorum call or one-way call returns a handle and sends nothing until
+// the caller invokes a terminal method, [Call.Async], [Responses.Correctable],
+// [OnewayCall.Send], or [OnewayCall.Async], or ranges over
+// [Responses.Results]. A remote call sends at once.
 // Lazy dispatch is what lets a call site attach client interceptors before the
 // request is sent. [Call.Async] sends the request at once and leaves the
 // replies to a later terminal method, and [Responses.Correctable] reports
 // progressively better results.
+//
+// A call that fails with an error returns it from the method that collects
+// its result: a terminal method of a quorum call, or [OnewayCall.Send] of a
+// one-way call. Async returns a handle that collects the result later:
+// [Call.Async] returns [Responses], whose terminal methods return the error,
+// and [OnewayCall.Async] returns [OnewayAsync], whose Wait returns it.
 //
 // # Service clients
 //
@@ -41,10 +49,11 @@
 //	leader := pb.NewStorageNodeClient(cfg.Node(leaderID))
 //	reply, err = leader.ReadRPC(ctx, req)
 //
-// A node client holds only its node, which may be outside cfg.
-// If the node is nil, remote calls return [ErrNoNode] and unicast handles
-// report it when consumed. A quorum call or multicast on an empty
-// configuration sends nothing and reports [ErrEmptyConfig] when consumed.
+// A node client holds only its node, so building one allocates nothing.
+// Build a node client where you need it, and do not keep it. The node may be
+// outside cfg. If the node is nil, a remote call or unicast fails with
+// [ErrNoNode]. On an empty configuration, a quorum call or multicast sends
+// nothing and fails with [ErrEmptyConfig].
 // To call another configuration, build a new SClient from it.
 // A client does not own its configuration or node; the close function returned
 // by [NewConfig] closes the connections.

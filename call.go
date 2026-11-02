@@ -20,7 +20,7 @@ type Call[Req, Resp proto.Message] = impl.Call[Req, Resp]
 type OnewayCall[Req proto.Message] = impl.OnewayCall[Req]
 
 // OnewayAsync is the send-completion handle of a one-way call dispatched with
-// [OnewayCall.Async]; [OnewayAsync.Wait] reports the send error.
+// [OnewayCall.Async]; [OnewayAsync.Wait] returns the send error.
 type OnewayAsync = impl.OnewayAsync
 
 // CallContext provides an interceptor with the context and state of a call.
