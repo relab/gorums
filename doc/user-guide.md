@@ -2074,12 +2074,16 @@ reply, err := fastClient.ReadQC(ctx, ReadRequest_builder{Key: "x"}.Build()).Majo
 ```
 
 Combining with error-based filtering is straightforward: drop failed nodes
-first, then pick the fastest of those that remain:
+first, then pick the fastest of those that remain.
+`WithoutErrors` can leave fewer than `quorumSize` nodes, so check the length before you slice:
 
 ```go
 var qcErr gorums.QuorumCallError
 if errors.As(err, &qcErr) {
-    fastCfg = cfg.WithoutErrors(qcErr).Sort(gorums.ByLatency)[:quorumSize]
+    healthy := cfg.WithoutErrors(qcErr).Sort(gorums.ByLatency)
+    if len(healthy) >= quorumSize {
+        fastCfg = healthy[:quorumSize]
+    }
 }
 ```
 
@@ -2146,7 +2150,8 @@ updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Config) gorums.Co
     mu.Lock()
     qcErr := lastQCErr
     mu.Unlock()
-    return c.WithoutErrors(qcErr).Sort(gorums.ByLatency)[:quorumSize]
+    healthy := c.WithoutErrors(qcErr).Sort(gorums.ByLatency)
+    return healthy[:min(quorumSize, len(healthy))]
 })
 ```
 
@@ -2488,10 +2493,11 @@ A client must announce `NodeID=0` in its connection metadata to be assigned a dy
 Clients behind a firewall typically have no pre-configured node ID, so they connect as anonymous clients.
 `WithBackChannel` requires a handler-only server, which has node ID 0, so the client sends `NodeID=0` automatically.
 The server assigns it a dynamic ID and includes it in `ConnectedClients()`.
-The client can then call `Register` (a unicast) to signal that it is ready to receive calls:
+The client can then signal that it is ready to receive calls.
+The `Storage` service has no such method, so this example assumes a `Registry` service with a `Register` unicast:
 
 ```go
-err = pb.NewStorageNodeClient(serverNode).Register(ctx, &pb.RegisterRequest{}).Send()
+err = pb.NewRegistryNodeClient(serverNode).Register(ctx, &pb.RegisterRequest{}).Send()
 ```
 
 A server configured with `WithPeers` announces its static node ID instead, and servers with a matching node list put it in their `ConnectedPeers()`, not `ConnectedClients()`.
