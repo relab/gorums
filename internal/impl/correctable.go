@@ -7,8 +7,7 @@ import (
 	"github.com/relab/gorums/internal/conn"
 )
 
-// LevelNotSet is the zero value level used to indicate that no level
-// (and thereby no reply) has been set for a correctable quorum call.
+// LevelNotSet is exported and documented as gorums.LevelNotSet.
 const LevelNotSet = -1
 
 type watcher struct {
@@ -16,7 +15,7 @@ type watcher struct {
 	ch    chan struct{}
 }
 
-// Correctable represents the progressive result of a correctable quorum call.
+// Correctable is exported and documented as gorums.Correctable.
 type Correctable[Resp any] struct {
 	mu       sync.Mutex
 	reply    Resp

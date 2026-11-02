@@ -7,9 +7,7 @@ import (
 	"slices"
 )
 
-// NodeSource identifies the set of nodes to build a [Config] from. Create one
-// with [WithNodes] or [WithNodeList]; the interface is sealed so it can only
-// be implemented within this package.
+// NodeSource is exported and documented as gorums.NodeSource.
 type NodeSource interface {
 	newConfig(nodeRegistry) (Config, error)
 	// nodeMap returns the captured, explicitly numbered node records, or nil
@@ -26,21 +24,17 @@ type nodeRegistry interface {
 	newNode(id ID, addr string, verify PeerVerifier) (*Node, error)
 }
 
-// NodeAddress must be implemented by types that can be used as node addresses.
+// NodeAddress is exported and documented as gorums.NodeAddress.
 type NodeAddress interface {
 	Addr() string
 }
 
-// TLSIdentity supplies the expected URI SAN or DNS SAN of a peer's verified
-// TLS certificate. A node source captures it alongside the node's address.
+// TLSIdentity is exported and documented as gorums.TLSIdentity.
 type TLSIdentity interface {
 	TLSIdentity() string
 }
 
-// WithNodes returns a NodeSource containing the provided mapping from
-// application-specific IDs to types implementing NodeAddress.
-// Node IDs must be greater than 0. It captures each node's address and, when
-// the node implements [TLSIdentity], its expected certificate identity.
+// WithNodes is exported and documented as gorums.WithNodes.
 func WithNodes[T NodeAddress](nodes map[ID]T) NodeSource {
 	nm := make(nodeMap, len(nodes))
 	for _, id := range slices.Sorted(maps.Keys(nodes)) {
@@ -96,10 +90,7 @@ func (nm nodeMap) newConfig(registry nodeRegistry) (Config, error) {
 	return builder.configuration(), nil
 }
 
-// WithNodeList returns a NodeSource for the provided list of node addresses.
-// Unique Node IDs are generated sequentially starting from the maximum existing
-// node ID plus one, or from 1 if no nodes exist, preventing conflicts with
-// existing nodes.
+// WithNodeList is exported and documented as gorums.WithNodeList.
 func WithNodeList(addrsList []string) NodeSource {
 	return nodeList(addrsList)
 }

@@ -47,10 +47,7 @@ func (t *nodeTally) incomplete() error {
 	return conn.NewQuorumCallError(ErrIncomplete, t.errs)
 }
 
-// AggregateFunc aggregates the responses of a quorum call into a result of
-// type Out, which may differ from the response type. It receives the call's
-// single-use response sequence, decides how to handle each node error, and
-// decides when to stop. [Responses.Aggregate] runs an AggregateFunc.
+// AggregateFunc is exported and documented as gorums.AggregateFunc.
 type AggregateFunc[Resp proto.Message, Out any] func(ResponseSeq[Resp]) (Out, error)
 
 // Aggregate applies fn to the single-use response sequence and returns its
@@ -126,8 +123,7 @@ func (r *Responses[Resp]) Reduce[Acc any](
 	return acc, tally.incomplete()
 }
 
-// Agreement contains a representative value and the successful node
-// responses that established it. Responses are retained in arrival order.
+// Agreement is exported and documented as gorums.Agreement.
 type Agreement[Resp proto.Message] struct {
 	Value     Resp
 	Responses []NodeResponse[Resp]

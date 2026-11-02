@@ -8,8 +8,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// RemoteCall executes a remote procedure call on node.
-// It returns [ErrNoNode] if node is nil.
+// RemoteCall is exported and documented as gorumsimpl.RemoteCall.
 func RemoteCall[Req, Resp proto.Message](ctx context.Context, node *Node, req Req, method string) (Resp, error) {
 	if node == nil {
 		var zero Resp

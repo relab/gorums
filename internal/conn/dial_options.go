@@ -11,7 +11,7 @@ import (
 	"github.com/relab/gorums/internal/stream"
 )
 
-// DialOption sets an option on a configuration's [DialOptions].
+// DialOption is exported and documented as gorums.DialOption.
 type DialOption func(*DialOptions)
 
 // DialOptions holds the accumulated dial configuration for a [Config]'s
@@ -45,12 +45,10 @@ func (o *DialOptions) borrowsStream(id ID) bool {
 	return o.StreamDedup && o.InboundManager != nil && id < o.LocalNodeID
 }
 
-// DefaultSendBufferSize is the per-node send queue capacity used when no
-// explicit size is configured. Each node allocates the full capacity up front.
+// DefaultSendBufferSize is exported and documented as gorums.DefaultSendBufferSize.
 const DefaultSendBufferSize = 4096
 
-// DefaultRecvBufferSize is the number of received requests per channel that can
-// wait for the running handler when no explicit size is configured.
+// DefaultRecvBufferSize is exported and documented as gorums.DefaultRecvBufferSize.
 const DefaultRecvBufferSize = 4096
 
 // NewDialOptions returns a DialOptions initialized with default values.

@@ -38,7 +38,7 @@ func mapToCallResponse[Resp proto.Message](channelResp NodeResponse[*stream.Mess
 // Iterator Helpers
 // -------------------------------------------------------------------------
 
-// ResponseSeq yields the responses from a quorum call.
+// ResponseSeq is exported and documented as gorums.ResponseSeq.
 type ResponseSeq[T proto.Message] iter.Seq[NodeResponse[T]]
 
 // IgnoreErrors returns a sequence containing only successful responses.
@@ -58,7 +58,7 @@ func (seq ResponseSeq[Resp]) IgnoreErrors() ResponseSeq[Resp] {
 // Response Methods
 // -------------------------------------------------------------------------
 
-// Responses provides response iteration and aggregation for a quorum call.
+// Responses is exported and documented as gorums.Responses.
 type Responses[Resp proto.Message] struct {
 	seq   ResponseSeq[Resp]
 	size  int
