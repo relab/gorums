@@ -321,7 +321,7 @@ func (n *Node) LastErr() error {
 
 // Latency returns the current round-trip latency estimate for this node,
 // computed as an exponentially weighted moving average with a
-// smoothing factor of 0.2 (roughly a 5-sample window).
+// smoothing factor of 0.2.
 //
 // The returned value has several important limits:
 //   - It returns -1s until the first successful response is received; treat
@@ -329,8 +329,9 @@ func (n *Node) LastErr() error {
 //   - The estimate is only updated when there is active traffic. On an idle
 //     node the value may be arbitrarily stale and will not reflect recent
 //     changes in network conditions.
-//   - A step-change in latency takes several round trips to settle because
-//     each new sample contributes only 20% of the new value.
+//   - Each new sample contributes 20% of the estimate. After a step change
+//     in latency, the estimate reflects about two-thirds of the change after
+//     five round trips, and about 90% after ten.
 //
 // Use the [ByLatency] comparator with [Config.Sort] to order nodes
 // by their current observed latency.
