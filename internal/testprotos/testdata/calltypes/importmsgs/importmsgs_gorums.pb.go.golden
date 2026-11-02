@@ -11,6 +11,7 @@ import (
 	gorums "github.com/relab/gorums"
 	msgs "github.com/relab/gorums/internal/testprotos/msgs"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
+	proto "google.golang.org/protobuf/proto"
 )
 
 const (
@@ -54,12 +55,12 @@ type QuorumCallServer interface {
 }
 
 func RegisterQuorumCallServer(srv *gorums.Server, impl QuorumCallServer) {
-	srv.RegisterHandler("internal.testprotos.calltypes.importmsgs.QuorumCall.QuorumCall", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.importmsgs.QuorumCall.QuorumCall", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
 		req := gorums.AsProto[*msgs.Request](in)
 		resp, err := impl.QuorumCall(ctx, req)
 		if err != nil {
 			return nil, err
 		}
-		return gorums.NewResponseMessage(in, resp), nil
+		return gorumsimpl.NewResponseMessage(in, resp), nil
 	})
 }

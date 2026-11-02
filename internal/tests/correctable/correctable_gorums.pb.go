@@ -10,6 +10,7 @@ import (
 	context "context"
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
+	proto "google.golang.org/protobuf/proto"
 )
 
 const (
@@ -69,19 +70,18 @@ type CorrectableTestServer interface {
 }
 
 func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTestServer) {
-	srv.RegisterHandler("correctable.CorrectableTest.Correctable", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("correctable.CorrectableTest.Correctable", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		resp, err := impl.Correctable(ctx, req)
 		if err != nil {
 			return nil, err
 		}
-		return gorums.NewResponseMessage(in, resp), nil
+		return gorumsimpl.NewResponseMessage(in, resp), nil
 	})
-	srv.RegisterHandler("correctable.CorrectableTest.CorrectableStream", func(ctx gorums.ServerContext, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("correctable.CorrectableTest.CorrectableStream", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.CorrectableStream(ctx, req, func(resp *Response) {
-			out := gorums.NewResponseMessage(in, resp)
-			ctx.SendMessage(out)
+			send(resp)
 		})
 		return nil, nil
 	})
