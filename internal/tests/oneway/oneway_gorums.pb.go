@@ -60,8 +60,8 @@ type onewayTestClient struct {
 // unicasts on the client's node. If the node is nil, no message is sent and the
 // call fails with [gorums.ErrNoNode].
 type OnewayTestNodeClient interface {
-	// Unicast returns a one-way call handle for the client's node; no reply is
-	// returned.
+	// Unicast returns a one-way call handle for the client's node.
+	// No reply is returned.
 	//
 	// Send blocks until the send completes and returns any send error.
 	// Async returns a handle at once; Wait on the handle returns the send error.
