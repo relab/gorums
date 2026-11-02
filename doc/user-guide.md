@@ -1023,27 +1023,33 @@ reply, err := client.ReadQC(ctx, &ReadRequest{}).Aggregate(validatedMajority(con
 ### Custom Return Types
 
 The function may return a type that differs from the response type, such as a summary, a slice, or a number.
+The first two examples use the `Control` service of the `benchkit` module (`github.com/relab/gorums/benchkit`).
+Its `Stop` quorum call returns a `*benchkit.Result` from each node.
 
 ```go
-// collectStats gathers the memory statistics from every node that replies.
-func collectStats(seq gorums.ResponseSeq[*MemoryStat]) (*MemoryStatList, error) {
-  var stats []*MemoryStat
+// collectMemoryStats returns the memory statistics of every node that replies.
+func collectMemoryStats(seq gorums.ResponseSeq[*benchkit.Result]) ([]*benchkit.MemoryStat, error) {
+  var stats []*benchkit.MemoryStat
   for resp := range seq.IgnoreErrors() {
-    stats = append(stats, resp.Value)
+    r := resp.Value
+    stats = append(stats, benchkit.MemoryStat_builder{
+      Allocs: r.GetAllocsPerOp() * r.GetTotalOps(),
+      Memory: r.GetMemPerOp() * r.GetTotalOps(),
+    }.Build())
   }
   if len(stats) == 0 {
     return nil, gorums.ErrIncomplete
   }
-  return &MemoryStatList{MemoryStats: stats}, nil
+  return stats, nil
 }
 
-benchClient := NewBenchmarkClient(config)
-memStats, err := benchClient.StopBenchmark(ctx, &StopRequest{}).Aggregate(collectStats)
+control := benchkit.NewControlClient(config)
+memStats, err := control.Stop(ctx, &benchkit.StopRequest{}).Aggregate(collectMemoryStats)
 ```
 
 ```go
 // meanThroughput returns the mean throughput of the nodes that reply.
-func meanThroughput(seq gorums.ResponseSeq[*Result]) (float64, error) {
+func meanThroughput(seq gorums.ResponseSeq[*benchkit.Result]) (float64, error) {
   var sum float64
   n := 0
   for resp := range seq.IgnoreErrors() {
@@ -1906,7 +1912,7 @@ nodes := map[gorums.ID]replica{
   3: {addr: "10.0.0.3:9000"},
 }
 srv := gorums.NewServer(
-  gorums.WithPeers(myID, gorums.WithNodes(nodes), dialOpts),
+  gorums.WithPeers(myID, gorums.WithNodes(nodes), dialOpts...),
 )
 ```
 
@@ -1934,7 +1940,7 @@ for _, m := range members {
   byID[m.ID] = m
   idOf[m.Name] = m.ID
 }
-cfg, closeFn, err := gorums.NewConfig(gorums.WithNodes(byID), dialOpts)
+cfg, closeFn, err := gorums.NewConfig(gorums.WithNodes(byID), dialOpts...)
 ```
 
 `cfg.Node(idOf[name])` returns the node for an application ID, or nil if the configuration has no such node.
@@ -2195,7 +2201,7 @@ go run ./storage
 To connect to remote servers instead of starting local ones, pass their addresses separated by commas:
 
 ```shell
-go run ./storage --connect localhost:8080,localhost:8081,localhost:8082
+go run ./storage -addrs localhost:8080,localhost:8081,localhost:8082
 ```
 
 To enable server-side interceptors, pass a comma-separated list of interceptor names:
@@ -2429,10 +2435,10 @@ Create a handler-only `*gorums.Server` (no listener, no peers), register any han
 `WithBackChannel` installs the client as the back-channel request handler automatically:
 
 ```go
-// Create a handler-only server and register the methods the remote server is
-// allowed to call back on this client.
+// Create a handler-only server and register the services that the remote
+// server may call back on this client. clientStorage implements pb.StorageServer.
 clientSrv := gorums.NewServer()
-clientSrv.RegisterHandler(pb.MyMethod, myHandler)
+pb.RegisterStorageServer(clientSrv, &clientStorage{})
 
 // The configuration is used to reach the server(s); WithBackChannel installs
 // clientSrv as the back-channel handler on its connections.
