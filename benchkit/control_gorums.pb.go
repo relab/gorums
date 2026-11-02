@@ -102,31 +102,19 @@ type ControlServer interface {
 }
 
 func RegisterControlServer(srv *gorums.Server, impl ControlServer) {
-	srv.RegisterHandler("benchkit.Control.Start", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("benchkit.Control.Start", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*StartRequest](in)
-		resp, err := impl.Start(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.Start(ctx, req)
 	})
-	srv.RegisterHandler("benchkit.Control.Stop", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("benchkit.Control.Stop", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*StopRequest](in)
-		resp, err := impl.Stop(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.Stop(ctx, req)
 	})
-	srv.RegisterHandler("benchkit.Control.ClockSync", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("benchkit.Control.ClockSync", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*ClockSyncRequest](in)
-		resp, err := impl.ClockSync(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.ClockSync(ctx, req)
 	})
-	srv.RegisterHandler("benchkit.Control.Done", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("benchkit.Control.Done", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*DoneRequest](in)
 		impl.Done(ctx, req)
 		return nil, nil

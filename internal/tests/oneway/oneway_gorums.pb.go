@@ -102,12 +102,12 @@ type OnewayTestServer interface {
 }
 
 func RegisterOnewayTestServer(srv *gorums.Server, impl OnewayTestServer) {
-	srv.RegisterHandler("oneway.OnewayTest.Unicast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("oneway.OnewayTest.Unicast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.Unicast(ctx, req)
 		return nil, nil
 	})
-	srv.RegisterHandler("oneway.OnewayTest.Multicast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("oneway.OnewayTest.Multicast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.Multicast(ctx, req)
 		return nil, nil

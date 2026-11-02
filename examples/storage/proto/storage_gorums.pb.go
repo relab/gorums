@@ -165,65 +165,41 @@ type StorageServer interface {
 }
 
 func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
-	srv.RegisterHandler("proto.Storage.ReadRPC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("proto.Storage.ReadRPC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*ReadRequest](in)
-		resp, err := impl.ReadRPC(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.ReadRPC(ctx, req)
 	})
-	srv.RegisterHandler("proto.Storage.WriteRPC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("proto.Storage.WriteRPC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*WriteRequest](in)
-		resp, err := impl.WriteRPC(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.WriteRPC(ctx, req)
 	})
-	srv.RegisterHandler("proto.Storage.WriteUnicast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("proto.Storage.WriteUnicast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*WriteRequest](in)
 		impl.WriteUnicast(ctx, req)
 		return nil, nil
 	})
-	srv.RegisterHandler("proto.Storage.WriteMulticast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("proto.Storage.WriteMulticast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*WriteRequest](in)
 		impl.WriteMulticast(ctx, req)
 		return nil, nil
 	})
-	srv.RegisterHandler("proto.Storage.ReadQC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("proto.Storage.ReadQC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*ReadRequest](in)
-		resp, err := impl.ReadQC(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.ReadQC(ctx, req)
 	})
-	srv.RegisterHandler("proto.Storage.WriteQC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("proto.Storage.WriteQC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*WriteRequest](in)
-		resp, err := impl.WriteQC(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.WriteQC(ctx, req)
 	})
-	srv.RegisterHandler("proto.Storage.ReadNestedQC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("proto.Storage.ReadNestedQC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*ReadRequest](in)
-		resp, err := impl.ReadNestedQC(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.ReadNestedQC(ctx, req)
 	})
-	srv.RegisterHandler("proto.Storage.WriteNestedMulticast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("proto.Storage.WriteNestedMulticast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*WriteRequest](in)
-		resp, err := impl.WriteNestedMulticast(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.WriteNestedMulticast(ctx, req)
 	})
-	srv.RegisterHandler("proto.Storage.ReadCorrectable", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("proto.Storage.ReadCorrectable", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*ReadRequest](in)
 		impl.ReadCorrectable(ctx, req, func(resp *ReadResponse) {
 			send(resp)

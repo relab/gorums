@@ -58,20 +58,12 @@ type MetadataTestServer interface {
 }
 
 func RegisterMetadataTestServer(srv *gorums.Server, impl MetadataTestServer) {
-	srv.RegisterHandler("metadata.MetadataTest.IDFromMD", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("metadata.MetadataTest.IDFromMD", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*emptypb.Empty](in)
-		resp, err := impl.IDFromMD(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.IDFromMD(ctx, req)
 	})
-	srv.RegisterHandler("metadata.MetadataTest.WhatIP", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("metadata.MetadataTest.WhatIP", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*emptypb.Empty](in)
-		resp, err := impl.WhatIP(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.WhatIP(ctx, req)
 	})
 }

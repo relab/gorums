@@ -54,12 +54,8 @@ type QuorumCallServer interface {
 }
 
 func RegisterQuorumCallServer(srv *gorums.Server, impl QuorumCallServer) {
-	srv.RegisterHandler("internal.testprotos.calltypes.quorumcall.QuorumCall.QuorumCall", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.quorumcall.QuorumCall.QuorumCall", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.QuorumCall(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.QuorumCall(ctx, req)
 	})
 }

@@ -130,39 +130,23 @@ type BetaServer interface {
 }
 
 func RegisterAlphaServer(srv *gorums.Server, impl AlphaServer) {
-	srv.RegisterHandler("multiservice.Alpha.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("multiservice.Alpha.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.Heartbeat(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.Heartbeat(ctx, req)
 	})
-	srv.RegisterHandler("multiservice.Alpha.Read", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("multiservice.Alpha.Read", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.Read(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.Read(ctx, req)
 	})
 }
 
 func RegisterBetaServer(srv *gorums.Server, impl BetaServer) {
-	srv.RegisterHandler("multiservice.Beta.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("multiservice.Beta.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.Heartbeat(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.Heartbeat(ctx, req)
 	})
-	srv.RegisterHandler("multiservice.Beta.Write", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("multiservice.Beta.Write", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.Write(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.Write(ctx, req)
 	})
 }
