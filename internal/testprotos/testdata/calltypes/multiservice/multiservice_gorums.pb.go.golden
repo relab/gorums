@@ -141,34 +141,22 @@ type BetaServer interface {
 }
 
 func RegisterAlphaServer(srv *gorums.Server, impl AlphaServer) {
-	srv.RegisterHandler("internal.testprotos.calltypes.multiservice.Alpha.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.multiservice.Alpha.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.Heartbeat(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.Heartbeat(ctx, req)
 	})
-	srv.RegisterHandler("internal.testprotos.calltypes.multiservice.Alpha.Read", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.multiservice.Alpha.Read", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.Read(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.Read(ctx, req)
 	})
 }
 
 func RegisterBetaServer(srv *gorums.Server, impl BetaServer) {
-	srv.RegisterHandler("internal.testprotos.calltypes.multiservice.Beta.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.multiservice.Beta.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.Heartbeat(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.Heartbeat(ctx, req)
 	})
-	srv.RegisterHandler("internal.testprotos.calltypes.multiservice.Beta.Write", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.multiservice.Beta.Write", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.Write(ctx, req)
 		return nil, nil

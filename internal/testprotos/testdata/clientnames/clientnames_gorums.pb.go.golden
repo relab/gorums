@@ -110,28 +110,20 @@ type ClientNamesServer interface {
 }
 
 func RegisterClientNamesServer(srv *gorums.Server, impl ClientNamesServer) {
-	srv.RegisterHandler("internal.testprotos.clientnames.ClientNames.Config", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.clientnames.ClientNames.Config", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.Config(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.Config(ctx, req)
 	})
-	srv.RegisterHandler("internal.testprotos.clientnames.ClientNames.WithConfig", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.clientnames.ClientNames.WithConfig", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.WithConfig(ctx, req)
 		return nil, nil
 	})
-	srv.RegisterHandler("internal.testprotos.clientnames.ClientNames.Node", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.clientnames.ClientNames.Node", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.Node(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.Node(ctx, req)
 	})
-	srv.RegisterHandler("internal.testprotos.clientnames.ClientNames.ForNode", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.clientnames.ClientNames.ForNode", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.ForNode(ctx, req)
 		return nil, nil

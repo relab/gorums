@@ -79,15 +79,11 @@ type NodeOnlyServer interface {
 }
 
 func RegisterNodeOnlyServer(srv *gorums.Server, impl NodeOnlyServer) {
-	srv.RegisterHandler("internal.testprotos.nodeonly.NodeOnly.Read", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.nodeonly.NodeOnly.Read", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.Read(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.Read(ctx, req)
 	})
-	srv.RegisterHandler("internal.testprotos.nodeonly.NodeOnly.Write", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.nodeonly.NodeOnly.Write", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.Write(ctx, req)
 		return nil, nil

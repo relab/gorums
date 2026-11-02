@@ -83,20 +83,12 @@ type OrderingServer interface {
 }
 
 func RegisterOrderingServer(srv *gorums.Server, impl OrderingServer) {
-	srv.RegisterHandler("ordering.Ordering.QuorumCall", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("ordering.Ordering.QuorumCall", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.QuorumCall(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.QuorumCall(ctx, req)
 	})
-	srv.RegisterHandler("ordering.Ordering.UnaryRPC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("ordering.Ordering.UnaryRPC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.UnaryRPC(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return gorumsimpl.NewResponseMessage(in, resp), nil
+		return impl.UnaryRPC(ctx, req)
 	})
 }

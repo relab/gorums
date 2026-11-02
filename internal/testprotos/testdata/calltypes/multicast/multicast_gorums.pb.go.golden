@@ -65,7 +65,7 @@ type MulticastServer interface {
 }
 
 func RegisterMulticastServer(srv *gorums.Server, impl MulticastServer) {
-	srv.RegisterHandler("internal.testprotos.calltypes.multicast.Multicast.Multicast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("internal.testprotos.calltypes.multicast.Multicast.Multicast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		req := gorums.AsProto[*Request](in)
 		impl.Multicast(ctx, req)
 		return nil, nil
