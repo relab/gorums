@@ -15,7 +15,7 @@ type Message struct {
 	*stream.Message
 }
 
-// MetadataEntry is a type alias for [stream.MetadataEntry].
+// MetadataEntry is a key-value pair in a message's metadata.
 type MetadataEntry = stream.MetadataEntry
 
 // newResponse returns the response envelope to the request in. It carries the

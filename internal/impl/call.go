@@ -10,19 +10,16 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// Call represents a lazily dispatched quorum call.
-// Register interceptors with [Call.Intercept] before the call is dispatched.
-// A Call may be dispatched once.
+// Call is exported and documented as gorums.Call.
 type Call[Req, Resp proto.Message] struct {
 	*Responses[Resp]
 	ctx *CallContext[Req, Resp]
 }
 
-// ClientInterceptor transforms a call's request or response sequence.
+// ClientInterceptor is exported and documented as gorums.ClientInterceptor.
 type ClientInterceptor[Req, Resp proto.Message] func(ctx *CallContext[Req, Resp], next ResponseSeq[Resp]) ResponseSeq[Resp]
 
-// MapRequest returns an interceptor that transforms the request for each node.
-// Returning nil or an invalid message skips the node with [ErrSkipNode].
+// MapRequest is exported and documented as gorums.MapRequest.
 func MapRequest[Req, Resp proto.Message](fn func(Req, *Node) Req) ClientInterceptor[Req, Resp] {
 	return func(ctx *CallContext[Req, Resp], next ResponseSeq[Resp]) ResponseSeq[Resp] {
 		if fn != nil {
@@ -32,7 +29,7 @@ func MapRequest[Req, Resp proto.Message](fn func(Req, *Node) Req) ClientIntercep
 	}
 }
 
-// MapResponse returns an interceptor that transforms each successful response.
+// MapResponse is exported and documented as gorums.MapResponse.
 func MapResponse[Req, Resp proto.Message](fn func(Resp, *Node) Resp) ClientInterceptor[Req, Resp] {
 	return func(ctx *CallContext[Req, Resp], next ResponseSeq[Resp]) ResponseSeq[Resp] {
 		if fn == nil {
@@ -98,9 +95,7 @@ func (c *Call[Req, Resp]) Async() *Responses[Resp] {
 	return c.Responses
 }
 
-// OnewayCall represents a lazily dispatched multicast or unicast call.
-// [OnewayCall.Send] and [OnewayCall.Async] each dispatch the call; invoking
-// either after the call was dispatched panics.
+// OnewayCall is exported and documented as gorums.OnewayCall.
 type OnewayCall[Req proto.Message] struct {
 	ctx     *CallContext[Req, *emptypb.Empty]
 	unicast bool
@@ -218,8 +213,7 @@ func (c *OnewayCall[Req]) receive() (NodeResponse[*stream.Message], error) {
 	}
 }
 
-// OnewayAsync is the send-completion handle of a one-way call dispatched with
-// [OnewayCall.Async].
+// OnewayAsync is exported and documented as gorums.OnewayAsync.
 type OnewayAsync struct {
 	collect func() error
 	once    sync.Once

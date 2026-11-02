@@ -29,14 +29,10 @@ func sharedNodeTransport(peer *Node) *stream.Transport {
 	return stream.NewSharedTransport(transport)
 }
 
-// ID identifies a node. ID 0 is reserved for a node that has no ID: a
-// handler-only server, or a client that announces no ID. Dynamic client IDs
-// start at [ClientIDStart] and skip configured IDs. Under stream
-// deduplication, the peer with the lower ID dials.
+// ID is exported and documented as gorums.ID.
 type ID = stream.ID
 
-// Node encapsulates the state of a node on which a remote procedure call
-// can be performed.
+// Node is exported and documented as gorums.Node.
 type Node struct {
 	// Only assigned at creation.
 	id   ID
@@ -342,16 +338,12 @@ func (n *Node) Latency() time.Duration {
 	return NodeTransport(n).Latency().Load()
 }
 
-// ByID compares nodes by their identifier in increasing order.
-// It is compatible with [slices.SortFunc] and [Config.Sort].
+// ByID is exported and documented as gorums.ByID.
 var ByID = func(a, b *Node) int {
 	return cmp.Compare(a.id, b.id)
 }
 
-// ByLastError compares nodes by their [Node.LastErr] status, sorting the nodes
-// with no recorded error first. Since LastErr reverts to nil once traffic flows
-// again, this orders nodes by whether they are currently failing.
-// It is compatible with [slices.SortFunc] and [Config.Sort].
+// ByLastError is exported and documented as gorums.ByLastError.
 var ByLastError = func(a, b *Node) int {
 	aErr := a.LastErr()
 	bErr := b.LastErr()
@@ -365,9 +357,7 @@ var ByLastError = func(a, b *Node) int {
 	}
 }
 
-// ByLatency compares nodes by their current latency estimate in ascending order.
-// Nodes with no measurement yet (negative latency value) sort after nodes with a
-// measurement. It is compatible with [slices.SortFunc] and [Config.Sort].
+// ByLatency is exported and documented as gorums.ByLatency.
 var ByLatency = func(a, b *Node) int {
 	la, lb := a.Latency(), b.Latency()
 	// Note: cmp.Compare alone would sort negative sentinel values first

@@ -6,13 +6,10 @@ import (
 	"strings"
 )
 
-// ErrStopped is returned by the server wait methods ([InboundManager.WaitForPeers],
-// [InboundManager.WaitForClients]) when the server is stopped before the
-// condition is met.
+// ErrStopped is exported and documented as gorums.ErrStopped.
 var ErrStopped = errors.New("server stopped")
 
-// QuorumCallError reports on a failed quorum call.
-// It provides detailed information about which nodes failed.
+// QuorumCallError is exported and documented as gorums.QuorumCallError.
 type QuorumCallError struct {
 	cause  error
 	errors []NodeError

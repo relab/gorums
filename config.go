@@ -65,8 +65,10 @@ type Node = conn.Node
 // It is compatible with [slices.SortFunc] and [Config.Sort].
 var ByID = conn.ByID
 
-// ByLastError compares nodes by their LastErr status.
-// Nodes with no error sort before nodes with an error.
+// ByLastError compares nodes by their [Node.LastErr] status.
+// Nodes with no error sort before nodes with an error. LastErr reverts to nil
+// once traffic flows again, so this orders nodes by whether they are failing
+// now.
 // It is compatible with [slices.SortFunc] and [Config.Sort].
 var ByLastError = conn.ByLastError
 

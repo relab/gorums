@@ -7,27 +7,20 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// ErrIncomplete is the error returned by a quorum call when the call cannot be completed
-// due to insufficient non-error replies to form a quorum according to the quorum function.
+// ErrIncomplete is exported and documented as gorums.ErrIncomplete.
 var ErrIncomplete = errors.New("incomplete call")
 
-// ErrSendFailure is the error returned by a multicast call when message sending fails for one or more nodes.
+// ErrSendFailure is exported and documented as gorums.ErrSendFailure.
 var ErrSendFailure = errors.New("send failure")
 
-// ErrSkipNode is returned when a node is skipped by request transformations.
-// This allows the response iterator to account for all nodes without blocking.
+// ErrSkipNode is exported and documented as gorums.ErrSkipNode.
 var ErrSkipNode = errors.New("skip node")
 
-// ErrTypeMismatch is returned when a response cannot be cast to the expected type.
+// ErrTypeMismatch is exported and documented as gorums.ErrTypeMismatch.
 var ErrTypeMismatch = errors.New("response type mismatch")
 
-// ErrNoNode is returned by a remote call or unicast on a nil node, such as
-// the node that [Config.Node] returns for an ID outside the configuration.
-// It is a gRPC status error with the InvalidArgument code, because the call
-// cannot succeed until the caller passes a node.
+// ErrNoNode is exported and documented as gorums.ErrNoNode.
 var ErrNoNode = status.Error(codes.InvalidArgument, "no such node")
 
-// ErrEmptyConfig is reported when a quorum call or multicast handle on an
-// empty configuration is consumed. It is a gRPC status error with the
-// InvalidArgument code.
+// ErrEmptyConfig is exported and documented as gorums.ErrEmptyConfig.
 var ErrEmptyConfig = status.Error(codes.InvalidArgument, "empty configuration")

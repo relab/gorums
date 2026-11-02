@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// CallContext provides an interceptor with the context and state of a call.
+// CallContext is exported and documented as gorums.CallContext.
 type CallContext[Req, Resp proto.Message] struct {
 	context.Context
 	config       Config

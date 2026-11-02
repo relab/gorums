@@ -8,18 +8,13 @@ import (
 )
 
 var (
-	// ErrNodeClosed is returned for requests enqueued after the node closed.
+	// ErrNodeClosed is exported and documented as gorums.ErrNodeClosed.
 	ErrNodeClosed = status.Error(codes.Unavailable, "node closed")
-	// ErrStreamDown is returned for requests that cannot be delivered or
-	// retried because the node's stream is not available.
+	// ErrStreamDown is exported and documented as gorums.ErrStreamDown.
 	ErrStreamDown = status.Error(codes.Unavailable, "stream is down")
-	// ErrSendQueueFull is returned for two-way requests enqueued while the
-	// node's send queue is full; one-way requests wait for space instead (see
-	// [Channel]).
+	// ErrSendQueueFull is exported and documented as gorums.ErrSendQueueFull.
 	ErrSendQueueFull = status.Error(codes.Unavailable, "send queue full")
-	// ErrSendStalled is reported by [Channel.LastErr] while a send on the
-	// node's stream has been blocked for [stallReportDelay] or longer, as when
-	// the peer has stopped reading the stream.
+	// ErrSendStalled is exported and documented as gorums.ErrSendStalled.
 	ErrSendStalled = status.Error(codes.Unavailable, "send stalled")
 )
 

@@ -8,42 +8,10 @@ import (
 	"time"
 )
 
-// Config represents a static set of nodes on which multicast or
-// quorum calls may be invoked. A configuration is created using [NewConfig].
-// A configuration should be treated as immutable. Therefore, methods that
-// operate on a configuration always return a new Config instance.
+// Config is exported and documented as gorums.Config.
 type Config []*Node
 
-// NewConfig returns a new [Config] based on the provided nodes and dial
-// options, and a function that closes the configuration's connection pool.
-//
-// The returned configuration and every configuration derived from it, for
-// example with [Config.Extend], [Config.Remove], or [Config.Sort], share one
-// connection pool. Only the returned close function closes that pool, and it
-// closes every node in it, including nodes that [Config.Extend] added later.
-// After the close function returns:
-//   - calls to the pool's nodes fail with an Unavailable "node closed" error;
-//   - [Config.Extend] on any configuration in the pool returns an error.
-//
-// One exception: a node that runs in-process, or that reuses a server's
-// inbound stream, owns no connection, so calls to it still work.
-//
-// The close function is idempotent and safe for concurrent use; every call
-// returns after the nodes are closed. It returns no error, because closing a
-// connection has no failure that a caller can act on.
-//
-// On error, NewConfig returns a nil configuration and a nil close function.
-//
-// Example:
-//
-//	cfg, closeFn, err := NewConfig(
-//	    gorums.WithNodeList([]string{"localhost:8080", "localhost:8081", "localhost:8082"}),
-//	    gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
-//	)
-//	if err != nil {
-//	    return err
-//	}
-//	defer closeFn()
+// NewConfig is exported and documented as gorums.NewConfig.
 func NewConfig(nodes NodeSource, opts ...DialOption) (Config, func(), error) {
 	if nodes == nil {
 		return nil, nil, fmt.Errorf("gorums: missing required node list")

@@ -42,8 +42,8 @@ var ErrEmptyConfig = impl.ErrEmptyConfig
 
 // ErrSendQueueFull is returned for a two-way call enqueued while the node's
 // send queue is full, so quorum logic counts the peer as failed; see
-// [WithDialBufferSizes]. It is a gRPC status error with the Unavailable code;
-// match it with [errors.Is].
+// [WithDialBufferSizes]. A one-way call waits for space instead. It is a gRPC
+// status error with the Unavailable code; match it with [errors.Is].
 var ErrSendQueueFull = stream.ErrSendQueueFull
 
 // ErrSendStalled is reported by [Node.LastErr] while a send to the node has

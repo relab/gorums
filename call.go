@@ -59,8 +59,9 @@ type Correctable[Resp any] = impl.Correctable[Resp]
 type ResponseSeq[T proto.Message] = impl.ResponseSeq[T]
 
 // AggregateFunc aggregates the responses of a quorum call into a result of
-// type Out, which may differ from the response type. [Responses.Aggregate]
-// runs an AggregateFunc.
+// type Out, which may differ from the response type. It receives the call's
+// single-use response sequence, decides how to handle each node error, and
+// decides when to stop. [Responses.Aggregate] runs an AggregateFunc.
 type AggregateFunc[Resp proto.Message, Out any] = impl.AggregateFunc[Resp, Out]
 
 // NodeResponse contains a node's response value or error.

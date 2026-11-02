@@ -7,9 +7,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// Multicast returns a lazy [OnewayCall] for every node in config.
-// On an empty config, it sends nothing and reports [ErrEmptyConfig] when
-// consumed.
+// Multicast is exported and documented as gorumsimpl.Multicast.
 func Multicast[Req proto.Message](ctx context.Context, config Config, req Req, method string) *OnewayCall[Req] {
 	callCtx := &CallContext[Req, *emptypb.Empty]{
 		Context: ctx,

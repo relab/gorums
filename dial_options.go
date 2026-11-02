@@ -56,6 +56,7 @@ func WithBackoff(backoff backoff.Config) DialOption {
 
 // DefaultSendBufferSize is the per-node send queue capacity Gorums uses when
 // [WithDialBufferSizes] or [WithBufferSizes] is applied with a send size of 0.
+// Each node allocates the full capacity up front.
 const DefaultSendBufferSize = conn.DefaultSendBufferSize
 
 // DefaultRecvBufferSize is the number of received requests per channel that

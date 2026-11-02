@@ -55,7 +55,7 @@ func (r Request) sendErrorResponse(nodeID ID, err error) {
 // ID identifies a node. A channel with ID 0 belongs to a peer that has no ID.
 type ID = uint32
 
-// NodeResponse wraps a response value from node ID, and an error if any.
+// NodeResponse is exported and documented as gorums.NodeResponse.
 type NodeResponse[T any] struct {
 	NodeID ID
 	Value  T
