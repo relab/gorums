@@ -29,7 +29,7 @@ import (
 func TestOnewayNoResourceLeak(t *testing.T) {
 	servers := gorumstest.LocalServers(t, 3)
 	for _, srv := range servers {
-		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 			return nil, nil
 		})
 	}
@@ -63,7 +63,7 @@ func TestOnewayDroppedHandleDoesNotDispatch(t *testing.T) {
 	var received atomic.Int32
 	servers := gorumstest.LocalServers(t, 3)
 	for _, srv := range servers {
-		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 			received.Add(1)
 			return nil, nil
 		})
@@ -87,7 +87,7 @@ func TestOnewayDroppedHandleDoesNotDispatch(t *testing.T) {
 func TestOnewayCallDoubleDispatchPanics(t *testing.T) {
 	servers := gorumstest.LocalServers(t, 3)
 	for _, srv := range servers {
-		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 			return nil, nil
 		})
 	}
@@ -138,7 +138,7 @@ func TestOnewayCallAsync(t *testing.T) {
 	var received atomic.Int32
 	servers := gorumstest.LocalServers(t, 3)
 	for _, srv := range servers {
-		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 			received.Add(1)
 			return nil, nil
 		})

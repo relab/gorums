@@ -14,7 +14,6 @@ import (
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"github.com/relab/gorums/internal/testutils/mockcall"
-	"github.com/relab/gorums/runtime/gorumsimpl"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
@@ -443,10 +442,10 @@ func TestStreamDedupBorrowerSlowHandlerDoesNotBlockOwnCalls(t *testing.T) {
 			servers := newServerPair(t, dedup)
 			started := make(chan struct{}, 1)
 			unblock := make(chan struct{})
-			servers[1].RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+			servers[1].RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 				started <- struct{}{}
 				<-unblock // slow handler, no Release
-				return gorumsimpl.NewResponseMessage(in, pb.String("slow")), nil
+				return pb.String("slow"), nil
 			})
 			servers[0].RegisterHandler(mock.EchoMethod, gorumstest.EchoHandler("echo"))
 			gorumstest.WaitForPeers(t, servers)
@@ -488,10 +487,10 @@ func TestStreamDedupOwnerSlowHandlerDoesNotBlockOwnCalls(t *testing.T) {
 			servers := newServerPair(t, dedup)
 			started := make(chan struct{}, 4)
 			unblock := make(chan struct{})
-			servers[0].RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+			servers[0].RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 				started <- struct{}{}
 				<-unblock // slow handler, no Release
-				return gorumsimpl.NewResponseMessage(in, pb.String("slow")), nil
+				return pb.String("slow"), nil
 			})
 			servers[1].RegisterHandler(mock.EchoMethod, gorumstest.EchoHandler("echo"))
 			gorumstest.WaitForPeers(t, servers)
@@ -531,7 +530,7 @@ func TestStreamDedupNestedCallToRequesterWithoutRelease(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			servers := newServerPair(t, dedup)
-			servers[1].RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+			servers[1].RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 				n1 := gorumstest.PeerNode(t, ctx.PeerConfig(), 1)
 				cctx, cancel := context.WithTimeout(ctx, time.Second)
 				defer cancel()
@@ -539,7 +538,7 @@ func TestStreamDedupNestedCallToRequesterWithoutRelease(t *testing.T) {
 				if err != nil {
 					return nil, err
 				}
-				return gorumsimpl.NewResponseMessage(in, pb.String("outer | "+resp.GetValue())), nil
+				return pb.String("outer | " + resp.GetValue()), nil
 			})
 			servers[0].RegisterHandler(mock.EchoMethod, gorumstest.EchoHandler("echo"))
 			gorumstest.WaitForPeers(t, servers)
@@ -566,7 +565,7 @@ func TestStreamDedupInflightCallFailsWithStreamDown(t *testing.T) {
 	started := make(chan struct{}, 1)
 	unblock := make(chan struct{})
 	defer close(unblock)
-	owner.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	owner.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		started <- struct{}{}
 		select {
 		case <-unblock:

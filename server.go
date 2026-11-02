@@ -17,13 +17,14 @@ import (
 )
 
 type (
-	// Handler processes a request and returns a response. The send callback
-	// sends each response of a streaming call.
-	Handler func(ServerContext, *Message, func(proto.Message)) (*Message, error)
+	// Handler processes a request and returns its response. The send callback
+	// sends each response of a streaming call. A handler that returns a nil
+	// response and a nil error sends no reply.
+	Handler func(ServerContext, *Message, func(proto.Message)) (proto.Message, error)
 	// ServerInterceptor intercepts and may modify incoming requests and outgoing responses.
 	// It receives a ServerContext, the incoming Message, a streaming response
-	// sender, and the next Handler. It returns a Message and an error.
-	ServerInterceptor func(ServerContext, *Message, func(proto.Message), Handler) (*Message, error)
+	// sender, and the next Handler. It returns the response and an error.
+	ServerInterceptor func(ServerContext, *Message, func(proto.Message), Handler) (proto.Message, error)
 )
 
 // Server serves Gorums calls on registered handlers, and can call its peers
@@ -192,7 +193,7 @@ func chainInterceptors(final Handler, interceptors ...ServerInterceptor) Handler
 	handler := final
 	for _, curr := range slices.Backward(interceptors) {
 		next := handler
-		handler = func(ctx ServerContext, in *Message, send func(proto.Message)) (*Message, error) {
+		handler = func(ctx ServerContext, in *Message, send func(proto.Message)) (proto.Message, error) {
 			return curr(ctx, in, send, next)
 		}
 	}
@@ -224,20 +225,19 @@ func (s *Server) HandleRequest(ctx context.Context, senderID ID, reqMsg *stream.
 
 	handler, ok := s.handlers[reqMsg.GetMethod()]
 	if !ok {
-		in := &Message{Message: reqMsg}
-		srvCtx.sendMessage(messageWithError(in, nil, status.Errorf(codes.Unimplemented, "no handler registered for method %s", reqMsg.GetMethod())))
+		srvCtx.reply(reqMsg, nil, status.Errorf(codes.Unimplemented, "no handler registered for method %s", reqMsg.GetMethod()))
 		return
 	}
 
 	msg, err := impl.UnmarshalRequest(reqMsg)
-	in := &Message{Proto: msg, Message: reqMsg}
 	if err != nil {
-		srvCtx.sendMessage(messageWithError(in, nil, err))
+		srvCtx.reply(reqMsg, nil, err)
 		return
 	}
 
+	in := &Message{Proto: msg, Message: reqMsg}
 	out, err := handler(srvCtx, in, func(resp proto.Message) {
-		srvCtx.sendMessage(newResponseMessage(in, resp))
+		srvCtx.reply(reqMsg, resp, nil)
 	})
 	// If there is no response and no error, we do not send anything back to the client.
 	// This corresponds to a unidirectional message from client to server, where clients
@@ -245,7 +245,7 @@ func (s *Server) HandleRequest(ctx context.Context, senderID ID, reqMsg *stream.
 	if out == nil && err == nil {
 		return
 	}
-	srvCtx.sendMessage(messageWithError(in, out, err))
+	srvCtx.reply(reqMsg, out, err)
 }
 
 // Serve serves on the externally supplied listener and records it so that
@@ -432,22 +432,12 @@ func (ctx *ServerContext) Release() {
 	}
 }
 
-// sendMessage sends the given message to the client.
-// If marshaling fails, the error is encoded into the response envelope
-// and sent to the client; the stream is not closed.
-func (ctx *ServerContext) sendMessage(out *Message) {
-	// If Proto is set, marshal it to payload before sending.
-	if out.Proto != nil && len(out.GetPayload()) == 0 {
-		payload, err := proto.Marshal(out.Proto)
-		if err == nil {
-			out.SetPayload(payload)
-		} else {
-			// Encode the marshal error into the response envelope; don't close the stream.
-			out = messageWithError(nil, out, err)
-		}
-	}
+// reply sends resp, or the status of err, to the client as the response to
+// the request in. A marshal failure is sent as the response status; the
+// stream is not closed.
+func (ctx *ServerContext) reply(in *stream.Message, resp proto.Message, err error) {
 	if ctx.send != nil {
-		ctx.send(out.Message)
+		ctx.send(newResponse(in, resp, err))
 	}
 }
 
