@@ -75,16 +75,15 @@ var registerInterface = `
 {{$gorumsMessage := use "gorums.Message" .GenFile}}
 {{$protoMessage := use "proto.Message" .GenFile}}
 {{$asProto := use "gorums.AsProto" .GenFile}}
-{{$newMessage := use "gorumsimpl.NewResponseMessage" $genFile}}
 {{$gorumsServer := use "gorums.Server" $genFile}}
 {{range .Services -}}
 {{$names := .Names}}
-{{$reg := localNames "srv impl" $context $gorumsMessage $asProto $newMessage (methodTypes $genFile .Service)}}
+{{$reg := localNames "srv impl" $context $gorumsMessage $protoMessage $asProto (methodTypes $genFile .Service)}}
 
 func {{$names.Register}}({{$reg.srv}} *{{$gorumsServer}}, {{$reg.impl}} {{$names.Interface}}) {
 	{{- range .Service.Methods}}
-	{{- $local := localNames "ctx in req resp err send" $context $gorumsMessage $protoMessage $asProto $newMessage (in $genFile .) (out $genFile .) $reg.impl}}
-	{{$reg.srv}}.RegisterHandler("{{.Desc.FullName}}", func({{$local.ctx}} {{$context}}, {{$local.in}} *{{$gorumsMessage}}, {{if isStreamingServer .}}{{$local.send}}{{else}}_{{end}} func({{$protoMessage}})) (*{{$gorumsMessage}}, error) {
+	{{- $local := localNames "ctx in req resp send" $context $gorumsMessage $protoMessage $asProto (in $genFile .) (out $genFile .) $reg.impl}}
+	{{$reg.srv}}.RegisterHandler("{{.Desc.FullName}}", func({{$local.ctx}} {{$context}}, {{$local.in}} *{{$gorumsMessage}}, {{if isStreamingServer .}}{{$local.send}}{{else}}_{{end}} func({{$protoMessage}})) ({{$protoMessage}}, error) {
 		{{$local.req}} := {{$asProto}}[*{{in $genFile .}}]({{$local.in}})
 		{{- if isOneway .}}
 		{{$reg.impl}}.{{.GoName}}({{$local.ctx}}, {{$local.req}})
@@ -95,11 +94,7 @@ func {{$names.Register}}({{$reg.srv}} *{{$gorumsServer}}, {{$reg.impl}} {{$names
 		})
 		return nil, nil
 		{{- else }}
-		{{$local.resp}}, {{$local.err}} := {{$reg.impl}}.{{.GoName}}({{$local.ctx}}, {{$local.req}})
-		if {{$local.err}} != nil {
-			return nil, {{$local.err}}
-		}
-		return {{$newMessage}}({{$local.in}}, {{$local.resp}}), nil
+		return {{$reg.impl}}.{{.GoName}}({{$local.ctx}}, {{$local.req}})
 		{{- end}}
 	})
 	{{- end}}

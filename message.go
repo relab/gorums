@@ -18,25 +18,19 @@ type Message struct {
 // MetadataEntry is a type alias for [stream.MetadataEntry].
 type MetadataEntry = stream.MetadataEntry
 
-// newResponseMessage creates a response envelope for the given request and
-// proto message. The sender marshals its payload before transmission.
-func newResponseMessage(in *Message, resp proto.Message) *Message {
-	if in == nil {
-		return nil
-	}
-	return &Message{
-		Proto:   resp,
-		Message: stream.NewResponseEnvelope(in.Message),
-	}
-}
-
-// messageWithError ensures a response envelope exists and sets the error status.
-// If out is nil, a new response is created based on the in request envelope;
-// otherwise, out is modified in place. This is used by the server to send error
-// responses back to the client.
-func messageWithError(in, out *Message, err error) *Message {
-	if out == nil {
-		out = newResponseMessage(in, nil)
+// newResponse returns the response envelope to the request in. It carries the
+// request's message ID and method, and either the status of err or the
+// marshaled resp. A marshal failure becomes the response status.
+func newResponse(in *stream.Message, resp proto.Message, err error) *stream.Message {
+	out := stream.Message_builder{
+		MessageSeqNo: in.GetMessageSeqNo(), // routes the response to the pending call
+		Method:       in.GetMethod(),       // selects the response type on the client
+	}.Build()
+	if err == nil && resp != nil {
+		var payload []byte
+		if payload, err = proto.Marshal(resp); err == nil {
+			out.SetPayload(payload)
+		}
 	}
 	if err != nil {
 		errStatus, ok := status.FromError(err)

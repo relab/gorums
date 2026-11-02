@@ -1340,12 +1340,13 @@ Gorums also supports server-side interceptors that wrap inbound RPC handlers, si
 A server-side interceptor implements the `gorums.ServerInterceptor` signature:
 
 ```go
-type ServerInterceptor func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (*gorums.Message, error)
+type ServerInterceptor func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error)
 ```
 
 You can pass multiple interceptors when starting a Gorums server.
 They can perform logging, latency injection, metadata insertion, and request validation before sending the request to the handler.
 Pass `send` to `next` so the handler can send streamed responses.
+An interceptor can wrap `send` to observe or change each streamed response, and it receives a unary response as the `proto.Message` that `next` returns.
 
 Below are several examples based on the `examples/interceptors` package.
 
@@ -1353,7 +1354,7 @@ Below are several examples based on the `examples/interceptors` package.
 
 ```go
 func LoggingInterceptor(addr string) gorums.ServerInterceptor {
-    return func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (*gorums.Message, error) {
+    return func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
         req := gorums.AsProto[proto.Message](in)
         log.Printf("[%s]: LoggingInterceptor(incoming): Method=%s, Message=%s", addr, in.GetMethod(), req)
 
@@ -1361,8 +1362,7 @@ func LoggingInterceptor(addr string) gorums.ServerInterceptor {
         out, err := next(ctx, in, send)
 
         duration := time.Since(start)
-        resp := gorums.AsProto[proto.Message](out)
-        log.Printf("[%s]: LoggingInterceptor(outgoing): Method=%s, Duration=%s, Err=%v, Message=%v", addr, in.GetMethod(), duration, err, resp)
+        log.Printf("[%s]: LoggingInterceptor(outgoing): Method=%s, Duration=%s, Err=%v, Message=%v", addr, in.GetMethod(), duration, err, out)
         return out, err
     }
 }
@@ -1373,13 +1373,13 @@ func LoggingInterceptor(addr string) gorums.ServerInterceptor {
 Interceptors can inject arbitrary delays based on client properties or attach metadata to the incoming requests:
 
 ```go
-func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (*gorums.Message, error) {
+func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
     delay := 50 * time.Millisecond
     time.Sleep(delay)
     return next(ctx, in, send)
 }
 
-func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (*gorums.Message, error) {
+func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
     // Inject a custom metadata field for the handler
     entry := &gorums.MetadataEntry{}
     entry.SetKey("customKey")
@@ -1396,7 +1396,7 @@ A server interceptor can also stop a request from reaching the handler entirely.
 
 ```go
 // NoFooAllowedInterceptor rejects requests for messages with key "foo".
-func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (*gorums.Message, error) {
+func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
     if req, ok := gorums.AsProto[proto.Message](in).(T); ok {
         if req.GetKey() == "foo" {
             return nil, fmt.Errorf("requests for key 'foo' are not allowed")

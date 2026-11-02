@@ -43,7 +43,7 @@ func ServerContext(t testing.TB, senderID gorums.ID) gorums.ServerContext {
 		ran    bool
 	)
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		srvCtx, ran = ctx, true
 		return nil, nil
 	})

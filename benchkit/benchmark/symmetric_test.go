@@ -19,7 +19,6 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/benchkit"
 	"github.com/relab/gorums/gorumstest"
-	"github.com/relab/gorums/runtime/gorumsimpl"
 	proto "google.golang.org/protobuf/proto"
 )
 
@@ -126,11 +125,11 @@ func symmetricServers(t *testing.T, n int, serverOpts ...gorums.ServerOption) *S
 func registerReplyDroppingPeer(srv *gorums.Server, drop int64) {
 	var remaining atomic.Int64
 	remaining.Store(drop)
-	srv.RegisterHandler("benchmark.Benchmark.QuorumCall", func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (*gorums.Message, error) {
+	srv.RegisterHandler("benchmark.Benchmark.QuorumCall", func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
 		if remaining.Add(-1) >= 0 {
 			return nil, nil // no response and no error: nothing is sent back
 		}
-		return gorumsimpl.NewResponseMessage(in, gorums.AsProto[*Echo](in)), nil
+		return gorums.AsProto[*Echo](in), nil
 	})
 }
 
