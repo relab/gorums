@@ -174,8 +174,8 @@ func (c *CallContext[Req, Resp]) send() {
 }
 
 // sendShared marshals the request payload once and enqueues it to all nodes.
-// Regular outbound nodes each have their own stream and router, so a single
-// message with one client-initiated ID is shared across all of them, avoiding
+// Each ordinary node matches responses only against its own pending calls, so
+// a single message with one ID is shared across all of them, avoiding
 // per-node message construction. A shared dedup node sends on a stream that
 // also carries the remote peer's client-initiated IDs, so it gets its own
 // message with an ID from the server-initiated ID space to avoid collisions.
