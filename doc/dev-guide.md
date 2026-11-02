@@ -188,6 +188,7 @@ The tests write nothing into the tree: `gentest.Compile` type-checks the generat
 | Test                                   | Checks                                                                           |
 | -------------------------------------- | -------------------------------------------------------------------------------- |
 | `TestFailingProtoFiles`                | Proto files written inline in the test fail with the expected generator error.   |
+| `TestFailingProtoFilesPackageFile`     | A proto file whose `.pb.go` path is the package's `gorums.pb.go` path fails.     |
 | `TestGenerateProtoFiles`               | The code generated for each fixture under `internal/testprotos` compiles.        |
 | `TestGenerateImportedPackageNames`     | Generated code compiles with message packages named `c`, `ctx`, `in`, or `node`. |
 | `TestGoldenProtoFiles`                 | The Gorums code for each fixture equals its golden file in `testdata`.           |
@@ -242,6 +243,8 @@ The `Makefile` itself also serves as documentation; inspect it for details.
 | `dev`             | Updates `template_static.go` and regenerates generated files from templates.                           |
 | `genproto`        | Force-regenerates all protobuf and Gorums files across the repo (dev, benchmark, tests, examples).     |
 | `benchmark`       | Compiles the benchmark tool.                                                                           |
+| `benchkit`        | Regenerates the protobuf and Gorums files of the `benchkit` module.                                    |
+| `sweep`           | Builds the `sweep` command in `benchkit/cmd/sweep`.                                                    |
 | `compiletests`    | Compiles test protos in `internal/tests`.                                                              |
 | `tools`           | Installs required tools (`protoc-gen-go`, `protoc-gen-go-grpc`, `stress`, etc.) via `go install tool`. |
 | `installgorums`   | Reinstalls the `protoc-gen-gorums` plugin.                                                             |
@@ -253,6 +256,7 @@ The `Makefile` itself also serves as documentation; inspect it for details.
 | `bench`           | Runs benchmarks with proper measurement for performance analysis.                                      |
 | `golden`          | Rewrites the generator golden files in `internal/testprotos/testdata` after a template change.         |
 | `stresstest`      | Runs the ordering tests for a fixed duration (test flag: `-stress`) for thorough testing.              |
+| `stressdev`       | Runs the tests of the `dev` package repeatedly with the `stress` tool.                                 |
 | `modernize`       | Applies `go fix` and `x/tools/modernize@latest` across all workspace modules.                          |
 | `goplscheck`      | Fails on gopls diagnostics, including hint-level suggestions, in non-generated Go source.              |
 | `lint`            | Runs `golangci-lint` with `.golangci.yml` on all workspace modules, as CI does.                        |
@@ -489,7 +493,7 @@ classDiagram
     Node o-- "0..*" StreamInboundChannel : liveChannels
     outboundManager o-- "*" Node : nodes
     outboundManager *-- DialOptions : opts
-    DialOptions --> InboundManager : InboundMgr
+    DialOptions --> InboundManager : InboundManager
     DialOptions --> StreamRequestHandler : Handler
     InboundManager o-- "*" Node : knownNodes, clientNodes
     InboundManager --> Config : peer, connected, client configs
@@ -531,10 +535,13 @@ flowchart LR
 ### Call Engine (`internal/impl`)
 
 A call constructor takes the call's `context.Context` and its target directly: a `Config` for quorum calls and multicasts, and a `*Node` for remote calls and unicasts.
-On an empty `Config`, the `CallContext` holds `ErrEmptyConfig`: a quorum call sends nothing, its terminal methods return the error, and its response iterator yields one response that holds the error; `Multicast` returns a `OnewayCall` that sends nothing and reports the error.
+On an empty `Config`, the `CallContext` holds `ErrEmptyConfig`: a quorum call sends nothing, its terminal methods return the error, and its response iterator yields one response that holds the error; `Multicast` returns a `OnewayCall` that sends nothing and returns the error from `Send` and `Wait`.
 On a nil `*Node`, `RemoteCall` returns `ErrNoNode`, and `Unicast` returns a `OnewayCall` whose `CallContext` holds `ErrNoNode` and that sends nothing.
-Each call constructor except `RemoteCall` builds a `CallContext` that holds the request, the target `Config`, the response channel, and the response iterator (`ResponseSeq`).
+A quorum call constructor builds a `CallContext` that holds the request, the target `Config`, the response channel, and the response iterator (`ResponseSeq`).
+`Multicast` and `Unicast` build a `CallContext` that holds the request and the target `Config`, but no response iterator.
 A unicast's `CallContext` holds a one-node `Config`.
+A one-way `CallContext` gets its response channel when `Send` or `Async` dispatches the call; the channel carries the local send confirmations.
+`RemoteCall` builds no `CallContext`; it enqueues one request on the node's transport and waits for the response.
 A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`), as well as the `Correctable` future.
 `Call.Async` sends the requests at once and returns the dispatched `Responses`, so any terminal method collects the replies later.
 A one-way call (`Multicast`, `Unicast`) returns a `OnewayCall`, whose `Send` waits for local send confirmations and whose `Async` returns a `OnewayAsync`.
@@ -664,12 +671,13 @@ classDiagram
         ConnectedClients() Config
     }
     class ServerContext {
+        SenderID() ID
         Release()
         PeerConfig() Config
         ConnectedClients() Config
     }
     class Handler {
-        <<func(ServerContext, Message, send)>>
+        <<func(ServerContext, *Message, send) (proto.Message, error)>>
     }
     class ServerInterceptor {
         <<func>>
@@ -734,18 +742,29 @@ sequenceDiagram
 
 Symmetric stream deduplication makes the lower-ID peer of each pair the only dialer.
 The higher-ID peer's outbound node is born shared: it borrows the matching inbound transport when the configuration is created, before the peer has connected.
-The borrower cannot dial through a shared transport, so it reports `gorums.ErrStreamDown` while the owner-side stream is unavailable; callers match it with `errors.Is`.
-The owner re-establishes a lost stream eagerly with capped backoff from its channel's goroutine, independently of its own sends.
+The borrower cannot dial through a shared transport, so its calls fail with `gorums.ErrStreamDown` while the dialer's stream is unavailable; callers match it with `errors.Is`.
+The dialer re-establishes a lost stream eagerly with capped backoff from its channel's goroutine, independently of its own sends.
 
 Client-initiated message IDs use the low 63 bits, while server-initiated and shared-call IDs have bit 63 set.
-Shared calls use the server-generated ID space so both directions can share one router without sequence-number collisions.
-These IDs encode as ten-byte protobuf varints because the high bit is set; the small wire-cost increase is intentional and avoids a second stream or router.
+A session uses this bit to route each received frame.
+A frame in the peer's ID space is a request for the handler.
+A frame in the session's own ID space is a response to one of its pending calls.
+A shared call travels on the stream that the lower-ID peer dialed, as a server-initiated request.
+So it takes its ID from the generator of the inbound peer node, which sets bit 63, and the dialer's session passes it to the handler.
+The dialer's own calls on that stream keep their client-initiated IDs, so the calls of the two peers never collide on one stream.
+These IDs encode as ten-byte protobuf varints because the high bit is set; the small wire-cost increase is intentional and avoids a second stream.
 
-Each channel registers pending calls with an owner token.
-Closing a channel cancels or requeues only entries registered by that channel, while full router shutdown cancels all remaining entries during node teardown.
+Each `session` owns the `pendingCalls` of its stream, so ending a session affects only the calls sent on that stream.
+When an outbound session ends, it requeues its pending two-way calls on the channel's send queue for the next session.
+A call fails instead if the server refused the stream, if the stream ended with `ResourceExhausted`, if the send queue is full, or if the channel is closed.
+A pending streaming call is not requeued; it fails with `ErrStreamDown`, or with `ErrNodeClosed` if the channel is closed.
+An inbound session has no next session, so its pending calls fail with `ErrStreamDown` when it ends.
+These include the calls of a shared node that borrows the inbound stream.
+Closing a channel ends its sessions and fails the requests in its send queue.
 
-`Node` identity and its transport are fixed at construction; only the channel behind the transport's shared channel reference changes as streams come and go.
-A call therefore reads the node's message-ID generator, router, and current channel directly from that fixed transport, with no per-call binding step.
+`Node` identity and its transport are fixed at construction; only the channel behind the transport's `channelRef` changes as streams come and go.
+A call therefore reads the node's message-ID generator and current channel directly from that fixed transport, with no per-call binding step.
 
-Back-channel request dispatch appends per-message metadata to the incoming context and serializes handlers through the router's FIFO dispatch gate.
-This keeps back-channel behavior consistent with ordinary inbound stream dispatch.
+Every session handles a received request the same way, on inbound and outbound streams alike.
+It appends the message's metadata to the incoming context and pushes the handler call to the endpoint's `dispatcher`, which runs handlers one at a time, in arrival order.
+So a back-channel request on a stream that this node dialed is served like a request on an inbound stream.
