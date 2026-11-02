@@ -3,7 +3,7 @@
 
 package gengorums
 
-// pkgIdentMap maps from package name to one of the package's identifiers.
+// pkgIdentMap maps the import path of each package to one of its identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
 var pkgIdentMap = map[string]string{"github.com/relab/gorums": "Config"}
 
