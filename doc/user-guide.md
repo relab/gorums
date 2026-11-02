@@ -1345,8 +1345,19 @@ type ServerInterceptor func(ctx gorums.ServerContext, in *gorums.Message, send f
 
 You can pass multiple interceptors when starting a Gorums server.
 They can perform logging, latency injection, metadata insertion, and request validation before sending the request to the handler.
-Pass `send` to `next` so the handler can send streamed responses.
-An interceptor can wrap `send` to observe or change each streamed response, and it receives a unary response as the `proto.Message` that `next` returns.
+
+How an interceptor sees the handler's responses depends on the call type:
+
+* Unary call: `next` returns the response.
+  The interceptor can inspect or replace the response before it returns it.
+* Streaming call: the handler calls `send` once for each response, and `next` returns `nil, nil`.
+  To see each response, the interceptor gives `next` a new `send` function.
+  This function inspects or replaces the response, and then calls the original `send`.
+  The [stream logging interceptor](#server-side-stream-logging-interceptor) below shows this pattern.
+* One-way call: the handler sends no response, and `next` returns `nil, nil`.
+
+An interceptor that does not need the streamed responses passes its `send` argument to `next` unchanged.
+It must not pass `nil`, because then a streaming handler cannot send its responses.
 
 Below are several examples based on the `examples/interceptors` package.
 
@@ -1365,6 +1376,23 @@ func LoggingInterceptor(addr string) gorums.ServerInterceptor {
         log.Printf("[%s]: LoggingInterceptor(outgoing): Method=%s, Duration=%s, Err=%v, Message=%v", addr, in.GetMethod(), duration, err, out)
         return out, err
     }
+}
+```
+
+The logging interceptor above sees only unary responses, because `next` returns `nil` for a streaming call.
+
+#### Server-Side Stream Logging Interceptor
+
+This interceptor logs each response of a streaming call.
+It passes `next` a new `send` function, which logs the response and then calls the original `send`:
+
+```go
+func StreamLoggingInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
+    logAndSend := func(resp proto.Message) {
+        log.Printf("StreamLoggingInterceptor: Method=%s, Message=%v", in.GetMethod(), resp)
+        send(resp)
+    }
+    return next(ctx, in, logAndSend)
 }
 ```
 
