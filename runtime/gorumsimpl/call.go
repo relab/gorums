@@ -12,33 +12,34 @@ import (
 )
 
 // QuorumCall returns a quorum-call handle for the nodes in config.
-// The call is dispatched when the handle is consumed. If config is empty,
-// the handle sends nothing and reports [gorums.ErrEmptyConfig].
+// A terminal method or [gorums.Call.Async] dispatches the call. If config is
+// empty, the call sends nothing and fails with [gorums.ErrEmptyConfig].
 // It is used by generated code.
 func QuorumCall[Req, Resp proto.Message](ctx context.Context, config gorums.Config, req Req, method string) *gorums.Call[Req, Resp] {
 	return impl.QuorumCall[Req, Resp](ctx, config, req, method)
 }
 
 // QuorumCallStream returns a streaming quorum-call handle for the nodes in
-// config. The call is dispatched when the handle is consumed. If config is
-// empty, the handle sends nothing and reports [gorums.ErrEmptyConfig].
+// config. It accepts multiple responses per node until ctx ends. A terminal
+// method or [gorums.Call.Async] dispatches the call. If config is empty, the
+// call sends nothing and fails with [gorums.ErrEmptyConfig].
 // It is used by generated code.
 func QuorumCallStream[Req, Resp proto.Message](ctx context.Context, config gorums.Config, req Req, method string) *gorums.Call[Req, Resp] {
 	return impl.QuorumCallStream[Req, Resp](ctx, config, req, method)
 }
 
 // Multicast returns a one-way call handle for every node in config.
-// [gorums.OnewayCall.Send] or [gorums.OnewayCall.Async] dispatches the call;
-// Send errors are reported by Send or [gorums.OnewayAsync.Wait]. If config is
-// empty, the handle sends nothing and reports [gorums.ErrEmptyConfig].
+// [gorums.OnewayCall.Send] or [gorums.OnewayCall.Async] dispatches the call.
+// If config is empty, the call sends nothing and fails with
+// [gorums.ErrEmptyConfig].
 // It is used by generated code.
 func Multicast[Req proto.Message](ctx context.Context, config gorums.Config, req Req, method string) *gorums.OnewayCall[Req] {
 	return impl.Multicast(ctx, config, req, method)
 }
 
-// Unicast executes a one-way call on node. No reply is returned.
-// Send errors are reported by [gorums.OnewayCall.Send] or
-// [gorums.OnewayAsync.Wait]. If node is nil, they report [gorums.ErrNoNode].
+// Unicast returns a one-way call handle for node.
+// [gorums.OnewayCall.Send] or [gorums.OnewayCall.Async] dispatches the call.
+// If node is nil, the call sends nothing and fails with [gorums.ErrNoNode].
 // It is used by generated code.
 func Unicast[Req proto.Message](ctx context.Context, node *gorums.Node, req Req, method string) *gorums.OnewayCall[Req] {
 	return impl.Unicast(ctx, node, req, method)
