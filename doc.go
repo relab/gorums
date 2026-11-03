@@ -14,24 +14,27 @@
 //     return a handle whose terminal methods (First, Majority, All, Threshold,
 //     Aggregate, Reduce, Matching) wait for the responses and aggregate them
 //     into a result.
-//   - rpc: a plain unary call to a single node.
+//   - remotecall: a plain unary call to a single node. A method without a
+//     call type option is a remote call.
 //   - multicast: a one-way call to every node in a configuration.
 //   - unicast: a one-way call to a single node.
 //
-// A quorum call or one-way call returns a handle and sends nothing until
-// the caller invokes a terminal method, [Call.Async], [Responses.Correctable],
-// [OnewayCall.Send], or [OnewayCall.Async], or ranges over
-// [Responses.Results]. A remote call sends at once.
-// Lazy dispatch is what lets a call site attach client interceptors before the
-// request is sent. [Call.Async] sends the request at once and leaves the
-// replies to a later terminal method, and [Responses.Correctable] reports
-// progressively better results.
+// Quorum calls and one-way calls are dispatched lazily. The call returns a
+// handle, and the request is sent only when the caller uses the handle.
+// Lazy dispatch lets a call site attach client interceptors to the handle
+// before the request is sent. A remote call sends its request at once.
 //
-// A call that fails with an error returns it from the method that collects
-// its result: a terminal method of a quorum call, or [OnewayCall.Send] of a
-// one-way call. Async returns a handle that collects the result later:
-// [Call.Async] returns [Responses], whose terminal methods return the error,
-// and [OnewayCall.Async] returns [OnewayAsync], whose Wait returns it.
+// A quorum call sends its request on a terminal method, on Async, on
+// Correctable, or on a range over Results. Async sends the request at once
+// and leaves the replies to a later terminal method. Correctable returns
+// progressively better results. A one-way call sends its request on Send or
+// on Async.
+//
+// A call that fails returns its error from the method that collects the
+// result. For a quorum call, that is a terminal method. For a one-way call,
+// it is Send. If the caller uses Async, the returned handle collects the
+// result later: the terminal methods of [Responses] or [OnewayAsync.Wait]
+// return the error.
 //
 // # Service clients
 //
@@ -50,10 +53,9 @@
 //	reply, err = leader.ReadRPC(ctx, req)
 //
 // A node client holds only its node, so building one allocates nothing.
-// Build a node client where you need it, and do not keep it. The node may be
-// outside cfg. If the node is nil, a remote call or unicast fails with
-// [ErrNoNode]. On an empty configuration, a quorum call or multicast sends
-// nothing and fails with [ErrEmptyConfig].
+// Build a node client where you need it, and do not keep it. If the node is
+// nil, a remote call or unicast fails with [ErrNoNode]. On an empty
+// configuration, a quorum call or multicast fails with [ErrEmptyConfig].
 // To call another configuration, build a new SClient from it.
 // A client does not own its configuration or node; the close function returned
 // by [NewConfig] closes the connections.

@@ -20,29 +20,34 @@ var ErrTypeMismatch = impl.ErrTypeMismatch
 // because the target node's stream is unavailable, such as a call over a
 // shared [WithStreamDedup] stream that is not connected (see
 // [Server.WaitForAll]). It is a gRPC status error with the Unavailable code;
-// match it with [errors.Is], also inside a [QuorumCallError].
+// test for it with [errors.Is], also inside a [QuorumCallError]. The
+// Unavailable code alone does not tell it apart from other node errors.
 var ErrStreamDown = stream.ErrStreamDown
 
 // ErrNodeClosed is returned for a call enqueued after its node was closed. It
-// is a gRPC status error with the Unavailable code; match it with [errors.Is].
+// is a gRPC status error with the Unavailable code; test for it with
+// [errors.Is]. The Unavailable code alone does not tell it apart from other
+// node errors.
 var ErrNodeClosed = stream.ErrNodeClosed
 
 // ErrNoNode is the error of a remote call or unicast on a nil node.
-// [Config.Node] returns nil for an ID outside the configuration.
-// It is a gRPC status error with the InvalidArgument code; match it with
-// [errors.Is].
+// It is a gRPC status error with the InvalidArgument code; test for it with
+// [errors.Is]. The InvalidArgument code alone does not tell it apart from
+// [ErrEmptyConfig].
 var ErrNoNode = impl.ErrNoNode
 
 // ErrEmptyConfig is the error of a quorum call or multicast on an empty
 // configuration, such as one that [Config.Remove] or [Config.WithoutErrors]
-// emptied. Such a call sends nothing. It is a gRPC status error with the
-// InvalidArgument code; match it with [errors.Is].
+// emptied. It is a gRPC status error with the InvalidArgument code; test for
+// it with [errors.Is]. The InvalidArgument code alone does not tell it apart
+// from [ErrNoNode].
 var ErrEmptyConfig = impl.ErrEmptyConfig
 
 // ErrSendQueueFull is returned for a two-way call enqueued while the node's
 // send queue is full, so quorum logic counts the peer as failed; see
 // [WithDialBufferSizes]. A one-way call waits for space instead. It is a gRPC
-// status error with the Unavailable code; match it with [errors.Is].
+// status error with the Unavailable code; test for it with [errors.Is]. The
+// Unavailable code alone does not tell it apart from other node errors.
 var ErrSendQueueFull = stream.ErrSendQueueFull
 
 // ErrSendStalled is reported by [Node.LastErr] while a send to the node has
