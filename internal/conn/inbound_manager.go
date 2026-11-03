@@ -149,7 +149,7 @@ func (im *InboundManager) Nodes() []*Node {
 }
 
 // ConnectedPeers returns the current connected-peer [Config]; see
-// [github.com/relab/gorums.Server.ConnectedPeers]. Before [InboundManager.SetPeerConfig]
+// [gorums.Server.ConnectedPeers]. Before [InboundManager.SetPeerConfig]
 // installs a peer configuration, it returns the inbound view.
 func (im *InboundManager) ConnectedPeers() Config {
 	if im == nil {
@@ -161,7 +161,7 @@ func (im *InboundManager) ConnectedPeers() Config {
 }
 
 // SetPeerConfig installs the server's peer [Config], from which the
-// connected-peer view is derived. It is called once by [github.com/relab/gorums.NewServer] after the
+// connected-peer view is derived. It is called once by [gorums.NewServer] after the
 // peer configuration is built; stream-state changes observed before that are
 // picked up by the rebuild here.
 func (im *InboundManager) SetPeerConfig(cfg Config) {
@@ -182,7 +182,7 @@ func (im *InboundManager) onStreamChange() {
 }
 
 // ConnectedClients returns the current connected-client [Config]; see
-// [github.com/relab/gorums.Server.ConnectedClients].
+// [gorums.Server.ConnectedClients].
 func (im *InboundManager) ConnectedClients() Config {
 	if im == nil {
 		return nil
@@ -453,7 +453,7 @@ func (im *InboundManager) waitForConfig(ctx context.Context, cond func() bool) e
 }
 
 // WaitForPeers blocks until cond returns true for the current connected-peer
-// [Config]; see [github.com/relab/gorums.Server.WaitForPeers]. cond runs under im.mu, so it must not
+// [Config]; see [gorums.Server.WaitForPeers]. cond runs under im.mu, so it must not
 // call back into im or otherwise acquire additional locks.
 func (im *InboundManager) WaitForPeers(ctx context.Context, cond func(Config) bool) error {
 	return im.waitForConfig(ctx, func() bool {
@@ -462,7 +462,7 @@ func (im *InboundManager) WaitForPeers(ctx context.Context, cond func(Config) bo
 }
 
 // WaitForClients blocks until cond returns true for the current
-// connected-client [Config]; see [github.com/relab/gorums.Server.WaitForClients]. cond runs under
+// connected-client [Config]; see [gorums.Server.WaitForClients]. cond runs under
 // im.mu, so it must not call back into im or otherwise acquire additional
 // locks.
 func (im *InboundManager) WaitForClients(ctx context.Context, cond func(Config) bool) error {
@@ -492,7 +492,7 @@ func (im *InboundManager) WaitForInbound(ctx context.Context, cond func(Config) 
 }
 
 // Close signals all waiters to stop and prevents new waits from blocking.
-// Called from [github.com/relab/gorums.Server.Stop] and [github.com/relab/gorums.Server.GracefulStop].
+// Called from [gorums.Server.Stop] and [gorums.Server.GracefulStop].
 func (im *InboundManager) Close() {
 	im.stopOnce.Do(func() { close(im.stopCh) })
 }

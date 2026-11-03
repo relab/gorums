@@ -8,9 +8,8 @@
 // stream. It also defines the call result errors that reference nodes
 // ([QuorumCallError], [NodeError]).
 //
-// The package sits below the call engine in
-// [github.com/relab/gorums/internal/impl] and exposes the send path to it
-// through [NodeTransport]. Package [github.com/relab/gorums] re-exports the
+// The package sits below the call engine in package impl and exposes the send
+// path to it through [NodeTransport]. Package gorums re-exports the
 // user-facing types here as aliases; application code must not import this
 // package directly.
 package conn

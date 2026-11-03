@@ -1,7 +1,7 @@
 // Package benchmark drives Gorums quorum calls against a configuration of
 // server nodes to measure their performance.
 //
-// It builds on [github.com/relab/gorums/benchkit] to run configurable load
+// It builds on [benchkit] to run configurable load
 // against local or remote targets, including the symmetric peer-to-peer setup
 // where every server also calls the others, and reports latency and throughput.
 package benchmark

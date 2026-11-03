@@ -12,7 +12,6 @@
 // [InboundStream]) that accepts inbound streams; and the [Message] envelope and
 // message-ID space shared by both directions.
 //
-// It sits below the connectivity layer in
-// [github.com/relab/gorums/internal/conn] and knows nothing about nodes,
-// configurations, or quorum calls.
+// It sits below the connectivity layer in package conn and knows nothing about
+// nodes, configurations, or quorum calls.
 package stream
