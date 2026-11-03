@@ -238,8 +238,10 @@ The `Call` type also has an `Intercept` method, which registers client intercept
 The one-way `WriteMulticast` method returns a `*gorums.OnewayCall[*WriteRequest]` handle, which also has an `Intercept` method.
 
 Both handles follow one pattern.
-A method can send the request and wait for the result in one step.
-Or `Async` can send the request at once, and a method on the handle that `Async` returns waits for the result later:
+A method can send the request and wait in one step.
+Or `Async` can send the request at once, and a method on the handle that `Async` returns waits later.
+A quorum call waits for the replies.
+A one-way call has no reply; it waits until each message reaches the stream of its node.
 
 | Call type    | Send and wait                            | Send now, wait later                                            |
 | ------------ | ---------------------------------------- | --------------------------------------------------------------- |
@@ -250,7 +252,7 @@ For a quorum call, `Async` returns a `*gorums.Responses`, which has all the term
 For a one-way call, `Async` returns a `*gorums.OnewayAsync`, and its `Wait` method returns the send errors.
 So `Send` is the same as `Async().Wait()`.
 
-When this guide says that a call *fails with* an error, the method that waits for the call's result returns that error.
+When this guide says that a call *fails with* an error, the method that waits returns that error.
 For a quorum call, this is a terminal method.
 For a one-way call, this is `Send` or `Wait`.
 
