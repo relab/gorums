@@ -771,6 +771,36 @@ func TestInboundManagerOnConfigChangeFiresOnceForPeerConfig(t *testing.T) {
 	}
 }
 
+// TestInboundManagerSetPeerConfigReportsPeerUp verifies that SetPeerConfig
+// reports the first view once, including a peer that is already up, and that
+// the callback still runs for a later change.
+func TestInboundManagerSetPeerConfigReportsPeerUp(t *testing.T) {
+	var calls [][]uint32
+	im := newInboundManager(t, 1, WithNodes(map[uint32]mock.NodeAddr{
+		1: "127.0.0.1:9081",
+		2: "127.0.0.1:9082",
+	}), func(cfg Config) {
+		calls = append(calls, slices.Clone(cfg.NodeIDs()))
+	}, nil)
+
+	self := newNode(1, "127.0.0.1:9081", nil, nil)
+	transport := stream.NewTransport(2, func() uint64 { return 0 })
+	transport.StoreChannel(stream.NewLocalChannel(2, nil, DefaultRecvBufferSize))
+	peer := newNode(2, "127.0.0.1:9082", nil, transport)
+	im.SetPeerConfig(Config{self, peer})
+
+	if len(calls) != 1 || !slices.Equal(calls[0], []uint32{1, 2}) {
+		t.Fatalf("onChange calls after SetPeerConfig = %v; want [[1 2]]", calls)
+	}
+
+	// A later change is reported: the peer goes down.
+	transport.StoreChannel(nil)
+	im.onStreamChange()
+	if len(calls) != 2 || !slices.Equal(calls[1], []uint32{1}) {
+		t.Errorf("onChange calls after peer down = %v; want [[1 2] [1]]", calls)
+	}
+}
+
 // TestInboundManagerOnConfigChangePeerConnectDisconnect verifies that the onConfigChange
 // callback fires with the updated configuration when a known peer connects and
 // later disconnects.
