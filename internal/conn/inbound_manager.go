@@ -55,7 +55,8 @@ func hasPeerMetadata(ctx context.Context) bool {
 	return len(md.Get(gorumsNodeIDKey)) > 0
 }
 
-// MetadataWithNodeID returns a metadata.MD containing the gorums-node-id key with the given id value.
+// MetadataWithNodeID returns a metadata.MD containing the gorums-node-id key
+// with the given id value.
 func MetadataWithNodeID(id ID) metadata.MD {
 	return metadata.Pairs(gorumsNodeIDKey, strconv.FormatUint(uint64(id), 10))
 }
@@ -301,7 +302,8 @@ func (im *InboundManager) AcceptPeer(streamCtx context.Context, inboundStream st
 		// track it in ConnectedClients — the client cannot receive back-channel calls.
 		return untrackedChannel(streamCtx, inboundStream, im.inboundOptions())
 	}
-	// Peer-capable anonymous client (gorums-node-id: 0) — create new node with auto-assigned ID.
+	// Peer-capable anonymous client (gorums-node-id: 0) — create new node with
+	// auto-assigned ID.
 	return im.acceptClient(streamCtx, inboundStream)
 }
 

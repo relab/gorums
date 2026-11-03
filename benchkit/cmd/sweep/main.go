@@ -636,8 +636,8 @@ func collectRunArtifacts(g iago.Group, base string, nodes []nodeAssignment, cfg 
 	err := collectResults(g, base, nodes, cfg, collectExts)
 	// Bridge collected binary files to protojson for local sweeps. Driven sweeps
 	// keep the remote output compact by reducing successful runs to plot CSVs;
-	// if the raw archive is collected later, [convertDirBinaryResults] regenerates protojson on
-	// the laptop from the downloaded binpb files.
+	// if the raw archive is collected later, [convertDirBinaryResults]
+	// regenerates protojson on the laptop from the downloaded binpb files.
 	if !cfg.driven {
 		convertBinaryResults(cfg.outDir, base, nodes)
 	}

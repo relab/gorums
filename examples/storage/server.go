@@ -200,7 +200,8 @@ func (s *storageServer) WriteQC(_ gorums.ServerContext, req *pb.WriteRequest) (r
 	return s.write(req)
 }
 
-// ReadCorrectable is an RPC handler for a correctable quorum call. It sends multiple responses.
+// ReadCorrectable is an RPC handler for a correctable quorum call. It sends
+// multiple responses.
 func (s *storageServer) ReadCorrectable(_ gorums.ServerContext, req *pb.ReadRequest, send func(response *pb.ReadResponse)) {
 	resp, err := s.read(req)
 	if err != nil {

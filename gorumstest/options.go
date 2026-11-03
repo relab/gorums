@@ -51,7 +51,8 @@ func (to *testOptions) serverFunc(srvFn func(i int) ServerIface) func(i int) Ser
 		}
 	}
 	if len(to.serverOpts) > 0 {
-		// You need to pass nil as the server function to use server options with the default server
+		// You need to pass nil as the server function to use server options
+		// with the default server
 		panic("gorumstest: cannot use server options with a custom server function")
 	}
 	return srvFn

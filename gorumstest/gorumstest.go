@@ -134,7 +134,8 @@ func DialOptions(t testing.TB) gorums.DialOption {
 // The provided srvFn is used to create and register the server handlers.
 // If srvFn is nil, a default mock server implementation is used.
 //
-// Optional [Option] values can be provided to customize the dial options, server, or configuration.
+// Optional [Option] values can be provided to customize the dial options,
+// server, or configuration.
 //
 // By default, nodes are assigned sequential IDs (1, 2, 3, ...) matching the server
 // creation order. This can be overridden by providing a [gorums.NodeSource].
@@ -203,7 +204,8 @@ func UnreachableConfig(t testing.TB, addrs ...string) gorums.Config {
 // The provided srvFn is used to create and register the server handler.
 // If srvFn is nil, a default mock server implementation is used.
 //
-// Optional [Option] values can be provided to customize the dial options, server, or configuration.
+// Optional [Option] values can be provided to customize the dial options,
+// server, or configuration.
 //
 // This is the recommended way to set up tests that need only a single server node.
 // It ensures proper cleanup and detects goroutine leaks.

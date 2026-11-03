@@ -36,7 +36,8 @@ func init() {
 	}
 }
 
-// TestMethod, EchoMethod, GetValueMethod, and StreamMethod are the methods supported by the mock package.
+// TestMethod, EchoMethod, GetValueMethod, and StreamMethod are the methods
+// supported by the mock package.
 const (
 	TestMethod     = "mock.MockService.Test"
 	EchoMethod     = "mock.MockService.Echo"

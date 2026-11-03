@@ -350,10 +350,10 @@ type paceLevel struct {
 }
 
 // paceWarnings returns one warning per level that fell behind its schedule,
-// where targets is the number of send targets that share each level. A ramp is checked level by
-// level, because its top levels are where the workers run out, and the lower
-// levels would hide that shortfall in a whole-run count. A single-level run
-// gets the [PaceWarning] message.
+// where targets is the number of send targets that share each level. A ramp is
+// checked level by level, because its top levels are where the workers run out,
+// and the lower levels would hide that shortfall in a whole-run count. A
+// single-level run gets the [PaceWarning] message.
 func paceWarnings(levels []paceLevel, targets int) []string {
 	var msgs []string
 	for _, l := range levels {

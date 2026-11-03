@@ -54,11 +54,13 @@ func TestServerConnectCallback(t *testing.T) {
 func appendStringInterceptor(inStr, outStr string) gorums.ServerInterceptor {
 	return func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
 		req := gorums.AsProto[*pb.StringValue](in)
-		// update the underlying request gorums.Message's message field (pb.StringValue in this case)
+		// update the underlying request gorums.Message's message field
+		// (pb.StringValue in this case)
 		req.Value += inStr
 
 		// We do not need to re-marshal into the payload here.
-		// The next handler in the chain will access req via gorums.AsProto(in) which reads in.Proto.
+		// The next handler in the chain will access req via
+		// gorums.AsProto(in) which reads in.Proto.
 
 		// call the next handler
 		out, err := next(ctx, in, send)

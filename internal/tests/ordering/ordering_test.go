@@ -13,8 +13,8 @@ import (
 	"github.com/relab/gorums/gorumstest"
 )
 
-// stressMode controls whether tests run in stress mode (time-based) or normal mode (iteration-based).
-// Enable it with go test -stress.
+// stressMode controls whether tests run in stress mode (time-based) or normal
+// mode (iteration-based). Enable it with go test -stress.
 var stressMode = flag.Bool("stress", false, "run the ordering tests for a fixed duration instead of a fixed number of iterations")
 
 // testIterations is the number of iterations for ordering tests in normal mode.

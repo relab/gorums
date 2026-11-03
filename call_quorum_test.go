@@ -272,7 +272,8 @@ func TestQuorumCallAsyncSynctest(t *testing.T) {
 	})
 }
 
-// BenchmarkQuorumCallTerminalMethods benchmarks the built-in terminal methods with real servers.
+// BenchmarkQuorumCallTerminalMethods benchmarks the built-in terminal methods
+// with real servers.
 func BenchmarkQuorumCallTerminalMethods(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9, 13, 17, 19} {
 		config := gorumstest.Config(b, numNodes, gorumstest.EchoServer)
