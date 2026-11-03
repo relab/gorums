@@ -25,16 +25,17 @@
 // before the request is sent. A remote call sends its request at once.
 //
 // A quorum call sends its request on a terminal method, on Async, on
-// Correctable, or on a range over Results. Async sends the request at once
-// and leaves the replies to a later terminal method. Correctable returns
+// Correctable, or on a range over Results. Correctable returns
 // progressively better results. A one-way call sends its request on Send or
 // on Async.
 //
-// A call that fails returns its error from the method that collects the
-// result. For a quorum call, that is a terminal method. For a one-way call,
-// it is Send. If the caller uses Async, the returned handle collects the
-// result later: the terminal methods of [Responses] or [OnewayAsync.Wait]
-// return the error.
+// Quorum calls and one-way calls follow one pattern. A terminal method of a
+// quorum call sends the request and waits for the replies. Send of a one-way
+// call sends the request and waits until each message reaches its node's
+// stream; no reply follows. Async sends the request at once and returns a
+// handle that waits later: [Responses] has the terminal methods, and
+// [OnewayAsync] has Wait. So Send is the same as Async followed by Wait. A
+// call that fails returns its error from the method that waits.
 //
 // # Service clients
 //
