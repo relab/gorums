@@ -107,7 +107,9 @@ const ClientIDStart = 1 << 20
 // immediately included in the Config as the self-node, so that quorum thresholds
 // account for the local replica from the moment of construction. The handler is
 // installed on the self-node (if present) to enable in-process dispatch without
-// a network round-trip. Inbound channels use sendBufferSize and recvBufferSize
+// a network round-trip. onConfigChange does not run for the initial view; for
+// a server with peerNodes, its first call comes from
+// [InboundManager.SetPeerConfig]. Inbound channels use sendBufferSize and recvBufferSize
 // as their send queue and request dispatch capacities; a recvBufferSize must
 // be positive. It returns an error if peerNodes is invalid, for example
 // because of an invalid address or a duplicate node.
@@ -123,7 +125,6 @@ func NewInboundManager(myID ID, peerNodes NodeSource, sendBufferSize, recvBuffer
 		recvBufferSize: recvBufferSize,
 		handler:        handler,
 		verify:         verify,
-		onConfigChange: onConfigChange,
 		nextClientID:   ClientIDStart,
 		configCh:       make(chan struct{}),
 		stopCh:         make(chan struct{}),
@@ -133,7 +134,11 @@ func NewInboundManager(myID ID, peerNodes NodeSource, sendBufferSize, recvBuffer
 			return nil, err
 		}
 	}
+	// The initial view of a server that expects a peer configuration is not
+	// reported: [InboundManager.SetPeerConfig] reports the first view, whose
+	// nodes the caller can use. The callback is installed after this rebuild.
 	im.rebuildConfig()
+	im.onConfigChange = onConfigChange
 	return im, nil
 }
 
