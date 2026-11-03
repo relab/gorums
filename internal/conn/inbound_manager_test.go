@@ -741,12 +741,13 @@ func TestInboundManagerAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 	}
 }
 
-// TestInboundManagerOnConfigChangeFiringOnConstruction verifies that the onConfigChange
-// callback fires once during InboundManager construction, with only the
-// self-node present in the initial configuration.
-func TestInboundManagerOnConfigChangeFiringOnConstruction(t *testing.T) {
+// TestInboundManagerOnConfigChangeSilentOnConstruction verifies that the
+// onConfigChange callback does not fire during construction, nor when
+// SetPeerConfig installs a peer configuration that holds the same node IDs
+// as the view it replaces. Only a real connection change fires it.
+func TestInboundManagerOnConfigChangeSilentOnConstruction(t *testing.T) {
 	var calls [][]uint32
-	newInboundManager(t, 1, WithNodes(map[uint32]mock.NodeAddr{
+	im := newInboundManager(t, 1, WithNodes(map[uint32]mock.NodeAddr{
 		1: "127.0.0.1:9081",
 		2: "127.0.0.1:9082",
 		3: "127.0.0.1:9083",
@@ -754,11 +755,19 @@ func TestInboundManagerOnConfigChangeFiringOnConstruction(t *testing.T) {
 		calls = append(calls, slices.Clone(cfg.NodeIDs()))
 	}, nil)
 
-	if len(calls) != 1 {
-		t.Fatalf("onChange fired %d times during construction; want 1", len(calls))
+	if len(calls) != 0 {
+		t.Fatalf("onChange fired %d times during construction; want 0", len(calls))
 	}
-	if got := calls[0]; !slices.Equal(got, []uint32{1}) {
-		t.Errorf("construction config IDs = %v; want [1]", got)
+
+	// The peer configuration has its own self node, a different *Node with
+	// the same ID as the inbound self node.
+	self := newNode(1, "127.0.0.1:9081", nil, nil)
+	im.SetPeerConfig(Config{self})
+	if len(calls) != 0 {
+		t.Errorf("onChange fired %d times for SetPeerConfig with unchanged IDs; want 0", len(calls))
+	}
+	if got := im.ConnectedPeers(); len(got) != 1 || got[0] != self {
+		t.Errorf("ConnectedPeers() = %v; want the peer configuration's self node", got.NodeIDs())
 	}
 }
 

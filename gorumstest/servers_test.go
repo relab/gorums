@@ -46,7 +46,7 @@ func TestLocalServersOptions(t *testing.T) {
 	peerChanges := 0
 	var perServer []gorums.ID
 	var dialLog bytes.Buffer
-	gorumstest.LocalServers(t, n,
+	srvs := gorumstest.LocalServers(t, n,
 		gorums.WithPeerChange(func(gorums.Config) {
 			mu.Lock()
 			defer mu.Unlock()
@@ -60,6 +60,9 @@ func TestLocalServersOptions(t *testing.T) {
 			return nil
 		}),
 	)
+
+	// The callback does not run during construction; peers connecting do.
+	gorumstest.WaitForPeers(t, srvs)
 
 	mu.Lock()
 	defer mu.Unlock()

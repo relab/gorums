@@ -1547,7 +1547,8 @@ gorums.WithPeerChange(func(cfg gorums.Config) { ... })
 
 **When it runs:** after every change to the connected-peer configuration.
 For a peer connect or disconnect, the callback runs while the server holds the lock that guards its peer and client views, immediately after the configuration has been replaced.
-The callback also runs during `NewServer`, with a configuration that contains only the self-node.
+The callback does not run during `NewServer`.
+Read the initial state from `ConnectedPeers` after `NewServer` returns.
 
 **What is available:** a configuration of the connected peers, sorted by node ID.
 The self-node (this server's own ID) is always included regardless of connectivity.

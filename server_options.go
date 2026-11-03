@@ -125,8 +125,8 @@ func WithPeers(myID ID, nodes NodeSource, opts ...DialOption) ServerOption {
 // [WithPeers]. The server calls it after each change to the connected-peer
 // [Config], that is, when its connection to a peer comes up or goes down. The
 // [Config] is sorted by node ID and always holds this server's own node. The
-// callback also runs during [NewServer], with a [Config] that holds only this
-// server's own node.
+// callback does not run during [NewServer]; read the initial state from
+// [Server.ConnectedPeers] after [NewServer] returns.
 //
 // For a peer change, the callback runs while the server holds the lock that
 // guards its peer and client views. So it must not call

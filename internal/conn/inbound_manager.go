@@ -107,7 +107,8 @@ const ClientIDStart = 1 << 20
 // immediately included in the Config as the self-node, so that quorum thresholds
 // account for the local replica from the moment of construction. The handler is
 // installed on the self-node (if present) to enable in-process dispatch without
-// a network round-trip. Inbound channels use sendBufferSize and recvBufferSize
+// a network round-trip. The onConfigChange callback does not run for the
+// initial configuration, only for later changes. Inbound channels use sendBufferSize and recvBufferSize
 // as their send queue and request dispatch capacities; a recvBufferSize must
 // be positive. It returns an error if peerNodes is invalid, for example
 // because of an invalid address or a duplicate node.
@@ -123,7 +124,6 @@ func NewInboundManager(myID ID, peerNodes NodeSource, sendBufferSize, recvBuffer
 		recvBufferSize: recvBufferSize,
 		handler:        handler,
 		verify:         verify,
-		onConfigChange: onConfigChange,
 		nextClientID:   ClientIDStart,
 		configCh:       make(chan struct{}),
 		stopCh:         make(chan struct{}),
@@ -133,7 +133,9 @@ func NewInboundManager(myID ID, peerNodes NodeSource, sendBufferSize, recvBuffer
 			return nil, err
 		}
 	}
+	// The initial view is not a change: install the callback only after it.
 	im.rebuildConfig()
+	im.onConfigChange = onConfigChange
 	return im, nil
 }
 
@@ -385,7 +387,8 @@ func (im *InboundManager) nextAvailableClientID() (ID, error) {
 // is myID; a client is in the client Config while its stream lives. The
 // connected-peer Config is the subset of the installed peer configuration
 // whose nodes can currently carry calls; before a peer configuration is
-// installed it falls back to the inbound view. Callers must hold the lock.
+// installed it falls back to the inbound view. The change callback runs only
+// when the set of connected node IDs changes. Callers must hold the lock.
 func (im *InboundManager) rebuildConfig() {
 	inboundCfg := make(Config, 0, len(im.knownNodes))
 	for id, node := range im.knownNodes {
@@ -414,7 +417,9 @@ func (im *InboundManager) rebuildConfig() {
 		}
 		slices.SortFunc(cfg, ByID)
 	}
-	cfgChanged := !slices.Equal(im.connectedPeers, cfg)
+	// Compare by ID: SetPeerConfig replaces the self node with an equivalent
+	// one, which is not a change in who is connected.
+	cfgChanged := !slices.EqualFunc(im.connectedPeers, cfg, func(a, b *Node) bool { return a.ID() == b.ID() })
 	im.connectedPeers = cfg
 	if cfgChanged && im.onConfigChange != nil {
 		im.onConfigChange(cfg)

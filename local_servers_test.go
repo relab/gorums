@@ -196,7 +196,7 @@ func TestLocalServersAppliesPerServerOptions(t *testing.T) {
 	sharedChanges := 0
 	sawOwnNode := make(map[gorums.ID]bool)
 	var sharedLog, perServerLog bytes.Buffer
-	_, stop, err := gorums.NewLocalServers(n,
+	srvs, stop, err := gorums.NewLocalServers(n,
 		gorums.WithLocalServerOptions(gorums.WithPeerChange(func(gorums.Config) {
 			mu.Lock()
 			defer mu.Unlock()
@@ -220,6 +220,11 @@ func TestLocalServersAppliesPerServerOptions(t *testing.T) {
 		t.Fatalf("NewLocalServers: %v", err)
 	}
 	t.Cleanup(stop)
+	for _, srv := range srvs {
+		go srv.ListenAndServe()
+	}
+	// The callback does not run during construction; peers connecting do.
+	gorumstest.WaitForPeers(t, srvs)
 
 	mu.Lock()
 	defer mu.Unlock()
