@@ -1580,6 +1580,15 @@ gorumsSrv := gorums.NewServer(
     }),
 )
 
+// Peers that connected during NewServer do not call the callback, so check
+// the initial state first.
+if len(gorumsSrv.ConnectedPeers()) >= quorumSize {
+    select {
+    case ready <- struct{}{}:
+    default:
+    }
+}
+
 // Block until a quorum connects before accepting client requests.
 <-ready
 log.Println("quorum ready, starting to serve")

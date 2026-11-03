@@ -743,8 +743,8 @@ func TestInboundManagerAcceptPeerReplyRidesReceivingStream(t *testing.T) {
 
 // TestInboundManagerOnConfigChangeSilentOnConstruction verifies that the
 // onConfigChange callback does not fire during construction, nor when
-// SetPeerConfig installs a peer configuration that holds the same node IDs
-// as the view it replaces. Only a real connection change fires it.
+// SetPeerConfig installs a peer configuration whose self node differs from
+// the inbound self node.
 func TestInboundManagerOnConfigChangeSilentOnConstruction(t *testing.T) {
 	var calls [][]uint32
 	im := newInboundManager(t, 1, WithNodes(map[uint32]mock.NodeAddr{
@@ -764,10 +764,44 @@ func TestInboundManagerOnConfigChangeSilentOnConstruction(t *testing.T) {
 	self := newNode(1, "127.0.0.1:9081", nil, nil)
 	im.SetPeerConfig(Config{self})
 	if len(calls) != 0 {
-		t.Errorf("onChange fired %d times for SetPeerConfig with unchanged IDs; want 0", len(calls))
+		t.Errorf("onChange fired %d times for SetPeerConfig; want 0", len(calls))
 	}
 	if got := im.ConnectedPeers(); len(got) != 1 || got[0] != self {
 		t.Errorf("ConnectedPeers() = %v; want the peer configuration's self node", got.NodeIDs())
+	}
+}
+
+// TestInboundManagerSetPeerConfigSilentWithPeerUp verifies that SetPeerConfig
+// does not call onConfigChange when a peer is already up, since its view then
+// differs from the inbound view. ConnectedPeers reports the peer, and the
+// callback still runs for a later change.
+func TestInboundManagerSetPeerConfigSilentWithPeerUp(t *testing.T) {
+	var calls [][]uint32
+	im := newInboundManager(t, 1, WithNodes(map[uint32]mock.NodeAddr{
+		1: "127.0.0.1:9081",
+		2: "127.0.0.1:9082",
+	}), func(cfg Config) {
+		calls = append(calls, slices.Clone(cfg.NodeIDs()))
+	}, nil)
+
+	self := newNode(1, "127.0.0.1:9081", nil, nil)
+	transport := stream.NewTransport(2, func() uint64 { return 0 })
+	transport.StoreChannel(stream.NewLocalChannel(2, nil, DefaultRecvBufferSize))
+	peer := newNode(2, "127.0.0.1:9082", nil, transport)
+	im.SetPeerConfig(Config{self, peer})
+
+	if len(calls) != 0 {
+		t.Errorf("onChange fired %d times for SetPeerConfig; want 0", len(calls))
+	}
+	if got := im.ConnectedPeers().NodeIDs(); !slices.Equal(got, []uint32{1, 2}) {
+		t.Errorf("ConnectedPeers() IDs = %v; want [1 2]", got)
+	}
+
+	// A later change is reported: the peer goes down.
+	transport.StoreChannel(nil)
+	im.onStreamChange()
+	if len(calls) != 1 || !slices.Equal(calls[0], []uint32{1}) {
+		t.Errorf("onChange calls after peer down = %v; want [[1]]", calls)
 	}
 }
 

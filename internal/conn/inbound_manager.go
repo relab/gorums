@@ -166,12 +166,17 @@ func (im *InboundManager) ConnectedPeers() Config {
 // SetPeerConfig installs the server's peer [Config], from which the
 // connected-peer view is derived. It is called once by [gorums.NewServer] after the
 // peer configuration is built; stream-state changes observed before that are
-// picked up by the rebuild here.
+// picked up by the rebuild here. The rebuild does not call onConfigChange, even
+// if peers are already up: the caller reads the installed state from
+// [InboundManager.ConnectedPeers], and the callback reports later changes.
 func (im *InboundManager) SetPeerConfig(cfg Config) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	im.peerConfig = cfg
+	onConfigChange := im.onConfigChange
+	im.onConfigChange = nil
 	im.rebuildConfig()
+	im.onConfigChange = onConfigChange
 }
 
 // onStreamChange rebuilds the connected-peer view after a dialed peer's
@@ -387,8 +392,7 @@ func (im *InboundManager) nextAvailableClientID() (ID, error) {
 // is myID; a client is in the client Config while its stream lives. The
 // connected-peer Config is the subset of the installed peer configuration
 // whose nodes can currently carry calls; before a peer configuration is
-// installed it falls back to the inbound view. The change callback runs only
-// when the set of connected node IDs changes. Callers must hold the lock.
+// installed it falls back to the inbound view. Callers must hold the lock.
 func (im *InboundManager) rebuildConfig() {
 	inboundCfg := make(Config, 0, len(im.knownNodes))
 	for id, node := range im.knownNodes {
@@ -417,9 +421,7 @@ func (im *InboundManager) rebuildConfig() {
 		}
 		slices.SortFunc(cfg, ByID)
 	}
-	// Compare by ID: SetPeerConfig replaces the self node with an equivalent
-	// one, which is not a change in who is connected.
-	cfgChanged := !slices.EqualFunc(im.connectedPeers, cfg, func(a, b *Node) bool { return a.ID() == b.ID() })
+	cfgChanged := !slices.Equal(im.connectedPeers, cfg)
 	im.connectedPeers = cfg
 	if cfgChanged && im.onConfigChange != nil {
 		im.onConfigChange(cfg)
