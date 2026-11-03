@@ -111,7 +111,8 @@ func (c *OnewayCall[Req]) Intercept(ics ...ClientInterceptor[Req, *emptypb.Empty
 	return c
 }
 
-// Send dispatches the request and blocks until every message has reached its
+// Send is the same as [OnewayCall.Async] followed by [OnewayAsync.Wait]: it
+// dispatches the request and blocks until every message has reached its
 // node's stream. A one-way call carries no reply, so there is nothing further
 // to await.
 //
@@ -126,7 +127,8 @@ func (c *OnewayCall[Req]) Intercept(ics ...ClientInterceptor[Req, *emptypb.Empty
 // wait for the send. Use [OnewayCall.Async] also to keep several sends in
 // flight from a single goroutine.
 //
-// Send dispatches the call; calling it again on the same handle panics.
+// Send dispatches the call; calling Send or Async on the same handle after
+// dispatch panics.
 func (c *OnewayCall[Req]) Send() error {
 	c.dispatch()
 	return c.collect()
@@ -140,9 +142,11 @@ func (c *OnewayCall[Req]) Send() error {
 //	err := h.Wait()
 //
 // Async starts no goroutine; [OnewayAsync.Wait] collects the send confirmations
-// on the caller's goroutine. Dropping the handle without calling Wait is safe.
+// on the caller's goroutine. Dropping the handle without calling Wait is safe,
+// but the send errors are then lost.
 //
-// Async dispatches the call; calling it again on the same handle panics.
+// Async dispatches the call; calling Send or Async on the same handle after
+// dispatch panics.
 func (c *OnewayCall[Req]) Async() *OnewayAsync {
 	c.dispatch()
 	return &OnewayAsync{collect: c.collect}

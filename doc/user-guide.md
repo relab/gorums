@@ -235,14 +235,24 @@ The `StorageClient` methods target every node in the configuration.
 A quorum call method returns a `*gorums.Call[*ReadRequest, *ReadResponse]` handle.
 The handle embeds `*gorums.Responses[*ReadResponse]`, which provides the terminal methods.
 The `Call` type also has an `Intercept` method, which registers client interceptors before the call is sent.
-The one-way `WriteMulticast` method returns a `*gorums.OnewayCall[*WriteRequest]` handle.
-`Send` blocks until every send completes and returns any send errors.
-`Async` sends the request and returns a `*gorums.OnewayAsync` handle at once.
-`Wait` on that handle returns the send errors.
+The one-way `WriteMulticast` method returns a `*gorums.OnewayCall[*WriteRequest]` handle, which also has an `Intercept` method.
 
-When this guide says that a call *fails with* an error, the method that collects the call's result returns that error.
-For a quorum call, this is a terminal method, also on the `*gorums.Responses` that `Async` returns.
-For a one-way call, this is `Send`, or `Wait` on the `*gorums.OnewayAsync` that `Async` returns.
+Both handles follow one pattern.
+A method can send the request and wait for the result in one step.
+Or `Async` can send the request at once, and a method on the handle that `Async` returns waits for the result later:
+
+| Call type    | Send and wait                            | Send now, wait later                                            |
+| ------------ | ---------------------------------------- | --------------------------------------------------------------- |
+| Quorum call  | `client.ReadQC(ctx, req).Majority()`     | `h := client.ReadQC(ctx, req).Async()`, then `h.Majority()`     |
+| One-way call | `client.WriteMulticast(ctx, req).Send()` | `h := client.WriteMulticast(ctx, req).Async()`, then `h.Wait()` |
+
+For a quorum call, `Async` returns a `*gorums.Responses`, which has all the terminal methods.
+For a one-way call, `Async` returns a `*gorums.OnewayAsync`, and its `Wait` method returns the send errors.
+So `Send` is the same as `Async().Wait()`.
+
+When this guide says that a call *fails with* an error, the method that waits for the call's result returns that error.
+For a quorum call, this is a terminal method.
+For a one-way call, this is `Send` or `Wait`.
 
 ```go
 type StorageClient interface {
@@ -843,21 +853,17 @@ _, _ = b.Majority()
 
 Collecting the replies one call after the other takes about as long as the slowest call, because the replies of both calls arrive in their buffers at the same time.
 
-**Multicast and unicast are lazy too.** A one-way call returns a `*OnewayCall[Req]` handle.
-The call is not dispatched until the caller calls `.Send()` or `.Async()` on the handle.
+**Multicast and unicast follow the same pattern.** A one-way call is not dispatched until the caller calls `Send` or `Async`.
 If the caller drops the handle without calling either method, the call is never dispatched.
+`Send` is the same as `Async().Wait()`.
 
-`.Send()` returns every send failure, and so does `.Wait()` on the `*OnewayAsync` that `.Async()` returns, so a one-way call cannot fail silently.
-Each send completes when the message reaches the stream of its node.
-Neither can return errors that occur later in the server handler, because a one-way call has no reply.
+A send completes when the message reaches the stream of its node.
+`Send` and `Wait` return every send failure.
+They cannot return errors that occur later in the server handler, because a one-way call has no reply.
+If the caller drops the `*OnewayAsync` handle without calling `Wait`, the sends still complete, but their errors are lost.
 
-A server handler that multicasts calls `.Async()` before `ServerContext.Release()` and `.Wait()` after it.
-The sends then keep the order of the requests.
-The next request also does not wait for the sends.
-For details, see [Request Ordering and ServerContext.Release](#request-ordering-and-servercontextrelease).
-
-`.Send()` blocks until the sends complete, so one goroutine holds a single outstanding message per node — the same depth a quorum call has.
-`.Async()` dispatches and returns a `*OnewayAsync` whose `.Wait()` collects the errors later, letting one goroutine keep several calls in flight:
+`Send` blocks until the sends complete, so one goroutine holds a single outstanding message per node — the same depth a quorum call has.
+As with a quorum call, `Async` lets one goroutine keep several calls in flight:
 
 ```go
 handles := make([]*gorums.OnewayAsync, 0, len(batch))
@@ -871,15 +877,21 @@ for _, h := range handles {
 }
 ```
 
-`.Async()` starts no goroutine; `.Wait()` collects the send confirmations on the caller's goroutine.
+`Async` starts no goroutine; `Wait` collects the send confirmations on the caller's goroutine.
+
+A server handler that multicasts calls `Async` before `ServerContext.Release()` and `Wait` after it.
+The sends then keep the order of the requests.
+The next request also does not wait for the sends.
+For details, see [Request Ordering and ServerContext.Release](#request-ordering-and-servercontextrelease).
 
 Summary:
 
-| Call type            | When messages are sent              |
-| -------------------- | ----------------------------------- |
-| Quorum call          | On dispatch (lazy)                  |
-| Quorum call, `Async` | Immediately, before `Async` returns |
-| Multicast / unicast  | On `.Send()` or `.Async()` (lazy)   |
+| Call type             | When messages are sent                                   |
+| --------------------- | -------------------------------------------------------- |
+| Quorum call           | On a terminal method, `Correctable`, or `Results` (lazy) |
+| Quorum call, `Async`  | Immediately, before `Async` returns                      |
+| One-way call          | On `Send` (lazy)                                         |
+| One-way call, `Async` | Immediately, before `Async` returns                      |
 
 **A cancelled call leaves the node's stream intact.**
 When a call's context ends, the call returns, but the request may still be sent if it was already queued or in flight, and a late reply is discarded.
@@ -1169,7 +1181,7 @@ It does not cover the client names `SClient` and `NewSClient` that `protoc-gen-g
 ## Interceptors for Request/Response Transformation
 
 Gorums provides interceptors to transform requests and responses on a per-node basis.
-Register them with `Call.Intercept` (or `OnewayCall.Intercept`) before invoking a terminal or one-way method; interceptors are applied in call-site order and can be chained.
+Register them with `Call.Intercept` (or `OnewayCall.Intercept`) before the call is dispatched; interceptors are applied in call-site order and can be chained.
 
 ### MapRequest Interceptor
 
