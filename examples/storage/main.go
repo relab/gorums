@@ -38,7 +38,8 @@ func main() {
 		return
 	}
 
-	// Client mode: connect to the provided addresses, or spin up a local cluster (same process).
+	// Client mode: connect to the provided addresses, or spin up a local
+	// cluster (same process).
 	if len(all) == 0 {
 		clusterAddrs, stop, err := runLocalCluster(parseInterceptors(*ic))
 		if err != nil {

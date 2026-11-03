@@ -411,7 +411,8 @@ func TestConfigExtend(t *testing.T) {
 func TestConfigExtendConcurrent(t *testing.T) {
 	addrs := gorumstest.Servers(t, 6, func(_ int) gorumstest.ServerIface { return gorums.NewServer() })
 
-	// Create base configuration so that concurrent Extend operations share the same node registry.
+	// Create base configuration so that concurrent Extend operations share the
+	// same node registry.
 	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs[0:1]), gorumstest.DialOptions(t))
 	if err != nil {
 		t.Fatal(err)

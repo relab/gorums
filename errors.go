@@ -10,7 +10,8 @@ import (
 // due to insufficient non-error replies to form a quorum according to the quorum function.
 var ErrIncomplete = impl.ErrIncomplete
 
-// ErrSendFailure is the error returned by a multicast call when message sending fails for one or more nodes.
+// ErrSendFailure is the error returned by a multicast call when message sending
+// fails for one or more nodes.
 var ErrSendFailure = impl.ErrSendFailure
 
 // ErrTypeMismatch is returned when a response cannot be cast to the expected type.

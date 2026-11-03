@@ -555,7 +555,8 @@ func TestConnectedClientsServerCallsClient(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	// Client: a Server whose back-channel mock.StreamMethod handler is wired in via withServer.
+	// Client: a Server whose back-channel mock.StreamMethod handler is wired in
+	// via withServer.
 	clientSrv := NewServer()
 	clientSrv.RegisterHandler(mock.StreamMethod, func(_ ServerContext, _ *Message, _ func(proto.Message)) (proto.Message, error) {
 		wg.Done()
@@ -570,7 +571,8 @@ func TestConnectedClientsServerCallsClient(t *testing.T) {
 	// Wait for the client to appear in the server's ConnectedClients.
 	mustWaitForClients(t, srv, func(cfg Config) bool { return len(cfg) > 0 })
 
-	// Trigger: client multicasts TestMethod to the server; server fans it back via ConnectedClients.
+	// Trigger: client multicasts TestMethod to the server; server fans it back
+	// via ConnectedClients.
 	ctx := testTimeoutContext(t, 2*time.Second)
 	if err := impl.Multicast(ctx, clientConfig, pb.String("trigger"), mock.TestMethod).Send(); err != nil {
 		t.Fatalf("Multicast error: %v", err)

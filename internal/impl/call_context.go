@@ -74,8 +74,9 @@ func (c *CallContext[Req, Resp]) intercept(ics ...ClientInterceptor[Req, Resp]) 
 	}
 }
 
-// newQuorumCallContext constructs a CallContext for quorum calls (two-way, always returns responses).
-// A response channel is always created; streaming controls both its buffer size and the response iterator type.
+// newQuorumCallContext constructs a CallContext for quorum calls (two-way,
+// always returns responses). A response channel is always created; streaming
+// controls both its buffer size and the response iterator type.
 func newQuorumCallContext[Req, Resp proto.Message](
 	ctx context.Context,
 	config Config,
