@@ -18,7 +18,7 @@ func acceptFrame() *Message {
 }
 
 // PeerAcceptor identifies and registers incoming peers on a stream.
-// It is implemented by [github.com/relab/gorums/internal/conn.InboundManager].
+// It is implemented by [conn.InboundManager].
 type PeerAcceptor interface {
 	// AcceptPeer returns the channel for an accepted stream and a cleanup
 	// function to call when the stream ends, or an error that rejects the

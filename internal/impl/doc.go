@@ -5,12 +5,9 @@
 // terminal methods, the [Correctable] future, and the client interceptor API
 // ([ClientInterceptor], [MapRequest], [MapResponse]). It also provides the
 // call constructors ([QuorumCall], [QuorumCallStream], [Multicast], [Unicast],
-// [RemoteCall]) that generated code reaches through
-// [github.com/relab/gorums/runtime/gorumsimpl].
+// [RemoteCall]) that generated code reaches through package gorumsimpl.
 //
-// The engine operates on the connectivity types in
-// [github.com/relab/gorums/internal/conn] and sends through
-// [github.com/relab/gorums/internal/conn.NodeTransport]. Package
-// [github.com/relab/gorums] re-exports the user-facing handle types here as
-// aliases; application code must not import this package directly.
+// The engine operates on the connectivity types in [conn] and sends through
+// [conn.NodeTransport]. Package gorums re-exports the user-facing handle types
+// here as aliases; application code must not import this package directly.
 package impl
