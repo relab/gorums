@@ -34,15 +34,16 @@ type ServerOption func(*serverOptions)
 // call before Release and waiting after it avoids this. A receiveSize of 0
 // selects [DefaultRecvBufferSize].
 //
-// The sendSize controls the capacity of the server's per-node send queue for
-// outgoing peer messages, with the same full-queue semantics as
-// [WithDialBufferSizes]. Two-way requests fail fast when the queue is full.
-// One-way requests wait for space. A reply to a peer from [WithPeers], or to
-// a client in [Server.ConnectedClients], never waits: if the queue is full,
-// the reply is dropped and counted by [Node.DroppedReplies]. A reply to any
-// other client waits for space. A sendSize of 0 selects
-// [DefaultSendBufferSize]. Larger values may increase throughput at the cost
-// of higher latency.
+// The sendSize is the capacity of each per-node send queue of the server.
+// These queues carry the server's requests to its peers and its replies to
+// callers. When a queue is full, a two-way request fails with
+// [ErrSendQueueFull], and a one-way request waits for space. A reply to a
+// peer from [WithPeers], or to a client in [Server.ConnectedClients], is
+// dropped and counted by [Node.DroppedReplies]: the server also sends
+// requests to these nodes, and a waiting reply could stop both nodes. A
+// reply to any other client waits for space. A sendSize of 0 selects
+// [DefaultSendBufferSize]. Larger values may increase throughput at the
+// cost of higher latency.
 func WithBufferSizes(receiveSize, sendSize uint) ServerOption {
 	return func(o *serverOptions) {
 		o.recvBufferSize = receiveSize
@@ -120,14 +121,15 @@ func WithPeers(myID ID, nodes NodeSource, opts ...DialOption) ServerOption {
 	}
 }
 
-// WithPeerChange registers a callback that runs after each change to the
-// connected-peer [Config], that is, when a peer connects or disconnects. The
+// WithPeerChange registers a callback for a server configured with
+// [WithPeers]. The server calls it after each change to the connected-peer
+// [Config], that is, when its connection to a peer comes up or goes down. The
 // [Config] is sorted by node ID and always holds this server's own node. The
-// callback also runs once during [NewServer], with a [Config] that holds only
-// this server's own node. It never runs without [WithPeers].
+// callback also runs during [NewServer], with a [Config] that holds only this
+// server's own node.
 //
-// For a peer connect or disconnect, the callback runs while the server holds
-// the lock that guards its peer and client views. So it must not call
+// For a peer change, the callback runs while the server holds the lock that
+// guards its peer and client views. So it must not call
 // [Server.ConnectedPeers], [Server.ConnectedClients], [Server.WaitForPeers],
 // [Server.WaitForClients], [Server.WaitForAll], or other blocking methods.
 // Use it only to signal or copy, not for long work.

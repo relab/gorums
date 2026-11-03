@@ -211,7 +211,8 @@ protoc -I="$(go list -m -f {{.Dir}} github.com/relab/gorums):." \
 The above step should produce three files named `storage.pb.go`, `storage_gorums.pb.go`, and `gorums.pb.go` in your package directory.
 The first contains the Protobuf definitions of our messages.
 The messages use the Opaque API, which is the default for edition 2024, so their fields are not exported.
-Build a message with its builder type, for example `ReadRequest_builder{Key: "x"}.Build()`, and access its fields with getters and setters, such as `GetKey` and `SetKey`.
+Build a message with its builder type, for example `ReadRequest_builder{Key: "x"}.Build()`.
+Read and write its fields with getters and setters, such as `GetKey` and `SetKey`.
 The second contains the Gorums generated client and server interfaces.
 The third declares the `Config`, `ID`, `Node`, and `Correctable` type aliases of the Go package.
 
@@ -802,15 +803,15 @@ reply, level, err = corr.Get()
 ```
 
 The level is the number of successful responses so far.
-A node of a streaming call can send several responses, and each one counts.
+A node of a streaming call can send several responses.
 The call completes when the level reaches `n`.
-If the responses end before that, for example because the context ends, the call completes with an error that matches `gorums.ErrIncomplete`.
+If the responses end before that, for example because the context ends, the call completes with a `gorums.ErrIncomplete` error.
 
 `Get` does not wait: it returns the latest response, the current level, and the error.
 Before the first response, the level is `gorums.LevelNotSet`.
-`Watch(level)` closes when the call reaches that level or completes, including when it completes with an error.
+`Watch(level)` returns a channel that is closed when the call reaches that level or completes, including when it completes with an error.
 If the call has already completed, `Watch` returns a closed channel.
-`Done` closes when the call completes.
+`Done` returns a channel that is closed when the call completes.
 
 `Correctable(n)` panics if `n` is not positive.
 It panics before it sends any request.
@@ -1521,9 +1522,8 @@ defer closeFn()
 
 ### WithPeerChange
 
-`WithPeerChange` registers a `func(gorums.Config)` callback.
-The callback is called after every change to the connected-peer configuration, that is, each time a peer from `WithPeers` connects or disconnects.
-It never runs without `WithPeers`.
+`WithPeerChange` registers a `func(gorums.Config)` callback for a server configured with `WithPeers`.
+The server calls it after every change to the connected-peer configuration, that is, each time its connection to a peer comes up or goes down.
 
 **Signature:**
 
@@ -1533,14 +1533,14 @@ gorums.WithPeerChange(func(cfg gorums.Config) { ... })
 
 **When it runs:** after every change to the connected-peer configuration.
 For a peer connect or disconnect, the callback runs while the server holds the lock that guards its peer and client views, immediately after the configuration has been replaced.
-The callback also runs once during `NewServer`, with a configuration that contains only the self-node.
+The callback also runs during `NewServer`, with a configuration that contains only the self-node.
 
 **What is available:** a configuration of the connected peers, sorted by node ID.
 The self-node (this server's own ID) is always included regardless of connectivity.
 
 **Safe side effects:** signaling a channel, writing to an atomic, or copying the slice.
 For a peer connect or disconnect, the callback holds that lock, so it must **not** call `ConnectedPeers`, `ConnectedClients`, `WaitForPeers`, `WaitForClients`, `WaitForAll`, or any other blocking method.
-Do not perform blocking or long-running work inside the callback, also not during the call from `NewServer`.
+Do not perform blocking or long-running work inside the callback.
 
 #### Example: Reacting to Peer Membership Changes
 
@@ -1641,7 +1641,7 @@ It provides the following methods:
 * **`NumErrors() int`** - Returns the number of nodes that failed
 * **`Unwrap() []error`** - Supports error unwrapping for use with `errors.Is` and `errors.As`
 
-The error implements Go's standard error unwrapping interface, allowing `errors.Is()` and `errors.As()` to check both the direct cause and any wrapped node-specific errors.
+The error implements Go's standard error unwrapping interface, allowing `errors.Is` and `errors.AsType` to check both the direct cause and any wrapped node-specific errors.
 
 #### Common Error Causes
 
@@ -1663,8 +1663,7 @@ func handleQuorumCall(client StorageClient, req *ReadRequest) {
 
   if err != nil {
     // Check if it's a QuorumCallError
-    var qcErr gorums.QuorumCallError
-    if errors.As(err, &qcErr) {
+    if qcErr, ok := errors.AsType[gorums.QuorumCallError](err); ok {
       log.Printf("Quorum call failed: %v", qcErr.Cause())
       log.Printf("Failed nodes: %d", qcErr.NumErrors())
 
@@ -1696,7 +1695,7 @@ Check `ctx.Err()` instead, as the example does.
 
 ### Checking for Specific Error Types
 
-Use `errors.Is()` and `errors.As()` to check for specific error types, including both the direct cause and any node-specific errors:
+Use `errors.Is` and `errors.AsType` to check for specific error types, including both the direct cause and any node-specific errors:
 
 ```go
 // Check if the error is caused by insufficient responses
@@ -1705,8 +1704,7 @@ if errors.Is(err, gorums.ErrIncomplete) {
 }
 
 // Check if any node returned a specific gRPC status code
-var qcErr gorums.QuorumCallError
-if errors.As(err, &qcErr) {
+if qcErr, ok := errors.AsType[gorums.QuorumCallError](err); ok {
   for _, nodeErr := range qcErr.Unwrap() {
     if status.Code(nodeErr) == codes.Unavailable {
       // Handle an unavailable node
@@ -1715,8 +1713,7 @@ if errors.As(err, &qcErr) {
 }
 
 // Extract custom error types from node failures
-var customErr MyCustomError
-if errors.As(err, &customErr) {
+if customErr, ok := errors.AsType[MyCustomError](err); ok {
   // Handle custom error from a node
 }
 ```
@@ -1744,8 +1741,7 @@ import (
 client := NewStorageClient(config)
 state, err := client.ReadQC(ctx, &ReadRequest{}).Majority()
 if err != nil {
-  var qcErr gorums.QuorumCallError
-  if errors.As(err, &qcErr) {
+  if qcErr, ok := errors.AsType[gorums.QuorumCallError](err); ok {
     // Option 1: Exclude all failed nodes
     newConfig := config.WithoutErrors(qcErr)
 
@@ -1876,8 +1872,7 @@ func ExampleConfigClient() {
   client := NewStorageClient(c1)
   state, err := client.ReadQC(context.Background(), &ReadRequest{}).Majority()
   if err != nil {
-    var qcErr gorums.QuorumCallError
-    if errors.As(err, &qcErr) {
+    if qcErr, ok := errors.AsType[gorums.QuorumCallError](err); ok {
       // Create a new configuration excluding all nodes that failed.
       c7 := c1.WithoutErrors(qcErr)
 
@@ -2078,8 +2073,7 @@ first, then pick the fastest of those that remain.
 `WithoutErrors` can leave fewer than `quorumSize` nodes, so check the length before you slice:
 
 ```go
-var qcErr gorums.QuorumCallError
-if errors.As(err, &qcErr) {
+if qcErr, ok := errors.AsType[gorums.QuorumCallError](err); ok {
     healthy := cfg.WithoutErrors(qcErr).Sort(gorums.ByLatency)
     if len(healthy) >= quorumSize {
         fastCfg = healthy[:quorumSize]
@@ -2141,8 +2135,7 @@ var lastQCErr gorums.QuorumCallError // zero value excludes no nodes
 // After each failed quorum call, record the error so the next Watch tick
 // can exclude the offending nodes:
 //
-//   var qcErr gorums.QuorumCallError
-//   if errors.As(err, &qcErr) {
+//   if qcErr, ok := errors.AsType[gorums.QuorumCallError](err); ok {
 //       mu.Lock(); lastQCErr = qcErr; mu.Unlock()
 //   }
 
@@ -2881,12 +2874,16 @@ The per-node send queue defaults to 4096 entries.
 Passing zero as the send-size argument of `WithBufferSizes` or `WithDialBufferSizes` selects that default.
 Two-way requests fail fast with an unavailable error when a real buffered queue is full.
 One-way client calls (`Unicast`, `Multicast`) wait for space instead, since backpressure on the caller is what paces them.
-A reply to a node that this side can also send requests to never waits either, so the connection keeps reading further messages.
-This covers a server's reply to a peer from `WithPeers` or to a client in `ConnectedClients`, and a client's back-channel reply to a server.
-A reply that does not fit the queue is dropped, and the remote caller waits until its context ends.
-`Node.DroppedReplies` counts these drops for a given node, so a deployment can monitor for sustained backpressure.
-A server's reply to any other client waits for space in the queue.
-The server sends no requests to such a client, so the waiting reply cannot block the client's receiving.
+Replies to two-way requests follow one of two rules, depending on whether the two nodes send requests to each other.
+
+* Some pairs of nodes send requests in both directions: a server and a peer from `WithPeers`, a server and a client in `ConnectedClients`, and a client that serves back-channel requests and its server.
+  Between such nodes, a reply never waits.
+  If both nodes waited to send a reply, neither would read the other's messages, and both would stop.
+  A reply that does not fit the queue is dropped, and the caller waits until its context ends.
+  `Node.DroppedReplies` counts these drops for each node, so a deployment can monitor for sustained backpressure.
+* A server sends no requests to any other client.
+  A reply to such a client waits for space in the queue, because the wait cannot stop the client from reading.
+
 Sweeps from 64 to 4096 entries showed no throughput difference, so the default rests on failure behavior: it keeps a peer that stops draining for a while from making two-way requests fail, at a cost of about 256 KiB per channel.
 Choose an explicit positive capacity when a smaller backlog is required.
 
