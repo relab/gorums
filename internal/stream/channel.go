@@ -35,12 +35,10 @@ type Channel interface {
 
 // RequestHandler is the interface that wraps the HandleRequest method.
 //
-// HandleRequest handles an incoming request message from the stream,
-// dispatching it to the appropriate method handler, as encoded in the
-// message's method field. A channel starts its calls in arrival order, never
-// on the goroutine that received the request. A call that starts when the
-// call before it returns runs on that call's goroutine, so HandleRequest must
-// not depend on the identity of its goroutine.
+// HandleRequest handles a request message from the stream and dispatches it
+// to the method handler that the message's method field names. A channel
+// calls HandleRequest for one request at a time, in arrival order, on a
+// goroutine other than the one that receives from the stream.
 //
 // The senderID is the ID of the channel that received the request: the
 // peer's ID on a stream, 0 if the peer has no ID, and the local node's own

@@ -75,8 +75,8 @@ const packageFileName = "gorums.pb.go"
 // static code, which declares package-level names, such as the Config, ID,
 // Node, and Correctable aliases. Its content depends only on the Go package
 // name and the tool versions, so every protoc run that generates Gorums code
-// for the package writes the same file. It returns an error if protoc-gen-go writes a
-// file with the same path for a proto file of the package, such as
+// for the package writes the same file. It returns an error if protoc-gen-go
+// writes a file with the same path for a proto file of the package, such as
 // gorums.proto in the same directory.
 func generatePackageFile(gen *protogen.Plugin, pkg *goPackage, file *protogen.File) error {
 	filename := path.Join(path.Dir(file.GeneratedFilenamePrefix), packageFileName)
