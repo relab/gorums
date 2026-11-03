@@ -19,7 +19,7 @@ runtime_deps			:= internal/stream/stream.pb.go internal/stream/stream_grpc.pb.go
 benchkit_deps			:= benchkit/benchkit.pb.go benchkit/control.pb.go benchkit/control_gorums.pb.go
 benchmark_deps			:= $(benchkit_deps) benchkit/benchmark/benchmark.pb.go benchkit/benchmark/benchmark_gorums.pb.go
 
-.PHONY: all dev tools bootstrapgorums installgorums benchmark sweep test compiletests golden genproto benchtest bench lint deadcode modernize goplscheck
+.PHONY: all dev tools bootstrapgorums installgorums benchmark benchkit sweep test compiletests golden genproto benchtest bench lint deadcode modernize goplscheck
 
 all: dev benchmark compiletests
 
@@ -51,9 +51,8 @@ benchkit/control.pb.go: $(bk_path)/benchkit/control.proto
 		--go_out=benchkit --go_opt=module=$(bk_module) \
 		--go_opt=default_api_level=API_OPAQUE $<
 
-# Each protoc-gen-gorums run (except dev=true) also writes gorums.pb.go, which
-# declares the Config, ID, Node, and Correctable aliases, next to the first
-# _gorums.pb.go file of each Go package.
+# Each protoc-gen-gorums run writes a _gorums.pb.go file for each .proto file
+# and a package-level gorums.pb.go file.
 benchkit/control_gorums.pb.go: $(bk_path)/benchkit/control.proto
 	@protoc -I=$(bk_proto_path) \
 		--gorums_out=benchkit --gorums_opt=module=$(bk_module) $<
@@ -79,9 +78,8 @@ $(static_file): $(static_files)
 %_grpc.pb.go : %.proto
 	@protoc -I=$(proto_path) --go-grpc_out=paths=source_relative:. $^
 
-# Each protoc-gen-gorums run (except dev=true) also writes gorums.pb.go, which
-# declares the Config, ID, Node, and Correctable aliases, next to the first
-# _gorums.pb.go file of each Go package.
+# Each protoc-gen-gorums run writes a _gorums.pb.go file for each .proto file
+# and a package-level gorums.pb.go file.
 %_gorums.pb.go : %.proto
 	@protoc -I=$(proto_path) --gorums_out=paths=source_relative:. $^
 
