@@ -101,22 +101,31 @@ type InboundManager struct {
 // this range; the allocator skips every occupied known-peer or client ID.
 const ClientIDStart = 1 << 20
 
-// NewInboundManager creates an InboundManager for this server whose NodeID is myID.
-// If peerNodes is non-nil, the InboundManager is configured with the given NodeSource
-// defining the set of known peers. If myID is present in the NodeSource it is
-// immediately included in the Config as the self-node, so that quorum thresholds
-// account for the local replica from the moment of construction. The handler is
-// installed on the self-node (if present) to enable in-process dispatch without
-// a network round-trip. onConfigChange does not run for the initial view; for
-// a server with peerNodes, its first call comes from
-// [InboundManager.SetPeerConfig]. Inbound channels use sendBufferSize and recvBufferSize
-// as their send queue and request dispatch capacities; a recvBufferSize must
-// be positive. It returns an error if peerNodes is invalid, for example
-// because of an invalid address or a duplicate node.
-// If verify is non-nil, [InboundManager.AcceptPeer] attaches a stream that
-// claims a peer's node ID only after verify accepts the claim, and the
-// server's outbound peer nodes check the peers they dial with verify.
-func NewInboundManager(myID ID, peerNodes NodeSource, sendBufferSize, recvBufferSize uint, onConfigChange func(Config), handler stream.RequestHandler, verify PeerVerifier) (*InboundManager, error) {
+// NewInboundManager creates an InboundManager for this server with node ID myID.
+// If peerNodes is non-nil, it defines the known peers. If peerNodes contains
+// myID, the configuration includes this server's node. Thus, quorum thresholds
+// must account for the local server. If handler is also non-nil, requests to this
+// node run in process without a network round trip.
+//
+// When provided, onConfigChange reports changes to the connected-peer [Config]
+// as each inbound stream comes up or goes down.
+//
+// Inbound channels use sendBufferSize for their send queues and recvBufferSize
+// for their request dispatch queues. recvBufferSize must be positive.
+//
+// It returns an error for invalid peerNodes, such as an invalid address or a
+// duplicate node.
+//
+// When verify is non-nil, a peer's inbound stream is attached only after verify
+// accepts its claimed node ID. The same verifier checks peers dialed by this
+// server.
+func NewInboundManager(
+	myID ID, peerNodes NodeSource,
+	sendBufferSize, recvBufferSize uint,
+	onConfigChange func(Config),
+	handler stream.RequestHandler,
+	verify PeerVerifier,
+) (*InboundManager, error) {
 	im := &InboundManager{
 		myID:           myID,
 		knownNodes:     make(map[ID]*Node),
