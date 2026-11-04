@@ -40,7 +40,10 @@ func WithTransportCredentials(creds credentials.TransportCredentials) DialOption
 }
 
 // WithLogger returns a DialOption which sets an optional error logger for
-// the configuration.
+// the configuration. The logger also logs each error reply that matches no
+// call awaiting a response, such as the server's reply to a one-way call that
+// names a method the server does not handle; [Node.UnmatchedErrors] counts
+// these replies.
 func WithLogger(logger *log.Logger) DialOption {
 	return func(o *conn.DialOptions) {
 		o.Logger = logger

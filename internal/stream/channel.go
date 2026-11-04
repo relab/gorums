@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"log"
 	"sync/atomic"
 	"time"
 )
@@ -25,6 +26,10 @@ type Channel interface {
 	// DroppedReplies returns the number of handler replies dropped because
 	// the send queue was full or closed, or during a refusal backoff.
 	DroppedReplies() int64
+	// UnmatchedErrors returns the number of error replies from the peer that
+	// matched no pending call. Each one is also logged if the channel has a
+	// logger.
+	UnmatchedErrors() int64
 	// PendingCount returns the number of two-way calls awaiting responses.
 	// The count may include calls whose callers are done but that have not
 	// yet been removed.
@@ -53,7 +58,9 @@ type Channel interface {
 // on an [InboundChannel] created with [InboundOptions.WaitingReplies].
 // For two-way call types, send may be called zero or more times (e.g., for
 // streaming correctable calls). For one-way call types, the peer has no
-// pending call to receive a response, so it is dropped.
+// pending call to receive a response. The peer counts and logs an error
+// response as described for [Channel.UnmatchedErrors], and drops any other
+// response.
 type RequestHandler interface {
 	HandleRequest(ctx context.Context, senderID ID, msg *Message, release func(), send func(*Message))
 }
@@ -76,6 +83,8 @@ type endpoint struct {
 	// waitingReplies makes handler replies wait for queue space until the
 	// channel closes, instead of being dropped when the queue is full.
 	waitingReplies bool
+
+	unmatchedErrors
 }
 
 // newEndpoint returns an endpoint that lives until parent ends or cancel is
@@ -110,6 +119,31 @@ func (e *endpoint) reply(msg *Message) {
 // DroppedReplies implements [Channel.DroppedReplies].
 func (e *endpoint) DroppedReplies() int64 {
 	return e.queue.dropped.Load()
+}
+
+// unmatchedErrors counts the error replies from a channel's peer that match no
+// pending call, and logs each one if it has a logger. The server replies with
+// an error when a request names an unknown method or cannot be decoded, even
+// for a one-way call, which has no pending call. An error reply to a two-way
+// call that is no longer pending is counted too.
+type unmatchedErrors struct {
+	logger *log.Logger // may be nil
+	count  atomic.Int64
+}
+
+// UnmatchedErrors implements [Channel.UnmatchedErrors].
+func (u *unmatchedErrors) UnmatchedErrors() int64 {
+	return u.count.Load()
+}
+
+// record counts msg, an error reply with err from node id, and logs it. It
+// logs before it counts, so a reader that sees the count also sees the log.
+func (u *unmatchedErrors) record(id ID, msg *Message, err error) {
+	if u.logger != nil {
+		u.logger.Printf("node %d: %s: error reply to message %d matches no pending call: %v",
+			id, msg.GetMethod(), msg.GetMessageSeqNo(), err)
+	}
+	u.count.Add(1)
 }
 
 // LastErr implements [Channel.LastErr]. It reports the channel's current

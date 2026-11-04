@@ -1,6 +1,8 @@
 package stream
 
 import (
+	"log"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -12,12 +14,17 @@ type LocalChannel struct {
 	id       ID
 	handler  RequestHandler
 	requests *dispatcher
+	unmatchedErrors
 }
 
 // NewLocalChannel returns a channel that serves requests with handler. Up to
 // recvBufferSize requests can wait for the running handler; it must be positive.
-func NewLocalChannel(id ID, handler RequestHandler, recvBufferSize uint) *LocalChannel {
-	return &LocalChannel{id: id, handler: handler, requests: newDispatcher(nil, recvBufferSize)}
+// If logger is non-nil, it logs each error reply to a one-way request; see
+// [Channel.UnmatchedErrors].
+func NewLocalChannel(id ID, handler RequestHandler, recvBufferSize uint, logger *log.Logger) *LocalChannel {
+	c := &LocalChannel{id: id, handler: handler, requests: newDispatcher(nil, recvBufferSize)}
+	c.unmatchedErrors.logger = logger
+	return c
 }
 
 // Enqueue queues req for the handler. A one-way request is confirmed once
@@ -38,8 +45,12 @@ func (c *LocalChannel) Enqueue(req Request) {
 	}
 	ctx := req.Msg.appendToIncomingContext(req.Ctx)
 	send := func(msg *Message) {
-		if req.wantServerResponse() {
-			req.deliver(response{NodeID: c.id, Value: msg, Err: msg.errorStatus()})
+		err := msg.errorStatus()
+		switch {
+		case req.wantServerResponse():
+			req.deliver(response{NodeID: c.id, Value: msg, Err: err})
+		case err != nil:
+			c.unmatchedErrors.record(c.id, msg, err)
 		}
 	}
 	run := func(release func()) { c.handler.HandleRequest(ctx, c.id, req.Msg, release, send) }

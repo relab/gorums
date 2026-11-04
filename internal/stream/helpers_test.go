@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // requestHandlerFunc adapts a function to [RequestHandler].
@@ -42,4 +43,25 @@ func messageIDs(msgs []*Message) []uint64 {
 		ids[i] = msg.GetMessageSeqNo()
 	}
 	return ids
+}
+
+// lockedBuffer is a [strings.Builder] that is safe for concurrent use, so a
+// test can read what a logger on another goroutine wrote.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+// Write implements [io.Writer].
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+// String returns the bytes written so far.
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }

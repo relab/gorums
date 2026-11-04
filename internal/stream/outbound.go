@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -37,6 +38,9 @@ type OutboundOptions struct {
 	// goes down, on one of the channel's goroutines and without holding the
 	// channel's locks; [OutboundChannel.StreamUp] reports the current state.
 	OnStreamChange func()
+	// Logger, if non-nil, logs each error reply that matches no pending call;
+	// see [Channel.UnmatchedErrors].
+	Logger *log.Logger
 }
 
 // OutboundChannel is a [Channel] over a stream that this node opens to a
@@ -99,6 +103,7 @@ func NewOutboundChannel(ctx context.Context, id ID, conn *grpc.ClientConn, opts 
 		onStreamChange: opts.OnStreamChange,
 		sessions:       make(map[*session]struct{}),
 	}
+	c.unmatchedErrors.logger = opts.Logger
 	c.closeOnce = sync.OnceValue(func() error {
 		c.cancel()
 		c.queue.close()

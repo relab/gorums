@@ -139,7 +139,7 @@ func (m *outboundManager) newNode(id ID, addr string, verify PeerVerifier) (*Nod
 	}
 	if m.opts.inProcess(id) {
 		// This server calls itself without a network round-trip.
-		n := newLocalNode(id, addr, m.nextMsgID, m.opts.Handler, m.opts.RecvBufferSize, m)
+		n := newLocalNode(id, addr, m.nextMsgID, m.opts.Handler, m.opts.RecvBufferSize, m.logger, m)
 		if err := m.addNode(n); err != nil {
 			return nil, err
 		}
@@ -181,6 +181,7 @@ func (m *outboundManager) newNode(id ID, addr string, verify PeerVerifier) (*Nod
 		// stream deduplication, only while the stream is up.
 		EagerReconnect: im != nil,
 		OnStreamChange: onStreamChange,
+		Logger:         m.logger,
 		Manager:        m,
 	}
 	n, err := newOutboundNode(addr, opts)

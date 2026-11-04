@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
+	"github.com/relab/gorums/internal/conn"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"github.com/relab/gorums/internal/testutils/mockcall"
 	"google.golang.org/grpc"
@@ -345,6 +348,92 @@ func TestStreamDedupMulticastAndQuorumCall(t *testing.T) {
 	}
 	if got, want := resp.GetValue(), "echo: hello"; got != want {
 		t.Fatalf("QuorumCall response = %q, want %q", got, want)
+	}
+}
+
+// TestStreamDedupFrameworkErrorLogger checks the caller's logger for local,
+// dialed and shared calls, including after a shared stream is replaced.
+func TestStreamDedupFrameworkErrorLogger(t *testing.T) {
+	tests := []struct {
+		name   string
+		dedup  bool
+		phases []string // "Reconnected" first replaces the shared stream
+	}{
+		{name: "Dedup=false", phases: []string{"Initial"}},
+		{name: "Dedup=true", dedup: true, phases: []string{"Initial", "Reconnected"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logs := []logLines{make(logLines, 16), make(logLines, 16)}
+			firstStream := make(chan context.CancelFunc, 1)
+			var captured atomic.Bool
+			intercept := func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+				if !captured.CompareAndSwap(false, true) {
+					return streamer(ctx, desc, cc, method, opts...)
+				}
+				ctx, cancel := context.WithCancel(ctx)
+				st, err := streamer(ctx, desc, cc, method, opts...)
+				if err != nil {
+					cancel()
+					return nil, err
+				}
+				firstStream <- cancel
+				return st, nil
+			}
+			opts := []gorumstest.Option{gorums.WithLocalDialOptionsFunc(func(id gorums.ID) []gorums.DialOption {
+				opts := []gorums.DialOption{gorums.WithLogger(log.New(logs[id-1], "", 0))}
+				if id == 1 {
+					opts = append(opts, gorums.WithGRPCDialOptions(grpc.WithStreamInterceptor(intercept)))
+				}
+				return opts
+			})}
+			if tt.dedup {
+				opts = append(opts, gorums.WithStreamDedup())
+			}
+			servers := gorumstest.LocalServers(t, 2, opts...)
+			gorumstest.WaitForPeers(t, servers)
+			ctx := gorumstest.Context(t, 5*time.Second)
+			var cancel context.CancelFunc
+			select {
+			case cancel = <-firstStream:
+				t.Cleanup(cancel)
+			case <-ctx.Done():
+				t.Fatal("owner did not open its stream")
+			}
+
+			for _, phase := range tt.phases {
+				if phase == "Reconnected" {
+					transport := conn.NodeTransport(servers[1].PeerConfig().Node(1))
+					old := transport.LoadChannel()
+					cancel()
+					if !gorumstest.WaitUntil(t, 5*time.Second, func() bool {
+						ch := transport.LoadChannel()
+						return ch != nil && ch != old
+					}) {
+						t.Fatal("shared stream was not replaced")
+					}
+					gorumstest.WaitForPeers(t, servers)
+				}
+				for i, srv := range servers {
+					drainLines(logs[i])
+					for _, node := range srv.PeerConfig() {
+						wantCount := node.UnmatchedErrors() + 1
+						if err := mockcall.Unicast(ctx, node, "unhandled").Send(); err != nil {
+							t.Fatalf("%s: Unicast: %v", phase, err)
+						}
+						if !gorumstest.WaitUntil(t, 5*time.Second, func() bool { return node.UnmatchedErrors() == wantCount }) {
+							t.Fatalf("%s: caller %d -> node %d: error was not counted", phase, srv.NodeID(), node.ID())
+						}
+						logged := strings.Join(drainLines(logs[i]), "")
+						for _, want := range []string{fmt.Sprintf("node %d:", node.ID()), mock.TestMethod, "Unimplemented"} {
+							if !strings.Contains(logged, want) {
+								t.Errorf("%s: caller %d -> node %d: logged %q, want %q", phase, srv.NodeID(), node.ID(), logged, want)
+							}
+						}
+					}
+				}
+			}
+		})
 	}
 }
 
