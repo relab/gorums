@@ -414,14 +414,17 @@ func TestSessionHandleBackChannel(t *testing.T) {
 
 // TestSessionHandleUnmatchedErrors verifies that an error reply that matches
 // no pending call, as the server sends for a one-way call to an unknown
-// method, is counted and logged with the peer, method, and message ID. A
-// reply without an error, or an error reply to a pending call, is not.
+// method, is counted and logged with the peer, method, and message ID. So is
+// an error reply to a pending call whose context has ended, even before a
+// sweep removes the call. A reply without an error, or an error reply to a
+// live pending call, is not.
 func TestSessionHandleUnmatchedErrors(t *testing.T) {
 	const msgID = 7
 	errStatus := status.New(codes.Unimplemented, "no handler registered").Proto()
 	tests := []struct {
 		name      string
 		pending   bool
+		ended     bool // the pending call's context has ended
 		msg       *Message
 		wantCount int64
 		wantLog   []string
@@ -441,6 +444,20 @@ func TestSessionHandleUnmatchedErrors(t *testing.T) {
 			pending: true,
 			msg:     Message_builder{MessageSeqNo: msgID, Method: mock.TestMethod, Status: errStatus}.Build(),
 		},
+		{
+			name:      "ErrorReplyToEndedPendingCall",
+			pending:   true,
+			ended:     true,
+			msg:       Message_builder{MessageSeqNo: msgID, Method: mock.TestMethod, Status: errStatus}.Build(),
+			wantCount: 1,
+			wantLog:   []string{"node 1", mock.TestMethod, "message 7", "Unimplemented"},
+		},
+		{
+			name:    "ReplyToEndedPendingCall",
+			pending: true,
+			ended:   true,
+			msg:     Message_builder{MessageSeqNo: msgID, Method: mock.TestMethod}.Build(),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -449,7 +466,12 @@ func TestSessionHandleUnmatchedErrors(t *testing.T) {
 			s.unmatchedErrors.logger = log.New(&logBuf, "", 0)
 			responseChan := make(chan response, 1)
 			if tt.pending {
-				s.pending.add(msgID, Request{Ctx: t.Context(), Msg: &Message{}, ResponseChan: responseChan})
+				ctx, cancel := context.WithCancel(t.Context())
+				if tt.ended {
+					cancel()
+				}
+				defer cancel()
+				s.pending.add(msgID, Request{Ctx: ctx, Msg: &Message{}, ResponseChan: responseChan})
 			}
 
 			s.handle(tt.msg)
@@ -465,7 +487,7 @@ func TestSessionHandleUnmatchedErrors(t *testing.T) {
 					t.Errorf("logged %q, want it to contain %q", logged, want)
 				}
 			}
-			if tt.pending {
+			if tt.pending && tt.msg.GetStatus() != nil {
 				if resp := <-responseChan; status.Code(resp.Err) != codes.Unimplemented {
 					t.Errorf("pending call error = %v, want codes.Unimplemented", resp.Err)
 				}

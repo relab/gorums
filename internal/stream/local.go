@@ -19,8 +19,8 @@ type LocalChannel struct {
 
 // NewLocalChannel returns a channel that serves requests with handler. Up to
 // recvBufferSize requests can wait for the running handler; it must be positive.
-// If logger is non-nil, it logs each error reply to a one-way request; see
-// [Channel.UnmatchedErrors].
+// If logger is non-nil, it logs each error reply to a one-way request, or to
+// a two-way request whose context has ended; see [Channel.UnmatchedErrors].
 func NewLocalChannel(id ID, handler RequestHandler, recvBufferSize uint, logger *log.Logger) *LocalChannel {
 	c := &LocalChannel{id: id, handler: handler, requests: newDispatcher(nil, recvBufferSize)}
 	c.unmatchedErrors.logger = logger
@@ -46,11 +46,13 @@ func (c *LocalChannel) Enqueue(req Request) {
 	ctx := req.Msg.appendToIncomingContext(req.Ctx)
 	send := func(msg *Message) {
 		err := msg.errorStatus()
-		switch {
-		case req.wantServerResponse():
-			req.deliver(response{NodeID: c.id, Value: msg, Err: err})
-		case err != nil:
+		if err != nil && (!req.wantServerResponse() || req.Ctx.Err() != nil) {
+			// No caller observes the error: the request is one-way, or its
+			// caller is done.
 			c.unmatchedErrors.record(c.id, msg, err)
+		}
+		if req.wantServerResponse() {
+			req.deliver(response{NodeID: c.id, Value: msg, Err: err})
 		}
 	}
 	run := func(release func()) { c.handler.HandleRequest(ctx, c.id, req.Msg, release, send) }
