@@ -163,9 +163,7 @@ func (im *InboundManager) Nodes() []*Node {
 	})
 }
 
-// ConnectedPeers returns the current connected-peer [Config]; see
-// [gorums.Server.ConnectedPeers]. Before [InboundManager.SetPeerConfig]
-// installs a peer configuration, it returns the inbound view.
+// ConnectedPeers is exported and documented as gorums.Server.ConnectedPeers.
 func (im *InboundManager) ConnectedPeers() Config {
 	if im == nil {
 		return nil
@@ -196,8 +194,7 @@ func (im *InboundManager) onStreamChange() {
 	im.rebuildConfig()
 }
 
-// ConnectedClients returns the current connected-client [Config]; see
-// [gorums.Server.ConnectedClients].
+// ConnectedClients is exported and documented as gorums.Server.ConnectedClients.
 func (im *InboundManager) ConnectedClients() Config {
 	if im == nil {
 		return nil
@@ -207,7 +204,7 @@ func (im *InboundManager) ConnectedClients() Config {
 	return im.connectedClients
 }
 
-// NodeID returns this server's own nodeID.
+// NodeID is exported and documented as gorums.Server.NodeID.
 func (im *InboundManager) NodeID() ID {
 	if im == nil {
 		return 0
@@ -468,19 +465,14 @@ func (im *InboundManager) waitForConfig(ctx context.Context, cond func() bool) e
 	}
 }
 
-// WaitForPeers blocks until cond returns true for the current connected-peer
-// [Config]; see [gorums.Server.WaitForPeers]. cond runs under im.mu, so it must not
-// call back into im or otherwise acquire additional locks.
+// WaitForPeers is exported and documented as gorums.Server.WaitForPeers.
 func (im *InboundManager) WaitForPeers(ctx context.Context, cond func(Config) bool) error {
 	return im.waitForConfig(ctx, func() bool {
 		return cond(im.connectedPeers)
 	})
 }
 
-// WaitForClients blocks until cond returns true for the current
-// connected-client [Config]; see [gorums.Server.WaitForClients]. cond runs under
-// im.mu, so it must not call back into im or otherwise acquire additional
-// locks.
+// WaitForClients is exported and documented as gorums.Server.WaitForClients.
 func (im *InboundManager) WaitForClients(ctx context.Context, cond func(Config) bool) error {
 	return im.waitForConfig(ctx, func() bool {
 		return cond(im.connectedClients)
