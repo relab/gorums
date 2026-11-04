@@ -802,8 +802,8 @@ So read the replies of a streaming call soon after `Async`, or use `Correctable`
 
 **Correctable variant** provides progressive updates as more responses arrive:
 
-| Method            | Description                | Returns           |
-| ----------------- | -------------------------- | ----------------- |
+| Method            | Description                                      | Returns           |
+| ----------------- | ------------------------------------------------ | ----------------- |
 | `.Correctable(n)` | Progressive updates until n successful responses | `*Correctable[T]` |
 
 ```go
@@ -1537,7 +1537,7 @@ defer closeFn()
 ### WithPeerChange
 
 `WithPeerChange` registers a `func(gorums.Config)` callback for a server configured with `WithPeers`.
-The server calls it after every change to the connected-peer configuration, that is, each time its connection to a peer comes up or goes down.
+The server calls it once with the initial connected-peer configuration, then whenever a peer connection comes up or goes down.
 
 **Signature:**
 
@@ -1545,54 +1545,47 @@ The server calls it after every change to the connected-peer configuration, that
 gorums.WithPeerChange(func(cfg gorums.Config) { ... })
 ```
 
-**When it runs:** after every change to the connected-peer configuration.
-For a peer connect or disconnect, the callback runs while the server holds the lock that guards its peer and client views, immediately after the configuration has been replaced.
-The callback also runs once during `NewServer`, with a configuration that contains the self-node and any peer whose connection is already up.
+**When it runs:** the first call happens when `NewServer` installs the peer configuration.
+Later calls report changes to peer connections.
+The first call may already include connected peers.
 
 **What is available:** a configuration of the connected peers, sorted by node ID.
 The self-node (this server's own ID) is always included regardless of connectivity.
 
 **Safe side effects:** signaling a channel, writing to an atomic, or copying the slice.
-For a peer connect or disconnect, the callback holds that lock, so it must **not** call `ConnectedPeers`, `ConnectedClients`, `WaitForPeers`, `WaitForClients`, `WaitForAll`, or any other blocking method.
+Every callback runs while the server holds the lock that guards its peer and client views, including the first callback.
+It must **not** call `ConnectedPeers`, `ConnectedClients`, `WaitForPeers`, `WaitForClients`, `WaitForAll`, or any other blocking method.
 Do not perform blocking or long-running work inside the callback.
 
-#### Example: Reacting to Peer Membership Changes
+#### Example: Tracking Connected Peers
 
-The following example shows how a server can wait until a quorum of peers is connected before beginning to serve requests.
+The following shows an example of how to track the number of connected peers with an atomic counter.
+The first callback sets the count during `NewServer`.
+Later callbacks update it as peers connect or disconnect.
 
 ```go
-const quorumSize = 2 // majority for a three-node cluster, including self
-
-ready := make(chan struct{}, 1)
+var connectedCount atomic.Int64
 
 gorumsSrv := gorums.NewServer(
     gorums.WithPeers(myNodeID, gorums.WithNodeList(peerAddrs),
         gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
     ),
     gorums.WithPeerChange(func(cfg gorums.Config) {
-        if len(cfg) >= quorumSize {
-            select {
-            case ready <- struct{}{}:
-            default:
-            }
-        }
+        connectedCount.Store(int64(cfg.Size()))
     }),
 )
+defer gorumsSrv.Stop()
 
-// Block until a quorum connects before accepting client requests.
-<-ready
-log.Println("quorum ready, starting to serve")
+log.Printf("%d peers connected", connectedCount.Load())
 ```
-
-The self-node is always present in `cfg`, so a three-node cluster (`quorumSize = 2`) will fire the signal as soon as a single remote peer connects.
 
 ## Waiting for Configuration
 
-`Server.WaitForPeers` and `Server.WaitForClients` block until a condition on the configuration is satisfied, or until the context is cancelled or the system is stopped.
-They replace the need to poll `ConnectedPeers()` in a loop and eliminate the latency and CPU overhead of polling.
+Once the server is serving, use `Server.WaitForPeers` to wait for peers or `Server.WaitForClients` to wait for back-channel clients.
+They block until a condition on the configuration is satisfied, or until the context is cancelled or the system is stopped.
 
 ```go
-// Block until all three known peers are connected.
+// Wait until all three peers are connected.
 ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 defer cancel()
 if err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
@@ -1607,7 +1600,7 @@ The condition is checked immediately against the current configuration, so the c
 ### WaitForPeers
 
 `WaitForPeers` waits on the connected-peer configuration — the subset of `PeerConfig()` that is currently reachable, plus the local node itself (see `ConnectedPeers()`).
-Use this when you need a quorum of static cluster members to be present before beginning to serve requests.
+Use this when work must wait for a quorum of static cluster members.
 
 ```go
 err := srv.WaitForPeers(ctx, func(cfg gorums.Config) bool {
@@ -1634,12 +1627,12 @@ err := srv.WaitForClients(ctx, func(cfg gorums.Config) bool {
 | `ctx` is cancelled or times out   | `ctx.Err()`         |
 | `srv.Stop()` called before `cond` | `gorums.ErrStopped` |
 
-### Relationship to `onChange`
+### Relationship to `WithPeerChange`
 
-`WaitForPeers` and the `onChange` callback (see [WithPeerChange](#withpeerchange)) serve complementary purposes.
-`onChange` is suited for reactive work that must happen synchronously on every configuration change — for example, triggering a leader election or updating an atomic counter.
+`WaitForPeers` and `WithPeerChange` serve complementary purposes.
+`WithPeerChange` reports the initial connected-peer state and later changes, for example to update an atomic counter or signal another goroutine.
 `WaitForPeers` is suited for startup synchronization — blocking until the cluster reaches a desired state before the application begins normal operation.
-Unlike `onChange`, `WaitForPeers` composes naturally with `context.WithTimeout` and `context.WithCancel`.
+Unlike `WithPeerChange`, `WaitForPeers` composes naturally with `context.WithTimeout` and `context.WithCancel`.
 
 ## Error Handling
 
@@ -1791,13 +1784,13 @@ A node also checks the identity of each server it dials (see [Authenticating Pee
 If that check fails, no stream opens, and the node treats the failure as a refusal.
 A new stream to the same server would fail the same way, so the node fails its calls and waits before it tries again:
 
-| After a refusal | Behavior |
-| --- | --- |
-| Calls on the refused stream | Two-way and streaming calls fail with the refusal's status; they are not resent. A one-way call whose send fails on the refused stream also fails with the refusal. A one-way call sent before the refusal arrived counts as sent. |
-| New streams | The node backs off: 50 ms after the first refusal, doubling after each further refusal up to 2 s. With eager reconnection, the node opens the next stream when the backoff ends; otherwise, the first call after the backoff opens it. |
-| Calls during the backoff | They fail at once with the refusal. |
-| `Node.LastErr` | It reports the refusal. A newer error, such as `Unavailable`, may replace it. It reverts to nil once the server accepts a new stream. |
-| Connection state | A refused stream never counts as connected. |
+| After a refusal             | Behavior                                                                                                                                                                                                                               |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Calls on the refused stream | Two-way and streaming calls fail with the refusal's status; they are not resent. A one-way call whose send fails on the refused stream also fails with the refusal. A one-way call sent before the refusal arrived counts as sent.     |
+| New streams                 | The node backs off: 50 ms after the first refusal, doubling after each further refusal up to 2 s. With eager reconnection, the node opens the next stream when the backoff ends; otherwise, the first call after the backoff opens it. |
+| Calls during the backoff    | They fail at once with the refusal.                                                                                                                                                                                                    |
+| `Node.LastErr`              | It reports the refusal. A newer error, such as `Unavailable`, may replace it. It reverts to nil once the server accepts a new stream.                                                                                                  |
+| Connection state            | A refused stream never counts as connected.                                                                                                                                                                                            |
 
 A node sends its calls on a new stream at once, but it counts the stream as connected only once the server accepts it.
 A refused stream ends without the acceptance header:
@@ -2765,12 +2758,12 @@ When the server refuses a stream that claims a peer's node ID, the refusal sent 
 When a peer that the server dials fails the check, the reason is in the error of the waiting call.
 The checks require mutually authenticated TLS; see [Binding Node IDs to TLS Certificates](#binding-node-ids-to-tls-certificates).
 
-| Stream | Check | When the check fails |
-| --- | --- | --- |
-| Claims the node ID of a configured peer | Certificate identity matches the claimed ID before the stream is attached to the peer | The stream ends with `codes.Unauthenticated`; no connect callback or handler runs |
-| Claims a node ID outside the peer configuration | None; there is no identity to check | The stream ends with `codes.Unauthenticated` |
-| A connection this server dials to a configured peer | Certificate identity matches the dialed ID, right after the TLS handshake | The connection closes before any stream opens; calls to the peer fail with `codes.Unauthenticated`, as after a refused stream |
-| Claims no peer node ID (a client) | None | Served without peer identity checks |
+| Stream                                              | Check                                                                                 | When the check fails                                                                                                          |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Claims the node ID of a configured peer             | Certificate identity matches the claimed ID before the stream is attached to the peer | The stream ends with `codes.Unauthenticated`; no connect callback or handler runs                                             |
+| Claims a node ID outside the peer configuration     | None; there is no identity to check                                                   | The stream ends with `codes.Unauthenticated`                                                                                  |
+| A connection this server dials to a configured peer | Certificate identity matches the dialed ID, right after the TLS handshake             | The connection closes before any stream opens; calls to the peer fail with `codes.Unauthenticated`, as after a refused stream |
+| Claims no peer node ID (a client)                   | None                                                                                  | Served without peer identity checks                                                                                           |
 
 A refused peer's calls to this server fail with `codes.Unauthenticated`.
 The peer's `Node.LastErr` for this server reports the reason.
@@ -2779,13 +2772,13 @@ When a peer fails this server's dial-side check, it never receives a stream from
 
 With TLS peer identities, `ServerContext.SenderID` is authenticated for every configured peer, with and without stream deduplication:
 
-| Request arrives on | `SenderID` | Checked by |
-| --- | --- | --- |
-| A stream that a configured peer opened to this server | The peer's ID | The inbound check |
-| A stream that this server opened to a configured peer | The dialed peer's ID | The dial-side check |
-| A back-channel client's stream | The ID this server assigned | Not authenticated |
-| A regular client's stream | 0 | Not authenticated |
-| A call this server sends to itself | This server's own ID | No network involved |
+| Request arrives on                                    | `SenderID`                  | Checked by          |
+| ----------------------------------------------------- | --------------------------- | ------------------- |
+| A stream that a configured peer opened to this server | The peer's ID               | The inbound check   |
+| A stream that this server opened to a configured peer | The dialed peer's ID        | The dial-side check |
+| A back-channel client's stream                        | The ID this server assigned | Not authenticated   |
+| A regular client's stream                             | 0                           | Not authenticated   |
+| A call this server sends to itself                    | This server's own ID        | No network involved |
 
 `SenderID` names only the last hop.
 

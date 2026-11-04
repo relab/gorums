@@ -121,17 +121,12 @@ func WithPeers(myID ID, nodes NodeSource, opts ...DialOption) ServerOption {
 	}
 }
 
-// WithPeerChange registers a callback for a server configured with
-// [WithPeers]. The server calls it after each change to the connected-peer
-// [Config], that is, when its connection to a peer comes up or goes down. The
-// [Config] is sorted by node ID and always holds this server's own node. The
-// callback also runs once during [NewServer], with a [Config] that holds this
-// server's own node and any peer whose connection is already up.
+// WithPeerChange registers a callback for tracking changes to the server's
+// connected peers. The callback may run at any time after registration.
+// The [Config] passed to the callback always includes this server's own node.
 //
-// For a peer change, the callback runs while the server holds the lock that
-// guards its peer and client views. So it must not call
-// [Server.ConnectedPeers], [Server.ConnectedClients], [Server.WaitForPeers],
-// [Server.WaitForClients], [Server.WaitForAll], or other blocking methods.
+// The callback must not call [Server.ConnectedPeers], [Server.ConnectedClients],
+// [Server.WaitForPeers], [Server.WaitForClients], [Server.WaitForAll].
 // Use it only to signal or copy, not for long work.
 func WithPeerChange(callback func(Config)) ServerOption {
 	return func(o *serverOptions) {
