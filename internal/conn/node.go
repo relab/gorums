@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"slices"
 	"sync"
@@ -80,6 +81,7 @@ type nodeOptions struct {
 	Handler         stream.RequestHandler
 	EagerReconnect  bool             // re-establish a lost stream proactively; see [stream.OutboundOptions]
 	OnStreamChange  func()           // optional; invoked on outbound stream transitions
+	Logger          *log.Logger      // optional; logs unmatched error replies
 	Manager         *outboundManager // owning manager
 }
 
@@ -114,6 +116,7 @@ func newOutboundNode(addr string, opts nodeOptions) (*Node, error) {
 		Latency:        transport.Latency(),
 		EagerReconnect: opts.EagerReconnect,
 		OnStreamChange: opts.OnStreamChange,
+		Logger:         opts.Logger,
 	}))
 	return n, nil
 }
@@ -127,11 +130,11 @@ func newInboundNode(id ID, addr string, msgIDGen func() uint64) *Node {
 // newLocalNode creates a Node that dispatches calls in-process, bypassing the
 // network. It is used for the self-node when a server calls its own peers,
 // which include itself. The provided handler serves requests directly without
-// a gRPC round-trip.
-func newLocalNode(id ID, addr string, msgIDGen func() uint64, handler stream.RequestHandler, recvBufferSize uint, mgr *outboundManager) *Node {
+// a gRPC round-trip. The logger may be nil.
+func newLocalNode(id ID, addr string, msgIDGen func() uint64, handler stream.RequestHandler, recvBufferSize uint, logger *log.Logger, mgr *outboundManager) *Node {
 	transport := stream.NewTransport(id, msgIDGen)
 	n := newNode(id, addr, mgr, transport)
-	transport.StoreChannel(stream.NewLocalChannel(id, handler, recvBufferSize))
+	transport.StoreChannel(stream.NewLocalChannel(id, handler, recvBufferSize, logger))
 	return n
 }
 
@@ -185,6 +188,20 @@ func (n *Node) DroppedReplies() int64 {
 		return 0
 	}
 	return ch.DroppedReplies()
+}
+
+// UnmatchedErrors returns the number of error replies from this node that
+// matched no call awaiting a response, on the node's active channel. A server
+// sends such a reply when a request names a method it does not handle or
+// cannot be decoded, also for a one-way call. These replies do not change the
+// result of a call. The logger set with gorums.WithLogger, if any, logs each
+// one. Returns 0 if the node has no active channel.
+func (n *Node) UnmatchedErrors() int64 {
+	ch := n.activeChannel()
+	if ch == nil {
+		return 0
+	}
+	return ch.UnmatchedErrors()
 }
 
 // isUp reports whether the node's transport can currently carry calls: a

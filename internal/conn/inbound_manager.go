@@ -242,7 +242,7 @@ func (im *InboundManager) nextMsgID() uint64 {
 func (im *InboundManager) newNode(id ID, addr string, _ PeerVerifier) (*Node, error) {
 	var node *Node
 	if id == im.myID && im.handler != nil {
-		node = newLocalNode(id, addr, im.nextMsgID, im.handler, im.recvBufferSize, nil)
+		node = newLocalNode(id, addr, im.nextMsgID, im.handler, im.recvBufferSize, nil, nil)
 	} else {
 		node = newInboundNode(id, addr, im.nextMsgID)
 	}
@@ -342,7 +342,14 @@ func (im *InboundManager) registerPeer(streamCtx context.Context, inboundStream 
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	node := im.knownNodes[id]
-	newCh, detach := node.attachStream(streamCtx, inboundStream, im.inboundOptions())
+	opts := im.inboundOptions()
+	// The peer configuration's shared node for id sends its calls on this
+	// channel, so the channel uses that configuration's logger. Each
+	// attachment sets it, including one that replaces a lost stream.
+	if shared := im.peerConfig.Node(id); shared != nil && shared.IsShared() {
+		opts.Logger = shared.mgr.logger
+	}
+	newCh, detach := node.attachStream(streamCtx, inboundStream, opts)
 	im.rebuildConfig()
 
 	return newCh, func() {

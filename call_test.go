@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -53,6 +54,67 @@ func TestOnewayNoResourceLeak(t *testing.T) {
 	for _, node := range cfg.Nodes() {
 		if pc := node.PendingCount(); pc > 0 {
 			t.Errorf("node %d: pending = %d; expected 0", node.ID(), pc)
+		}
+	}
+}
+
+// logLines is an [io.Writer] for a [log.Logger] that sends each logged line
+// on the channel. It is safe for concurrent use.
+type logLines chan string
+
+func (w logLines) Write(p []byte) (int, error) {
+	w <- string(p)
+	return len(p), nil
+}
+
+// TestOnewayFrameworkErrorIsCounted verifies that a one-way call to a method
+// the server does not handle still returns nil from Send, and that the
+// server's error reply is counted by [gorums.Node.UnmatchedErrors] and logged
+// by the [gorums.WithLogger] logger with the node and method.
+func TestOnewayFrameworkErrorIsCounted(t *testing.T) {
+	lines := make(logLines, 16)
+	noHandlers := func(int) gorumstest.ServerIface { return gorums.NewServer() }
+	cfg := gorumstest.Config(t, 2, noHandlers, gorums.WithLogger(log.New(lines, "", 0)))
+	ctx := gorumstest.Context(t, 5*time.Second)
+	if err := mockcall.Multicast(ctx, cfg, "unhandled").Send(); err != nil {
+		t.Fatalf("Multicast: %v", err)
+	}
+	gorumstest.WaitUntil(t, 5*time.Second, func() bool {
+		for _, node := range cfg.Nodes() {
+			if node.UnmatchedErrors() != 1 {
+				return false
+			}
+		}
+		return true
+	})
+
+	logged := make(map[gorums.ID]string)
+	for _, line := range drainLines(lines) {
+		for _, node := range cfg.Nodes() {
+			if strings.Contains(line, fmt.Sprintf("node %d:", node.ID())) {
+				logged[node.ID()] = line
+			}
+		}
+	}
+	for _, node := range cfg.Nodes() {
+		line := logged[node.ID()]
+		for _, want := range []string{mock.TestMethod, "Unimplemented"} {
+			if !strings.Contains(line, want) {
+				t.Errorf("node %d: logged %q, want it to contain %q", node.ID(), line, want)
+			}
+		}
+	}
+}
+
+// drainLines returns the lines buffered in lines without blocking.
+func drainLines(lines logLines) []string {
+	var got []string
+	for {
+		select {
+		case line := <-lines:
+			got = append(got, line)
+		default:
+			return got
 		}
 	}
 }

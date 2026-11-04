@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"log"
 	"sync"
 
 	"google.golang.org/grpc/metadata"
@@ -18,6 +19,9 @@ type InboundOptions struct {
 	Handler RequestHandler
 	// Latency receives round-trip samples; may be nil.
 	Latency *Latency
+	// Logger, if non-nil, logs each error reply that matches no pending call;
+	// see [Channel.UnmatchedErrors].
+	Logger *log.Logger
 	// WaitingReplies makes handler replies wait for send queue space instead
 	// of being dropped when the queue is full. Set it only for a peer that
 	// this node sends no requests to: such a peer's receiving never waits on
@@ -53,6 +57,7 @@ func NewInboundChannel(ctx context.Context, id ID, stream InboundStream, opts In
 		endpoint: newEndpoint(ctx, id, opts.SendBufferSize, opts.RecvBufferSize, opts.Handler, opts.Latency),
 	}
 	c.waitingReplies = opts.WaitingReplies
+	c.unmatchedErrors.logger = opts.Logger
 	sessionCtx, cancel := context.WithCancel(c.ctx)
 	c.session = newSession(sessionCtx, cancel, &c.endpoint, stream, false, false)
 	c.closeOnce = sync.OnceValue(func() error {

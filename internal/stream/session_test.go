@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -408,6 +410,68 @@ func TestSessionHandleBackChannel(t *testing.T) {
 		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build())
 		s.handle(Message_builder{MessageSeqNo: 999, Method: mock.TestMethod}.Build())
 	})
+}
+
+// TestSessionHandleUnmatchedErrors verifies that an error reply that matches
+// no pending call, as the server sends for a one-way call to an unknown
+// method, is counted and logged with the peer, method, and message ID. A
+// reply without an error, or an error reply to a pending call, is not.
+func TestSessionHandleUnmatchedErrors(t *testing.T) {
+	const msgID = 7
+	errStatus := status.New(codes.Unimplemented, "no handler registered").Proto()
+	tests := []struct {
+		name      string
+		pending   bool
+		msg       *Message
+		wantCount int64
+		wantLog   []string
+	}{
+		{
+			name:      "ErrorReplyWithoutPendingCall",
+			msg:       Message_builder{MessageSeqNo: msgID, Method: mock.TestMethod, Status: errStatus}.Build(),
+			wantCount: 1,
+			wantLog:   []string{"node 1", mock.TestMethod, "message 7", "Unimplemented"},
+		},
+		{
+			name: "ReplyWithoutPendingCall",
+			msg:  Message_builder{MessageSeqNo: msgID, Method: mock.TestMethod}.Build(),
+		},
+		{
+			name:    "ErrorReplyToPendingCall",
+			pending: true,
+			msg:     Message_builder{MessageSeqNo: msgID, Method: mock.TestMethod, Status: errStatus}.Build(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestSession(t, 1, nil, true, true)
+			var logBuf strings.Builder
+			s.unmatchedErrors.logger = log.New(&logBuf, "", 0)
+			responseChan := make(chan response, 1)
+			if tt.pending {
+				s.pending.add(msgID, Request{Ctx: t.Context(), Msg: &Message{}, ResponseChan: responseChan})
+			}
+
+			s.handle(tt.msg)
+			if got := s.UnmatchedErrors(); got != tt.wantCount {
+				t.Errorf("UnmatchedErrors() = %d, want %d", got, tt.wantCount)
+			}
+			logged := logBuf.String()
+			if len(tt.wantLog) == 0 && logged != "" {
+				t.Errorf("logged %q, want nothing", logged)
+			}
+			for _, want := range tt.wantLog {
+				if !strings.Contains(logged, want) {
+					t.Errorf("logged %q, want it to contain %q", logged, want)
+				}
+			}
+			if tt.pending {
+				if resp := <-responseChan; status.Code(resp.Err) != codes.Unimplemented {
+					t.Errorf("pending call error = %v, want codes.Unimplemented", resp.Err)
+				}
+			}
+		})
+	}
 }
 
 // scriptedStream is a [BidiStream] whose Send returns sendErr and whose Recv

@@ -864,6 +864,21 @@ A send completes when the message reaches the stream of its node.
 They cannot return errors that occur later in the server handler, because a one-way call has no reply.
 If the caller drops the `*OnewayAsync` handle without calling `Wait`, the sends still complete, but their errors are lost.
 
+The server still replies with an error if it cannot run the handler: it has no handler for the method, or it cannot decode the request.
+For a one-way call, this reply arrives after `Send` or `Wait` returned, so it does not change their result.
+Instead, `Node.UnmatchedErrors` counts these replies for each node.
+To see them while debugging, set a logger with `gorums.WithLogger`.
+The configuration then logs each reply with the node ID, the method, the message ID, and the error:
+
+```go
+cfg, closeFn, err := gorums.NewConfig(nodes,
+	gorums.WithLogger(log.New(os.Stderr, "gorums: ", log.LstdFlags)),
+)
+```
+
+The count also includes an error reply to a two-way call that ended before its reply arrived.
+A count of zero does not show that the server received a message or ran its handler; one-way calls have no acknowledgements.
+
 `Send` blocks until the sends complete, so one goroutine holds a single outstanding message per node — the same depth a quorum call has.
 As with a quorum call, `Async` lets one goroutine keep several calls in flight:
 

@@ -779,7 +779,7 @@ func TestInboundManagerSetPeerConfigReportsPeerUp(t *testing.T) {
 
 	self := newNode(1, "127.0.0.1:9081", nil, nil)
 	transport := stream.NewTransport(2, func() uint64 { return 0 })
-	transport.StoreChannel(stream.NewLocalChannel(2, nil, DefaultRecvBufferSize))
+	transport.StoreChannel(stream.NewLocalChannel(2, nil, DefaultRecvBufferSize, nil))
 	peer := newNode(2, "127.0.0.1:9082", nil, transport)
 	im.SetPeerConfig(Config{self, peer})
 
