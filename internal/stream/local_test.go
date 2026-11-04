@@ -119,3 +119,35 @@ func TestLocalChannelUnmatchedErrors(t *testing.T) {
 		}
 	}
 }
+
+// TestLocalChannelUnmatchedErrorsEndedCall verifies that an error reply to a
+// two-way request whose context ended while the handler ran is counted and
+// logged.
+func TestLocalChannelUnmatchedErrorsEndedCall(t *testing.T) {
+	proceed := make(chan struct{})
+	handler := requestHandlerFunc(func(_ context.Context, msg *Message, _ func(), send func(*Message)) {
+		<-proceed
+		send(Message_builder{
+			MessageSeqNo: msg.GetMessageSeqNo(),
+			Method:       msg.GetMethod(),
+			Status:       status.New(codes.Unimplemented, "no handler registered").Proto(),
+		}.Build())
+	})
+	var logBuf lockedBuffer
+	c := NewLocalChannel(1, handler, testRecvBufferSize, log.New(&logBuf, "", 0))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	c.Enqueue(Request{
+		Ctx:          ctx,
+		Msg:          Message_builder{MessageSeqNo: 3, Method: mock.TestMethod}.Build(),
+		ResponseChan: make(chan response, 1),
+	})
+	cancel()
+	close(proceed)
+	if !waitUntil(defaultTestTimeout, func() bool { return c.UnmatchedErrors() == 1 }) {
+		t.Fatalf("UnmatchedErrors() = %d after an error reply to an ended call, want 1", c.UnmatchedErrors())
+	}
+	if logged := logBuf.String(); !strings.Contains(logged, "message 3") {
+		t.Errorf("logged %q, want it to contain %q", logged, "message 3")
+	}
+}

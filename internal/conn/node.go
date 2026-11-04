@@ -190,12 +190,13 @@ func (n *Node) DroppedReplies() int64 {
 	return ch.DroppedReplies()
 }
 
-// UnmatchedErrors returns the number of error replies from this node that
-// matched no call awaiting a response, on the node's active channel. A server
-// sends such a reply when a request names a method it does not handle or
-// cannot be decoded, also for a one-way call. These replies do not change the
-// result of a call. The logger set with gorums.WithLogger, if any, logs each
-// one. Returns 0 if the node has no active channel.
+// UnmatchedErrors returns the number of error replies from this node that no
+// caller observed, on the node's active channel: replies that matched no
+// pending call, and replies to calls whose contexts had ended. A server
+// replies with an error even to a one-way call, when the request names a
+// method it does not handle or cannot be decoded. These replies do not change
+// the result of a call. The logger set with gorums.WithLogger, if any, logs
+// each one. Returns 0 if the node has no active channel.
 func (n *Node) UnmatchedErrors() int64 {
 	ch := n.activeChannel()
 	if ch == nil {

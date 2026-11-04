@@ -750,7 +750,7 @@ A session uses this bit to route each received frame.
 A frame in the peer's ID space is a request for the handler.
 A frame in the session's own ID space is a response to one of its pending calls.
 If no call is pending for it, the session drops the frame.
-It first counts an error frame in `unmatchedErrors` and logs it if the channel has a logger, since a server replies with an error to a one-way call that names an unknown method or cannot be decoded.
+An error frame that no caller observes is counted in `unmatchedErrors` and logged if the channel has a logger: one with no pending call, since a server replies with an error to a one-way call that names an unknown method or cannot be decoded, and one for a call whose context has ended, even before a sweep removes the call.
 An inbound channel borrowed by the peer configuration inherits that configuration's logger when the stream is attached, including after reconnection.
 A shared call travels on the stream that the lower-ID peer dialed, as a server-initiated request.
 So it takes its ID from the generator of the inbound peer node, which sets bit 63, and the dialer's session passes it to the handler.

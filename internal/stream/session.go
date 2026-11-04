@@ -235,8 +235,9 @@ func (s *session) receiveFailed(err error) {
 // handle routes one received frame. A frame in the peer's ID space is a new
 // request, queued for the handler; it is dropped if there is no handler. A
 // frame in this side's ID space is a response to a pending call. If no call is
-// pending for it, the frame is dropped; an error frame is first counted and
-// logged as an unmatched error.
+// pending for it, the frame is dropped. An error frame with no pending call, or
+// for a call whose context has ended, is counted and logged as an unmatched
+// error.
 func (s *session) handle(msg *Message) {
 	msgID := msg.GetMessageSeqNo()
 	if isServerSequenceNumber(msgID) == s.serverRequests {
@@ -256,8 +257,12 @@ func (s *session) handle(msg *Message) {
 		return
 	}
 	resp := response{NodeID: s.id, Value: msg, Err: msg.errorStatus()}
-	if resp.Err == nil {
+	switch {
+	case resp.Err == nil:
 		s.latency.observe(time.Since(req.sendTime))
+	case req.Ctx.Err() != nil:
+		// The caller is done, so it does not observe the error.
+		s.unmatchedErrors.record(s.id, msg, resp.Err)
 	}
 	req.deliver(resp)
 }

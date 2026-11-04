@@ -27,8 +27,9 @@ type Channel interface {
 	// the send queue was full or closed, or during a refusal backoff.
 	DroppedReplies() int64
 	// UnmatchedErrors returns the number of error replies from the peer that
-	// matched no pending call. Each one is also logged if the channel has a
-	// logger.
+	// no caller observes: replies that match no pending call, and replies to
+	// calls whose contexts have ended. Each one is also logged if the channel
+	// has a logger.
 	UnmatchedErrors() int64
 	// PendingCount returns the number of two-way calls awaiting responses.
 	// The count may include calls whose callers are done but that have not
@@ -121,11 +122,12 @@ func (e *endpoint) DroppedReplies() int64 {
 	return e.queue.dropped.Load()
 }
 
-// unmatchedErrors counts the error replies from a channel's peer that match no
-// pending call, and logs each one if it has a logger. The server replies with
-// an error when a request names an unknown method or cannot be decoded, even
-// for a one-way call, which has no pending call. An error reply to a two-way
-// call that is no longer pending is counted too.
+// unmatchedErrors counts the error replies from a channel's peer that no
+// caller observes, and logs each one if it has a logger. The server replies
+// with an error when a request names an unknown method or cannot be decoded,
+// even for a one-way call, which has no pending call. An error reply to a
+// two-way call whose context has ended is counted too, whether or not the call
+// is still pending.
 type unmatchedErrors struct {
 	logger *log.Logger // may be nil
 	count  atomic.Int64
