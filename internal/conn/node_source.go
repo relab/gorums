@@ -211,3 +211,9 @@ func comparableAddr(addr string) string {
 	}
 	return addr
 }
+
+// Compile-time assertions: nodeMap and nodeList implement [NodeSource].
+var (
+	_ NodeSource = nodeMap(nil)
+	_ NodeSource = nodeList(nil)
+)

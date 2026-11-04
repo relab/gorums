@@ -35,12 +35,6 @@ func newInboundManager(t *testing.T, myID uint32, peerNodes NodeSource, onConfig
 	return im
 }
 
-// Compile-time assertions: both node providers satisfy NodeSource.
-var (
-	_ NodeSource = nodeMap(nil)
-	_ NodeSource = nodeList(nil)
-)
-
 // newTestInboundManager creates an InboundManager with myID and three known peers.
 func newTestInboundManager(t *testing.T, myID uint32) *InboundManager {
 	t.Helper()

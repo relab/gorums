@@ -344,3 +344,10 @@ func writeCSV[T any](w io.Writer, header []string, rows []T, fields func(T) []st
 	cw.Flush()
 	return cw.Error()
 }
+
+// Compile-time assertions: each time-series type implements [Plotter].
+var (
+	_ Plotter = (*ThroughputTimePlotter)(nil)
+	_ Plotter = (*LatencyTimePlotter)(nil)
+	_ Plotter = (*SaturationCurvePlotter)(nil)
+)

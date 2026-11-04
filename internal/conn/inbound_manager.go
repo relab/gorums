@@ -531,7 +531,8 @@ func untrackedChannel(streamCtx context.Context, inboundStream stream.InboundStr
 	return ch, func() { _ = ch.Close() }, nil
 }
 
-// compile-time assertion for interface compliance.
+// Compile-time assertions: InboundManager implements [stream.PeerAcceptor] and
+// [nodeRegistry].
 var (
 	_ stream.PeerAcceptor = (*InboundManager)(nil)
 	_ nodeRegistry        = (*InboundManager)(nil)

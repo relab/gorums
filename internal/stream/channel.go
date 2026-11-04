@@ -138,7 +138,7 @@ func (e *endpoint) recordHealth(err error) {
 	e.lastErr.Store(&err)
 }
 
-// compile-time assertions for interface compliance.
+// Compile-time assertions: each channel type implements [Channel].
 var (
 	_ Channel = (*OutboundChannel)(nil)
 	_ Channel = (*InboundChannel)(nil)

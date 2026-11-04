@@ -200,5 +200,5 @@ func (m *outboundManager) nextMsgID() uint64 {
 	return m.msgIDs.Add(1)
 }
 
-// compile-time assertion for interface compliance.
+// Compile-time assertion: outboundManager implements [nodeRegistry].
 var _ nodeRegistry = (*outboundManager)(nil)

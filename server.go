@@ -454,5 +454,5 @@ func (ctx *ServerContext) ConnectedClients() Config {
 	return ctx.srv.ConnectedClients()
 }
 
-// compile-time assertion for interface compliance.
+// Compile-time assertion: Server implements [stream.RequestHandler].
 var _ stream.RequestHandler = (*Server)(nil)
