@@ -16,14 +16,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// gorumsNodeIDKey carries the peer-asserted Gorums node ID in gRPC metadata.
-const gorumsNodeIDKey = "gorums-node-id"
-
 // errSelfNodeIDStream is returned by [InboundManager.AcceptPeer] when an
 // inbound stream presents this server's own node ID. It terminates the RPC, so
 // the misconfigured peer observes the rejection. The InvalidArgument code
 // marks it as a client configuration error that a retry does not fix.
 var errSelfNodeIDStream = status.Error(codes.InvalidArgument, "gorums: inbound stream claims the server's own node ID")
+
+// gorumsNodeIDKey carries the peer-asserted Gorums node ID in gRPC metadata.
+const gorumsNodeIDKey = "gorums-node-id"
 
 // nodeID extracts the NodeID from the gorums-node-id metadata key in ctx.
 // It returns 0 if the key is absent, empty, or not a valid ID greater than zero.
@@ -163,6 +163,14 @@ func (im *InboundManager) Nodes() []*Node {
 	})
 }
 
+// NodeID is exported and documented as gorums.Server.NodeID.
+func (im *InboundManager) NodeID() ID {
+	if im == nil {
+		return 0
+	}
+	return im.myID
+}
+
 // ConnectedPeers is exported and documented as gorums.Server.ConnectedPeers.
 func (im *InboundManager) ConnectedPeers() Config {
 	if im == nil {
@@ -171,6 +179,30 @@ func (im *InboundManager) ConnectedPeers() Config {
 	im.mu.RLock()
 	defer im.mu.RUnlock()
 	return im.connectedPeers
+}
+
+// ConnectedClients is exported and documented as gorums.Server.ConnectedClients.
+func (im *InboundManager) ConnectedClients() Config {
+	if im == nil {
+		return nil
+	}
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+	return im.connectedClients
+}
+
+// WaitForPeers is exported and documented as gorums.Server.WaitForPeers.
+func (im *InboundManager) WaitForPeers(ctx context.Context, cond func(Config) bool) error {
+	return im.waitForConfig(ctx, func() bool {
+		return cond(im.connectedPeers)
+	})
+}
+
+// WaitForClients is exported and documented as gorums.Server.WaitForClients.
+func (im *InboundManager) WaitForClients(ctx context.Context, cond func(Config) bool) error {
+	return im.waitForConfig(ctx, func() bool {
+		return cond(im.connectedClients)
+	})
 }
 
 // SetPeerConfig installs the server's peer [Config], from which the
@@ -192,24 +224,6 @@ func (im *InboundManager) onStreamChange() {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	im.rebuildConfig()
-}
-
-// ConnectedClients is exported and documented as gorums.Server.ConnectedClients.
-func (im *InboundManager) ConnectedClients() Config {
-	if im == nil {
-		return nil
-	}
-	im.mu.RLock()
-	defer im.mu.RUnlock()
-	return im.connectedClients
-}
-
-// NodeID is exported and documented as gorums.Server.NodeID.
-func (im *InboundManager) NodeID() ID {
-	if im == nil {
-		return 0
-	}
-	return im.myID
 }
 
 // nextMsgID returns the next unique message ID for server-initiated calls.
@@ -435,17 +449,6 @@ func (im *InboundManager) rebuildConfig() {
 	im.configCh = make(chan struct{})
 }
 
-// checkConfig checks the condition under the read lock and returns the
-// current broadcast channel if the condition is not yet met.
-func (im *InboundManager) checkConfig(cond func() bool) (met bool, ch <-chan struct{}) {
-	im.mu.RLock()
-	defer im.mu.RUnlock()
-	if cond() {
-		return true, nil
-	}
-	return false, im.configCh
-}
-
 // waitForConfig blocks until cond returns true or until ctx is cancelled
 // or the InboundManager is closed. The cond function is called while the
 // read lock is held, so it must not acquire any additional locks.
@@ -465,18 +468,15 @@ func (im *InboundManager) waitForConfig(ctx context.Context, cond func() bool) e
 	}
 }
 
-// WaitForPeers is exported and documented as gorums.Server.WaitForPeers.
-func (im *InboundManager) WaitForPeers(ctx context.Context, cond func(Config) bool) error {
-	return im.waitForConfig(ctx, func() bool {
-		return cond(im.connectedPeers)
-	})
-}
-
-// WaitForClients is exported and documented as gorums.Server.WaitForClients.
-func (im *InboundManager) WaitForClients(ctx context.Context, cond func(Config) bool) error {
-	return im.waitForConfig(ctx, func() bool {
-		return cond(im.connectedClients)
-	})
+// checkConfig checks the condition under the read lock and returns the
+// current broadcast channel if the condition is not yet met.
+func (im *InboundManager) checkConfig(cond func() bool) (met bool, ch <-chan struct{}) {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+	if cond() {
+		return true, nil
+	}
+	return false, im.configCh
 }
 
 // InboundPeers returns the known peers that currently have an inbound stream,
