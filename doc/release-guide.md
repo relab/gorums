@@ -225,7 +225,7 @@ Do this once, and again when you rotate the key.
      - `CLUSTER_SSH_KEY`: the private key from step 1;
      - `CLUSTER_SSH_CONFIG`: an SSH config with a `Host` entry for the jump host and for the driver, each with `User <account>`; the driver entry sets `ProxyJump` to the jump host's `Host` alias in the same file (sweep's SSH library does not read the `user@host` form);
      - `CLUSTER_KNOWN_HOSTS`: the `known_hosts` lines of the jump host and the driver, keyed by the `HostName` that `ssh -G <alias>` prints, not by the alias; copy them from a `known_hosts` file that already trusts these hosts, for example with `ssh-keygen -F <HostName>`; the pool hosts need no lines, because the driver connects to them without host-key checks;
-     - `CLUSTER_MASK`: one string per line to hide in the public job log, for example `152.94.`, `ux.uis.no`, the jump host name, and the account name;
+     - `CLUSTER_MASK`: one string per line to hide in the public job log, for example `152.94.`, `ux.uis.no`, the jump host name, and the account name; host aliases such as `bb2` stay visible in the log, because sweep prints them; to hide them too, give the hosts neutral aliases in `CLUSTER_SSH_CONFIG`, `CLUSTER_DRIVER`, and `CLUSTER_HOSTS` (for example `n1`, `n2`, …);
    - variables:
      - `CLUSTER_DRIVER`: `nebula` or `bb1`;
      - `CLUSTER_HOSTS`: the pool, for example `bb[2-8],bb10,bb11`, with at least 9 hosts, since the smoke sweep runs `-test 9`; leave out the driver and known faulty hosts (bb9, bb16); every listed host must be reachable, because `sweep -check` fails on any unreachable host;

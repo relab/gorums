@@ -2,9 +2,11 @@ name: cluster-check
 # Proves that a GitHub-hosted runner can reach the bbchain cluster through the
 # jump host, and that the pool is idle: it runs sweep -check -strict from the
 # cluster-local driver. Run it after setting up or rotating cluster access, by
-# pushing a release/v0-probe* branch (and approving the cluster environment),
-# or by hand once this workflow is on the default branch. See the "Cluster
-# Access" section of doc/release-guide.md.
+# pushing a release/v0-probe* branch and approving the cluster environment.
+# Once this workflow is on the default branch, it can also be started by hand,
+# but only on a release/* ref, which the cluster environment admits:
+# gh workflow run cluster-check.yml --ref release/v0-probe. A manual run on any
+# other ref skips the job. See "Cluster Access" in doc/release-guide.md.
 on:
   push:
     branches: ["release/v0-probe*"]
