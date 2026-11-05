@@ -11,7 +11,10 @@ import (
 // releaseSHA is the merge commit of the release pull request in the tests.
 const releaseSHA = "abc123"
 
-const prOpenGreen = `{"number":999,"url":"https://github.com/relab/gorums/pull/999","state":"OPEN","mergeCommit":null,"statusCheckRollup":[
+// headSHA is the head commit of the release pull request in the tests.
+const headSHA = "def456"
+
+const prOpenGreen = `{"number":999,"url":"https://github.com/relab/gorums/pull/999","state":"OPEN","headRefOid":"def456","mergeCommit":null,"statusCheckRollup":[
 {"__typename":"CheckRun","name":"test","status":"COMPLETED","conclusion":"SUCCESS"},
 {"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"SKIPPED"},
 {"__typename":"StatusContext","context":"ci","state":"SUCCESS"},
@@ -34,7 +37,7 @@ func prJSON(state, checks string) string {
 	if state == "MERGED" {
 		merge = `{"oid":"` + releaseSHA + `"}`
 	}
-	return `{"number":999,"url":"u","state":"` + state + `","mergeCommit":` + merge + `,"statusCheckRollup":[` + checks + `]}`
+	return `{"number":999,"url":"u","state":"` + state + `","headRefOid":"` + headSHA + `","mergeCommit":` + merge + `,"statusCheckRollup":[` + checks + `]}`
 }
 
 func publishRunner(pr string) *fakeRunner {
@@ -82,7 +85,7 @@ func TestPublishOpenPR(t *testing.T) {
 	}
 	assertOrder(t, f.calls,
 		"query gh pr view release/v0.12.0 --json",
-		"exec gh pr merge release/v0.12.0 --squash --delete-branch",
+		"exec gh pr merge release/v0.12.0 --squash --delete-branch --match-head-commit def456",
 		"query gh pr view release/v0.12.0 --json",
 		"exec git fetch origin master",
 		"query git cat-file -e abc123^{commit}",
@@ -198,6 +201,8 @@ func TestPublishRefusals(t *testing.T) {
 		{name: "PR lookup fails", pr: "", prep: func(f *fakeRunner) { f.fail["gh pr view"] = errBoom }, wantErr: "cannot look up"},
 		{name: "closed PR", pr: prJSON("CLOSED", ""), wantErr: "closed"},
 		{name: "not confirmed", pr: prOpenGreen, opts: func(o *publishOptions) { o.yes = false }, wantErr: "--yes"},
+		{name: "open without a head commit", pr: `{"number":999,"url":"u","state":"OPEN","mergeCommit":null,"statusCheckRollup":[` + smokeChecksGreen + `]}`,
+			wantErr: "no head commit"},
 		{name: "local tag exists", pr: prJSON("MERGED", ""),
 			prep: func(f *fakeRunner) { f.answers["git tag -l"] = "v0.12.0\n" }, wantErr: "already exists"},
 		{name: "remote tag exists", pr: prJSON("MERGED", ""),

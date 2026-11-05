@@ -28,6 +28,7 @@ type prInfo struct {
 	Number      int    `json:"number"`
 	URL         string `json:"url"`
 	State       string `json:"state"`
+	HeadRefOID  string `json:"headRefOid"` // the head commit that StatusCheckRollup describes
 	MergeCommit struct {
 		OID string `json:"oid"`
 	} `json:"mergeCommit"`
@@ -127,7 +128,7 @@ func (t *tool) publish(o publishOptions) error {
 
 // lookupPR reads the release pull request for a branch.
 func (t *tool) lookupPR(branch string) (prInfo, error) {
-	out, err := t.query("gh", "pr", "view", branch, "--json", "number,url,state,mergeCommit,statusCheckRollup")
+	out, err := t.query("gh", "pr", "view", branch, "--json", "number,url,state,headRefOid,mergeCommit,statusCheckRollup")
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "no pull requests found") {
 			return prInfo{}, fmt.Errorf("no pull request found for %s: run %s pr first", branch, progName)
@@ -170,10 +171,15 @@ func (t *tool) mergeRelease(branch string, yes bool) (string, error) {
 		if missing := missingRequired(pr.StatusCheckRollup, requiredSmokeChecks); len(missing) > 0 {
 			return "", fmt.Errorf("required smoke checks missing or not successful for %s: %s", pr.URL, strings.Join(missing, ", "))
 		}
+		if pr.HeadRefOID == "" {
+			return "", fmt.Errorf("pull request %s reports no head commit", pr.URL)
+		}
 		if err := t.confirm(fmt.Sprintf("Squash-merge %s?", pr.URL), yes); err != nil {
 			return "", err
 		}
-		if err := t.exec("gh", "pr", "merge", branch, "--squash", "--delete-branch"); err != nil {
+		// Merge only the head commit whose checks passed above; gh refuses the
+		// merge if a newer commit was pushed in the meantime.
+		if err := t.exec("gh", "pr", "merge", branch, "--squash", "--delete-branch", "--match-head-commit", pr.HeadRefOID); err != nil {
 			return "", err
 		}
 		if t.dryRun {
