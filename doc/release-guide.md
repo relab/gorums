@@ -197,21 +197,32 @@ No sweep, binary, or file is ever placed there.
 
 ### Set Up Access
 
-Do this once, and again when you rotate the key.
+Do this once, and again when you rotate the keys.
 
-1. Create a key pair for the workflow, without a passphrase:
+1. Create two key pairs for the workflow, without a passphrase: one for the cluster hosts and one for the jump host.
 
    ```shell
    ssh-keygen -t ed25519 -C gorums-release-smoke -N '' -f gorums-release-smoke
+   ssh-keygen -t ed25519 -C gorums-release-smoke-jump -N '' -f gorums-release-smoke-jump
    ```
 
-2. Install the public key for the dedicated cluster account, not your own account, on the driver, the pool hosts, and the jump host.
+2. Install the public keys for the dedicated cluster account, not your own account.
    A dedicated account has its own `/tmp/sweep-$USER` and owns none of your processes, so a release run cannot stop your sweeps.
-   - On the driver, the key needs agent forwarding, because `sweep -detach` forwards the agent to dial the pool.
-   - On the jump host, limit the key to forwarding SSH to the driver: `restrict,port-forwarding,permitopen="<driver host>:22"`.
+   Add these two lines to the account's `~/.ssh/authorized_keys`:
+
+   ```text
+   command="/bin/false",restrict,port-forwarding,permitopen="<driver host>:22" <contents of gorums-release-smoke-jump.pub>
+   from="<jump host IP>,<cluster network>",restrict,port-forwarding,agent-forwarding,pty <contents of gorums-release-smoke.pub>
+   ```
+
+   - The first line lets the jump-host key only forward SSH to the driver.
+     The forced command makes any command session run `/bin/false` instead, so the key runs nothing on the shared jump host; `ProxyJump` still works, because forwarding is not a command session.
      Write `<driver host>` exactly as the `HostName` of the driver in `CLUSTER_SSH_CONFIG`; `permitopen` takes no wildcards.
-     The runner never connects to the pool hosts, so they need no `permitopen` entry.
-   - If the jump host and the cluster hosts share one home directory, one line must allow both: `restrict,port-forwarding,agent-forwarding,pty`.
+   - The second line lets the cluster key work on the driver and the pool hosts, with the agent forwarding that `sweep -detach` needs to dial the pool.
+     `from=` admits it only from the jump host and the cluster network, so the jump host refuses it from the GitHub runner.
+     Write IP addresses or CIDR ranges, not names: `sshd` does not resolve names by default.
+   - If the jump host and the cluster hosts share one home directory, both lines go in that one file.
+     Otherwise, the first line goes on the jump host, and the second on the driver and the pool hosts.
 
 3. Create a key pair for the encrypted smoke output, and keep `key.txt` private:
 
@@ -223,11 +234,13 @@ Do this once, and again when you rotate the key.
    - deployment branches: only the pattern `release/v*`;
    - required reviewer: the maintainer;
    - secrets:
-     - `CLUSTER_SSH_KEY`: the private key from step 1;
+     - `CLUSTER_SSH_KEY`: the private key `gorums-release-smoke` from step 1;
+     - `CLUSTER_JUMP_SSH_KEY`: the private key `gorums-release-smoke-jump` from step 1;
      - `CLUSTER_SSH_CONFIG`: an SSH config with a `Host` entry for the jump host and for the driver, each with `User <account>`; the driver entry sets `ProxyJump` to the jump host's `Host` alias in the same file (sweep's SSH library does not read the `user@host` form);
      - `CLUSTER_KNOWN_HOSTS`: the `known_hosts` lines of the jump host and the driver, keyed by the `HostName` that `ssh -G <alias>` prints, not by the alias; copy them from a `known_hosts` file that already trusts these hosts, for example with `ssh-keygen -F <HostName>`; the pool hosts need no lines, because the driver connects to them without host-key checks;
      - `CLUSTER_MASK`: one string per line to hide in the public job log: the full IP address and the full DNS name of the jump host, the driver, and every pool host, and the account name; mask whole values, not prefixes, because masking `192.0.2.` in `192.0.2.19` still shows `***19`; host aliases such as `bb2` stay visible in the log, because sweep prints them; to hide them too, give the hosts neutral aliases in `CLUSTER_SSH_CONFIG`, `CLUSTER_DRIVER`, and `CLUSTER_HOSTS` (for example `n1`, `n2`, …);
    - variables:
+     - `CLUSTER_JUMP`: the jump host's `Host` alias in `CLUSTER_SSH_CONFIG`;
      - `CLUSTER_DRIVER`: `nebula` or `bb1`;
      - `CLUSTER_HOSTS`: the pool, for example `bb[2-8],bb10,bb11`, with at least 9 hosts, since the smoke sweep runs `-test 9`; leave out the driver and known faulty hosts (bb9, bb16); every listed host must be reachable, because `sweep -check` fails on any unreachable host;
      - `SMOKE_AGE_RECIPIENT`: the public key that `age-keygen` printed in step 3.
@@ -241,7 +254,8 @@ Do this once, and again when you rotate the key.
    git push origin HEAD:refs/heads/release/v0-probe
    ```
 
-   The job runs `sweep -check -strict` from the driver.
+   The job first checks that the jump host runs no command for the account: `ssh <jump> true` must exit with the status of `/bin/false`.
+   It then runs `sweep -check -strict` from the driver.
    It passes when every host is reachable, no benchmark port is busy, and no benchmark process is left over.
    Check that the log shows `***` in place of the cluster addresses.
    Then delete the branch:
@@ -253,7 +267,7 @@ Do this once, and again when you rotate the key.
 The environment secrets reach only jobs that name the `cluster` environment, run from a `release/v*` branch, and are approved.
 Only people with write access can push such a branch, and a pull request from a fork runs without the secrets.
 
-### Rotate the Key
+### Rotate the Keys
 
-Create a new key pair, install the new public key as in step 2, replace `CLUSTER_SSH_KEY`, and run the `cluster-check` workflow.
-Then remove the old public key from every host.
+Create new key pairs, install the new public keys as in step 2, replace `CLUSTER_SSH_KEY` and `CLUSTER_JUMP_SSH_KEY`, and run the `cluster-check` workflow.
+Then remove the old public keys from every host.

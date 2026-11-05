@@ -1,15 +1,18 @@
 name: Cluster SSH
 description: >
   Prepares SSH access to the bbchain cluster for sweep: hides UiS host details
-  in the job log, loads the cluster key into an ssh-agent that later steps
-  inherit, and writes ~/.ssh/config and ~/.ssh/known_hosts. Pass the values
-  from the cluster environment's secrets.
+  in the job log, loads the cluster key and the jump-host key into an
+  ssh-agent that later steps inherit, and writes ~/.ssh/config and
+  ~/.ssh/known_hosts. Pass the values from the cluster environment's secrets.
 inputs:
   mask:
     description: Newline-separated strings to hide in the job log, such as the full IP addresses and DNS names of the cluster hosts and the account name.
     required: true
   ssh-key:
-    description: The private key of the dedicated cluster account.
+    description: The private key that the dedicated cluster account accepts on the driver and the pool hosts.
+    required: true
+  jump-ssh-key:
+    description: The private key that the dedicated cluster account accepts on the jump host, for forwarding only.
     required: true
   ssh-config:
     description: The SSH config with the jump host, the driver, and the pool hosts.
@@ -29,14 +32,19 @@ runs:
       run: '"$GITHUB_ACTION_PATH/register-masks.sh"'
 
     # sweep -detach forwards this agent to the driver, which uses it to dial the
-    # pool hosts; -collect uses it again later in the job.
-    - name: Start ssh-agent with the cluster key
+    # pool hosts; -collect uses it again later in the job. SSH clients offer
+    # agent keys in the order they were added. The cluster key comes first: if
+    # the hosts share a home directory, the driver also accepts the jump-host
+    # key, but only to run /bin/false.
+    - name: Start ssh-agent with the cluster keys
       shell: bash
       env:
         SSH_KEY: ${{ inputs.ssh-key }}
+        JUMP_SSH_KEY: ${{ inputs.jump-ssh-key }}
       run: |
         eval "$(ssh-agent -s)" > /dev/null
         printf '%s\n' "$SSH_KEY" | ssh-add -q -
+        printf '%s\n' "$JUMP_SSH_KEY" | ssh-add -q -
         {
           echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
           echo "SSH_AGENT_PID=$SSH_AGENT_PID"
