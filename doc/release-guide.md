@@ -123,7 +123,7 @@ Install it again after the program changes.
    It needs the cluster access described in [Cluster Access](#cluster-access).
 
    Each smoke job writes a verdict to its job summary.
-   The verdict names runs and node indices, never hosts.
+   The verdict names runs and host aliases, such as `bb2`, but never addresses.
    `cluster-smoke` also uploads two artifacts: `cluster-smoke` (the verdict and `agg.csv`) and `cluster-smoke-full-encrypted` (the full run directory).
    To read the full run directory, download that artifact and decrypt it with your `age` key:
 

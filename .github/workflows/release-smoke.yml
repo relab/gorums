@@ -177,7 +177,7 @@ jobs:
           # shellcheck disable=SC2086 # SMOKE_FLAGS holds separate flags
           ./cmd/sweep/sweep -verify "$RUN_DIR" $SMOKE_FLAGS -summary verdict.md
 
-      # Only host-free files are public: the verdict and agg.csv.
+      # Only files without addresses are public: the verdict and agg.csv.
       - name: Publish the verdict
         if: always()
         working-directory: benchkit
@@ -196,7 +196,7 @@ jobs:
             benchkit/out/release-smoke/report/agg.csv
           if-no-files-found: warn
 
-      # The full run directory names cluster hosts, so it is uploaded only
+      # The full run directory holds cluster addresses, so it is uploaded only
       # encrypted to the maintainer's age key: age -d -i key.txt.
       - name: Encrypt the full run directory
         if: always()
