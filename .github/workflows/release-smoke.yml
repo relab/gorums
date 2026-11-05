@@ -177,6 +177,18 @@ jobs:
           # shellcheck disable=SC2086 # SMOKE_FLAGS holds separate flags
           ./cmd/sweep/sweep -verify "$RUN_DIR" $SMOKE_FLAGS -summary verdict.md
 
+      # The first -collect fetched the compact data and left the raw results on
+      # the driver. A second -collect adds the raw results to RUN_DIR and
+      # removes the driver work directory. A salvaged run stays on the driver
+      # for inspection.
+      - name: Archive the raw results and release the driver
+        if: always()
+        working-directory: benchkit
+        run: |
+          if [ -f out/.sweep-last.json ] && [ "$(jq -r .collection out/.sweep-last.json)" = compact ]; then
+            ./cmd/sweep/sweep -collect
+          fi
+
       # Only files without addresses are public: the verdict and agg.csv.
       - name: Publish the verdict
         if: always()
