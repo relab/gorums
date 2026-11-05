@@ -103,12 +103,15 @@ Run it on master after prepare. It does the following:
 
 The version is read from internal/version/version.go.
 `,
-	"publish": `Publishes the release after the pull request has passed CI.
+	"publish": `Publishes the release after the pull request has passed CI and the smoke checks.
 
 The version is read from internal/version/version.go. It does the following:
 
   1. Squash-merges the release pull request, if it is still open. It stops if
-     CI has not passed, and asks for confirmation unless -yes is given.
+     CI has not passed, or if a release-smoke job (local-checks, docker-smoke,
+     cluster-smoke) did not succeed on the pull request, and asks for
+     confirmation unless -yes is given. A pull request that is already merged
+     is published with a warning that names each smoke check that did not pass.
   2. Fetches master. It checks that the merge commit of the pull request is on
      origin/master and carries the version, and that the tags do not exist yet.
   3. Creates the tags <version> and benchkit/<version> on that merge commit, not
