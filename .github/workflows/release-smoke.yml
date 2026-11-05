@@ -1,12 +1,15 @@
 name: release-smoke
 # Runs the checks that the pull request CI skips, before a release is
-# published: the local checks and a multi-host sweep smoke test on Docker.
-# A push to a release/v* branch runs every job. It can also be started by hand
-# (workflow_dispatch) on any branch, to try the checks before a release; the
-# guard then runs only if the branch name starts with release/.
+# published: the local checks, a multi-host sweep smoke test on Docker, and the
+# same smoke test on the bbchain cluster. A push to a release/v* branch runs
+# every job; gorums-release publish requires them on the release pull request.
+# The cluster job waits for approval of the cluster environment. The workflow
+# can also be started by hand (workflow_dispatch) on any branch, to try the
+# checks before a release; the guard and the cluster job then run only if the
+# branch is a release branch. Pushes to release/v0-probe* run only cluster-check.
 on:
   push:
-    branches: ["release/v*"]
+    branches: ["release/v*", "!release/v0-probe*"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -108,3 +111,104 @@ jobs:
           path: benchkit/out/smoke-docker
           if-no-files-found: warn
           include-hidden-files: true
+
+  cluster-smoke:
+    needs: [guard, local-checks, docker-smoke]
+    runs-on: ubuntu-latest
+    # The environment admits only release/v* branches and needs an approval;
+    # it holds the cluster key. See "Cluster Access" in doc/release-guide.md.
+    environment: cluster
+    timeout-minutes: 60
+    # One job on the cluster at a time, across workflows.
+    concurrency:
+      group: bbchain-cluster
+      cancel-in-progress: false
+    env:
+      CLUSTER_HOSTS: ${{ vars.CLUSTER_HOSTS }}
+      CLUSTER_DRIVER: ${{ vars.CLUSTER_DRIVER }}
+      # The launch, collect, and verify steps share these flags.
+      SMOKE_FLAGS: -test 9 -sweep release-smoke -stream-mode dual,dedup -benchmarks SymmetricQuorumCall,SymmetricMulticast
+      RUN_DIR: out/release-smoke
+    steps:
+      # Masks first: the public log must never show UiS host details.
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/cluster-ssh
+        with:
+          mask: ${{ secrets.CLUSTER_MASK }}
+          ssh-key: ${{ secrets.CLUSTER_SSH_KEY }}
+          ssh-config: ${{ secrets.CLUSTER_SSH_CONFIG }}
+          known-hosts: ${{ secrets.CLUSTER_KNOWN_HOSTS }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: "go.mod"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      - uses: ./.github/actions/setup-protoc
+        with:
+          version: "32.1"
+      # Typst builds report.pdf; without it the smoke test still passes.
+      - uses: typst-community/setup-typst@v5
+
+      - name: Install tools
+        run: |
+          sudo apt-get install -y --no-install-recommends age
+          make tools
+          make installgorums
+          make sweep
+
+      - name: Check that the pool is reachable and idle
+        working-directory: benchkit
+        run: ./cmd/sweep/sweep -check -strict -hosts "$CLUSTER_HOSTS" -detach "$CLUSTER_DRIVER"
+
+      - name: Launch the smoke sweep on the driver
+        working-directory: benchkit
+        run: |
+          # shellcheck disable=SC2086 # SMOKE_FLAGS holds separate flags
+          ./cmd/sweep/sweep $SMOKE_FLAGS -hosts "$CLUSTER_HOSTS" -detach "$CLUSTER_DRIVER"
+
+      - name: Wait for and collect the run
+        working-directory: benchkit
+        run: ./cmd/sweep/sweep -collect -wait -wait-timeout 40m
+
+      - name: Verify the run
+        working-directory: benchkit
+        run: |
+          # shellcheck disable=SC2086 # SMOKE_FLAGS holds separate flags
+          ./cmd/sweep/sweep -verify "$RUN_DIR" $SMOKE_FLAGS -summary verdict.md
+
+      # Only host-free files are public: the verdict and agg.csv.
+      - name: Publish the verdict
+        if: always()
+        working-directory: benchkit
+        run: |
+          if [ -f verdict.md ]; then
+            cat verdict.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No verdict: the smoke test stopped before sweep -verify ran." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: cluster-smoke
+          path: |
+            benchkit/verdict.md
+            benchkit/out/release-smoke/report/agg.csv
+          if-no-files-found: warn
+
+      # The full run directory names cluster hosts, so it is uploaded only
+      # encrypted to the maintainer's age key: age -d -i key.txt.
+      - name: Encrypt the full run directory
+        if: always()
+        working-directory: benchkit
+        env:
+          SMOKE_AGE_RECIPIENT: ${{ vars.SMOKE_AGE_RECIPIENT }}
+        run: |
+          if [ -d "$RUN_DIR" ]; then
+            tar czf - "$RUN_DIR" | age -r "$SMOKE_AGE_RECIPIENT" > smoke-full.tar.gz.age
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: cluster-smoke-full-encrypted
+          path: benchkit/smoke-full.tar.gz.age
+          if-no-files-found: ignore

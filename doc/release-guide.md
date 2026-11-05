@@ -190,7 +190,7 @@ Do this once, and again when you rotate the key.
    - secrets:
      - `CLUSTER_SSH_KEY`: the private key from step 1;
      - `CLUSTER_SSH_CONFIG`: an SSH config with the jump host, the driver, and the pool hosts, for example `Host bb*` and `Host nebula` entries with `User <account>` and `ProxyJump <jump host alias>`;
-     - `CLUSTER_KNOWN_HOSTS`: the `known_hosts` line of `ssh4.ux.uis.no`, from `ssh-keyscan ssh4.ux.uis.no`;
+     - `CLUSTER_KNOWN_HOSTS`: the `known_hosts` lines of `ssh4.ux.uis.no`, the driver, and every pool host, under the names the SSH config uses; copy them from a `known_hosts` file that already trusts these hosts, for example with `ssh-keygen -F bb2`;
      - `CLUSTER_MASK`: one string per line to hide in the public job log, for example `152.94.`, `ux.uis.no`, the jump host name, and the account name;
    - variables:
      - `CLUSTER_DRIVER`: `nebula` or `bb1`;

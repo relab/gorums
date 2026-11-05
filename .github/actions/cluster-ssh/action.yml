@@ -15,7 +15,7 @@ inputs:
     description: The SSH config with the jump host, the driver, and the pool hosts.
     required: true
   known-hosts:
-    description: The known_hosts lines that pin the jump host key.
+    description: The known_hosts lines that pin the host keys of the jump host, the driver, and the pool hosts.
     required: true
 runs:
   using: composite
