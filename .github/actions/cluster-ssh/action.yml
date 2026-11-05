@@ -21,17 +21,12 @@ runs:
   using: composite
   steps:
     # Register the masks first, before any step prints a host name or address.
-    # add-mask hides every occurrence, also inside longer strings.
+    # The script fails when the input holds no mask.
     - name: Hide cluster details
       shell: bash
       env:
         MASK: ${{ inputs.mask }}
-      run: |
-        while IFS= read -r line; do
-          if [ -n "$line" ]; then
-            echo "::add-mask::$line"
-          fi
-        done <<< "$MASK"
+      run: '"$GITHUB_ACTION_PATH/register-masks.sh"'
 
     # sweep -detach forwards this agent to the driver, which uses it to dial the
     # pool hosts; -collect uses it again later in the job.
