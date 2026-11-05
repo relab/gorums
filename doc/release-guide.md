@@ -147,3 +147,78 @@ These flags belong to one command:
   Never move or delete a tag that the Go module proxy has served.
 - If the proxy check times out, the release is still complete.
   Check later with `go list -m github.com/relab/gorums@vX.Y.Z` and `go list -m github.com/relab/gorums/benchkit@vX.Y.Z`.
+
+## Cluster Access
+
+The `cluster-smoke` job of the `release-smoke` workflow runs a smoke sweep on the bbchain cluster from a GitHub-hosted runner.
+It reaches the cluster over SSH through the UiS jump host:
+
+```text
+GitHub runner ──ssh, ProxyJump only──► ssh4.ux.uis.no ──► driver (nebula or bb1) ──ssh──► pool hosts (bbN)
+                                       shared jump host;     runs sweep -driven;        run the benchmark
+                                       nothing runs here     holds /tmp/sweep-$USER
+```
+
+`ssh4.ux.uis.no` is the jump host for all UiS users, so it only forwards connections.
+No sweep, binary, or file is ever placed there.
+
+### Set Up Access
+
+Do this once, and again when you rotate the key.
+
+1. Create a key pair for the workflow, without a passphrase:
+
+   ```shell
+   ssh-keygen -t ed25519 -C gorums-release-smoke -N '' -f gorums-release-smoke
+   ```
+
+2. Install the public key for the dedicated cluster account, not your own account, on the driver, the pool hosts, and `ssh4.ux.uis.no`.
+   A dedicated account has its own `/tmp/sweep-$USER` and owns none of your processes, so a release run cannot stop your sweeps.
+   - On the driver, the key needs agent forwarding, because `sweep -detach` forwards the agent to dial the pool.
+   - On `ssh4`, limit the key to forwarding SSH: `restrict,port-forwarding,permitopen="<driver>:22",permitopen="bb*:22"`.
+   - If `ssh4` and the cluster hosts share one home directory, one line must allow both: `restrict,port-forwarding,agent-forwarding,pty`.
+
+3. Create a key pair for the encrypted smoke output, and keep `key.txt` private:
+
+   ```shell
+   age-keygen -o key.txt
+   ```
+
+4. In the repository settings, create the environment `cluster`:
+   - deployment branches: only the pattern `release/v*`;
+   - required reviewer: the maintainer;
+   - secrets:
+     - `CLUSTER_SSH_KEY`: the private key from step 1;
+     - `CLUSTER_SSH_CONFIG`: an SSH config with the jump host, the driver, and the pool hosts, for example `Host bb*` and `Host nebula` entries with `User <account>` and `ProxyJump <jump host alias>`;
+     - `CLUSTER_KNOWN_HOSTS`: the `known_hosts` line of `ssh4.ux.uis.no`, from `ssh-keyscan ssh4.ux.uis.no`;
+     - `CLUSTER_MASK`: one string per line to hide in the public job log, for example `152.94.`, `ux.uis.no`, the jump host name, and the account name;
+   - variables:
+     - `CLUSTER_DRIVER`: `nebula` or `bb1`;
+     - `CLUSTER_HOSTS`: the pool, for example `bb[2-8],bb10,bb11`; leave out the driver and known faulty hosts (bb9, bb16);
+     - `SMOKE_AGE_RECIPIENT`: the public key that `age-keygen` printed in step 3.
+
+5. In the repository settings under Actions, require approval for workflows from all outside collaborators.
+
+6. Check the access with the `cluster-check` workflow.
+   Push any commit to a branch named `release/v0-probe`, approve the `cluster` environment in the Actions tab, and wait for the job:
+
+   ```shell
+   git push origin HEAD:refs/heads/release/v0-probe
+   ```
+
+   The job runs `sweep -check -strict` from the driver.
+   It passes when every host is reachable, no benchmark port is busy, and no benchmark process is left over.
+   Check that the log shows `***` in place of the cluster addresses.
+   Then delete the branch:
+
+   ```shell
+   git push origin --delete release/v0-probe
+   ```
+
+The environment secrets reach only jobs that name the `cluster` environment, run from a `release/v*` branch, and are approved.
+Only people with write access can push such a branch, and a pull request from a fork runs without the secrets.
+
+### Rotate the Key
+
+Create a new key pair, install the new public key as in step 2, replace `CLUSTER_SSH_KEY`, and run the `cluster-check` workflow.
+Then remove the old public key from every host.
