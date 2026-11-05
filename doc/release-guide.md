@@ -119,6 +119,7 @@ Install it again after the program changes.
 
    `cluster-smoke` waits for your approval of the `cluster` environment.
    Approve it in the Actions tab of the run (Review deployments).
+   While it waits, a run for a newer push to the same branch waits too, so approve or reject it before you push again.
    It needs the cluster access described in [Cluster Access](#cluster-access).
 
    Each smoke job writes a verdict to its job summary.
@@ -206,7 +207,9 @@ Do this once, and again when you rotate the key.
 2. Install the public key for the dedicated cluster account, not your own account, on the driver, the pool hosts, and `ssh4.ux.uis.no`.
    A dedicated account has its own `/tmp/sweep-$USER` and owns none of your processes, so a release run cannot stop your sweeps.
    - On the driver, the key needs agent forwarding, because `sweep -detach` forwards the agent to dial the pool.
-   - On `ssh4`, limit the key to forwarding SSH: `restrict,port-forwarding,permitopen="<driver>:22",permitopen="bb*:22"`.
+   - On `ssh4`, limit the key to forwarding SSH to the driver: `restrict,port-forwarding,permitopen="<driver host>:22"`.
+     Write `<driver host>` exactly as the `HostName` of the driver in `CLUSTER_SSH_CONFIG`; `permitopen` takes no wildcards.
+     The runner never connects to the pool hosts, so they need no `permitopen` entry.
    - If `ssh4` and the cluster hosts share one home directory, one line must allow both: `restrict,port-forwarding,agent-forwarding,pty`.
 
 3. Create a key pair for the encrypted smoke output, and keep `key.txt` private:
@@ -220,12 +223,12 @@ Do this once, and again when you rotate the key.
    - required reviewer: the maintainer;
    - secrets:
      - `CLUSTER_SSH_KEY`: the private key from step 1;
-     - `CLUSTER_SSH_CONFIG`: an SSH config with the jump host, the driver, and the pool hosts, for example `Host bb*` and `Host nebula` entries with `User <account>` and `ProxyJump <jump host alias>`;
-     - `CLUSTER_KNOWN_HOSTS`: the `known_hosts` lines of `ssh4.ux.uis.no`, the driver, and every pool host, under the names the SSH config uses; copy them from a `known_hosts` file that already trusts these hosts, for example with `ssh-keygen -F bb2`;
+     - `CLUSTER_SSH_CONFIG`: an SSH config with a `Host` entry for the jump host and for the driver, each with `User <account>`; the driver entry sets `ProxyJump` to the jump host's `Host` alias in the same file (sweep's SSH library does not read the `user@host` form);
+     - `CLUSTER_KNOWN_HOSTS`: the `known_hosts` lines of the jump host and the driver, keyed by the `HostName` that `ssh -G <alias>` prints, not by the alias; copy them from a `known_hosts` file that already trusts these hosts, for example with `ssh-keygen -F <HostName>`; the pool hosts need no lines, because the driver connects to them without host-key checks;
      - `CLUSTER_MASK`: one string per line to hide in the public job log, for example `152.94.`, `ux.uis.no`, the jump host name, and the account name;
    - variables:
      - `CLUSTER_DRIVER`: `nebula` or `bb1`;
-     - `CLUSTER_HOSTS`: the pool, for example `bb[2-8],bb10,bb11`; leave out the driver and known faulty hosts (bb9, bb16);
+     - `CLUSTER_HOSTS`: the pool, for example `bb[2-8],bb10,bb11`, with at least 9 hosts, since the smoke sweep runs `-test 9`; leave out the driver and known faulty hosts (bb9, bb16); every listed host must be reachable, because `sweep -check` fails on any unreachable host;
      - `SMOKE_AGE_RECIPIENT`: the public key that `age-keygen` printed in step 3.
 
 5. In the repository settings under Actions, require approval for workflows from all outside collaborators.
