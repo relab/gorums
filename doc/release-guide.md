@@ -107,7 +107,32 @@ Install it again after the program changes.
 
 5. Wait for CI to pass on the pull request.
 
-6. Publish the release.
+6. Approve and wait for the smoke checks.
+
+   The push of the release branch starts the `release-smoke` workflow.
+   It runs four jobs:
+
+   - `guard` checks that the branch is `release/<version>` for the version in `version.go`;
+   - `local-checks` runs `make integrationtest`, `make stresstest`, `make lint`, `make modernize` (which must change nothing), and `make goplscheck`;
+   - `docker-smoke` runs `make smoke-docker`, a multi-host sweep on Docker containers;
+   - `cluster-smoke` runs the same smoke sweep on the bbchain cluster, and checks it with `sweep -verify`.
+
+   `cluster-smoke` waits for your approval of the `cluster` environment.
+   Approve it in the Actions tab of the run (Review deployments).
+   It needs the cluster access described in [Cluster Access](#cluster-access).
+
+   Each smoke job writes a verdict to its job summary.
+   The verdict names runs and node indices, never hosts.
+   `cluster-smoke` also uploads two artifacts: `cluster-smoke` (the verdict and `agg.csv`) and `cluster-smoke-full-encrypted` (the full run directory).
+   To read the full run directory, download that artifact and decrypt it with your `age` key:
+
+   ```shell
+   age -d -i key.txt smoke-full.tar.gz.age | tar xzf -
+   ```
+
+   `publish` refuses to merge until all three of `local-checks`, `docker-smoke`, and `cluster-smoke` have succeeded on the pull request.
+
+7. Publish the release.
 
    ```shell
    gorums-release publish
@@ -137,6 +162,12 @@ These flags belong to one command:
 
 ## If Something Goes Wrong
 
+- If a smoke job fails, read its verdict in the job summary.
+  Fix the cause on the release branch and push; the workflow runs again.
+  To run a job again without a change, use "Re-run failed jobs" in the Actions tab.
+- If the cluster is down and the release cannot wait, merge the release pull request by hand in GitHub.
+  `publish` then publishes the merged pull request and prints a warning that names each smoke check that did not pass.
+  Use this only for an outage, and run the cluster smoke check again once the cluster is back.
 - If `prepare` fails, fix the cause and undo its changes before you run it again.
   Run `git restore .` for the changed files.
   Run `git clean -nd` to list the new files that code generation added, and `git clean -fd` to delete them.
