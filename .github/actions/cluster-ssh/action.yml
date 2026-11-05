@@ -6,7 +6,7 @@ description: >
   from the cluster environment's secrets.
 inputs:
   mask:
-    description: Newline-separated strings to hide in the job log, such as an IP prefix, a domain, and the account name.
+    description: Newline-separated strings to hide in the job log, such as the full IP addresses and DNS names of the cluster hosts and the account name.
     required: true
   ssh-key:
     description: The private key of the dedicated cluster account.

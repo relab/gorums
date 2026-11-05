@@ -183,15 +183,16 @@ These flags belong to one command:
 ## Cluster Access
 
 The `cluster-smoke` job of the `release-smoke` workflow runs a smoke sweep on the bbchain cluster from a GitHub-hosted runner.
-It reaches the cluster over SSH through the UiS jump host:
+It reaches the cluster over SSH through the UiS jump host.
+This guide writes it as `jump.example.org`; the real name stays in the `cluster` environment's secrets.
 
 ```text
-GitHub runner ──ssh, ProxyJump only──► ssh4.ux.uis.no ──► driver (nebula or bb1) ──ssh──► pool hosts (bbN)
-                                       shared jump host;     runs sweep -driven;        run the benchmark
-                                       nothing runs here     holds /tmp/sweep-$USER
+GitHub runner ──ssh, ProxyJump only──► jump.example.org ──► driver (nebula or bb1) ──ssh──► pool hosts (bbN)
+                                       shared jump host;       runs sweep -driven;        run the benchmark
+                                       nothing runs here       holds /tmp/sweep-$USER
 ```
 
-`ssh4.ux.uis.no` is the jump host for all UiS users, so it only forwards connections.
+The jump host serves all UiS users, so it only forwards connections.
 No sweep, binary, or file is ever placed there.
 
 ### Set Up Access
@@ -204,13 +205,13 @@ Do this once, and again when you rotate the key.
    ssh-keygen -t ed25519 -C gorums-release-smoke -N '' -f gorums-release-smoke
    ```
 
-2. Install the public key for the dedicated cluster account, not your own account, on the driver, the pool hosts, and `ssh4.ux.uis.no`.
+2. Install the public key for the dedicated cluster account, not your own account, on the driver, the pool hosts, and the jump host.
    A dedicated account has its own `/tmp/sweep-$USER` and owns none of your processes, so a release run cannot stop your sweeps.
    - On the driver, the key needs agent forwarding, because `sweep -detach` forwards the agent to dial the pool.
-   - On `ssh4`, limit the key to forwarding SSH to the driver: `restrict,port-forwarding,permitopen="<driver host>:22"`.
+   - On the jump host, limit the key to forwarding SSH to the driver: `restrict,port-forwarding,permitopen="<driver host>:22"`.
      Write `<driver host>` exactly as the `HostName` of the driver in `CLUSTER_SSH_CONFIG`; `permitopen` takes no wildcards.
      The runner never connects to the pool hosts, so they need no `permitopen` entry.
-   - If `ssh4` and the cluster hosts share one home directory, one line must allow both: `restrict,port-forwarding,agent-forwarding,pty`.
+   - If the jump host and the cluster hosts share one home directory, one line must allow both: `restrict,port-forwarding,agent-forwarding,pty`.
 
 3. Create a key pair for the encrypted smoke output, and keep `key.txt` private:
 
@@ -225,7 +226,7 @@ Do this once, and again when you rotate the key.
      - `CLUSTER_SSH_KEY`: the private key from step 1;
      - `CLUSTER_SSH_CONFIG`: an SSH config with a `Host` entry for the jump host and for the driver, each with `User <account>`; the driver entry sets `ProxyJump` to the jump host's `Host` alias in the same file (sweep's SSH library does not read the `user@host` form);
      - `CLUSTER_KNOWN_HOSTS`: the `known_hosts` lines of the jump host and the driver, keyed by the `HostName` that `ssh -G <alias>` prints, not by the alias; copy them from a `known_hosts` file that already trusts these hosts, for example with `ssh-keygen -F <HostName>`; the pool hosts need no lines, because the driver connects to them without host-key checks;
-     - `CLUSTER_MASK`: one string per line to hide in the public job log, for example `152.94.`, `ux.uis.no`, the jump host name, and the account name; host aliases such as `bb2` stay visible in the log, because sweep prints them; to hide them too, give the hosts neutral aliases in `CLUSTER_SSH_CONFIG`, `CLUSTER_DRIVER`, and `CLUSTER_HOSTS` (for example `n1`, `n2`, …);
+     - `CLUSTER_MASK`: one string per line to hide in the public job log: the full IP address and the full DNS name of the jump host, the driver, and every pool host, and the account name; mask whole values, not prefixes, because masking `192.0.2.` in `192.0.2.19` still shows `***19`; host aliases such as `bb2` stay visible in the log, because sweep prints them; to hide them too, give the hosts neutral aliases in `CLUSTER_SSH_CONFIG`, `CLUSTER_DRIVER`, and `CLUSTER_HOSTS` (for example `n1`, `n2`, …);
    - variables:
      - `CLUSTER_DRIVER`: `nebula` or `bb1`;
      - `CLUSTER_HOSTS`: the pool, for example `bb[2-8],bb10,bb11`, with at least 9 hosts, since the smoke sweep runs `-test 9`; leave out the driver and known faulty hosts (bb9, bb16); every listed host must be reachable, because `sweep -check` fails on any unreachable host;
