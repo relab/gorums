@@ -124,7 +124,7 @@ Install it again after the program changes.
 
    Each smoke job writes a verdict to its job summary.
    The verdict names runs and host aliases, such as `bb2`, but never addresses.
-   `cluster-smoke` also uploads two artifacts: `cluster-smoke` (the verdict and `agg.csv`) and `cluster-smoke-full-encrypted` (the full run directory).
+   `cluster-smoke` also uploads two artifacts: `cluster-smoke` (the verdict) and `cluster-smoke-full-encrypted` (the full run directory, with `agg.csv` and the raw results).
    To read the full run directory, download that artifact and decrypt it with your `age` key:
 
    ```shell

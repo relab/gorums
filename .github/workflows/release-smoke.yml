@@ -189,7 +189,7 @@ jobs:
             ./cmd/sweep/sweep -collect
           fi
 
-      # Only files without addresses are public: the verdict and agg.csv.
+      # Only the verdict is public: it holds no addresses.
       - name: Publish the verdict
         if: always()
         working-directory: benchkit
@@ -203,9 +203,7 @@ jobs:
         if: always()
         with:
           name: cluster-smoke
-          path: |
-            benchkit/verdict.md
-            benchkit/out/release-smoke/report/agg.csv
+          path: benchkit/verdict.md
           if-no-files-found: warn
 
       # The full run directory holds cluster addresses, so it is uploaded only
