@@ -1,13 +1,10 @@
 name: Cluster SSH
 description: >
-  Prepares SSH access to the bbchain cluster for sweep: hides UiS host details
-  in the job log, loads the cluster key and the jump-host key into an
-  ssh-agent that later steps inherit, and writes ~/.ssh/config and
-  ~/.ssh/known_hosts. Pass the values from the cluster environment's secrets.
+  Prepares SSH access to the bbchain cluster for sweep: loads the cluster key
+  and the jump-host key into an ssh-agent that later steps inherit, and writes
+  ~/.ssh/config and ~/.ssh/known_hosts. Pass the values from the cluster
+  environment.
 inputs:
-  mask:
-    description: Newline-separated strings to hide in the job log, such as the full IP addresses and DNS names of the cluster hosts and the account name.
-    required: true
   ssh-key:
     description: The private key that the dedicated cluster account accepts on the driver and the pool hosts.
     required: true
@@ -23,14 +20,6 @@ inputs:
 runs:
   using: composite
   steps:
-    # Register the masks first, before any step prints a host name or address.
-    # The script fails when the input holds no mask.
-    - name: Hide cluster details
-      shell: bash
-      env:
-        MASK: ${{ inputs.mask }}
-      run: '"$GITHUB_ACTION_PATH/register-masks.sh"'
-
     # sweep -detach forwards this agent to the driver, which uses it to dial the
     # pool hosts; -collect uses it again later in the job. SSH clients offer
     # agent keys in the order they were added. The cluster key comes first: if

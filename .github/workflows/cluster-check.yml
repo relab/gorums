@@ -38,7 +38,6 @@ jobs:
           version: "32.1"
       - uses: ./.github/actions/cluster-ssh
         with:
-          mask: ${{ secrets.CLUSTER_MASK }}
           ssh-key: ${{ secrets.CLUSTER_SSH_KEY }}
           jump-ssh-key: ${{ secrets.CLUSTER_JUMP_SSH_KEY }}
           ssh-config: ${{ secrets.CLUSTER_SSH_CONFIG }}

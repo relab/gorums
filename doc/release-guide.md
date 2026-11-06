@@ -238,7 +238,6 @@ Do this once, and again when you rotate the keys.
      - `CLUSTER_JUMP_SSH_KEY`: the private key `gorums-release-smoke-jump` from step 1;
      - `CLUSTER_SSH_CONFIG`: an SSH config with a `Host` entry for the jump host and for the driver, each with `User <account>`; the driver entry sets `ProxyJump` to the jump host's `Host` alias in the same file (sweep's SSH library does not read the `user@host` form);
      - `CLUSTER_KNOWN_HOSTS`: the `known_hosts` lines of the jump host and the driver, keyed by the `HostName` that `ssh -G <alias>` prints, not by the alias; copy them from a `known_hosts` file that already trusts these hosts, for example with `ssh-keygen -F <HostName>`; the pool hosts need no lines, because the driver connects to them without host-key checks;
-     - `CLUSTER_MASK`: one string per line to hide in the public job log: the full IP address and the full DNS name of the jump host, the driver, and every pool host, and the account name; mask whole values, not prefixes, because masking `192.0.2.` in `192.0.2.19` still shows `***19`; host aliases such as `bb2` stay visible in the log, because sweep prints them; to hide them too, give the hosts neutral aliases in `CLUSTER_SSH_CONFIG`, `CLUSTER_DRIVER`, and `CLUSTER_HOSTS` (for example `n1`, `n2`, …);
    - variables:
      - `CLUSTER_JUMP`: the jump host's `Host` alias in `CLUSTER_SSH_CONFIG`;
      - `CLUSTER_DRIVER`: `nebula` or `bb1`;
@@ -257,7 +256,6 @@ Do this once, and again when you rotate the keys.
    The job first checks that the jump host runs no command for the account: `ssh <jump> true` must exit with the status of `/bin/false`.
    It then runs `sweep -check -strict` from the driver.
    It passes when every host is reachable, no benchmark port is busy, and no benchmark process is left over.
-   Check that the log shows `***` in place of the cluster addresses.
    Then delete the branch:
 
    ```shell

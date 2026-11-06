@@ -130,11 +130,9 @@ jobs:
       SMOKE_FLAGS: -test 9 -sweep release-smoke -stream-mode dual,dedup -benchmarks SymmetricQuorumCall,SymmetricMulticast
       RUN_DIR: out/release-smoke
     steps:
-      # Masks first: the public log must never show UiS host details.
       - uses: actions/checkout@v7
       - uses: ./.github/actions/cluster-ssh
         with:
-          mask: ${{ secrets.CLUSTER_MASK }}
           ssh-key: ${{ secrets.CLUSTER_SSH_KEY }}
           jump-ssh-key: ${{ secrets.CLUSTER_JUMP_SSH_KEY }}
           ssh-config: ${{ secrets.CLUSTER_SSH_CONFIG }}
