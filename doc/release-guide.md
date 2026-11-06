@@ -178,16 +178,15 @@ These flags belong to one command:
 ## Cluster Access
 
 The `cluster-smoke` job of the `release-smoke` workflow runs a smoke sweep on the bbchain cluster from a GitHub-hosted runner.
-It reaches the cluster over SSH through the UiS jump host.
-This guide writes it as `jump.example.org`; the real name stays in the `cluster` environment's secrets.
+It reaches the cluster over SSH through the UiS jump host, as the dedicated account `gorums`:
 
 ```text
-GitHub runner ──ssh, ProxyJump only──► jump.example.org ──► driver (nebula or bb1) ──ssh──► pool hosts (bbN)
-                                       shared jump host;       runs sweep -driven;        run the benchmark
-                                       nothing runs here       holds /tmp/sweep-$USER
+GitHub runner ──ssh, ProxyJump only──► ssh4.ux.uis.no ──► driver (nebula or bb1) ──ssh──► pool hosts (bbN)
+                                       shared jump host;     runs sweep -driven;        run the benchmark
+                                       nothing runs here     holds /tmp/sweep-gorums
 ```
 
-The jump host serves all UiS users, so it only forwards connections.
+`ssh4.ux.uis.no` serves all UiS users, so it only forwards connections.
 No sweep, binary, or file is ever placed there.
 
 ### Set Up Access
@@ -201,8 +200,8 @@ Do this once, and again when you rotate the keys.
    ssh-keygen -t ed25519 -C gorums-release-smoke-jump -N '' -f gorums-release-smoke-jump
    ```
 
-2. Install the public keys for the dedicated cluster account, not your own account.
-   A dedicated account has its own `/tmp/sweep-$USER` and owns none of your processes, so a release run cannot stop your sweeps.
+2. Install the public keys for the dedicated account `gorums`, not your own account.
+   A dedicated account has its own `/tmp/sweep-gorums` and owns none of your processes, so a release run cannot stop your sweeps.
    Add these two lines to the account's `~/.ssh/authorized_keys`:
 
    ```text
