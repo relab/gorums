@@ -1,7 +1,6 @@
 package ordering
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"iter"
@@ -154,26 +153,31 @@ func TestQuorumCallOrdering(t *testing.T) {
 func TestQuorumCallAsyncOrdering(t *testing.T) {
 	client := NewOrderingClient(gorumstest.Config(t, 4, serverFn))
 
+	// Wait for every replica between batches so even the slowest stream
+	// has at most batchSize requests outstanding.
+	const batchSize = 32
 	var wg sync.WaitGroup
 	for i := range iterations() {
 		// Async sends the request before it returns, so the calls go out in
 		// loop order although their replies are collected concurrently.
 		responses := client.QuorumCall(t.Context(), Request_builder{Num: uint64(i)}.Build()).Async()
 		wg.Go(func() {
-			resp, err := responses.Majority()
-			if err != nil {
-				if errors.Is(err, context.Canceled) {
-					return
+			var replies int
+			for reply := range responses.Results() {
+				replies++
+				if reply.Err != nil {
+					t.Errorf("request %d to node %d: %v", i, reply.NodeID, reply.Err)
+				} else if !reply.Value.GetInOrder() {
+					t.Errorf("node %d received request %d out of order", reply.NodeID, i)
 				}
-				t.Errorf("QuorumCall error: %v", err)
 			}
-			if resp == nil {
-				t.Errorf("Got nil response")
-			}
-			if !resp.GetInOrder() && !t.Failed() {
-				t.Errorf("Message received out of order.")
+			if replies != responses.Size() {
+				t.Errorf("request %d: got %d replies, want %d", i, replies, responses.Size())
 			}
 		})
+		if i%batchSize == 0 {
+			wg.Wait()
+		}
 	}
 	wg.Wait()
 }
