@@ -24,6 +24,8 @@ func TestRunUsage(t *testing.T) {
 		{"pr help", []string{"pr", "-h"}, 0, "", "-web"},
 		{"prepare bump flag", []string{"prepare", "-h"}, 0, "", "-bump-min"},
 		{"prepare major flag", []string{"prepare", "-h"}, 0, "", "-allow-major"},
+		{"check-branch help", []string{"check-branch", "-h"}, 0, "", "-branch"},
+		{"usage names check-branch", []string{"help"}, 0, "check-branch", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
