@@ -1317,7 +1317,7 @@
                 <tr><td><code>-duration</code></td><td><code>10s</code></td><td>Measurement duration per run (forwarded as the binary's <code>-time</code>).</td></tr>
                 <tr><td><code>-outdir</code></td><td><code>out</code></td><td>Root output directory for sweep runs.</td></tr>
                 <tr><td><code>-sweep</code></td><td><code>run</code></td><td>Label prefix for output filenames and, when set explicitly, the run directory name.</td></tr>
-                <tr><td><code>-binary</code> / <code>-build</code></td><td>auto-build</td><td>Pre-built linux/amd64 binary, or a build command with the <code>{{output}}</code> token (also via <code>$BENCHKIT_BUILD</code>); default <code>go build ./cmd/benchmark</code>.</td></tr>
+                <tr><td><code>-binary</code> / <code>-build</code></td><td>auto-build</td><td>Pre-built Linux binary for the hosts' architecture, or a build command with the <code>{{output}}</code> token (also via <code>$BENCHKIT_BUILD</code>); default <code>go build ./cmd/benchmark</code>. Builds target linux/amd64; set <code>GOARCH</code> in sweep's environment (e.g. <code>GOARCH=arm64</code>) for other hosts.</td></tr>
                 <tr><td><code>-fd-limit</code></td><td><code>65536</code></td><td>Soft open-file limit (<code>ulimit -Sn</code>) applied to every node and the driven sweep; 0 keeps the host default.</td></tr>
                 <tr><td><code>-test</code></td><td><code>0</code></td><td>Quick smoke test with N nodes (5&nbsp;s, one worker, defaults elsewhere); 0 = full sweep. The label becomes <code>test</code> unless <code>-sweep</code> is given.</td></tr>
                 <tr><td><code>-verbose</code></td><td><code>false</code></td><td>Pass <code>-verbose</code> to the nodes.</td></tr>
@@ -1436,7 +1436,7 @@
 ./cmd/sweep/sweep -hosts <span class="s">'bb[1-10]'</span> -detach -sweep e4 -n 9 -workers 1,2,4,8,16</pre>
         <p>The driver role lives in <code>sweep</code>, not the benchmark binary: the orchestration depends on
             <code>iago</code> (SSH, upload, collection) and <code>cmd/benchmark</code> must stay free of that
-            dependency. The laptop cross-builds <code>sweep</code> and the benchmark binary for linux/amd64, ships
+            dependency. The laptop cross-builds <code>sweep</code> and the benchmark binary for linux/amd64 (or linux/<code>$GOARCH</code>), ships
             them plus a generated SSH config to the driver, and starts <code>sweep</code> there with the internal
             <code>-driven</code> flag. The driver then does all the per-node SSH over the LAN.
             The launcher confirms startup and exits; run <code>sweep -collect</code> after completion to download the compact transfer directory:
@@ -1967,7 +1967,7 @@ cat out/dedup-eval/plotdata/plotdata.binpb out/dedup-eval-baseline/plotdata/plot
 
     <h3>Foreign protocol binary</h3>
     <p>Any binary that implements the flag contract (<a href="#flags">§9</a>) can be swept. Pass a prebuilt
-        linux/amd64 binary, or a build command with the <code>{{output}}</code> token.</p>
+        Linux binary for the hosts' architecture, or a build command with the <code>{{output}}</code> token.</p>
     <div class="command-block">
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
         <pre>./cmd/sweep/sweep -hosts 'bb[1-9]' -sweep paxos \
