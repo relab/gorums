@@ -19,7 +19,7 @@ runtime_deps			:= internal/stream/stream.pb.go internal/stream/stream_grpc.pb.go
 benchkit_deps			:= benchkit/benchkit.pb.go benchkit/control.pb.go benchkit/control_gorums.pb.go
 benchmark_deps			:= $(benchkit_deps) benchkit/benchmark/benchmark.pb.go benchkit/benchmark/benchmark_gorums.pb.go
 
-.PHONY: all dev tools bootstrapgorums installgorums benchmark benchkit sweep test compiletests golden genproto benchtest bench lint deadcode modernize goplscheck
+.PHONY: all dev tools bootstrapgorums installgorums benchmark benchkit sweep smoke-docker test compiletests golden genproto benchtest bench lint deadcode modernize goplscheck
 
 all: dev benchmark compiletests
 
@@ -129,6 +129,13 @@ bench: compiletests
 # iterations. The -stress test flag is defined only in internal/tests/ordering.
 stresstest: compiletests
 	go test -count=1 ./internal/tests/ordering -stress
+
+# Run the sweep smoke test on a throwaway Docker cluster: a detached -test
+# sweep over SMOKE_N peer containers (default 5), collected and checked with
+# sweep -verify. Needs Docker and rsync >= 3.2.4. The verdict is written to
+# benchkit/out/smoke-docker/verdict.md.
+smoke-docker:
+	@./benchkit/smoke/docker/run.sh
 
 # Rewrite the generator golden files in internal/testprotos/testdata after an
 # intended change to a template. Review the diff before committing it.

@@ -1687,6 +1687,18 @@
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
         <pre>./cmd/sweep/sweep -hosts 'bb[1-3]' -test 3</pre>
     </div>
+    <p>Without a cluster, run the same detached smoke test on throwaway Docker containers. From the
+        repository root, <code>make smoke-docker</code> starts a driver and five peer containers
+        (<code>SMOKE_N</code> sets the count), runs a <code>-test</code> sweep of
+        <code>SymmetricQuorumCall</code> and <code>SymmetricMulticast</code> in both stream modes, collects it
+        with <code>-collect -wait</code>, and checks it with <code>-verify</code>. It needs Docker and
+        rsync&nbsp;&ge;&nbsp;3.2.4, builds for the Docker host's architecture, and writes the verdict to
+        <code>benchkit/out/smoke-docker/verdict.md</code>. The release workflow runs it on every release
+        branch.</p>
+    <div class="command-block">
+        <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
+        <pre>make smoke-docker</pre>
+    </div>
 
     <h3>Stream deduplication evaluation</h3>
     <p>These recipes compare the same benchmark binary in <code>dual</code> and <code>dedup</code> stream modes.
