@@ -25,8 +25,6 @@ jobs:
           cache: true
           cache-dependency-path: "**/go.sum"
       - uses: ./.github/actions/setup-protoc
-        with:
-          version: "32.1"
 
       - name: Run Make
         run: make
