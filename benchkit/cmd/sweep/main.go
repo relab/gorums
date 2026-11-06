@@ -645,6 +645,28 @@ func collectRunArtifacts(g iago.Group, base string, nodes []nodeAssignment, cfg 
 	return err
 }
 
+// applyTestMode applies the -test N quick smoke workload to cfg: N nodes, one
+// worker, empty payloads, and 5s runs. It keeps explicit -benchmarks, and keeps
+// an explicit -sweep label; otherwise the label becomes "test". It returns
+// whether the label now names the run directory, which a smoke run always
+// does. A testN of 0 leaves cfg unchanged and returns sweepExplicit.
+func applyTestMode(cfg *config, testN int, sweepExplicit, benchmarksExplicit bool) bool {
+	if testN <= 0 {
+		return sweepExplicit
+	}
+	cfg.sweep.numNodes = []int{testN}
+	cfg.sweep.workers = []int{1}
+	cfg.sweep.payloads = []int{0}
+	if !benchmarksExplicit {
+		cfg.sweep.benchmarks = []string{"SymmetricQuorumCall"}
+	}
+	cfg.duration = 5 * time.Second
+	if !sweepExplicit {
+		cfg.sweepLabel = "test"
+	}
+	return true
+}
+
 func parseFlags() (*config, []string) {
 	// Seed the sweep ranges with their defaults; the comma-separated list flags
 	// below replace a range wholesale when the corresponding flag is given.
@@ -789,17 +811,7 @@ func parseFlags() (*config, []string) {
 		log.Fatalf("-stream-mode: %v", err)
 	}
 
-	if testN > 0 {
-		cfg.sweep.numNodes = []int{testN}
-		cfg.sweep.workers = []int{1}
-		cfg.sweep.payloads = []int{0}
-		if !benchmarksExplicit {
-			cfg.sweep.benchmarks = []string{"SymmetricQuorumCall"}
-		}
-		cfg.duration = 5 * time.Second
-		cfg.sweepLabel = "test"
-		sweepExplicit = true
-	}
+	sweepExplicit = applyTestMode(cfg, testN, sweepExplicit, benchmarksExplicit)
 	// A custom binary or build command may provide different benchmark names.
 	// The built-in binary always runs each host in distributed symmetric mode.
 	if !collecting && !listing && !cfg.check && !cfg.explainCheck && cfg.plotDir == "" &&

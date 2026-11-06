@@ -1319,7 +1319,7 @@
                 <tr><td><code>-sweep</code></td><td><code>run</code></td><td>Label prefix for output filenames and, when set explicitly, the run directory name.</td></tr>
                 <tr><td><code>-binary</code> / <code>-build</code></td><td>auto-build</td><td>Pre-built linux/amd64 binary, or a build command with the <code>{{output}}</code> token (also via <code>$BENCHKIT_BUILD</code>); default <code>go build ./cmd/benchmark</code>.</td></tr>
                 <tr><td><code>-fd-limit</code></td><td><code>65536</code></td><td>Soft open-file limit (<code>ulimit -Sn</code>) applied to every node and the driven sweep; 0 keeps the host default.</td></tr>
-                <tr><td><code>-test</code></td><td><code>0</code></td><td>Quick smoke test with N nodes (5&nbsp;s, one worker, defaults elsewhere); 0 = full sweep.</td></tr>
+                <tr><td><code>-test</code></td><td><code>0</code></td><td>Quick smoke test with N nodes (5&nbsp;s, one worker, defaults elsewhere); 0 = full sweep. The label becomes <code>test</code> unless <code>-sweep</code> is given.</td></tr>
                 <tr><td><code>-verbose</code></td><td><code>false</code></td><td>Pass <code>-verbose</code> to the nodes.</td></tr>
                 <tr><td colspan="3"><strong>Health checks &amp; summarizing</strong></td></tr>
                 <tr><td><code>-check</code></td><td><code>false</code></td><td>Run host diagnostics and exit (see <em>Diagnostics</em> below).</td></tr>
