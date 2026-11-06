@@ -297,9 +297,66 @@ func runDriver(cfg *config, hosts []string) error {
 	return nil
 }
 
+// collectWaitInterval is how often -collect -wait checks whether a driver run
+// has finished.
+const collectWaitInterval = 15 * time.Second
+
+// errWaitTimeout reports that a driver run did not finish within -wait-timeout.
+var errWaitTimeout = errors.New("run did not finish in time")
+
+// errRunDirGone reports that a driver run's work directory does not exist.
+var errRunDirGone = errors.New("run directory not found")
+
+// runFinishedProbe returns the -collect -wait probe for the driver run in wd.
+// The probe returns true once wd/exit.code exists, false while wd exists
+// without it, and an error that wraps [errRunDirGone] when wd does not exist.
+// fileExists and dirExists check a path on the driver.
+func runFinishedProbe(wd string, fileExists, dirExists func(context.Context, string) (bool, error)) func(context.Context) (bool, error) {
+	return func(ctx context.Context) (bool, error) {
+		finished, err := fileExists(ctx, wd+"/exit.code")
+		if err != nil || finished {
+			return finished, err
+		}
+		exists, err := dirExists(ctx, wd)
+		if err != nil {
+			return false, err
+		}
+		if !exists {
+			return false, errRunDirGone
+		}
+		return false, nil
+	}
+}
+
+// waitForExit calls finished every interval until finished returns true, and
+// then returns nil. If finished returns an error, waitForExit returns that
+// error immediately. If timeout passes first, it returns an error that wraps
+// [errWaitTimeout].
+func waitForExit(ctx context.Context, finished func(context.Context) (bool, error), interval, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		done, err := finished(ctx)
+		if err != nil && ctx.Err() == nil {
+			return err
+		}
+		if done {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("%w after %v", errWaitTimeout, timeout)
+		case <-ticker.C:
+		}
+	}
+}
+
 // runDriverCollect checks a driver run once and downloads it only when finished,
-// unless -collect-now requested a best-effort active snapshot. It needs no SSH
-// agent because the driver has long since dialed its peers.
+// unless -collect-now requested a best-effort active snapshot. With -wait it
+// first polls until the run has finished, up to -wait-timeout. It needs no SSH
+// agent because the driver has already dialed its peers.
 func runDriverCollect(cfg *config) error {
 	if cfg.driver == "" {
 		return errors.New("-collect requires <host>:<remote-work-dir> or a saved run in .sweep-last.json")
@@ -316,6 +373,19 @@ func runDriverCollect(cfg *config) error {
 	if cfg.collectNow != "" {
 		wd = cfg.collectNow
 		collectNow = true
+	}
+	if cfg.wait && !collectNow {
+		log.Printf("waiting up to %v for run %s:%s to finish...", cfg.waitTimeout, driver, wd)
+		finished := runFinishedProbe(wd,
+			func(ctx context.Context, path string) (bool, error) { return iago.FileExists(ctx, host, path) },
+			func(ctx context.Context, path string) (bool, error) { return iago.DirExists(ctx, host, path) },
+		)
+		// A missing run directory falls through to the checks below, which
+		// say whether the run was already collected or the path is wrong.
+		err := waitForExit(context.Background(), finished, collectWaitInterval, cfg.waitTimeout)
+		if err != nil && !errors.Is(err, errRunDirGone) {
+			return fmt.Errorf("wait for run %s:%s: %w", driver, wd, err)
+		}
 	}
 	finished, err := iago.FileExists(context.Background(), host, wd+"/exit.code")
 	if err != nil {
