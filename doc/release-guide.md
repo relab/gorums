@@ -221,15 +221,15 @@ Do this once, and again when you rotate the keys.
 3. In the repository settings, create the environment `cluster`:
    - deployment branches: only the pattern `release/v*`;
    - required reviewer: the maintainer;
-   - secrets:
+   - secrets, which hold only the two private keys:
      - `CLUSTER_SSH_KEY`: the private key `gorums-release-smoke` from step 1;
      - `CLUSTER_JUMP_SSH_KEY`: the private key `gorums-release-smoke-jump` from step 1;
-     - `CLUSTER_SSH_CONFIG`: an SSH config with a `Host` entry for the jump host and for the driver, each with `User <account>`; the driver entry sets `ProxyJump` to the jump host's `Host` alias in the same file (sweep's SSH library does not read the `user@host` form);
-     - `CLUSTER_KNOWN_HOSTS`: the `known_hosts` lines of the jump host and the driver, keyed by the `HostName` that `ssh -G <alias>` prints, not by the alias; copy them from a `known_hosts` file that already trusts these hosts, for example with `ssh-keygen -F <HostName>`; the pool hosts need no lines, because the driver connects to them without host-key checks;
    - variables:
+     - `CLUSTER_SSH_CONFIG`: an SSH config with a `Host` entry for the jump host and for the driver, each with `User gorums`; the driver entry sets `ProxyJump` to the jump host's `Host` alias in the same file (sweep's SSH library does not read the `user@host` form);
+     - `CLUSTER_KNOWN_HOSTS`: the `known_hosts` lines of the jump host and the driver, keyed by the `HostName` that `ssh -G <alias>` prints, not by the alias; copy them from a `known_hosts` file that already trusts these hosts, for example with `ssh-keygen -F <HostName>`; the pool hosts need no lines, because the driver connects to them without host-key checks;
      - `CLUSTER_JUMP`: the jump host's `Host` alias in `CLUSTER_SSH_CONFIG`;
      - `CLUSTER_DRIVER`: `nebula` or `bb1`;
-     - `CLUSTER_HOSTS`: the pool, for example `bb[2-8],bb10,bb11`, with at least 9 hosts, since the smoke sweep runs `-test 9`; leave out the driver and known faulty hosts (bb9, bb16); every listed host must be reachable, because `sweep -check` fails on any unreachable host;
+     - `CLUSTER_HOSTS`: the pool, for example `bb[2-8],bb10,bb11`, with at least 9 hosts, since the smoke sweep runs `-test 9`; leave out the driver and known faulty hosts (bb9, bb16); every listed host must be reachable, because `sweep -check` fails on any unreachable host.
 
 4. In the repository settings under Actions, require approval for workflows from all outside collaborators.
 
@@ -249,7 +249,7 @@ Do this once, and again when you rotate the keys.
    git push origin --delete release/v0-probe
    ```
 
-The environment secrets reach only jobs that name the `cluster` environment, run from a `release/v*` branch, and are approved.
+The environment's keys reach only jobs that name the `cluster` environment, run from a `release/v*` branch, and are approved.
 Only people with write access can push such a branch, and a pull request from a fork runs without the secrets.
 
 ### Rotate the Keys

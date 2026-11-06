@@ -40,8 +40,8 @@ jobs:
         with:
           ssh-key: ${{ secrets.CLUSTER_SSH_KEY }}
           jump-ssh-key: ${{ secrets.CLUSTER_JUMP_SSH_KEY }}
-          ssh-config: ${{ secrets.CLUSTER_SSH_CONFIG }}
-          known-hosts: ${{ secrets.CLUSTER_KNOWN_HOSTS }}
+          ssh-config: ${{ vars.CLUSTER_SSH_CONFIG }}
+          known-hosts: ${{ vars.CLUSTER_KNOWN_HOSTS }}
 
       # The jump host must only forward connections. With the forced command
       # in its key line, ssh exits with the status of /bin/false, which is 1;

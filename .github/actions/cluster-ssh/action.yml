@@ -2,8 +2,8 @@ name: Cluster SSH
 description: >
   Prepares SSH access to the bbchain cluster for sweep: loads the cluster key
   and the jump-host key into an ssh-agent that later steps inherit, and writes
-  ~/.ssh/config and ~/.ssh/known_hosts. Pass the values from the cluster
-  environment.
+  ~/.ssh/config and ~/.ssh/known_hosts. Pass the keys from the cluster
+  environment's secrets and the rest from its variables.
 inputs:
   ssh-key:
     description: The private key that the dedicated cluster account accepts on the driver and the pool hosts.
