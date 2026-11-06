@@ -7,9 +7,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestValidateStreamModes(t *testing.T) {
@@ -163,4 +165,78 @@ func TestMainParseFlags(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMainApplyTestMode(t *testing.T) {
+	newCfg := func(label string, benchmarks ...string) *config {
+		return &config{
+			sweepLabel: label,
+			duration:   10 * time.Second,
+			sweep: sweepConfig{
+				numNodes:   []int{3, 5},
+				workers:    []int{4},
+				payloads:   []int{1024},
+				benchmarks: benchmarks,
+			},
+		}
+	}
+	tests := []struct {
+		name               string
+		label              string
+		sweepExplicit      bool
+		benchmarks         []string
+		benchmarksExplicit bool
+		wantLabel          string
+		wantBenchmarks     []string
+	}{
+		{
+			name: "DefaultLabelBecomesTest", label: "run",
+			benchmarks: []string{"SymmetricMulticast"},
+			wantLabel:  "test", wantBenchmarks: []string{"SymmetricQuorumCall"},
+		},
+		{
+			name: "ExplicitLabelKept", label: "release-smoke", sweepExplicit: true,
+			benchmarks: []string{"SymmetricQuorumCall"},
+			wantLabel:  "release-smoke", wantBenchmarks: []string{"SymmetricQuorumCall"},
+		},
+		{
+			name: "ExplicitBenchmarksKept", label: "run",
+			benchmarks: []string{"SymmetricQuorumCall", "SymmetricMulticast"}, benchmarksExplicit: true,
+			wantLabel: "test", wantBenchmarks: []string{"SymmetricQuorumCall", "SymmetricMulticast"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := newCfg(tt.label, tt.benchmarks...)
+			if got := applyTestMode(cfg, 9, tt.sweepExplicit, tt.benchmarksExplicit); !got {
+				t.Errorf("applyTestMode() = false, want true")
+			}
+			if cfg.sweepLabel != tt.wantLabel {
+				t.Errorf("sweepLabel = %q, want %q", cfg.sweepLabel, tt.wantLabel)
+			}
+			if !slices.Equal(cfg.sweep.benchmarks, tt.wantBenchmarks) {
+				t.Errorf("benchmarks = %v, want %v", cfg.sweep.benchmarks, tt.wantBenchmarks)
+			}
+			if !slices.Equal(cfg.sweep.numNodes, []int{9}) {
+				t.Errorf("numNodes = %v, want [9]", cfg.sweep.numNodes)
+			}
+			if !slices.Equal(cfg.sweep.workers, []int{1}) || !slices.Equal(cfg.sweep.payloads, []int{0}) {
+				t.Errorf("workers, payloads = %v, %v; want [1], [0]", cfg.sweep.workers, cfg.sweep.payloads)
+			}
+			if cfg.duration != 5*time.Second {
+				t.Errorf("duration = %v, want 5s", cfg.duration)
+			}
+		})
+	}
+
+	t.Run("ZeroLeavesConfigUnchanged", func(t *testing.T) {
+		cfg := newCfg("run", "SymmetricMulticast")
+		want := newCfg("run", "SymmetricMulticast")
+		if got := applyTestMode(cfg, 0, false, false); got {
+			t.Errorf("applyTestMode() = true, want the input sweepExplicit (false)")
+		}
+		if !reflect.DeepEqual(cfg, want) {
+			t.Errorf("config changed: got %+v, want %+v", cfg, want)
+		}
+	})
 }
