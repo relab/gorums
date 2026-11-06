@@ -1,0 +1,110 @@
+name: release-smoke
+# Runs the checks that the pull request CI skips, before a release is
+# published: the local checks and a multi-host sweep smoke test on Docker.
+# A push to a release/v* branch runs every job. It can also be started by hand
+# (workflow_dispatch) on any branch, to try the checks before a release; the
+# guard then runs only if the branch name starts with release/.
+on:
+  push:
+    branches: ["release/v*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+# One release smoke run at a time per branch; never cancel a run in progress.
+# A run on another branch cannot take the pending slot of a release run.
+concurrency:
+  group: release-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    # Only a release candidate commit may run the release-only jobs: the branch
+    # must be release/<version> for the version that version.go declares.
+    if: startsWith(github.ref, 'refs/heads/release/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: "go.mod"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      - name: Check the release branch and version
+        run: go run ./internal/cmd/gorums-release check-branch -branch "$GITHUB_REF_NAME"
+
+  local-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: "go.mod"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      - uses: ./.github/actions/setup-protoc
+      # Same golangci-lint version as golangci-lint.yml, so make lint agrees.
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14.0
+          install-only: true
+
+      - name: Install tools
+        run: |
+          make tools
+          make installgorums
+          go install github.com/bufbuild/buf/cmd/buf@v1.75.0
+          go install golang.org/x/tools/gopls@v0.23.0
+
+      - name: Integration tests (real TCP)
+        run: make integrationtest
+      - name: Stress tests (ordering under load)
+        run: make stresstest
+      - name: Lint
+        run: make lint
+      - name: Modernize changes nothing
+        run: |
+          make modernize
+          git diff --exit-code
+      - name: gopls diagnostics
+        run: make goplscheck
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: "go.mod"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      - uses: ./.github/actions/setup-protoc
+      # Typst builds report.pdf; without it the smoke test still passes.
+      - uses: typst-community/setup-typst@v5
+
+      - name: Install tools
+        run: |
+          make tools
+          make installgorums
+
+      - name: Sweep smoke test on Docker
+        run: make smoke-docker
+
+      - name: Publish the verdict
+        if: always()
+        run: |
+          if [ -f benchkit/out/smoke-docker/verdict.md ]; then
+            cat benchkit/out/smoke-docker/verdict.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No verdict: the smoke test stopped before sweep -verify ran." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: docker-smoke
+          path: benchkit/out/smoke-docker
+          if-no-files-found: warn
+          include-hidden-files: true
