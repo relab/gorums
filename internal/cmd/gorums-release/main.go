@@ -1,6 +1,8 @@
 // Command gorums-release prepares and publishes a Gorums release.
 //
-// It has three subcommands, run in this order: prepare, pr, and publish.
+// Its three release subcommands run in this order: prepare, pr, and publish.
+// A fourth, check-branch, checks that a branch is the release branch for the
+// current version; the release smoke workflow runs it.
 // Every subcommand works without flags and accepts -dry-run, which shows what
 // would be done and changes nothing.
 // Run "gorums-release help" for an overview and "gorums-release <command> -h"
@@ -36,7 +38,10 @@ Commands:
   pr        commit the prepared files on a release branch and open the pull request
   publish   merge the pull request, tag the root and benchkit modules, create the GitHub release
 
-Run the commands in this order, inside a checkout of the repository.
+  check-branch  check that a branch is the release branch for the version in version.go
+
+Run prepare, pr, and publish in this order, inside a checkout of the repository.
+The release smoke workflow runs check-branch.
 Every command accepts -dry-run, which shows what would be done and changes nothing.
 Run "gorums-release <command> -h" for what a command does and its flags.
 `
@@ -115,6 +120,13 @@ The version is read from internal/version/version.go. It does the following:
      would see them. It retries for up to 5 minutes, since the proxy can be
      slow. If the check times out, the release is still complete.
 `,
+	"check-branch": `Checks that a branch is the release branch for the current version.
+
+It fails unless the branch is release/<version>, where <version> is the
+version in internal/version/version.go, such as release/v0.12.0-rc.1. The
+release smoke workflow runs it, so that its release-only jobs build only a
+release candidate commit. It changes nothing.
+`,
 }
 
 // run executes one subcommand and returns the process exit code.
@@ -128,7 +140,7 @@ func run(args []string, in io.Reader, stdout, stderr io.Writer) int {
 	case "-h", "-help", "--help", "help":
 		fmt.Fprint(stdout, usage)
 		return 0
-	case "prepare", "pr", "publish":
+	case "prepare", "pr", "publish", "check-branch":
 	default:
 		fmt.Fprintf(stderr, "%s: unknown command %q\n\n%s", progName, name, usage)
 		return 2
@@ -160,6 +172,10 @@ func run(args []string, in io.Reader, stdout, stderr io.Writer) int {
 		fs.BoolVar(&o.yes, "yes", false, "merge the pull request without asking")
 		fs.BoolVar(&o.draft, "draft", false, "create the GitHub release as a draft")
 		do = func(t *tool) error { return t.publish(o) }
+	case "check-branch":
+		var o checkBranchOptions
+		fs.StringVar(&o.branch, "branch", "", "the `branch` to check, such as release/v0.12.0 (default: the checked-out branch)")
+		do = func(t *tool) error { return t.checkBranch(o) }
 	}
 	if err := fs.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
