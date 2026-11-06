@@ -30,6 +30,19 @@
 //	-check      report reachability, host info, busy benchmark ports, lingering
 //	            benchmark processes, and clock skew, using the sweep's SSH path
 //
+// The -verify mode checks a collected run directory and exits non-zero when a
+// smoke criterion fails. It needs no hosts, but takes the same sweep flags
+// that launched the run, so it knows which runs to expect:
+//
+//	sweep -verify out/release-smoke -sweep release-smoke -test 9 \
+//	      -benchmarks SymmetricQuorumCall -stream-mode dual,dedup -summary verdict.md
+//
+// Every expected run must have succeeded on N distinct hosts (-test N), every
+// agg.csv row must have throughput and a p50 latency, and the clock drift in
+// the node logs must be at most -max-drift. -summary writes the verdict as
+// Markdown: a table of the failed criteria, with the error of a failed run and
+// the degraded nodes of a degraded run.
+//
 // Any binary deployed via -binary must support these flags:
 //
 //	-self=host:port           this node's listen address (distributed mode)
@@ -159,6 +172,14 @@ type config struct {
 	// without shipping the raw archive across the WAN.
 	exportCompactDir string // -export-compact: sweep work directory to rebuild; empty = do not rebuild
 
+	// -verify: check a collected run directory against the smoke criteria of
+	// [verifyRun] and exit non-zero on any failure, without running a sweep. The
+	// expected runs come from the same sweep flags that launched the run.
+	verifyDir   string        // -verify: collected run directory to check; empty = do not verify
+	summaryPath string        // -summary: write the Markdown verdict here
+	maxDrift    time.Duration // -max-drift: largest allowed absolute clock drift
+	verifyHosts int           // the -test N value: expected distinct hosts per run; 0 = unchecked
+
 	// The degradation bounds each node's measurement must respect, relative to
 	// the run median (see [findDegradedNodes]); a non-positive value disables that
 	// check.
@@ -228,6 +249,19 @@ func main() {
 			log.Fatalf("export-compact: %v", err)
 		}
 		logCompactTransfer(cfg.exportCompactDir, summary)
+		return
+	}
+
+	// -verify checks a collected run directory and exits non-zero on any failed
+	// criterion. Like -plot it runs no sweep and needs no hosts.
+	if cfg.verifyDir != "" {
+		ok, err := runVerify(cfg)
+		if err != nil {
+			log.Fatalf("verify: %v", err)
+		}
+		if !ok {
+			os.Exit(1)
+		}
 		return
 	}
 
@@ -730,6 +764,9 @@ func parseFlags() (*config, []string) {
 	flag.StringVar(&cfg.explainModel, "explain-model", "", "model name for -explain (e.g. llama3.3, gpt-4o, claude-opus-4-8); required with -explain")
 	flag.IntVar(&cfg.explainMaxLog, "explain-max-log", defaultExplainMaxLog, "head+tail byte cap on the node log included in the -explain prompt")
 
+	flag.StringVar(&cfg.verifyDir, "verify", "", "check this collected run directory against the smoke criteria and exit non-zero on failure; pass the sweep flags that launched the run")
+	flag.StringVar(&cfg.summaryPath, "summary", "", "with -verify, also write the Markdown verdict to this file")
+	flag.DurationVar(&cfg.maxDrift, "max-drift", time.Millisecond, "with -verify, the largest allowed absolute clock drift in the node logs")
 	flag.StringVar(&cfg.plotDir, "plot", "", "regenerate the Typst report from this collected output directory, then exit (no sweep)")
 	flag.BoolVar(&cfg.includeDegraded, "include-degraded", false, "with -plot, keep degraded repetitions in the aggregate figures")
 	flag.Var(stringListFlag(&cfg.excludeRuns), "exclude-run", "with -plot, comma-separated run base names to drop from the report")
@@ -786,7 +823,7 @@ func parseFlags() (*config, []string) {
 	if (collecting || listing) && cfg.driver != "" {
 		log.Fatal("-detach launches a run; name the host with -collect <host>:<path>, -collect-now <host>:<path>, or -list <host>")
 	}
-	if rawHosts == "" && !collecting && !listing && cfg.plotDir == "" && cfg.exportCSVDir == "" && !cfg.explainCheck {
+	if rawHosts == "" && !collecting && !listing && cfg.plotDir == "" && cfg.exportCSVDir == "" && cfg.verifyDir == "" && !cfg.explainCheck {
 		log.Fatal("-hosts is required; use 'bb[1-30]' for range expansion or 'bb*' to match SSH config entries")
 	}
 	if cfg.remoteDir == "" || !filepath.IsAbs(cfg.remoteDir) || filepath.Clean(cfg.remoteDir) == "/" {
@@ -815,6 +852,7 @@ func parseFlags() (*config, []string) {
 	}
 
 	sweepExplicit = applyTestMode(cfg, testN, sweepExplicit, benchmarksExplicit)
+	cfg.verifyHosts = testN
 	// A custom binary or build command may provide different benchmark names.
 	// The built-in binary always runs each host in distributed symmetric mode.
 	if !collecting && !listing && !cfg.check && !cfg.explainCheck && cfg.plotDir == "" &&
@@ -889,7 +927,7 @@ func parseFlags() (*config, []string) {
 		}
 		cfg.outDir = resolveOutputDir(cfg.rootDir, now, cfg.sweepLabel, sweepExplicit, collectPath)
 	}
-	readOnlyMode := cfg.check || listing || cfg.explainCheck || cfg.plotDir != "" || cfg.exportCSVDir != ""
+	readOnlyMode := cfg.check || listing || cfg.explainCheck || cfg.plotDir != "" || cfg.exportCSVDir != "" || cfg.verifyDir != ""
 	if collecting {
 		if err := os.MkdirAll(cfg.outDir, 0o755); err != nil {
 			log.Fatalf("output directory: %v", err)

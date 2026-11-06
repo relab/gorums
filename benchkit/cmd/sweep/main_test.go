@@ -67,6 +67,8 @@ func TestMainParseFlags(t *testing.T) {
 		Driver, Collect, CollectNow, OutDir, SSHConfig, Transfer string
 		Hosts                                                    []string
 		Check, List, ExplainCheck                                bool
+		Label, VerifyDir                                         string
+		VerifyHosts                                              int
 	}
 	if os.Getenv("SWEEP_TEST_PARSE_FLAGS") == "1" {
 		i := slices.Index(os.Args, "--")
@@ -77,6 +79,7 @@ func TestMainParseFlags(t *testing.T) {
 			Driver: cfg.driver, Collect: cfg.collect, CollectNow: cfg.collectNow,
 			OutDir: cfg.outDir, SSHConfig: cfg.sshConfig, Transfer: cfg.transferMode,
 			Hosts: hosts, Check: cfg.check, List: cfg.list != "", ExplainCheck: cfg.explainCheck,
+			Label: cfg.sweepLabel, VerifyDir: cfg.verifyDir, VerifyHosts: cfg.verifyHosts,
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -94,7 +97,13 @@ func TestMainParseFlags(t *testing.T) {
 		driver, collect, collectNow, wantErr string
 		hosts                                []string
 		check, list, explainCheck            bool
+		label                                string // "" = not checked
+		verifyHosts                          int
 	}{
+		// -verify needs no -hosts; -test N sets the expected host count, and an
+		// explicit -sweep label is kept, so the verifier finds the run's files.
+		{name: "VerifyWithoutHosts", args: []string{"-verify", "/collected/run", "-test", "9", "-sweep", "release-smoke"}, label: "release-smoke", verifyHosts: 9},
+		{name: "VerifyDefaultTestLabel", args: []string{"-verify", "/collected/run", "-test", "3"}, label: "test", verifyHosts: 3},
 		{name: "Local", args: []string{"-hosts", "bb1,bb2"}, hosts: bb12},
 		{name: "CoordinatorBenchmarkRejected", args: []string{"-hosts", "bb1,bb2", "-benchmarks", "QuorumCall"}, wantErr: "QuorumCall requires coordinator mode"},
 		{name: "CustomBinaryNamesAllowed", args: []string{"-hosts", "bb1,bb2", "-binary", "/tmp/custom-benchmark", "-benchmarks", "QuorumCall"}, hosts: bb12},
@@ -162,6 +171,9 @@ func TestMainParseFlags(t *testing.T) {
 			}
 			if tt.saved && tt.driver == state.Driver && (got.OutDir != state.LocalRunDir || got.SSHConfig != state.SSHConfig || got.Transfer != state.TransferMode) {
 				t.Fatalf("saved recovery settings not restored: %+v", got)
+			}
+			if tt.label != "" && (got.Label != tt.label || got.VerifyHosts != tt.verifyHosts) {
+				t.Fatalf("label, verify hosts = %q, %d; want %q, %d", got.Label, got.VerifyHosts, tt.label, tt.verifyHosts)
 			}
 		})
 	}
