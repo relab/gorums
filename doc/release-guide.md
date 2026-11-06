@@ -123,13 +123,8 @@ Install it again after the program changes.
    It needs the cluster access described in [Cluster Access](#cluster-access).
 
    Each smoke job writes a verdict to its job summary.
-   The verdict names runs and host aliases, such as `bb2`, but never addresses.
-   `cluster-smoke` also uploads two artifacts: `cluster-smoke` (the verdict) and `cluster-smoke-full-encrypted` (the full run directory, with `agg.csv` and the raw results).
-   To read the full run directory, download that artifact and decrypt it with your `age` key:
-
-   ```shell
-   age -d -i key.txt smoke-full.tar.gz.age | tar xzf -
-   ```
+   The verdict lists each failed criterion, with the error of a failed run and the degraded nodes of a degraded run.
+   Each smoke job also uploads an artifact with its verdict and its full run directory, including `agg.csv`, the logs, and the raw results.
 
    `publish` refuses to merge until all three of `local-checks`, `docker-smoke`, and `cluster-smoke` have succeeded on the pull request.
 
@@ -224,13 +219,7 @@ Do this once, and again when you rotate the keys.
    - If the jump host and the cluster hosts share one home directory, both lines go in that one file.
      Otherwise, the first line goes on the jump host, and the second on the driver and the pool hosts.
 
-3. Create a key pair for the encrypted smoke output, and keep `key.txt` private:
-
-   ```shell
-   age-keygen -o key.txt
-   ```
-
-4. In the repository settings, create the environment `cluster`:
+3. In the repository settings, create the environment `cluster`:
    - deployment branches: only the pattern `release/v*`;
    - required reviewer: the maintainer;
    - secrets:
@@ -242,11 +231,10 @@ Do this once, and again when you rotate the keys.
      - `CLUSTER_JUMP`: the jump host's `Host` alias in `CLUSTER_SSH_CONFIG`;
      - `CLUSTER_DRIVER`: `nebula` or `bb1`;
      - `CLUSTER_HOSTS`: the pool, for example `bb[2-8],bb10,bb11`, with at least 9 hosts, since the smoke sweep runs `-test 9`; leave out the driver and known faulty hosts (bb9, bb16); every listed host must be reachable, because `sweep -check` fails on any unreachable host;
-     - `SMOKE_AGE_RECIPIENT`: the public key that `age-keygen` printed in step 3.
 
-5. In the repository settings under Actions, require approval for workflows from all outside collaborators.
+4. In the repository settings under Actions, require approval for workflows from all outside collaborators.
 
-6. Check the access with the `cluster-check` workflow.
+5. Check the access with the `cluster-check` workflow.
    Push any commit to a branch named `release/v0-probe`, approve the `cluster` environment in the Actions tab, and wait for the job:
 
    ```shell

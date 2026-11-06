@@ -150,8 +150,6 @@ jobs:
 
       - name: Install tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends age
           make tools
           make installgorums
           make sweep
@@ -188,7 +186,6 @@ jobs:
             ./cmd/sweep/sweep -collect
           fi
 
-      # Only the verdict is public: it holds no addresses.
       - name: Publish the verdict
         if: always()
         working-directory: benchkit
@@ -202,23 +199,8 @@ jobs:
         if: always()
         with:
           name: cluster-smoke
-          path: benchkit/verdict.md
+          path: |
+            benchkit/verdict.md
+            benchkit/out/release-smoke
           if-no-files-found: warn
-
-      # The full run directory holds cluster addresses, so it is uploaded only
-      # encrypted to the maintainer's age key: age -d -i key.txt.
-      - name: Encrypt the full run directory
-        if: always()
-        working-directory: benchkit
-        env:
-          SMOKE_AGE_RECIPIENT: ${{ vars.SMOKE_AGE_RECIPIENT }}
-        run: |
-          if [ -d "$RUN_DIR" ]; then
-            tar czf - "$RUN_DIR" | age -r "$SMOKE_AGE_RECIPIENT" > smoke-full.tar.gz.age
-          fi
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: cluster-smoke-full-encrypted
-          path: benchkit/smoke-full.tar.gz.age
-          if-no-files-found: ignore
+          include-hidden-files: true
