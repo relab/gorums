@@ -1456,7 +1456,9 @@
             the full raw <code>.binpb</code> dataset locally and remove the driver work directory. If the compact output
             is enough, discard the remote work directory with the cleanup command printed by <code>sweep</code>.</p>
         <p><code>-remote-dir</code> selects the remote storage root (for example <code>/local</code>).
-            Every host uses a per-user namespace below it, such as <code>/local/sweep-meling</code>. Use
+            Every host uses a per-user namespace below it, such as <code>/local/sweep-meling</code>.
+            Sweep creates the namespace with mode <code>0700</code> and refuses one that is a symlink or that another
+            user owns, because it runs cached executables from it. Use
             <code>sweep -list</code> to inspect driver runs without making <code>-check</code> output unbounded.</p>
         <p>Every remote launch detaches and survives a laptop disconnect.
             The launcher returns after confirming that the driver has connected to its peers; it does not stream

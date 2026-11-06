@@ -28,15 +28,32 @@ func remoteNamespace(ctx context.Context, host iago.Host, root string) (string, 
 	return path.Join(root, "sweep-"+user), nil
 }
 
+// ensureRemoteNamespace creates the remote user's private namespace below root
+// on host, or checks an existing one, and returns its path. See
+// [namespaceCommand] for what makes a namespace safe to use.
 func ensureRemoteNamespace(ctx context.Context, host iago.Host, root string) (string, error) {
 	namespace, err := remoteNamespace(ctx, host, root)
 	if err != nil {
 		return "", err
 	}
-	cmd := "test -d " + iago.Quote(root) + " && test -w " + iago.Quote(root) +
-		" && mkdir -p " + iago.Quote(namespace) + " && test -w " + iago.Quote(namespace)
-	if err := driverExec(ctx, host, cmd); err != nil {
-		return "", fmt.Errorf("remote storage root %s on %s must exist and be writable: %w", root, host.Name(), err)
+	if err := driverExec(ctx, host, namespaceCommand(root, namespace)); err != nil {
+		return "", fmt.Errorf("remote storage root %s on %s must exist and be writable, and %s must be a directory owned by the remote user: %w",
+			root, host.Name(), namespace, err)
 	}
 	return namespace, nil
+}
+
+// namespaceCommand returns the shell command that makes namespace, a directory
+// in root, safe to use. Sweep runs cached executables from the namespace, and
+// root is often a shared directory such as /tmp, so the command fails unless
+// root is a writable directory and the namespace is a directory, not a
+// symlink, that the remote user owns. It creates a missing namespace with mode
+// 0700 and sets an existing one to 0700, so no other user can replace its
+// files.
+func namespaceCommand(root, namespace string) string {
+	r, ns := iago.Quote(root), iago.Quote(namespace)
+	return "test -d " + r + " && test -w " + r +
+		" && { test -e " + ns + " || test -L " + ns + " || mkdir -m 700 " + ns + "; }" +
+		" && test -d " + ns + " && ! test -L " + ns + " && test -O " + ns +
+		" && chmod 700 " + ns
 }
