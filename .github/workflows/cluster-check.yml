@@ -34,8 +34,6 @@ jobs:
           cache: true
           cache-dependency-path: "**/go.sum"
       - uses: ./.github/actions/setup-protoc
-        with:
-          version: "32.1"
       - uses: ./.github/actions/cluster-ssh
         with:
           ssh-key: ${{ secrets.CLUSTER_SSH_KEY }}

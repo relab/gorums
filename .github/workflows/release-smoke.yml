@@ -143,8 +143,6 @@ jobs:
           cache: true
           cache-dependency-path: "**/go.sum"
       - uses: ./.github/actions/setup-protoc
-        with:
-          version: "32.1"
       # No third-party action runs after cluster-ssh, which starts the agent
       # that holds the cluster key. Without Typst, sweep skips report.pdf.
 
