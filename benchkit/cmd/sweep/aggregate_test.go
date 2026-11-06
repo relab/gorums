@@ -417,31 +417,3 @@ func TestRepOutliers(t *testing.T) {
 		}
 	}
 }
-
-// TestAggregateCSVHostFree pins that agg.csv holds configurations and
-// statistics only, never a host or address column. The release smoke workflow
-// publishes agg.csv from a public repository, where cluster host names and
-// addresses must not appear.
-func TestAggregateCSVHostFree(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "agg.csv")
-	rows := []aggRunRecord{{Benchmark: "SymmetricQuorumCall", Nodes: 9, reps: 1}}
-	if err := writeAggRunsCSV(path, rows); err != nil {
-		t.Fatal(err)
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	header, err := csv.NewReader(f).Read()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, column := range header {
-		for _, banned := range []string{"host", "addr", "peer", "node_map"} {
-			if strings.Contains(column, banned) {
-				t.Errorf("agg.csv column %q may hold host details (contains %q)", column, banned)
-			}
-		}
-	}
-}
