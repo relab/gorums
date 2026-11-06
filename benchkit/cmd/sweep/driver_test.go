@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -623,5 +624,86 @@ func TestFileSHA256(t *testing.T) {
 	}
 	if _, err := fileSHA256(filepath.Join(dir, "missing")); err == nil {
 		t.Error("expected an error hashing a missing file")
+	}
+}
+
+// TestDriverWaitForExit checks that -collect -wait polls until the run has
+// finished, gives up at the timeout, and reports a probe error at once.
+func TestDriverWaitForExit(t *testing.T) {
+	errProbe := errors.New("probe failed")
+	tests := []struct {
+		name      string
+		finished  func(call int) (bool, error)
+		timeout   time.Duration
+		wantErr   error
+		wantCalls int // 0 = at least one call, count not checked
+	}{
+		{
+			name:      "FinishesOnThirdPoll",
+			finished:  func(call int) (bool, error) { return call == 3, nil },
+			timeout:   time.Second,
+			wantCalls: 3,
+		},
+		{
+			name:     "NeverFinishes",
+			finished: func(int) (bool, error) { return false, nil },
+			timeout:  10 * time.Millisecond,
+			wantErr:  errWaitTimeout,
+		},
+		{
+			name:      "ProbeError",
+			finished:  func(int) (bool, error) { return false, errProbe },
+			timeout:   time.Second,
+			wantErr:   errProbe,
+			wantCalls: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			calls := 0
+			probe := func(context.Context) (bool, error) {
+				calls++
+				return tt.finished(calls)
+			}
+			err := waitForExit(t.Context(), probe, time.Millisecond, tt.timeout)
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("waitForExit() = %v, want %v", err, tt.wantErr)
+			}
+			if tt.wantCalls > 0 && calls != tt.wantCalls {
+				t.Errorf("probe called %d times, want %d", calls, tt.wantCalls)
+			}
+		})
+	}
+}
+
+// TestDriverRunFinishedProbe checks the -collect -wait probe: it reports a run
+// as finished once exit.code exists, keeps waiting while the run directory
+// exists, and stops with errRunDirGone once the directory is gone, for example
+// after an earlier collection archived it or when the path is mistyped.
+func TestDriverRunFinishedProbe(t *testing.T) {
+	errSSH := errors.New("ssh failed")
+	const wd = "/tmp/sweep-ci/sweep-driver-1"
+	tests := []struct {
+		name     string
+		paths    map[string]bool // paths that exist
+		probeErr error
+		want     bool
+		wantErr  error
+	}{
+		{"Finished", map[string]bool{wd: true, wd + "/exit.code": true}, nil, true, nil},
+		{"Running", map[string]bool{wd: true}, nil, false, nil},
+		{"DirectoryGone", map[string]bool{}, nil, false, errRunDirGone},
+		{"ProbeError", map[string]bool{}, errSSH, false, errSSH},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exists := func(_ context.Context, path string) (bool, error) {
+				return tt.paths[path], tt.probeErr
+			}
+			got, err := runFinishedProbe(wd, exists, exists)(t.Context())
+			if got != tt.want || !errors.Is(err, tt.wantErr) || (tt.wantErr == nil && err != nil) {
+				t.Errorf("runFinishedProbe() = %v, %v; want %v, %v", got, err, tt.want, tt.wantErr)
+			}
+		})
 	}
 }

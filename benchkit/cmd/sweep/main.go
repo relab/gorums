@@ -93,12 +93,13 @@
 //	-collect
 //	-collect <host>:<remote-work-dir>
 //
-// -collect checks once and exits if the run is still active. -collect-now
-// [<host>:<remote-work-dir>] takes a best-effort active snapshot and retains
-// the remote run. The first finished collection downloads compact plot data
-// and failed-run results; a later collection archives the raw results and
-// removes the remote work directory. -list [host] shows driver runs on host,
-// or on the saved driver when bare.
+// -collect checks once and exits if the run is still active; with -wait it
+// polls every 15s until the run has finished (at most -wait-timeout), which
+// suits unattended use such as CI. -collect-now [<host>:<remote-work-dir>]
+// takes a best-effort active snapshot and retains the remote run. The first
+// finished collection downloads compact plot data and failed-run results; a
+// later collection archives the results and removes the remote work directory.
+// -list [host] shows driver runs on host, or on the saved driver when bare.
 // Remote files live below <remote-dir>/sweep-$USER (default root: /tmp).
 //
 // A run whose compact transfer was built before a change to what gets exported
@@ -199,10 +200,12 @@ type config struct {
 
 	// Cluster-local driver: run the orchestration on a host inside the cluster
 	// so per-run SSH and the binary upload stay on the LAN (see [runDriver]).
-	driver     string // driver host from -detach, a -collect/-collect-now/-list value, or saved run state; empty = local
-	collect    string // -collect [host:path]: remote work dir of a finished driver run to collect
-	collectNow string // -collect-now [host:path]: remote work dir to snapshot even while active
-	list       string // -list [host]: host whose driver runs to list
+	driver      string        // driver host from -detach, a -collect/-collect-now/-list value, or saved run state; empty = local
+	collect     string        // -collect [host:path]: remote work dir of a finished driver run to collect
+	collectNow  string        // -collect-now [host:path]: remote work dir to snapshot even while active
+	wait        bool          // -wait: with -collect, poll until the run has finished
+	waitTimeout time.Duration // -wait-timeout: how long -wait polls before it gives up
+	list        string        // -list [host]: host whose driver runs to list
 
 	remoteDir    string // -remote-dir: remote storage root; each user gets sweep-$USER below it
 	remoteDirs   map[string]string
@@ -747,6 +750,8 @@ func parseFlags() (*config, []string) {
 	flag.Var(optionalValueFlag{&cfg.driver, "first"}, "detach", "run the sweep on a cluster-local `[hostname]` (default: first -hosts entry) and exit once safe to disconnect; -check and -explain-check run from that host")
 	flag.Var(optionalValueFlag{&cfg.collect, latestRunSentinel}, "collect", "collect a finished driver run `[host:path]` (default: latest run in <outdir>/.sweep-last.json)")
 	flag.Var(optionalValueFlag{&cfg.collectNow, latestRunSentinel}, "collect-now", "collect a best-effort snapshot of run `[host:path]` now (default: latest run)")
+	flag.BoolVar(&cfg.wait, "wait", false, "with -collect, poll the run every 15s until it has finished, then collect it")
+	flag.DurationVar(&cfg.waitTimeout, "wait-timeout", 30*time.Minute, "with -collect -wait, give up and exit non-zero after this long")
 	flag.Var(optionalValueFlag{&cfg.list, latestRunSentinel}, "list", "list active, completed, raw-pending, and recoverable driver runs on `[host]` (default: driver of the latest run)")
 	flag.StringVar(&cfg.remoteDir, "remote-dir", "/tmp", "remote storage root; sweep creates and uses <root>/sweep-$USER")
 	flag.StringVar(&cfg.transferMode, "transfer", "rsync", "file transfer backend for -detach uploads and downloads: rsync >=3.2.4 (default) or sftp")
