@@ -43,13 +43,16 @@
 //	-stream-mode=dual|dedup   symmetric stream topology (optional; default dual)
 //	-verbose                  verbose logging (optional)
 //
-// For a foreign protocol, pass a prebuilt linux/amd64 binary via -binary; sweep
-// uploads and runs it unchanged. When -binary is omitted, sweep builds the
-// binary itself: it uses the -build command (or the BENCHKIT_BUILD environment
-// variable) if set, substituting the chosen output path for the {{output}}
-// token, and otherwise falls back to the built-in default
+// Sweep builds for linux/amd64 hosts. To target other hosts, set GOARCH in
+// sweep's environment, e.g. GOARCH=arm64; GOOS is always linux.
+//
+// For a foreign protocol, pass a prebuilt Linux binary for the hosts via
+// -binary; sweep uploads and runs it unchanged. When -binary is omitted, sweep
+// builds the binary itself: it uses the -build command (or the BENCHKIT_BUILD
+// environment variable) if set, substituting the chosen output path for the
+// {{output}} token, and otherwise falls back to the built-in default
 // "go build -o <output> ./cmd/benchmark". The custom command is run via "sh -c"
-// from the benchkit module root with GOOS=linux GOARCH=amd64 in its environment.
+// from the benchkit module root.
 // With the built-in binary, -benchmarks accepts only symmetric benchmark names
 // because every host runs as a peer rather than as a coordinator.
 //
@@ -681,7 +684,7 @@ func parseFlags() (*config, []string) {
 			reps:        1,
 		},
 	}
-	flag.StringVar(&cfg.binaryPath, "binary", "", "pre-built linux/amd64 binary path (required for a foreign protocol; default: auto-build)")
+	flag.StringVar(&cfg.binaryPath, "binary", "", "pre-built Linux binary path for the hosts' architecture (required for a foreign protocol; default: auto-build for linux/amd64, or linux/$GOARCH when GOARCH is set)")
 	flag.StringVar(&cfg.buildCmd, "build", "", "build command for the auto-build path; {{output}} is replaced with the output path (default: go build ./cmd/benchmark; overrides $BENCHKIT_BUILD)")
 	flag.StringVar(&cfg.sshConfig, "config", "", "SSH config file (default: ~/.ssh/config)")
 	flag.StringVar(&cfg.rootDir, "outdir", defaultOutRoot, "root output directory for sweep runs (default: out)")

@@ -652,3 +652,46 @@ func TestChunkByLength(t *testing.T) {
 		})
 	}
 }
+
+// TestDeployCrossBuildEnv checks the environment of a cross-build: GOOS is
+// always linux, and GOARCH defaults to amd64 unless the caller set a non-empty
+// GOARCH. exec.Cmd uses the last value of a duplicated key, so the test reads
+// the last one.
+func TestDeployCrossBuildEnv(t *testing.T) {
+	lastValue := func(env []string, key string) (string, bool) {
+		value, found := "", false
+		for _, kv := range env {
+			if k, v, ok := strings.Cut(kv, "="); ok && k == key {
+				value, found = v, true
+			}
+		}
+		return value, found
+	}
+	tests := []struct {
+		name       string
+		environ    []string
+		wantGOARCH string
+	}{
+		{name: "Unset", environ: []string{"PATH=/bin"}, wantGOARCH: "amd64"},
+		{name: "SetArm64", environ: []string{"PATH=/bin", "GOARCH=arm64"}, wantGOARCH: "arm64"},
+		{name: "SetEmpty", environ: []string{"GOARCH="}, wantGOARCH: "amd64"},
+		{name: "HostGOOSOverridden", environ: []string{"GOOS=darwin"}, wantGOARCH: "amd64"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env, goarch := crossBuildEnv(tt.environ)
+			if goarch != tt.wantGOARCH {
+				t.Errorf("goarch = %q, want %q", goarch, tt.wantGOARCH)
+			}
+			if got, _ := lastValue(env, "GOARCH"); got != tt.wantGOARCH {
+				t.Errorf("effective GOARCH = %q, want %q (env %v)", got, tt.wantGOARCH, env)
+			}
+			if got, _ := lastValue(env, "GOOS"); got != "linux" {
+				t.Errorf("effective GOOS = %q, want linux (env %v)", got, env)
+			}
+			if !slices.Equal(env[:len(tt.environ)], tt.environ) {
+				t.Errorf("env does not start with the caller's environment: %v", env)
+			}
+		})
+	}
+}

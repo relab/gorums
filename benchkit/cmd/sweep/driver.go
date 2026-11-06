@@ -36,7 +36,8 @@ import (
 // Two processes cooperate:
 //
 //   - The launcher (this file, run on the laptop with -detach <host>) cross-
-//     builds sweep and the benchmark binary for linux/amd64, uploads whichever
+//     builds sweep and the benchmark binary for Linux (amd64 unless GOARCH is
+//     set), uploads whichever
 //     of them (plus the generated SSH config) changed since the last upload to
 //     the driver's binary cache over a single iago SSH connection, and re-execs
 //     sweep on the driver with -driven. It confirms peer readiness and exits.
@@ -1248,8 +1249,9 @@ func formatSize(n int64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
 
-// buildSweepBinary cross-compiles sweep itself for linux/amd64. Run from the
-// benchkit module root, which is where its own package path resolves.
+// buildSweepBinary cross-compiles sweep itself for Linux, for amd64 unless
+// GOARCH is set (see [crossBuildEnv]). Run from the benchkit module root, which
+// is where its own package path resolves.
 func buildSweepBinary(outputPath string) error {
 	if err := requireBenchkitModuleRoot(); err != nil {
 		return err
@@ -1258,8 +1260,9 @@ func buildSweepBinary(outputPath string) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("building sweep for linux/amd64 → %s", abs)
-	return runCrossBuild(exec.Command("go", "build", "-o", abs, "./cmd/sweep"))
+	env, goarch := crossBuildEnv(os.Environ())
+	log.Printf("building sweep for linux/%s → %s", goarch, abs)
+	return runCrossBuild(exec.Command("go", "build", "-o", abs, "./cmd/sweep"), env)
 }
 
 // joinInts formats an int slice as a comma-separated string for a sweep flag.

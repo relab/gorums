@@ -234,43 +234,62 @@ func run(g iago.Group, name string, fn func(context.Context, iago.Host) error) e
 	return errs.Err()
 }
 
-// buildBenchmark cross-compiles the benchmark binary for Linux/amd64 to
-// outputPath. It must be run from the benchkit module root.
+// buildBenchmark cross-compiles the benchmark binary for Linux to outputPath,
+// for amd64 unless GOARCH is set in the environment (see [crossBuildEnv]). It
+// must be run from the benchkit module root.
 //
-// When buildCmd is empty, it runs the built-in default (today's behavior):
+// When buildCmd is empty, it runs the built-in default:
 //
-//	GOOS=linux GOARCH=amd64 go build -o <output> ./cmd/benchmark/
+//	GOOS=linux GOARCH=<goarch> go build -o <output> ./cmd/benchmark/
 //
 // Otherwise buildCmd is a user-supplied build command template (from the -build
 // flag or the BENCHKIT_BUILD environment variable), letting a foreign protocol
 // supply its own package path or toolchain. The chosen output path is
 // substituted for the {{output}} token, or appended as "-o <output>" if the
-// token is absent. The command is run via "sh -c" from the benchkit module root with
-// GOOS=linux GOARCH=amd64 appended to its environment (a build script may
-// override these).
+// token is absent. The command is run via "sh -c" from the benchkit module root
+// with the same cross-build environment (a build script may override it).
 func buildBenchmark(outputPath, buildCmd string) error {
 	abs, err := filepath.Abs(outputPath)
 	if err != nil {
 		return err
 	}
+	env, goarch := crossBuildEnv(os.Environ())
 	var cmd *exec.Cmd
 	if buildCmd == "" {
-		log.Printf("building benchmark binary for linux/amd64 → %s", abs)
+		log.Printf("building benchmark binary for linux/%s → %s", goarch, abs)
 		cmd = exec.Command("go", "build", "-o", abs, "./cmd/benchmark/")
 	} else {
 		script := expandBuildCmd(buildCmd, abs)
-		log.Printf("building benchmark binary for linux/amd64 via custom command → %s", abs)
+		log.Printf("building benchmark binary for linux/%s via custom command → %s", goarch, abs)
 		log.Printf("  $ %s", script)
 		cmd = exec.Command("sh", "-c", script)
 	}
-	return runCrossBuild(cmd)
+	return runCrossBuild(cmd, env)
 }
 
-// runCrossBuild sets the linux/amd64 cross-compile environment on cmd, routes
-// its output to os.Stderr so a build never contaminates sweep's stdout, and
-// runs it. It is the shared tail of the benchmark and sweep builders.
-func runCrossBuild(cmd *exec.Cmd) error {
-	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=amd64")
+// crossBuildEnv returns environ extended for a Linux cross-build, and the
+// effective GOARCH. GOOS is always linux. GOARCH is amd64 unless environ holds
+// a non-empty GOARCH, so GOARCH=arm64 targets arm64 hosts.
+func crossBuildEnv(environ []string) (env []string, goarch string) {
+	for _, kv := range environ {
+		if v, ok := strings.CutPrefix(kv, "GOARCH="); ok {
+			goarch = v
+		}
+	}
+	env = append(slices.Clone(environ), "GOOS=linux")
+	if goarch == "" {
+		goarch = "amd64"
+		env = append(env, "GOARCH=amd64")
+	}
+	return env, goarch
+}
+
+// runCrossBuild runs cmd with the cross-build environment env from
+// [crossBuildEnv], routing its output to os.Stderr so a build never
+// contaminates sweep's stdout. It is the shared tail of the benchmark and
+// sweep builders.
+func runCrossBuild(cmd *exec.Cmd, env []string) error {
+	cmd.Env = env
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
