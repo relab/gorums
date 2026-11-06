@@ -51,6 +51,11 @@ func TestParseDiag(t *testing.T) {
 			output: "PROCS=notanumber\nEPOCH=alsobad\n",
 			want:   diagFields{procs: 0, epoch: 0},
 		},
+		{
+			name:   "ProbesUnknown",
+			output: "HOST=bb5\nPROCS=?\nPORTSBUSY=?\n",
+			want:   diagFields{hostname: "bb5", procsUnknown: true, portsUnknown: true},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -62,6 +67,8 @@ func TestParseDiag(t *testing.T) {
 				got.epoch != tt.want.epoch ||
 				got.epochEnd != tt.want.epochEnd ||
 				got.procs != tt.want.procs ||
+				got.procsUnknown != tt.want.procsUnknown ||
+				got.portsUnknown != tt.want.portsUnknown ||
 				!slices.Equal(got.portsBusy, tt.want.portsBusy) {
 				t.Errorf("parseDiag()\n got = %+v\nwant = %+v", got, tt.want)
 			}
@@ -265,6 +272,16 @@ func TestDiagLocal(t *testing.T) {
 				d.retransSegs, d.outSegs, d.synRetrans)
 		}
 	})
+	t.Run("MissingProbeTools", func(t *testing.T) {
+		// With an empty PATH, neither ss nor pgrep can run.
+		d := diagLocal("bb1", "PATH=/nonexistent\n"+diagCommand(9000, newRemoteProgram(""), "/tmp"))
+		if !d.reachable {
+			t.Fatalf("diagLocal reachable = false, errMsg = %q", d.errMsg)
+		}
+		if !d.portsUnknown || !d.procsUnknown {
+			t.Errorf("diagLocal portsUnknown = %v, procsUnknown = %v, want both true", d.portsUnknown, d.procsUnknown)
+		}
+	})
 	t.Run("CommandFailure", func(t *testing.T) {
 		d := diagLocal("bb1", "exit 3")
 		if d.reachable {
@@ -296,34 +313,77 @@ func TestFormatSkew(t *testing.T) {
 	}
 }
 
-// TestPrintDiagTableReturnsUnreachableCount verifies that printDiagTable
-// reports how many hosts were unreachable, the signal checkHosts uses to
-// fail -check loudly instead of always reporting success regardless of the
-// table's contents.
-func TestPrintDiagTableReturnsUnreachableCount(t *testing.T) {
+// TestPrintDiagTableReturnsCounts verifies that printDiagTable reports how many
+// hosts were unreachable, had busy ports, or had lingering processes, the
+// signal checkHosts uses to fail -check loudly instead of always reporting
+// success regardless of the table's contents.
+func TestPrintDiagTableReturnsCounts(t *testing.T) {
 	defer log.SetOutput(log.Writer())
 	log.SetOutput(io.Discard)
 
 	tests := []struct {
 		name    string
 		results map[string]hostDiag
-		want    int
+		want    diagCounts
 	}{
 		{"AllReachable", map[string]hostDiag{
 			"bb1": {alias: "bb1", reachable: true, diagFields: diagFields{storage: "ok"}},
 			"bb2": {alias: "bb2", reachable: true, diagFields: diagFields{storage: "ok"}},
-		}, 0},
+		}, diagCounts{}},
 		{"SomeUnreachable", map[string]hostDiag{
 			"bb1": {alias: "bb1", reachable: true, diagFields: diagFields{storage: "ok"}},
 			"bb2": {alias: "bb2", reachable: false, errMsg: "dial timeout"},
 			"bb3": {alias: "bb3", reachable: false, errMsg: "connection refused"},
-		}, 2},
-		{"Empty", map[string]hostDiag{}, 0},
+		}, diagCounts{unreachable: 2}},
+		{"BusyAndLingering", map[string]hostDiag{
+			"bb1": {alias: "bb1", reachable: true, diagFields: diagFields{storage: "ok", portsBusy: []string{"9000"}}},
+			"bb2": {alias: "bb2", reachable: true, diagFields: diagFields{storage: "ok", procs: 2}},
+			"bb3": {alias: "bb3", reachable: true, diagFields: diagFields{storage: "ok", portsBusy: []string{"9000"}, procs: 1}},
+		}, diagCounts{busyPorts: 2, lingering: 2}},
+		{"ProbesUnknown", map[string]hostDiag{
+			"bb1": {alias: "bb1", reachable: true, diagFields: diagFields{storage: "ok", portsUnknown: true}},
+			"bb2": {alias: "bb2", reachable: true, diagFields: diagFields{storage: "ok", procsUnknown: true}},
+			"bb3": {alias: "bb3", reachable: true, diagFields: diagFields{storage: "ok"}},
+		}, diagCounts{unknownProbes: 2}},
+		{"Empty", map[string]hostDiag{}, diagCounts{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := printDiagTable(tt.results); got != tt.want {
-				t.Errorf("printDiagTable() = %d, want %d", got, tt.want)
+				t.Errorf("printDiagTable() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDiagError checks which -check results fail: unreachable hosts always do,
+// while busy ports and lingering benchmark processes fail only with -strict.
+func TestDiagError(t *testing.T) {
+	tests := []struct {
+		name       string
+		counts     diagCounts
+		strict     bool
+		wantSubstr string // "" means no error
+	}{
+		{"CleanLenient", diagCounts{}, false, ""},
+		{"CleanStrict", diagCounts{}, true, ""},
+		{"UnreachableLenient", diagCounts{unreachable: 1}, false, "1 of 3 host(s) unreachable"},
+		{"UnreachableStrict", diagCounts{unreachable: 1}, true, "1 of 3 host(s) unreachable"},
+		{"BusyLenient", diagCounts{busyPorts: 2}, false, ""},
+		{"BusyStrict", diagCounts{busyPorts: 2}, true, "2 host(s) with busy ports"},
+		{"LingeringLenient", diagCounts{lingering: 1}, false, ""},
+		{"LingeringStrict", diagCounts{lingering: 1}, true, "1 host(s) with lingering benchmark processes"},
+		{"UnknownLenient", diagCounts{unknownProbes: 1}, false, ""},
+		{"UnknownStrict", diagCounts{unknownProbes: 1}, true, "1 host(s) where the port or process probe could not run"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := diagError(tt.counts, 3, tt.strict)
+			switch {
+			case tt.wantSubstr == "" && err != nil:
+				t.Errorf("diagError() = %v, want nil", err)
+			case tt.wantSubstr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantSubstr)):
+				t.Errorf("diagError() = %v, want an error containing %q", err, tt.wantSubstr)
 			}
 		})
 	}
@@ -340,7 +400,7 @@ func TestCheckHostsFailsOnUnreachableHost(t *testing.T) {
 
 	// An alias with no matching SSH config entry fails to dial, landing in
 	// group.DialErrors rather than aborting the whole check.
-	err := checkHosts([]string{"no-such-sweep-test-host.invalid"}, "", 9000, newRemoteProgram(""), "", "/tmp")
+	err := checkHosts([]string{"no-such-sweep-test-host.invalid"}, "", 9000, newRemoteProgram(""), "", "/tmp", false)
 	if err == nil {
 		t.Error("checkHosts(unreachable host) = nil error, want an error")
 	}

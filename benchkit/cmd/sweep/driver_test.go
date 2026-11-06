@@ -127,7 +127,7 @@ func TestExplainCheckScript(t *testing.T) {
 }
 
 func TestDriverCheckScript(t *testing.T) {
-	script := driverCheckScript("/tmp/sweep-driver-check-x", "bb1,bb2,bb3", 9000, "", "bb1", "/local")
+	script := driverCheckScript("/tmp/sweep-driver-check-x", "bb1,bb2,bb3", 9000, "", "bb1", "/local", false)
 	for _, want := range []string{
 		"cd '/tmp/sweep-driver-check-x'",
 		"-check",
@@ -148,6 +148,9 @@ func TestDriverCheckScript(t *testing.T) {
 	if strings.Contains(script, "-binary") {
 		t.Errorf("script must omit -binary when none is set:\n%s", script)
 	}
+	if strings.Contains(script, "-strict") {
+		t.Errorf("script must omit -strict when not set:\n%s", script)
+	}
 	// bash -s reads its script from stdin, which iago closes only after the
 	// command returns; without an explicit exit, a successful check blocks
 	// waiting for stdin EOF. The trailing exit must be present.
@@ -157,9 +160,18 @@ func TestDriverCheckScript(t *testing.T) {
 }
 
 func TestDriverCheckScriptBinary(t *testing.T) {
-	script := driverCheckScript("/tmp/wd", "bb1", 9000, "./cmd/otherproto/bench", "bb1", "/tmp")
+	script := driverCheckScript("/tmp/wd", "bb1", 9000, "./cmd/otherproto/bench", "bb1", "/tmp", false)
 	if !strings.Contains(script, "-binary './cmd/otherproto/bench'") {
 		t.Errorf("script must forward -binary when set:\n%s", script)
+	}
+}
+
+// TestDriverCheckScriptStrict checks that a driver-routed -check -strict runs
+// the strict check on the driver, so busy hosts fail the launcher too.
+func TestDriverCheckScriptStrict(t *testing.T) {
+	script := driverCheckScript("/tmp/wd", "bb1", 9000, "", "bb1", "/tmp", true)
+	if !strings.Contains(script, " -strict") {
+		t.Errorf("script must forward -strict when set:\n%s", script)
 	}
 }
 

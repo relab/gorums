@@ -29,6 +29,9 @@
 //
 //	-check      report reachability, host info, busy benchmark ports, lingering
 //	            benchmark processes, and clock skew, using the sweep's SSH path
+//	-strict     with -check, also fail on busy benchmark ports, lingering
+//	            benchmark processes, and port or process probes that could
+//	            not run, not only on unreachable hosts
 //
 // The -verify mode checks a collected run directory and exits non-zero when a
 // smoke criterion fails. It needs no hosts, but takes the same sweep flags
@@ -140,6 +143,7 @@ type config struct {
 	sweepLabel string
 	verbose    bool
 	check      bool
+	strict     bool // -strict: -check also fails on busy ports, lingering processes, and probes that could not run
 	sweep      sweepConfig
 	prog       remoteProgram
 
@@ -287,7 +291,7 @@ func main() {
 	// skew estimate and its uncertainty.
 	if cfg.check {
 		check := func(*config) error {
-			return checkHosts(hosts, cfg.sshConfig, cfg.port, cfg.prog, cfg.selfHost, cfg.remoteDir)
+			return checkHosts(hosts, cfg.sshConfig, cfg.port, cfg.prog, cfg.selfHost, cfg.remoteDir, cfg.strict)
 		}
 		if cfg.driver != "" && !cfg.driven {
 			check = func(cfg *config) error { return runDriverCheck(cfg, hosts) }
@@ -736,6 +740,7 @@ func parseFlags() (*config, []string) {
 	flag.StringVar(&cfg.sweepLabel, "sweep", "run", "label prefix for output filenames and, when set explicitly, the run directory name")
 	flag.BoolVar(&cfg.verbose, "verbose", false, "pass -verbose to benchmark nodes")
 	flag.BoolVar(&cfg.check, "check", false, "run connectivity and host diagnostics on matched hosts, then exit")
+	flag.BoolVar(&cfg.strict, "strict", false, "with -check, also fail on busy benchmark ports, lingering benchmark processes, and port or process probes that could not run")
 
 	// Pass-through flags forwarded to every benchmark node (not swept).
 	flag.StringVar(&cfg.interval, "interval", "", "pass -interval to benchmark nodes (e.g. 250ms, 0 disables events; empty = binary default)")

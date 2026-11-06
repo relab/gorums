@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"maps"
@@ -74,8 +75,10 @@ const checkLocalTimeout = 15 * time.Second
 // than dialed: a host cannot SSH to itself through the generated config — the
 // loopback self-connection fails the SSH handshake with EOF — so dialing it
 // would always report the driver UNREACHABLE even though it is right here.
-// Results are printed as an aligned table sorted by alias.
-func checkHosts(aliases []string, sshConfig string, basePort int, prog remoteProgram, selfAlias, remoteRoot string) error {
+// Results are printed as an aligned table sorted by alias. The returned error
+// follows [diagError]: with strict, busy ports and lingering benchmark
+// processes fail the check too.
+func checkHosts(aliases []string, sshConfig string, basePort int, prog remoteProgram, selfAlias, remoteRoot string, strict bool) error {
 	command := diagCommand(basePort, prog, remoteRoot)
 	results := make(map[string]hostDiag, len(aliases))
 
@@ -107,10 +110,39 @@ func checkHosts(aliases []string, sshConfig string, basePort int, prog remotePro
 		}
 	}
 
-	if unreachable := printDiagTable(results); unreachable > 0 {
-		return fmt.Errorf("%d of %d host(s) unreachable", unreachable, len(results))
+	return diagError(printDiagTable(results), len(results), strict)
+}
+
+// diagCounts counts the hosts with each problem that can fail a -check.
+type diagCounts struct {
+	unreachable int // hosts that could not be dialed or probed
+	busyPorts   int // hosts with a benchmark port already in use
+	lingering   int // hosts with leftover benchmark processes
+
+	unknownProbes int // hosts where the port or process probe could not run
+}
+
+// diagError returns the error a -check over total hosts reports for counts.
+// Unreachable hosts always fail the check. Busy ports and lingering benchmark
+// processes fail it only when strict, because a sweep would kill or collide
+// with another sweep on those hosts. A port or process probe that could not
+// run also fails it only when strict, because such a host cannot be shown to
+// be idle.
+func diagError(counts diagCounts, total int, strict bool) error {
+	var errs []error
+	if counts.unreachable > 0 {
+		errs = append(errs, fmt.Errorf("%d of %d host(s) unreachable", counts.unreachable, total))
 	}
-	return nil
+	if strict && counts.busyPorts > 0 {
+		errs = append(errs, fmt.Errorf("%d host(s) with busy ports", counts.busyPorts))
+	}
+	if strict && counts.lingering > 0 {
+		errs = append(errs, fmt.Errorf("%d host(s) with lingering benchmark processes", counts.lingering))
+	}
+	if strict && counts.unknownProbes > 0 {
+		errs = append(errs, fmt.Errorf("%d host(s) where the port or process probe could not run", counts.unknownProbes))
+	}
+	return errors.Join(errs...)
 }
 
 // diagLocal runs the diagnostic command on the local machine (no SSH) and
@@ -205,7 +237,8 @@ func (f diagFields) skewRTT(before, after time.Time) (skew, rtt time.Duration) {
 // diagCommand builds the best-effort diagnostic shell script run on each host.
 // Every datum is emitted as a KEY=VALUE line consumed by parseDiag; failures of
 // individual probes are swallowed so the script always exits 0 and one slow or
-// missing tool does not fail the whole check.
+// missing tool does not fail the whole check. When pgrep or ss cannot run,
+// PROCS or PORTSBUSY is "?", which -strict treats as a failure.
 func diagCommand(basePort int, prog remoteProgram, remoteRoot string) string {
 	ports := make([]string, numProbePorts)
 	for i := range ports {
@@ -224,11 +257,15 @@ echo "KERNEL=$(uname -sr 2>/dev/null)"
 echo "CPUS=$(nproc 2>/dev/null)"
 echo "LOAD=$(cut -d' ' -f1 /proc/loadavg 2>/dev/null)"
 procs=$(pgrep -fc '%[1]s' 2>/dev/null)
-echo "PROCS=${procs:-0}"
-busy=
-for p in %[2]s; do
-  if ss -ltnH 2>/dev/null | grep -qE ":$p([[:space:]]|$)"; then busy="$busy $p"; fi
-done
+echo "PROCS=${procs:-?}"
+if listening=$(ss -ltnH 2>/dev/null); then
+  busy=
+  for p in %[2]s; do
+    if printf '%%s\n' "$listening" | grep -qE ":$p([[:space:]]|$)"; then busy="$busy $p"; fi
+  done
+else
+  busy="?"
+fi
 echo "PORTSBUSY=$busy"
 root=%[3]s
 user=${USER:-$(id -un)}
@@ -280,18 +317,22 @@ done`, prog.pgrep(), portList)
 
 // diagFields holds the parsed KEY=VALUE output of diagCommand.
 type diagFields struct {
-	hostname   string
-	kernel     string
-	cpus       string
-	load       string
-	epoch      float64 // remote clock (seconds) sampled at the script's start
-	epochEnd   float64 // remote clock (seconds) sampled at the script's end
-	procs      int
-	portsBusy  []string
-	storage    string
-	free       string
-	stale      int
-	driverRuns int
+	hostname  string
+	kernel    string
+	cpus      string
+	load      string
+	epoch     float64 // remote clock (seconds) sampled at the script's start
+	epochEnd  float64 // remote clock (seconds) sampled at the script's end
+	procs     int
+	portsBusy []string
+	// procsUnknown and portsUnknown record that the process or port probe
+	// could not run, for example because pgrep or ss is missing.
+	procsUnknown bool
+	portsUnknown bool
+	storage      string
+	free         string
+	stale        int
+	driverRuns   int
 }
 
 // parseDiag parses the KEY=VALUE lines emitted by diagCommand. Unknown keys are
@@ -318,9 +359,13 @@ func parseDiag(output string) diagFields {
 		case "EPOCH_END":
 			f.epochEnd, _ = strconv.ParseFloat(value, 64)
 		case "PROCS":
+			f.procsUnknown = value == "?"
 			f.procs, _ = strconv.Atoi(value)
 		case "PORTSBUSY":
-			f.portsBusy = strings.Fields(value)
+			f.portsUnknown = value == "?"
+			if !f.portsUnknown {
+				f.portsBusy = strings.Fields(value)
+			}
 		case "STORAGE":
 			f.storage = value
 		case "FREE":
@@ -335,12 +380,11 @@ func parseDiag(output string) diagFields {
 }
 
 // printDiagTable renders the per-host diagnostics as an aligned table, sorted by
-// alias, and prints a trailing summary line flagging any problems.
-// printDiagTable prints the per-host diagnostic table and a summary line,
-// and returns how many hosts were unreachable, so callers (e.g. checkHosts)
-// can fail loudly instead of always reporting success regardless of what the
-// table shows.
-func printDiagTable(results map[string]hostDiag) (unreachable int) {
+// alias, and prints a trailing summary line flagging any problems. It returns
+// the problem counts, so callers (e.g. checkHosts) can fail loudly instead of
+// always reporting success regardless of what the table shows.
+func printDiagTable(results map[string]hostDiag) diagCounts {
+	var unreachable int
 	sorted := slices.SortedFunc(maps.Values(results), func(a, b hostDiag) int {
 		return compareHost(a.alias, b.alias)
 	})
@@ -348,7 +392,7 @@ func printDiagTable(results map[string]hostDiag) (unreachable int) {
 	tw := tabwriter.NewWriter(log.Writer(), 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "HOST\tSTATUS\tHOSTNAME\tKERNEL\tCPUS\tLOAD\tSKEW\tRETRANS%\tSYN-RETX\tPORTS BUSY\tLINGERING\tSTORAGE\tFREE\tSTALE\tRUNS")
 
-	var withBusyPorts, withLingering, skewed, withStale, badStorage, driverRuns int
+	var withBusyPorts, withLingering, withUnknown, skewed, withStale, badStorage, driverRuns int
 	for _, d := range sorted {
 		if !d.reachable {
 			unreachable++
@@ -357,14 +401,23 @@ func printDiagTable(results map[string]hostDiag) (unreachable int) {
 		}
 
 		ports := "-"
-		if len(d.portsBusy) > 0 {
+		switch {
+		case d.portsUnknown:
+			ports = "?"
+		case len(d.portsBusy) > 0:
 			ports = strings.Join(d.portsBusy, ",")
 			withBusyPorts++
 		}
 		lingering := "-"
-		if d.procs > 0 {
+		switch {
+		case d.procsUnknown:
+			lingering = "?"
+		case d.procs > 0:
 			lingering = strconv.Itoa(d.procs)
 			withLingering++
+		}
+		if d.portsUnknown || d.procsUnknown {
+			withUnknown++
 		}
 		if d.skew.Abs() > time.Second {
 			skewed++
@@ -391,7 +444,10 @@ func printDiagTable(results map[string]hostDiag) (unreachable int) {
 	if withStale > 0 {
 		log.Printf("stale files are reported only; -check does not delete them")
 	}
-	return unreachable
+	if withUnknown > 0 {
+		log.Printf("%d host(s) where the port or process probe could not run (shown as ?)", withUnknown)
+	}
+	return diagCounts{unreachable: unreachable, busyPorts: withBusyPorts, lingering: withLingering, unknownProbes: withUnknown}
 }
 
 // formatRetrans renders the since-boot retransmit ratio (retransSegs/outSegs, as

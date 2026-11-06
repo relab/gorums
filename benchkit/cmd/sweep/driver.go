@@ -567,7 +567,7 @@ func runDriverCheck(cfg *config, hosts []string) error {
 	log.Printf("running check on %s over %d host(s) (output streamed below)", driver, len(hosts))
 	runErr := iago.Shell{
 		Command: "bash -s",
-		Stdin:   strings.NewReader(driverCheckScript(cacheDir, strings.Join(hosts, ","), cfg.port, cfg.binaryPath, driver, cfg.remoteDir)),
+		Stdin:   strings.NewReader(driverCheckScript(cacheDir, strings.Join(hosts, ","), cfg.port, cfg.binaryPath, driver, cfg.remoteDir, cfg.strict)),
 		Stdout:  os.Stderr,
 		Stderr:  os.Stderr,
 	}.Apply(ctx, host)
@@ -591,17 +591,21 @@ func runDriverCheck(cfg *config, hosts []string) error {
 // -self-host so the check probes it locally instead of SSHing to itself (which
 // fails on the loopback self-connection). Like explainCheckScript it ends with
 // an explicit exit so bash -s does not block waiting for stdin EOF after a
-// successful check.
-func driverCheckScript(cacheDir, hostsCSV string, port int, binary, self, remoteDir string) string {
-	bin := ""
+// successful check. strict forwards -strict, so busy hosts fail the check on
+// the driver too.
+func driverCheckScript(cacheDir, hostsCSV string, port int, binary, self, remoteDir string, strict bool) string {
+	extra := ""
 	if binary != "" {
-		bin = " -binary " + iago.Quote(binary)
+		extra += " -binary " + iago.Quote(binary)
+	}
+	if strict {
+		extra += " -strict"
 	}
 	return fmt.Sprintf(`set -e
 cd %s
 ./sweep -check -hosts %s -config %s/ssh.config -port %d -self-host %s -remote-dir %s%s
 exit 0
-`, iago.Quote(cacheDir), iago.Quote(hostsCSV), iago.Quote(cacheDir), port, iago.Quote(self), iago.Quote(remoteDir), bin)
+`, iago.Quote(cacheDir), iago.Quote(hostsCSV), iago.Quote(cacheDir), port, iago.Quote(self), iago.Quote(remoteDir), extra)
 }
 
 // collectMode selects what a -collect downloads from the driver; see
