@@ -143,19 +143,21 @@ func (c *Control) Stop(_ gorums.ServerContext, _ *StopRequest) (*Result, error) 
 }
 
 // Done records that the sender, as [gorums.ServerContext.SenderID] reports it,
-// has finished its own benchmark work and will issue no further calls. It is
+// has finished its own benchmark work and will issue no further calls, and
+// acknowledges the signal so the sender can exit knowing it arrived. It is
 // advisory only: a missing or duplicate signal never blocks or errors anything
 // here, it only means the caller waiting on DoneCh falls back to its own
 // timeout. See benchmark.AwaitPeersDoneOrGrace.
-func (c *Control) Done(ctx gorums.ServerContext, _ *DoneRequest) {
+func (c *Control) Done(ctx gorums.ServerContext, _ *DoneRequest) (*DoneResponse, error) {
 	id := ctx.SenderID()
 	if c.doneCh == nil || id == 0 || int(id) >= len(c.doneSeen) {
-		return
+		return &DoneResponse{}, nil
 	}
 	if c.doneSeen[id].Swap(true) {
-		return // duplicate signal, already counted
+		return &DoneResponse{}, nil // duplicate signal, already counted
 	}
 	if c.doneLeft.Add(-1) == 0 {
 		close(c.doneCh)
 	}
+	return &DoneResponse{}, nil
 }

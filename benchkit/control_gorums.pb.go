@@ -11,7 +11,6 @@ import (
 	gorums "github.com/relab/gorums"
 	gorumsimpl "github.com/relab/gorums/runtime/gorumsimpl"
 	proto "google.golang.org/protobuf/proto"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
@@ -20,9 +19,6 @@ const (
 	// Verify that the gorums runtime is sufficiently up-to-date.
 	_ = gorumsimpl.EnforceVersion(gorumsimpl.MaxVersion - 13)
 )
-
-// Reference imports to suppress errors if they are not otherwise used.
-var _ emptypb.Empty
 
 // ControlClient is the client API for Control quorum calls and
 // multicasts on the client's configuration. If the configuration is empty, no
@@ -45,21 +41,13 @@ type ControlClient interface {
 	// clock-offset estimation between peers for one-way latency correction.
 	ClockSync(ctx context.Context, in *ClockSyncRequest) *gorums.Call[*ClockSyncRequest, *ClockSyncResponse]
 
-	// Done is an advisory, one-way signal: a node multicasts it to all peers
-	// once it has finished its own benchmark work and trailing flush. It is
-	// not a barrier — a missing or delayed Done never blocks or fails a run,
-	// it only means the waiting peer falls back to its own timeout. See
-	// benchmark.AwaitPeersDoneOrGrace.
-	//
-	// Example:
-	//
-	//	err := client.Done(ctx, in).Send()
-	//
-	// To dispatch without waiting for the sends:
-	//
-	//	h := client.Done(ctx, in).Async()
-	//	err = h.Wait()
-	Done(ctx context.Context, in *DoneRequest) *gorums.OnewayCall[*DoneRequest]
+	// Done is an advisory signal: a node sends it to all peers once it has
+	// finished its own benchmark work and trailing flush, and waits for their
+	// acknowledgements (bounded by a deadline) before it exits, so the signal
+	// is not lost to the exit. It is not a barrier — a missing or delayed Done
+	// never blocks or fails a run, it only means the waiting peer falls back to
+	// its own timeout. See benchmark.AwaitPeersDoneOrGrace.
+	Done(ctx context.Context, in *DoneRequest) *gorums.Call[*DoneRequest, *DoneResponse]
 }
 
 // NewControlClient returns a client whose calls execute on config.
@@ -84,8 +72,8 @@ func (c controlClient) ClockSync(ctx context.Context, in *ClockSyncRequest) *gor
 	return gorumsimpl.QuorumCall[*ClockSyncRequest, *ClockSyncResponse](ctx, c.config, in, "benchkit.Control.ClockSync")
 }
 
-func (c controlClient) Done(ctx context.Context, in *DoneRequest) *gorums.OnewayCall[*DoneRequest] {
-	return gorumsimpl.Multicast(ctx, c.config, in, "benchkit.Control.Done")
+func (c controlClient) Done(ctx context.Context, in *DoneRequest) *gorums.Call[*DoneRequest, *DoneResponse] {
+	return gorumsimpl.QuorumCall[*DoneRequest, *DoneResponse](ctx, c.config, in, "benchkit.Control.Done")
 }
 
 // ControlServer is the server API for Control.
@@ -98,7 +86,7 @@ type ControlServer interface {
 	Start(gorums.ServerContext, *StartRequest) (*StartResponse, error)
 	Stop(gorums.ServerContext, *StopRequest) (*Result, error)
 	ClockSync(gorums.ServerContext, *ClockSyncRequest) (*ClockSyncResponse, error)
-	Done(gorums.ServerContext, *DoneRequest)
+	Done(gorums.ServerContext, *DoneRequest) (*DoneResponse, error)
 }
 
 func RegisterControlServer(srv *gorums.Server, impl ControlServer) {
@@ -129,9 +117,13 @@ func RegisterControlServer(srv *gorums.Server, impl ControlServer) {
 		send(resp)
 		return nil
 	})
-	srv.RegisterHandler("benchkit.Control.Done", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) error {
+	srv.RegisterHandler("benchkit.Control.Done", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*DoneRequest](in)
-		impl.Done(ctx, req)
+		resp, err := impl.Done(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
 		return nil
 	})
 }

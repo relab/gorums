@@ -2,7 +2,6 @@ edition = "2024";
 
 package benchkit;
 
-import "google/protobuf/empty.proto";
 import "gorums.proto";
 import "benchkit/benchkit.proto";
 
@@ -31,12 +30,16 @@ message ClockSyncResponse {
   int64 server_time = 1; // nanoseconds; server's wall clock at handler entry
 }
 
-// DoneRequest is multicast to advise peers that the sender has finished its
+// DoneRequest is sent to every peer to advise that the sender has finished its
 // own benchmark work and will issue no further calls. The receiver takes the
 // sender's Gorums node ID from the request context. It uses that ID to
 // de-duplicate signals, and to name the peers that have not yet signaled when
 // it diagnoses a timeout.
 message DoneRequest {}
+
+// DoneResponse acknowledges a DoneRequest: the receiver has recorded the
+// signal. The sender uses it to know the signal arrived before it exits.
+message DoneResponse {}
 
 // The Result, Report, and MemoryStat data messages live in benchkit.proto, a
 // gorums-free file that consumers (e.g. sweep) can compile standalone without
@@ -65,12 +68,13 @@ service Control {
     option (gorums.quorumcall) = true;
   }
 
-  // Done is an advisory, one-way signal: a node multicasts it to all peers
-  // once it has finished its own benchmark work and trailing flush. It is
-  // not a barrier — a missing or delayed Done never blocks or fails a run,
-  // it only means the waiting peer falls back to its own timeout. See
-  // benchmark.AwaitPeersDoneOrGrace.
-  rpc Done(DoneRequest) returns (google.protobuf.Empty) {
-    option (gorums.multicast) = true;
+  // Done is an advisory signal: a node sends it to all peers once it has
+  // finished its own benchmark work and trailing flush, and waits for their
+  // acknowledgements (bounded by a deadline) before it exits, so the signal
+  // is not lost to the exit. It is not a barrier — a missing or delayed Done
+  // never blocks or fails a run, it only means the waiting peer falls back to
+  // its own timeout. See benchmark.AwaitPeersDoneOrGrace.
+  rpc Done(DoneRequest) returns (DoneResponse) {
+    option (gorums.quorumcall) = true;
   }
 }

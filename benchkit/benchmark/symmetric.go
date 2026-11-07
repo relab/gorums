@@ -132,22 +132,23 @@ func ExitGrace(numNodes int) time.Duration {
 }
 
 // SignalDone notifies every outbound peer that this node has finished its
-// own benchmark work and trailing flush and will issue no further calls. The
-// send is best-effort: per-peer errors are discarded, since a dropped or failed
-// notification only costs the receiving peer its fast exit via
-// AwaitPeersDoneOrGrace, never correctness, because that wait always falls
-// back to its own grace deadline.
+// own benchmark work and trailing flush and will issue no further calls, and
+// waits for each peer to acknowledge. The acknowledgement is what makes the
+// signal survive the caller's exit: a one-way send that has only reached the
+// local stream can be discarded when the process stops right after, leaving
+// the peer to wait out its full grace period. Errors are discarded: Done is
+// advisory, and a peer that already finished and exited makes a failed call
+// the expected outcome, not a fault. A lost signal only costs the receiving
+// peer its fast exit via AwaitPeersDoneOrGrace, never correctness, because that
+// wait always falls back to its own grace deadline.
 //
-// The whole notification is bounded by a deadline. Done is a one-way Multicast
-// whose enqueue waits for send-queue space until the request context is done
-// (the one-way path in internal/stream.(*Channel).Enqueue). Callers pass a
-// deadline-free context (cmd/benchmark passes context.Background), so without a
-// bound a full or backpressured send queue during the teardown broadcast traps
-// this call — and hence the caller — forever; this deadlocked node teardown on
-// the cluster. The bound mirrors the peers' own wait (ExitGrace over the
-// cluster size): never spend longer announcing Done than a peer will wait to
-// hear it. Wait blocks until each send completes or the deadline fires,
-// keeping the deferred cancel from aborting a send still in flight.
+// The whole exchange is bounded by a deadline. Callers pass a deadline-free
+// context (cmd/benchmark passes context.Background), and a peer that never
+// answers, or a full send queue during the teardown broadcast, would otherwise
+// trap this call, and hence the caller, forever; the one-way form of this call
+// deadlocked node teardown on the cluster. The bound mirrors the peers' own
+// wait (ExitGrace over the cluster size): never spend longer announcing Done
+// than a peer will wait to hear it.
 func SignalDone(ctx context.Context, t *SymmetricTarget) {
 	ctx, cancel := context.WithTimeout(ctx, ExitGrace(t.numPeers))
 	defer cancel()
@@ -156,12 +157,10 @@ func SignalDone(ctx context.Context, t *SymmetricTarget) {
 		if out.Size() == 0 {
 			continue
 		}
-		req := &benchkit.DoneRequest{}
-		// Report rather than return: Done is advisory, and a peer that already
-		// finished and exited makes a failed send the expected outcome, not a
-		// fault. Logging it still distinguishes that from a run where every
-		// send failed and no peer was ever told.
-		if err := benchkit.NewControlClient(out).Done(ctx, req).Send(); err != nil {
+		// Report rather than return: a failed call is logged so a run where
+		// every call failed and no peer was ever told stays distinguishable
+		// from one where only peers that had already exited did not answer.
+		if _, err := benchkit.NewControlClient(out).Done(ctx, &benchkit.DoneRequest{}).All(); err != nil {
 			benchkit.Logf("Done signal from node %d: %v\n", t.controls[i].ID(), err)
 		}
 	}
