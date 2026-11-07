@@ -3,9 +3,6 @@ package stream
 import (
 	"context"
 	"sync"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // acceptedKey is the response header that a server sends on each stream it
@@ -56,7 +53,7 @@ func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 	}
 	defer cleanup()
 	if !s.track(ch) {
-		return status.Error(codes.Unavailable, "server is draining")
+		return ErrServerDraining
 	}
 	defer s.untrack(ch)
 	if s.onConnect != nil {

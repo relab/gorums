@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -63,8 +64,9 @@ type drainState struct {
 	// finalReceived is set when the peer's final frame arrived; requests behind
 	// it are rejected.
 	finalReceived atomic.Bool
-	// drained is closed once the drained frame was sent.
-	drained chan struct{}
+	// drained is closed once the drained frame was sent, or the session ended.
+	drained     chan struct{}
+	drainedOnce sync.Once
 
 	// work counts the handlers that this session accepted and that have not
 	// returned.
@@ -91,7 +93,11 @@ func (s *session) control(msg *Message) {
 		}
 	case drainedMethod:
 		s.peerDrained.Store(true)
-		s.end(nil)
+		// While this side still drains, ending the session would cancel its
+		// accepted handlers; its own drained frame ends the session instead.
+		if !s.localDraining.Load() {
+			s.end(nil)
+		}
 	}
 }
 
@@ -101,7 +107,10 @@ func (s *session) controlSent(msg *Message) {
 	case drainFinalMethod:
 		s.finalSent.Store(true)
 	case drainedMethod:
-		close(s.drained)
+		s.closeDrained()
+		if s.peerDrained.Load() {
+			s.end(nil)
+		}
 	}
 }
 
@@ -116,8 +125,15 @@ func (s *session) rejectsDraining(req *Request) bool {
 // startLocalDrain begins draining the stream: it tells the peer to stop.
 func (s *session) startLocalDrain() {
 	if s.localDraining.CompareAndSwap(false, true) {
-		s.queue.push(Request{Ctx: s.ctx, Msg: drainFrame(drainingMethod)}, true)
+		// The push waits for queue space, so it must not block the caller,
+		// whose own deadline then still applies.
+		go s.queue.push(Request{Ctx: s.ctx, Msg: drainFrame(drainingMethod)}, true)
 	}
+}
+
+// closeDrained closes the drained channel; it is idempotent.
+func (s *session) closeDrained() {
+	s.drainedOnce.Do(func() { close(s.drained) })
 }
 
 // finishDrain waits for the accepted handlers to return, then queues the
@@ -140,6 +156,12 @@ func (s *session) finishDrain() {
 func drainCapable(ctx context.Context) bool {
 	md, ok := metadata.FromIncomingContext(ctx)
 	return ok && len(md.Get(drainCapableKey)) > 0
+}
+
+// isServerDraining reports whether err is the refusal of a draining server.
+func isServerDraining(err error) bool {
+	st, ok := status.FromError(err)
+	return ok && st.Code() == codes.Unavailable && st.Message() == status.Convert(ErrServerDraining).Message()
 }
 
 // newErrorReply returns an error reply to req with err.

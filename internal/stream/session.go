@@ -305,6 +305,7 @@ func (s *session) fail(err error) {
 // pending calls; see [session.retryOrFail]. It is idempotent.
 func (s *session) end(err error) {
 	s.cancel()
+	s.closeDrained()
 	for _, req := range s.pending.drain() {
 		s.retryOrFail(req, err)
 	}
@@ -354,6 +355,8 @@ func (s *session) outcome() (accepted bool, refusal error) {
 // every call with [ErrStreamDown].
 func (s *session) retryOrFail(req Request, err error) {
 	switch refusal := s.refused(); {
+	case isServerDraining(err):
+		req.sendErrorResponse(s.id, ErrServerDraining)
 	case refusal != nil:
 		req.sendErrorResponse(s.id, refusal)
 	case s.requeue && isResourceExhausted(err):

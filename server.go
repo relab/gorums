@@ -387,13 +387,14 @@ func (s *Server) WaitForAll(ctx context.Context) (Config, error) {
 // The wait is bounded by [WithDrainTimeout]; when it ends, the server stops
 // immediately as [Server.Stop] does.
 func (s *Server) GracefulStop() {
-	ctx, cancel := context.WithTimeout(context.Background(), s.drainTimeout)
+	deadline := time.Now().Add(s.drainTimeout)
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
 	if !s.srv.Drain(ctx) {
 		s.Stop()
 		return
 	}
-	forced := time.AfterFunc(s.drainTimeout, s.grpcServer.Stop)
+	forced := time.AfterFunc(time.Until(deadline), s.grpcServer.Stop)
 	s.grpcServer.GracefulStop()
 	forced.Stop()
 	s.im.Close()
