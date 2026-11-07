@@ -36,6 +36,7 @@ type session struct {
 	requeue bool
 
 	pending pendingCalls
+	drainState
 
 	drain       chan struct{} // closed when the session starts draining
 	draining    atomic.Bool
@@ -77,6 +78,7 @@ func newSession(ctx context.Context, cancel context.CancelFunc, e *endpoint, str
 		requeue:        requeue,
 		drain:          make(chan struct{}),
 		verdict:        make(chan struct{}),
+		drained:        make(chan struct{}),
 	}
 }
 
@@ -101,6 +103,11 @@ func (s *session) sendLoop(req *Request) *Request {
 		}
 		if err := req.Ctx.Err(); err != nil {
 			req.sendErrorResponse(s.id, err)
+			req = nil
+			continue
+		}
+		if s.rejectsDraining(req) {
+			req.sendErrorResponse(s.id, ErrServerDraining)
 			req = nil
 			continue
 		}
@@ -136,6 +143,9 @@ func (s *session) send(req Request) bool {
 	}
 	if s.healthy() {
 		s.recordHealth(nil)
+	}
+	if req.Msg.GetMessageSeqNo() == 0 && isControl(req.Msg) {
+		s.controlSent(req.Msg)
 	}
 	if req.wantSendConfirmation() {
 		req.deliver(response{NodeID: s.id})
@@ -240,12 +250,25 @@ func (s *session) receiveFailed(err error) {
 // error.
 func (s *session) handle(msg *Message) {
 	msgID := msg.GetMessageSeqNo()
+	if msgID == 0 && isControl(msg) {
+		s.control(msg)
+		return
+	}
 	if isServerSequenceNumber(msgID) == s.serverRequests {
+		if s.finalReceived.Load() {
+			// The peer sent this request after its final frame.
+			s.reply(newErrorReply(msg, ErrServerDraining))
+			return
+		}
 		if s.handler != nil {
 			ctx := msg.appendToIncomingContext(s.ctx)
-			s.requests.push(s.ctx, func(release func()) {
+			s.work.Add(1)
+			if !s.requests.push(s.ctx, func(release func()) {
+				defer s.work.Add(-1)
 				s.handler.HandleRequest(ctx, s.id, msg, release, s.reply)
-			})
+			}) {
+				s.work.Add(-1)
+			}
 		}
 		return
 	}
