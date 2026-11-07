@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"reflect"
+	"slices"
 	"testing"
 
 	"google.golang.org/grpc/metadata"
@@ -44,13 +45,15 @@ func TestMessageConstructorsPreservePayloadAndMetadata(t *testing.T) {
 
 func TestMessageFromPayloadMatchesBuilder(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		ctx     context.Context
-		payload []byte
+		name        string
+		ctx         context.Context
+		payload     []byte
+		wantEntries []string
 	}{
 		{name: "NilPayload", ctx: context.Background()},
 		{name: "EmptyPayload", ctx: context.Background(), payload: []byte{}},
-		{name: "PayloadAndMetadata", ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-id", "42")), payload: []byte("request")},
+		{name: "PayloadAndMetadata", ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-id", "42")), payload: []byte("request"), wantEntries: []string{"x-id=42"}},
+		{name: "RepeatedMetadataValues", ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-id", "42", "x-id", "43")), payload: []byte("request"), wantEntries: []string{"x-id=42", "x-id=43"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := NewMessageFromPayload(tc.ctx, 7, "test.Method", tc.payload)
@@ -60,6 +63,13 @@ func TestMessageFromPayloadMatchesBuilder(t *testing.T) {
 			}
 			if (got.GetPayload() == nil) != (want.GetPayload() == nil) {
 				t.Errorf("payload nil = %v, want %v", got.GetPayload() == nil, want.GetPayload() == nil)
+			}
+			var entries []string
+			for _, entry := range got.GetEntry() {
+				entries = append(entries, entry.GetKey()+"="+entry.GetValue())
+			}
+			if !slices.Equal(entries, tc.wantEntries) {
+				t.Errorf("metadata entries = %v, want %v", entries, tc.wantEntries)
 			}
 		})
 	}
