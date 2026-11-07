@@ -1,7 +1,7 @@
 # Migration Guide: Gorums v2 to v3
 
 Status: retained as a version-specific historical migration guide.
-It does not describe the later API redesign; that missing guide is tracked in [issue-redesign-migration-guide.md](issue-redesign-migration-guide.md).
+It does not describe the later API redesign; see [Migration Guide: Gorums v0.11 to v0.13](migration-v0.11-to-v0.13.md).
 Its call examples use the generated service clients.
 To migrate code from the generated call functions to service clients, see [Function API to Service Clients](#function-api-to-service-clients).
 
