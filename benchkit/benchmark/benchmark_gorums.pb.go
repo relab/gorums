@@ -85,17 +85,27 @@ type BenchmarkServer interface {
 }
 
 func RegisterBenchmarkServer(srv *gorums.Server, impl BenchmarkServer) {
-	srv.RegisterHandler("benchmark.Benchmark.QuorumCall", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("benchmark.Benchmark.QuorumCall", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*Echo](in)
-		return impl.QuorumCall(ctx, req)
+		resp, err := impl.QuorumCall(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler("benchmark.Benchmark.SlowServer", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("benchmark.Benchmark.SlowServer", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*Echo](in)
-		return impl.SlowServer(ctx, req)
+		resp, err := impl.SlowServer(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler("benchmark.Benchmark.Multicast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("benchmark.Benchmark.Multicast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) error {
 		req := gorums.AsProto[*TimedMsg](in)
 		impl.Multicast(ctx, req)
-		return nil, nil
+		return nil
 	})
 }

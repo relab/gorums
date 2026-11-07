@@ -54,8 +54,13 @@ type TLSServer interface {
 }
 
 func RegisterTLSServer(srv *gorums.Server, impl TLSServer) {
-	srv.RegisterHandler("tls.TLS.TestTLS", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("tls.TLS.TestTLS", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*Request](in)
-		return impl.TestTLS(ctx, req)
+		resp, err := impl.TestTLS(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
 }

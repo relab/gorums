@@ -130,23 +130,43 @@ type BetaServer interface {
 }
 
 func RegisterAlphaServer(srv *gorums.Server, impl AlphaServer) {
-	srv.RegisterHandler("multiservice.Alpha.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("multiservice.Alpha.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*Request](in)
-		return impl.Heartbeat(ctx, req)
+		resp, err := impl.Heartbeat(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler("multiservice.Alpha.Read", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("multiservice.Alpha.Read", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*Request](in)
-		return impl.Read(ctx, req)
+		resp, err := impl.Read(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
 }
 
 func RegisterBetaServer(srv *gorums.Server, impl BetaServer) {
-	srv.RegisterHandler("multiservice.Beta.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("multiservice.Beta.Heartbeat", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*Request](in)
-		return impl.Heartbeat(ctx, req)
+		resp, err := impl.Heartbeat(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler("multiservice.Beta.Write", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("multiservice.Beta.Write", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*Request](in)
-		return impl.Write(ctx, req)
+		resp, err := impl.Write(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
 }

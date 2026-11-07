@@ -70,15 +70,20 @@ type CorrectableTestServer interface {
 }
 
 func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTestServer) {
-	srv.RegisterHandler("correctable.CorrectableTest.Correctable", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("correctable.CorrectableTest.Correctable", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*Request](in)
-		return impl.Correctable(ctx, req)
+		resp, err := impl.Correctable(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler("correctable.CorrectableTest.CorrectableStream", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("correctable.CorrectableTest.CorrectableStream", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*Request](in)
 		impl.CorrectableStream(ctx, req, func(resp *Response) {
 			send(resp)
 		})
-		return nil, nil
+		return nil
 	})
 }
