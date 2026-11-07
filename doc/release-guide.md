@@ -107,7 +107,28 @@ Install it again after the program changes.
 
 5. Wait for CI to pass on the pull request.
 
-6. Publish the release.
+6. Approve and wait for the smoke checks.
+
+   The push of the release branch starts the `release-smoke` workflow.
+   It runs four jobs:
+
+   - `guard` checks that the branch is `release/<version>` for the version in `version.go`;
+   - `local-checks` runs `make integrationtest`, `make stresstest`, `make lint`, `make modernize` (which must change nothing), and `make goplscheck`;
+   - `docker-smoke` runs `make smoke-docker`, a multi-host sweep on Docker containers;
+   - `cluster-smoke` runs the same smoke sweep on the bbchain cluster, and checks it with `sweep -verify`.
+
+   `cluster-smoke` waits for your approval of the `cluster` environment.
+   Approve it in the Actions tab of the run (Review deployments).
+   While it waits, a run for a newer push to the same branch waits too, so approve or reject it before you push again.
+   It needs the cluster access described in [Cluster Access](#cluster-access).
+
+   Each smoke job writes a verdict to its job summary.
+   The verdict lists each failed criterion, with the error of a failed run and the degraded nodes of a degraded run.
+   Each smoke job also uploads an artifact with its verdict and its full run directory, including `agg.csv`, the logs, and the raw results.
+
+   `publish` refuses to merge until all three of `local-checks`, `docker-smoke`, and `cluster-smoke` have succeeded on the pull request.
+
+7. Publish the release.
 
    ```shell
    gorums-release publish
@@ -137,6 +158,12 @@ These flags belong to one command:
 
 ## If Something Goes Wrong
 
+- If a smoke job fails, read its verdict in the job summary.
+  Fix the cause on the release branch and push; the workflow runs again.
+  To run a job again without a change, use "Re-run failed jobs" in the Actions tab.
+- If the cluster is down and the release cannot wait, merge the release pull request by hand in GitHub.
+  `publish` then publishes the merged pull request and prints a warning that names each smoke check that did not pass.
+  Use this only for an outage, and run the cluster smoke check again once the cluster is back.
 - If `prepare` fails, fix the cause and undo its changes before you run it again.
   Run `git restore .` for the changed files.
   Run `git clean -nd` to list the new files that code generation added, and `git clean -fd` to delete them.
@@ -147,3 +174,85 @@ These flags belong to one command:
   Never move or delete a tag that the Go module proxy has served.
 - If the proxy check times out, the release is still complete.
   Check later with `go list -m github.com/relab/gorums@vX.Y.Z` and `go list -m github.com/relab/gorums/benchkit@vX.Y.Z`.
+
+## Cluster Access
+
+The `cluster-smoke` job of the `release-smoke` workflow runs a smoke sweep on the bbchain cluster from a GitHub-hosted runner.
+It reaches the cluster over SSH through the UiS jump host, as the dedicated account `gorums`:
+
+```text
+GitHub runner ──ssh, ProxyJump only──► ssh4.ux.uis.no ──► driver (nebula or bb1) ──ssh──► pool hosts (bbN)
+                                       shared jump host;     runs sweep -driven;        run the benchmark
+                                       nothing runs here     holds /tmp/sweep-gorums
+```
+
+`ssh4.ux.uis.no` serves all UiS users, so it only forwards connections.
+No sweep, binary, or file is ever placed there.
+
+### Set Up Access
+
+Do this once, and again when you rotate the keys.
+
+1. Create two key pairs for the workflow, without a passphrase: one for the cluster hosts and one for the jump host.
+
+   ```shell
+   ssh-keygen -t ed25519 -C gorums-release-smoke -N '' -f gorums-release-smoke
+   ssh-keygen -t ed25519 -C gorums-release-smoke-jump -N '' -f gorums-release-smoke-jump
+   ```
+
+2. Install the public keys for the dedicated account `gorums`, not your own account.
+   A dedicated account has its own `/tmp/sweep-gorums` and owns none of your processes, so a release run cannot stop your sweeps.
+   Add these two lines to the account's `~/.ssh/authorized_keys`:
+
+   ```text
+   command="/bin/false",restrict,port-forwarding,permitopen="<driver host>:22" <contents of gorums-release-smoke-jump.pub>
+   from="<jump host IP>,<cluster network>",restrict,port-forwarding,agent-forwarding,pty <contents of gorums-release-smoke.pub>
+   ```
+
+   - The first line lets the jump-host key only forward SSH to the driver.
+     The forced command makes any command session run `/bin/false` instead, so the key runs nothing on the shared jump host; `ProxyJump` still works, because forwarding is not a command session.
+     Write `<driver host>` exactly as the `HostName` of the driver in `CLUSTER_SSH_CONFIG`; `permitopen` takes no wildcards.
+   - The second line lets the cluster key work on the driver and the pool hosts, with the agent forwarding that `sweep -detach` needs to dial the pool.
+     `from=` admits it only from the jump host and the cluster network, so the jump host refuses it from the GitHub runner.
+     Write IP addresses or CIDR ranges, not names: `sshd` does not resolve names by default.
+   - If the jump host and the cluster hosts share one home directory, both lines go in that one file.
+     Otherwise, the first line goes on the jump host, and the second on the driver and the pool hosts.
+
+3. In the repository settings, create the environment `cluster`:
+   - deployment branches: only the pattern `release/v*`;
+   - required reviewer: the maintainer;
+   - secrets, which hold only the two private keys:
+     - `CLUSTER_SSH_KEY`: the private key `gorums-release-smoke` from step 1;
+     - `CLUSTER_JUMP_SSH_KEY`: the private key `gorums-release-smoke-jump` from step 1;
+   - variables:
+     - `CLUSTER_SSH_CONFIG`: an SSH config with a `Host` entry for the jump host and for the driver, each with `User gorums`; the driver entry sets `ProxyJump` to the jump host's `Host` alias in the same file (sweep's SSH library does not read the `user@host` form);
+     - `CLUSTER_KNOWN_HOSTS`: the `known_hosts` lines of the jump host and the driver, keyed by the `HostName` that `ssh -G <alias>` prints, not by the alias; copy them from a `known_hosts` file that already trusts these hosts, for example with `ssh-keygen -F <HostName>`; the pool hosts need no lines, because the driver connects to them without host-key checks;
+     - `CLUSTER_JUMP`: the jump host's `Host` alias in `CLUSTER_SSH_CONFIG`;
+     - `CLUSTER_DRIVER`: `nebula` or `bb1`;
+     - `CLUSTER_HOSTS`: the pool, for example `bb[2-8],bb10,bb11`, with at least 9 hosts, since the smoke sweep runs `-test 9`; leave out the driver and known faulty hosts (bb9, bb16); every listed host must be reachable, because `sweep -check` fails on any unreachable host.
+
+4. In the repository settings under Actions, require approval for workflows from all outside collaborators.
+
+5. Check the access with the `cluster-check` workflow.
+   Push any commit to a branch named `release/v0-probe`, approve the `cluster` environment in the Actions tab, and wait for the job:
+
+   ```shell
+   git push origin HEAD:refs/heads/release/v0-probe
+   ```
+
+   The job first checks that the jump host runs no command for the account: `ssh <jump> true` must exit with the status of `/bin/false`.
+   It then runs `sweep -check -strict` from the driver.
+   It passes when every host is reachable, no benchmark port is busy, and no benchmark process is left over.
+   Then delete the branch:
+
+   ```shell
+   git push origin --delete release/v0-probe
+   ```
+
+The environment's keys reach only jobs that name the `cluster` environment, run from a `release/v*` branch, and are approved.
+Only people with write access can push such a branch, and a pull request from a fork runs without the secrets.
+
+### Rotate the Keys
+
+Create new key pairs, install the new public keys as in step 2, replace `CLUSTER_SSH_KEY` and `CLUSTER_JUMP_SSH_KEY`, and run the `cluster-check` workflow.
+Then remove the old public keys from every host.

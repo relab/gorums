@@ -1,0 +1,51 @@
+name: Cluster SSH
+description: >
+  Prepares SSH access to the bbchain cluster for sweep: loads the cluster key
+  and the jump-host key into an ssh-agent that later steps inherit, and writes
+  ~/.ssh/config and ~/.ssh/known_hosts. Pass the keys from the cluster
+  environment's secrets and the rest from its variables.
+inputs:
+  ssh-key:
+    description: The private key that the dedicated cluster account accepts on the driver and the pool hosts.
+    required: true
+  jump-ssh-key:
+    description: The private key that the dedicated cluster account accepts on the jump host, for forwarding only.
+    required: true
+  ssh-config:
+    description: The SSH config with the jump host, the driver, and the pool hosts.
+    required: true
+  known-hosts:
+    description: The known_hosts lines that pin the host keys of the jump host, the driver, and the pool hosts.
+    required: true
+runs:
+  using: composite
+  steps:
+    # sweep -detach forwards this agent to the driver, which uses it to dial the
+    # pool hosts; -collect uses it again later in the job. SSH clients offer
+    # agent keys in the order they were added. The cluster key comes first: if
+    # the hosts share a home directory, the driver also accepts the jump-host
+    # key, but only to run /bin/false.
+    - name: Start ssh-agent with the cluster keys
+      shell: bash
+      env:
+        SSH_KEY: ${{ inputs.ssh-key }}
+        JUMP_SSH_KEY: ${{ inputs.jump-ssh-key }}
+      run: |
+        eval "$(ssh-agent -s)" > /dev/null
+        printf '%s\n' "$SSH_KEY" | ssh-add -q -
+        printf '%s\n' "$JUMP_SSH_KEY" | ssh-add -q -
+        {
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID"
+        } >> "$GITHUB_ENV"
+
+    - name: Write the SSH config and known hosts
+      shell: bash
+      env:
+        SSH_CONFIG: ${{ inputs.ssh-config }}
+        KNOWN_HOSTS: ${{ inputs.known-hosts }}
+      run: |
+        install -d -m 700 ~/.ssh
+        printf '%s\n' "$SSH_CONFIG" > ~/.ssh/config
+        printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+        chmod 600 ~/.ssh/config ~/.ssh/known_hosts

@@ -1,0 +1,75 @@
+name: cluster-check
+# Proves that a GitHub-hosted runner can reach the bbchain cluster through the
+# jump host, that the jump host runs no commands for the CI account, and that
+# the pool is idle: it runs sweep -check -strict from the cluster-local driver. Run it after setting up or rotating cluster access, by
+# pushing a release/v0-probe* branch and approving the cluster environment.
+# Once this workflow is on the default branch, it can also be started by hand,
+# but only on a release/* ref, which the cluster environment admits:
+# gh workflow run cluster-check.yml --ref release/v0-probe. A manual run on any
+# other ref skips the job. See "Cluster Access" in doc/release-guide.md.
+on:
+  push:
+    branches: ["release/v0-probe*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  check:
+    # The cluster environment admits only release/v* branches; this keeps a
+    # manual run elsewhere from waiting for an approval it can never get.
+    if: startsWith(github.ref, 'refs/heads/release/')
+    runs-on: ubuntu-latest
+    environment: cluster
+    timeout-minutes: 15
+    # One job on the cluster at a time, across workflows.
+    concurrency:
+      group: bbchain-cluster
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: "go.mod"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      - uses: ./.github/actions/setup-protoc
+      - uses: ./.github/actions/cluster-ssh
+        with:
+          ssh-key: ${{ secrets.CLUSTER_SSH_KEY }}
+          jump-ssh-key: ${{ secrets.CLUSTER_JUMP_SSH_KEY }}
+          ssh-config: ${{ vars.CLUSTER_SSH_CONFIG }}
+          known-hosts: ${{ vars.CLUSTER_KNOWN_HOSTS }}
+
+      # The jump host must only forward connections. With the forced command
+      # in its key line, ssh exits with the status of /bin/false, which is 1;
+      # 0 means a command ran there, and 255 means ssh could not connect.
+      - name: Check that the jump host runs no commands
+        env:
+          CLUSTER_JUMP: ${{ vars.CLUSTER_JUMP }}
+        run: |
+          status=0
+          ssh -T -o BatchMode=yes "$CLUSTER_JUMP" true || status=$?
+          case $status in
+          0)
+            echo "::error::The jump host ran a command; its key line needs command=\"/bin/false\"."
+            exit 1
+            ;;
+          255)
+            echo "::error::Cannot connect to the jump host."
+            exit 1
+            ;;
+          esac
+
+      - name: Build sweep
+        run: |
+          make tools
+          make installgorums
+          make sweep
+
+      - name: Check the cluster hosts from the driver
+        working-directory: benchkit
+        env:
+          CLUSTER_HOSTS: ${{ vars.CLUSTER_HOSTS }}
+          CLUSTER_DRIVER: ${{ vars.CLUSTER_DRIVER }}
+        run: ./cmd/sweep/sweep -check -strict -hosts "$CLUSTER_HOSTS" -detach "$CLUSTER_DRIVER"
