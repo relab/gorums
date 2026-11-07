@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/metadata"
 )
 
 // eagerReconnectBaseDelay and eagerReconnectMaxDelay bound the delay between
@@ -145,6 +146,13 @@ func (c *OutboundChannel) run() {
 		// from the queue but not sent comes back in req.
 		req = s.sendLoop(req)
 		c.setStreamUp(s, false)
+		if s.peerDraining.Load() {
+			// The server is shutting down: requests that were not sent fail
+			// instead of waiting for its replacement.
+			c.failRequest(req, ErrServerDraining)
+			req = nil
+			c.failQueued(ErrServerDraining)
+		}
 		accepted, refusalErr := s.outcome()
 		if accepted {
 			b.recovered()
@@ -193,6 +201,18 @@ func (c *OutboundChannel) await(b *backoff) (req *Request, ok bool) {
 			return &r, true
 		case <-b.retry:
 			return nil, true
+		}
+	}
+}
+
+// failQueued fails the requests in the send queue with err.
+func (c *OutboundChannel) failQueued(err error) {
+	for {
+		select {
+		case r := <-c.queue.ch:
+			c.queue.fail(r, err)
+		default:
+			return
 		}
 	}
 }
@@ -277,7 +297,7 @@ func (b *backoff) next() time.Time {
 // stream.
 func (c *OutboundChannel) open(suspect bool) (*session, error) {
 	ctx, cancel := context.WithCancel(c.ctx)
-	st, err := NewGorumsClient(c.conn).NodeStream(ctx)
+	st, err := NewGorumsClient(c.conn).NodeStream(metadata.AppendToOutgoingContext(ctx, drainCapableKey, "1"))
 	if err != nil {
 		cancel()
 		return nil, err

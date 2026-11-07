@@ -36,6 +36,7 @@ type session struct {
 	requeue bool
 
 	pending pendingCalls
+	drainState
 
 	drain       chan struct{} // closed when the session starts draining
 	draining    atomic.Bool
@@ -77,6 +78,7 @@ func newSession(ctx context.Context, cancel context.CancelFunc, e *endpoint, str
 		requeue:        requeue,
 		drain:          make(chan struct{}),
 		verdict:        make(chan struct{}),
+		drained:        make(chan struct{}),
 	}
 }
 
@@ -101,6 +103,11 @@ func (s *session) sendLoop(req *Request) *Request {
 		}
 		if err := req.Ctx.Err(); err != nil {
 			req.sendErrorResponse(s.id, err)
+			req = nil
+			continue
+		}
+		if s.rejectsDraining(req) {
+			req.sendErrorResponse(s.id, ErrServerDraining)
 			req = nil
 			continue
 		}
@@ -136,6 +143,9 @@ func (s *session) send(req Request) bool {
 	}
 	if s.healthy() {
 		s.recordHealth(nil)
+	}
+	if req.Msg.GetMessageSeqNo() == 0 && isControl(req.Msg) {
+		s.controlSent(req.Msg)
 	}
 	if req.wantSendConfirmation() {
 		req.deliver(response{NodeID: s.id})
@@ -240,12 +250,25 @@ func (s *session) receiveFailed(err error) {
 // error.
 func (s *session) handle(msg *Message) {
 	msgID := msg.GetMessageSeqNo()
+	if msgID == 0 && isControl(msg) {
+		s.control(msg)
+		return
+	}
 	if isServerSequenceNumber(msgID) == s.serverRequests {
+		if s.finalReceived.Load() {
+			// The peer sent this request after its final frame.
+			s.reply(newErrorReply(msg, ErrServerDraining))
+			return
+		}
 		if s.handler != nil {
 			ctx := msg.appendToIncomingContext(s.ctx)
-			s.requests.push(s.ctx, func(release func()) {
+			s.work.Add(1)
+			if !s.requests.push(s.ctx, func(release func()) {
+				defer s.work.Add(-1)
 				s.handler.HandleRequest(ctx, s.id, msg, release, s.reply)
-			})
+			}) {
+				s.work.Add(-1)
+			}
 		}
 		return
 	}
@@ -282,6 +305,7 @@ func (s *session) fail(err error) {
 // pending calls; see [session.retryOrFail]. It is idempotent.
 func (s *session) end(err error) {
 	s.cancel()
+	s.closeDrained()
 	for _, req := range s.pending.drain() {
 		s.retryOrFail(req, err)
 	}
@@ -331,6 +355,8 @@ func (s *session) outcome() (accepted bool, refusal error) {
 // every call with [ErrStreamDown].
 func (s *session) retryOrFail(req Request, err error) {
 	switch refusal := s.refused(); {
+	case isServerDraining(err):
+		req.sendErrorResponse(s.id, ErrServerDraining)
 	case refusal != nil:
 		req.sendErrorResponse(s.id, refusal)
 	case s.requeue && isResourceExhausted(err):

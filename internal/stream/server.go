@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"sync"
 )
 
 // acceptedKey is the response header that a server sends on each stream it
@@ -31,12 +32,16 @@ type Server struct {
 	onConnect func(context.Context)
 	acceptor  PeerAcceptor
 	UnimplementedGorumsServer
+
+	mu       sync.Mutex
+	channels map[*InboundChannel]struct{} // streams being served
+	draining bool                         // new streams are refused
 }
 
 // NewServer returns a Server that accepts streams with acceptor and calls
 // onConnect, if non-nil, for each accepted stream.
 func NewServer(onConnect func(context.Context), acceptor PeerAcceptor) *Server {
-	return &Server{onConnect: onConnect, acceptor: acceptor}
+	return &Server{onConnect: onConnect, acceptor: acceptor, channels: make(map[*InboundChannel]struct{})}
 }
 
 // NodeStream serves one client stream on the channel the acceptor returns for
@@ -47,8 +52,56 @@ func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 		return err
 	}
 	defer cleanup()
+	if !s.track(ch) {
+		return ErrServerDraining
+	}
+	defer s.untrack(ch)
 	if s.onConnect != nil {
 		s.onConnect(srv.Context())
 	}
 	return ch.Serve()
+}
+
+// track registers ch and reports false if the server is draining.
+func (s *Server) track(ch *InboundChannel) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.draining {
+		return false
+	}
+	s.channels[ch] = struct{}{}
+	return true
+}
+
+// untrack removes ch.
+func (s *Server) untrack(ch *InboundChannel) {
+	s.mu.Lock()
+	delete(s.channels, ch)
+	s.mu.Unlock()
+}
+
+// Drain refuses new streams and runs the drain protocol on every stream that
+// the server serves, whether or not the stream is tracked in a configuration.
+// It waits until each stream's dialer has sent its last request and this
+// server has finished the requests it accepted, and reports whether that
+// happened before ctx ended. Streams whose dialer does not implement the
+// protocol are not waited for.
+func (s *Server) Drain(ctx context.Context) bool {
+	s.mu.Lock()
+	s.draining = true
+	var waits []<-chan struct{}
+	for ch := range s.channels {
+		if done := ch.Drain(); done != nil {
+			waits = append(waits, done)
+		}
+	}
+	s.mu.Unlock()
+	for _, done := range waits {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return false
+		}
+	}
+	return true
 }

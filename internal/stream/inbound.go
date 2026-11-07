@@ -43,6 +43,8 @@ type InboundChannel struct {
 	endpoint
 	session   *session
 	closeOnce func() error
+	// drainable is set when the dialer implements the drain protocol.
+	drainable bool
 }
 
 // NewInboundChannel returns a channel over stream and starts its send loop.
@@ -56,6 +58,7 @@ func NewInboundChannel(ctx context.Context, id ID, stream InboundStream, opts In
 	c := &InboundChannel{
 		endpoint: newEndpoint(ctx, id, opts.SendBufferSize, opts.RecvBufferSize, opts.Handler, opts.Latency),
 	}
+	c.drainable = drainCapable(ctx)
 	c.waitingReplies = opts.WaitingReplies
 	c.unmatchedErrors.logger = opts.Logger
 	sessionCtx, cancel := context.WithCancel(c.ctx)
@@ -93,6 +96,23 @@ func (c *InboundChannel) accept(stream InboundStream) {
 // fails, and returns the receive error.
 func (c *InboundChannel) Serve() error {
 	return c.session.receive()
+}
+
+// Drainable reports whether the dialer implements the drain protocol.
+func (c *InboundChannel) Drainable() bool {
+	return c.drainable
+}
+
+// Drain tells the dialer that this node is draining. The dialer then stops
+// sending, and the returned channel closes once this node has finished the
+// requests it accepted and sent the drained frame, or when the channel closes.
+// Drain returns nil if the dialer does not implement the drain protocol.
+func (c *InboundChannel) Drain() <-chan struct{} {
+	if !c.drainable {
+		return nil
+	}
+	c.session.startLocalDrain()
+	return c.session.drained
 }
 
 // StreamUp reports true; an inbound channel is detached from its node when its
