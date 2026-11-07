@@ -1413,7 +1413,8 @@ The same rule holds for every call type:
 
 To inspect or replace the responses, the interceptor gives `next` a new `send` function.
 This function inspects or replaces each response, and then calls the original `send`.
-The error that `next` returns is the call's final status; the server sends a non-nil error to the caller as a reply.
+The server sends a non-nil error that `next` returns to the caller as one more reply, after the sent responses.
+A streaming caller receives this error as one more response; the call still ends only when the caller stops iterating or its context ends.
 An interceptor that does not need the responses passes its `send` argument to `next` unchanged.
 It must not pass `nil`, because then the handler cannot send its responses.
 

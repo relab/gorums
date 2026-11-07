@@ -20,7 +20,9 @@ type (
 	// Handler processes a request. It calls send once for each response:
 	// exactly once for a unary call, once per response for a streaming call,
 	// and never for a one-way call. A non-nil returned error is sent to the
-	// caller as the call's final reply.
+	// caller as one more reply, after the sent responses. A streaming caller
+	// receives it as one more response; its call still ends only when the
+	// caller stops iterating or its context ends.
 	Handler func(ctx ServerContext, in *Message, send func(proto.Message)) error
 	// ServerInterceptor intercepts and may modify incoming requests and outgoing
 	// responses of every call type. It receives the request and the send
