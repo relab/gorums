@@ -1417,6 +1417,7 @@ A call either responds or fails.
 If `next` returns an error before any response was sent, the server sends the error to the caller as the call's reply.
 An error returned after a response was sent is a programming error.
 The server discards it and logs it with the logger set by `gorums.WithServerLogger`, which defaults to the standard logger.
+The servers that `gorumstest` starts use `gorumstest.ServerLogger`, which fails the test instead.
 A streaming handler that must report a problem after its first response puts it in a response message.
 An interceptor that does not need the responses passes its `send` argument to `next` unchanged.
 It must not pass `nil`, because then the handler cannot send its responses.
