@@ -82,20 +82,23 @@ var registerInterface = `
 
 func {{$names.Register}}({{$reg.srv}} *{{$gorumsServer}}, {{$reg.impl}} {{$names.Interface}}) {
 	{{- range .Service.Methods}}
-	{{- $local := localNames "ctx in req resp send" $context $gorumsMessage $protoMessage $asProto (in $genFile .) (out $genFile .) $reg.impl}}
-	{{$reg.srv}}.RegisterHandler("{{.Desc.FullName}}", func({{$local.ctx}} {{$context}}, {{$local.in}} *{{$gorumsMessage}}, {{if isStreamingServer .}}{{$local.send}}{{else}}_{{end}} func({{$protoMessage}})) ({{$protoMessage}}, error) {
+	{{- $local := localNames "ctx in req resp send err" $context $gorumsMessage $protoMessage $asProto (in $genFile .) (out $genFile .) $reg.impl}}
+	{{$reg.srv}}.RegisterHandler("{{.Desc.FullName}}", func({{$local.ctx}} {{$context}}, {{$local.in}} *{{$gorumsMessage}}, {{if isOneway .}}_{{else}}{{$local.send}}{{end}} func({{$protoMessage}})) error {
 		{{$local.req}} := {{$asProto}}[*{{in $genFile .}}]({{$local.in}})
 		{{- if isOneway .}}
 		{{$reg.impl}}.{{.GoName}}({{$local.ctx}}, {{$local.req}})
-		return nil, nil
 		{{- else if isStreamingServer .}}
 		{{$reg.impl}}.{{.GoName}}({{$local.ctx}}, {{$local.req}}, func({{$local.resp}} *{{out $genFile .}}) {
 			{{$local.send}}({{$local.resp}})
 		})
-		return nil, nil
 		{{- else }}
-		return {{$reg.impl}}.{{.GoName}}({{$local.ctx}}, {{$local.req}})
+		{{$local.resp}}, {{$local.err}} := {{$reg.impl}}.{{.GoName}}({{$local.ctx}}, {{$local.req}})
+		if {{$local.err}} != nil {
+			return {{$local.err}}
+		}
+		{{$local.send}}({{$local.resp}})
 		{{- end}}
+		return nil
 	})
 	{{- end}}
 }
