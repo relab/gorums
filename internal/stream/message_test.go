@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestMessageConstructorsPreservePayloadAndMetadata(t *testing.T) {
@@ -36,6 +37,29 @@ func TestMessageConstructorsPreservePayloadAndMetadata(t *testing.T) {
 			}
 			if values := md.Get("x-role"); len(values) != 1 || values[0] != "replica" {
 				t.Fatalf("x-role = %v, want [replica]", values)
+			}
+		})
+	}
+}
+
+func TestMessageFromPayloadMatchesBuilder(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		ctx     context.Context
+		payload []byte
+	}{
+		{name: "NilPayload", ctx: context.Background()},
+		{name: "EmptyPayload", ctx: context.Background(), payload: []byte{}},
+		{name: "PayloadAndMetadata", ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-id", "42")), payload: []byte("request")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NewMessageFromPayload(tc.ctx, 7, "test.Method", tc.payload)
+			want := messageWithBuilder(tc.ctx, tc.payload)
+			if !proto.Equal(got, want) {
+				t.Errorf("NewMessageFromPayload = %v, want %v", got, want)
+			}
+			if (got.GetPayload() == nil) != (want.GetPayload() == nil) {
+				t.Errorf("payload nil = %v, want %v", got.GetPayload() == nil, want.GetPayload() == nil)
 			}
 		})
 	}

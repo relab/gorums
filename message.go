@@ -22,10 +22,9 @@ type MetadataEntry = stream.MetadataEntry
 // request's message ID and method, and either the status of err or the
 // marshaled resp. A marshal failure becomes the response status.
 func newResponse(in *stream.Message, resp proto.Message, err error) *stream.Message {
-	out := stream.Message_builder{
-		MessageSeqNo: in.GetMessageSeqNo(), // routes the response to the pending call
-		Method:       in.GetMethod(),       // selects the response type on the client
-	}.Build()
+	out := &stream.Message{}
+	out.SetMessageSeqNo(in.GetMessageSeqNo()) // routes the response to the pending call
+	out.SetMethod(in.GetMethod())             // selects the response type on the client
 	if err == nil && resp != nil {
 		var payload []byte
 		if payload, err = proto.Marshal(resp); err == nil {
