@@ -658,7 +658,8 @@ A handler delivers every response through its `send func(proto.Message)` callbac
 * A streaming handler calls `send` once for each response.
 * A one-way handler never calls `send`, and the server sends no response.
 
-A handler that returns a non-nil error ends the call with an error reply.
+A handler that returns a non-nil error gets one more reply, an error reply, after its sent responses.
+For a streaming call, this reply does not end the call on the client; the call ends when the caller stops iterating or its context ends.
 `Server.HandleRequest` builds the response envelope for each sent response and for a returned error, so handlers never touch envelopes.
 
 ```mermaid
