@@ -28,19 +28,26 @@ func NewMessage(ctx context.Context, msgID uint64, method string, msg proto.Mess
 // payload bytes. It is useful when the same request body is sent to many nodes
 // but each node requires a different message sequence number.
 func NewMessageFromPayload(ctx context.Context, msgID uint64, method string, payload []byte) *Message {
-	msgBuilder := Message_builder{
-		MessageSeqNo: msgID,
-		Method:       method,
-		Payload:      payload,
+	msg := &Message{}
+	msg.SetMessageSeqNo(msgID)
+	msg.SetMethod(method)
+	if payload != nil {
+		msg.SetPayload(payload)
 	}
 	md, _ := metadata.FromOutgoingContext(ctx)
+	var entries []*MetadataEntry
 	for k, vv := range md {
 		for _, v := range vv {
-			entry := MetadataEntry_builder{Key: k, Value: v}.Build()
-			msgBuilder.Entry = append(msgBuilder.Entry, entry)
+			entry := &MetadataEntry{}
+			entry.SetKey(k)
+			entry.SetValue(v)
+			entries = append(entries, entry)
 		}
 	}
-	return msgBuilder.Build()
+	if len(entries) != 0 {
+		msg.SetEntry(entries)
+	}
+	return msg
 }
 
 // appendToIncomingContext appends client-specific metadata from the [Message] proto message

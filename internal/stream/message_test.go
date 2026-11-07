@@ -3,9 +3,11 @@ package stream
 import (
 	"context"
 	"reflect"
+	"slices"
 	"testing"
 
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestMessageConstructorsPreservePayloadAndMetadata(t *testing.T) {
@@ -36,6 +38,38 @@ func TestMessageConstructorsPreservePayloadAndMetadata(t *testing.T) {
 			}
 			if values := md.Get("x-role"); len(values) != 1 || values[0] != "replica" {
 				t.Fatalf("x-role = %v, want [replica]", values)
+			}
+		})
+	}
+}
+
+func TestMessageFromPayloadMatchesBuilder(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		ctx         context.Context
+		payload     []byte
+		wantEntries []string
+	}{
+		{name: "NilPayload", ctx: context.Background()},
+		{name: "EmptyPayload", ctx: context.Background(), payload: []byte{}},
+		{name: "PayloadAndMetadata", ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-id", "42")), payload: []byte("request"), wantEntries: []string{"x-id=42"}},
+		{name: "RepeatedMetadataValues", ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-id", "42", "x-id", "43")), payload: []byte("request"), wantEntries: []string{"x-id=42", "x-id=43"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NewMessageFromPayload(tc.ctx, 7, "test.Method", tc.payload)
+			want := messageWithBuilder(tc.ctx, tc.payload)
+			if !proto.Equal(got, want) {
+				t.Errorf("NewMessageFromPayload = %v, want %v", got, want)
+			}
+			if (got.GetPayload() == nil) != (want.GetPayload() == nil) {
+				t.Errorf("payload nil = %v, want %v", got.GetPayload() == nil, want.GetPayload() == nil)
+			}
+			var entries []string
+			for _, entry := range got.GetEntry() {
+				entries = append(entries, entry.GetKey()+"="+entry.GetValue())
+			}
+			if !slices.Equal(entries, tc.wantEntries) {
+				t.Errorf("metadata entries = %v, want %v", entries, tc.wantEntries)
 			}
 		})
 	}

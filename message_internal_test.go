@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/emptypb"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -42,6 +43,7 @@ func TestMessageNewResponse(t *testing.T) {
 		want *stream.Message
 	}{
 		{name: "NilResp", resp: nil, err: nil, want: response(nil, codes.OK, "")},
+		{name: "EmptyResp", resp: &emptypb.Empty{}, err: nil, want: response([]byte{}, codes.OK, "")},
 		{name: "Resp", resp: pb.String("response"), err: nil, want: response(payload, codes.OK, "")},
 		{name: "StatusErr", resp: nil, err: status.Error(codes.NotFound, "missing"), want: response(nil, codes.NotFound, "missing")},
 		{name: "PlainErr", resp: nil, err: errors.New("failed"), want: response(nil, codes.Unknown, "failed")},
@@ -52,6 +54,9 @@ func TestMessageNewResponse(t *testing.T) {
 			got := newResponse(in, tt.resp, tt.err)
 			if diff := cmp.Diff(tt.want, got, protocmp.Transform()); diff != "" {
 				t.Errorf("newResponse mismatch (-want, +got):\n%s", diff)
+			}
+			if (got.GetPayload() == nil) != (tt.want.GetPayload() == nil) {
+				t.Errorf("payload nil = %v, want %v", got.GetPayload() == nil, tt.want.GetPayload() == nil)
 			}
 		})
 	}
