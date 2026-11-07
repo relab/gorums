@@ -40,14 +40,16 @@ func (to *testOptions) shouldSkipGoleak() bool {
 
 // serverFunc returns a server creation function based on the server options.
 // If srvFn is nil, it returns a default server function that creates servers
-// with the provided server options and registers default handlers.
+// with [ServerLogger] for t, followed by the provided server options, and
+// registers default handlers.
 // If srvFn is not nil and server options are provided, it panics since
 // options cannot be applied to a custom server function.
-func (to *testOptions) serverFunc(srvFn func(i int) ServerIface) func(i int) ServerIface {
+func (to *testOptions) serverFunc(t testing.TB, srvFn func(i int) ServerIface) func(i int) ServerIface {
 	if srvFn == nil {
 		// Use default server, potentially with custom options
+		opts := append([]gorums.ServerOption{ServerLogger(t)}, to.serverOpts...)
 		return func(i int) ServerIface {
-			return newDefaultServer(i, to.serverOpts...)
+			return newDefaultServer(i, opts...)
 		}
 	}
 	if len(to.serverOpts) > 0 {

@@ -1,7 +1,9 @@
 package gorumstest
 
 import (
+	"bytes"
 	"fmt"
+	"log"
 	"testing"
 	"time"
 
@@ -47,7 +49,7 @@ func Servers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []stri
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
 	if srvFn == nil {
-		srvFn = func(i int) ServerIface { return newDefaultServer(i) }
+		srvFn = func(i int) ServerIface { return newDefaultServer(i, ServerLogger(t)) }
 	}
 	addrs, stopFn := servers.Start(t, numServers, srvFn)
 	// Register server cleanup SECOND so it runs BEFORE goleak check
@@ -96,13 +98,14 @@ func LocalServers(t testing.TB, n int, opts ...Option) []*gorums.Server {
 }
 
 // localServerOptions returns the [gorums.LocalServerOption]s that
-// [LocalServers] passes to [gorums.NewLocalServers]: the test's dial options
-// and listeners, followed by opts in order. It panics on an Option of any
-// other type.
+// [LocalServers] passes to [gorums.NewLocalServers]: the test's dial options,
+// listeners, and [ServerLogger], followed by opts in order. It panics on an
+// Option of any other type.
 func localServerOptions(t testing.TB, opts []Option) []gorums.LocalServerOption {
 	localOpts := []gorums.LocalServerOption{
 		gorums.WithLocalDialOptions(DialOptions(t)),
 		gorums.WithLocalListeners(servers.ListenFunc(t)),
+		gorums.WithLocalServerOptions(ServerLogger(t)),
 	}
 	for _, opt := range opts {
 		switch o := opt.(type) {
@@ -117,6 +120,26 @@ func localServerOptions(t testing.TB, opts []Option) []gorums.LocalServerOption 
 		}
 	}
 	return localOpts
+}
+
+// ServerLogger returns a [gorums.ServerOption] that sets a server logger that
+// fails t with t.Errorf for each logged message. A server logs only
+// programming errors, such as a handler that returns an error after it calls
+// send, so a test that causes one fails. [LocalServers] and the default
+// servers of [Config], [Node], and [Servers] use it. A custom srvFn passes it
+// to [gorums.NewServer] to get the same check. A later
+// [gorums.WithServerLogger] option replaces it, for a test that causes such
+// an error on purpose.
+func ServerLogger(t testing.TB) gorums.ServerOption {
+	return gorums.WithServerLogger(log.New(testErrorWriter{t}, "", 0))
+}
+
+// testErrorWriter is an [io.Writer] that fails t with each written message.
+type testErrorWriter struct{ t testing.TB }
+
+func (w testErrorWriter) Write(p []byte) (int, error) {
+	w.t.Errorf("%s", bytes.TrimSuffix(p, []byte("\n")))
+	return len(p), nil
 }
 
 // WaitForPeers blocks until every server in srvs is connected to all the

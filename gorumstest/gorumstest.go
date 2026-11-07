@@ -154,7 +154,7 @@ func Config(t testing.TB, numServers int, srvFn func(i int) ServerIface, opts ..
 	}
 
 	// Start servers and register cleanup.
-	addrs, stopFn := servers.Start(t, numServers, testOpts.serverFunc(srvFn))
+	addrs, stopFn := servers.Start(t, numServers, testOpts.serverFunc(t, srvFn))
 	stopAllFn := func() { stopFn() } // wrap to call without arguments to stop all servers
 	t.Cleanup(stopAllFn)
 
