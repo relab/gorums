@@ -17,14 +17,17 @@ import (
 )
 
 type (
-	// Handler processes a request and returns its response. The send callback
-	// sends each response of a streaming call. A handler that returns a nil
-	// response and a nil error sends no reply.
-	Handler func(ServerContext, *Message, func(proto.Message)) (proto.Message, error)
-	// ServerInterceptor intercepts and may modify incoming requests and outgoing responses.
-	// It receives a ServerContext, the incoming Message, a streaming response
-	// sender, and the next Handler. It returns the response and an error.
-	ServerInterceptor func(ServerContext, *Message, func(proto.Message), Handler) (proto.Message, error)
+	// Handler processes a request. It calls send once for each response:
+	// exactly once for a unary call, once per response for a streaming call,
+	// and never for a one-way call. A non-nil returned error is sent to the
+	// caller as the call's final reply.
+	Handler func(ctx ServerContext, in *Message, send func(proto.Message)) error
+	// ServerInterceptor intercepts and may modify incoming requests and outgoing
+	// responses of every call type. It receives the request and the send
+	// function of the call, and calls next to continue the chain. To observe or
+	// modify responses, it passes next a send function that wraps send. To
+	// reject a request, it returns an error without calling next.
+	ServerInterceptor func(ctx ServerContext, in *Message, send func(proto.Message), next Handler) error
 )
 
 // Server serves Gorums calls on registered handlers, and can call its peers
@@ -193,7 +196,7 @@ func chainInterceptors(final Handler, interceptors ...ServerInterceptor) Handler
 	handler := final
 	for _, curr := range slices.Backward(interceptors) {
 		next := handler
-		handler = func(ctx ServerContext, in *Message, send func(proto.Message)) (proto.Message, error) {
+		handler = func(ctx ServerContext, in *Message, send func(proto.Message)) error {
 			return curr(ctx, in, send, next)
 		}
 	}
@@ -206,8 +209,8 @@ func chainInterceptors(final Handler, interceptors ...ServerInterceptor) Handler
 //
 // send is invoked in two infrastructure-level error cases regardless of call type:
 // no handler is registered for the method, or the request cannot be unmarshaled.
-// For requests that reach the handler: one-way handlers return nil, nil and send
-// is not invoked; two-way handlers return a response which is delivered via send.
+// For requests that reach the handler, send is invoked once for each response
+// the handler sends, and once more if the handler returns an error.
 //
 // This is the "default interceptor"; it is the first and last handler in the chain.
 // It calls release only when the handler or an interceptor calls
@@ -235,16 +238,12 @@ func (s *Server) HandleRequest(ctx context.Context, senderID ID, reqMsg *stream.
 	}
 
 	in := &Message{Proto: msg, Message: reqMsg}
-	out, err := handler(srvCtx, in, func(resp proto.Message) {
+	err = handler(srvCtx, in, func(resp proto.Message) {
 		send(newResponse(reqMsg, resp, nil))
 	})
-	// If there is no response and no error, we do not send anything back to the client.
-	// This corresponds to a unidirectional message from client to server, where clients
-	// are not expected to receive a response.
-	if out == nil && err == nil {
-		return
+	if err != nil {
+		send(newResponse(reqMsg, nil, err))
 	}
-	send(newResponse(reqMsg, out, err))
 }
 
 // Serve serves on the externally supplied listener and records it so that

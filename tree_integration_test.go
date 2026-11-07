@@ -69,7 +69,7 @@ func TestTreeMulticast(t *testing.T) {
 
 			for i, srv := range servers {
 				tree := trees[i]
-				srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+				srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) error {
 					ctx.Release()
 					if children := tree.ChildrenOf(srv.NodeID()); len(children) > 0 {
 						req := gorums.AsProto[*pb.StringValue](in)
@@ -81,7 +81,7 @@ func TestTreeMulticast(t *testing.T) {
 					received[srv.NodeID()]++
 					mu.Unlock()
 					wg.Done()
-					return nil, nil
+					return nil
 				})
 			}
 
@@ -134,14 +134,14 @@ func TestTreeMulticastRelayOrder(t *testing.T) {
 					tree := trees[i]
 					children := tree.ChildrenOf(srv.NodeID())
 					relayedOne := make(chan struct{}) // closed when this node has relayed "1"
-					srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+					srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) error {
 						defer wg.Done()
 						req := gorums.AsProto[*pb.StringValue](in)
 						if len(children) == 0 {
 							mu.Lock()
 							leafOrder[srv.NodeID()] = append(leafOrder[srv.NodeID()], req.GetValue())
 							mu.Unlock()
-							return nil, nil
+							return nil
 						}
 						var relay *gorums.OnewayAsync
 						if tt.relayBeforeRelease {
@@ -160,7 +160,7 @@ func TestTreeMulticastRelayOrder(t *testing.T) {
 						if err := relay.Wait(); err != nil {
 							t.Errorf("node %d: relay %q: %v", srv.NodeID(), req.GetValue(), err)
 						}
-						return nil, nil
+						return nil
 					})
 				}
 
@@ -216,15 +216,16 @@ func TestTreeQuorumCall(t *testing.T) {
 
 			for i, srv := range servers {
 				tree := trees[i]
-				srv.RegisterHandler(mock.GetValueMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+				srv.RegisterHandler(mock.GetValueMethod, func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 					// Release before blocking on the children, so that the
 					// next request on this stream can start meanwhile.
 					ctx.Release()
 					total, err := aggregate(ctx, tree, srv.NodeID())
 					if err != nil {
-						return nil, err
+						return err
 					}
-					return pb.Int32(total), nil
+					send(pb.Int32(total))
+					return nil
 				})
 			}
 
@@ -254,18 +255,19 @@ func TestTreeExternalCaller(t *testing.T) {
 
 	for i, srv := range servers {
 		tree := trees[i]
-		srv.RegisterHandler(mock.GetValueMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+		srv.RegisterHandler(mock.GetValueMethod, func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 			ctx.Release()
 			total := int32(srv.NodeID())
 			if children := tree.ChildrenOf(srv.NodeID()); len(children) > 0 {
 				for r := range mockcall.Int32QuorumCall(ctx, children, 0).Results() {
 					if r.Err != nil {
-						return nil, fmt.Errorf("child %d: %w", r.NodeID, r.Err)
+						return fmt.Errorf("child %d: %w", r.NodeID, r.Err)
 					}
 					total += r.Value.GetValue()
 				}
 			}
-			return pb.Int32(total), nil
+			send(pb.Int32(total))
+			return nil
 		})
 	}
 

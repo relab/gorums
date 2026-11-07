@@ -125,11 +125,12 @@ func symmetricServers(t *testing.T, n int, serverOpts ...gorums.ServerOption) *S
 func registerReplyDroppingPeer(srv *gorums.Server, drop int64) {
 	var remaining atomic.Int64
 	remaining.Store(drop)
-	srv.RegisterHandler("benchmark.Benchmark.QuorumCall", func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("benchmark.Benchmark.QuorumCall", func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		if remaining.Add(-1) >= 0 {
-			return nil, nil // no response and no error: nothing is sent back
+			return nil // no send and no error: the server sends no reply
 		}
-		return gorums.AsProto[*Echo](in), nil
+		send(gorums.AsProto[*Echo](in))
+		return nil
 	})
 }
 

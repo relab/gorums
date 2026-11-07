@@ -1398,74 +1398,63 @@ Gorums also supports server-side interceptors that wrap inbound RPC handlers, si
 A server-side interceptor implements the `gorums.ServerInterceptor` signature:
 
 ```go
-type ServerInterceptor func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error)
+type ServerInterceptor func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) error
 ```
 
 You can pass multiple interceptors when starting a Gorums server.
 They can perform logging, latency injection, metadata insertion, and request validation before sending the request to the handler.
 
-How an interceptor sees the handler's responses depends on the call type:
+A handler sends each response through `send`, and returns an error if the call fails.
+The same rule holds for every call type:
 
-* Unary call: `next` returns the response.
-  The interceptor can inspect or replace the response before it returns it.
-* Streaming call: the handler calls `send` once for each response, and `next` returns `nil, nil`.
-  To see each response, the interceptor gives `next` a new `send` function.
-  This function inspects or replaces the response, and then calls the original `send`.
-  The [stream logging interceptor](#server-side-stream-logging-interceptor) below shows this pattern.
-* One-way call: the handler sends no response, and `next` returns `nil, nil`.
+* Unary call: the handler calls `send` once.
+* Streaming call: the handler calls `send` once for each response.
+* One-way call: the handler never calls `send`.
 
-An interceptor that does not need the streamed responses passes its `send` argument to `next` unchanged.
-It must not pass `nil`, because then a streaming handler cannot send its responses.
+To inspect or replace the responses, the interceptor gives `next` a new `send` function.
+This function inspects or replaces each response, and then calls the original `send`.
+The error that `next` returns is the call's final status; the server sends a non-nil error to the caller as a reply.
+An interceptor that does not need the responses passes its `send` argument to `next` unchanged.
+It must not pass `nil`, because then the handler cannot send its responses.
 
 Below are several examples based on the `examples/interceptors` package.
 
 #### Server-Side Logging Interceptor
 
+This interceptor logs each request, each response, and the handler's duration and error.
+It works for every call type, because it sees the responses through `send`:
+
 ```go
 func LoggingInterceptor(addr string) gorums.ServerInterceptor {
-    return func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
+    return func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) error {
         req := gorums.AsProto[proto.Message](in)
         log.Printf("[%s]: LoggingInterceptor(incoming): Method=%s, Message=%s", addr, in.GetMethod(), req)
 
         start := time.Now()
-        out, err := next(ctx, in, send)
-
-        duration := time.Since(start)
-        log.Printf("[%s]: LoggingInterceptor(outgoing): Method=%s, Duration=%s, Err=%v, Message=%v", addr, in.GetMethod(), duration, err, out)
-        return out, err
+        err := next(ctx, in, func(resp proto.Message) {
+            log.Printf("[%s]: LoggingInterceptor(outgoing): Method=%s, Message=%v", addr, in.GetMethod(), resp)
+            send(resp)
+        })
+        log.Printf("[%s]: LoggingInterceptor(done): Method=%s, Duration=%s, Err=%v", addr, in.GetMethod(), time.Since(start), err)
+        return err
     }
 }
 ```
 
-The logging interceptor above sees only unary responses, because `next` returns `nil` for a streaming call.
-
-#### Server-Side Stream Logging Interceptor
-
-This interceptor logs each response of a streaming call.
-It passes `next` a new `send` function, which logs the response and then calls the original `send`:
-
-```go
-func StreamLoggingInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
-    logAndSend := func(resp proto.Message) {
-        log.Printf("StreamLoggingInterceptor: Method=%s, Message=%v", in.GetMethod(), resp)
-        send(resp)
-    }
-    return next(ctx, in, logAndSend)
-}
-```
+A unary handler calls `send` before it returns, so the reply leaves the server before the interceptor's code after `next` runs.
 
 #### Delay and Metadata Interceptors
 
 Interceptors can inject arbitrary delays based on client properties or attach metadata to the incoming requests:
 
 ```go
-func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
+func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) error {
     delay := 50 * time.Millisecond
     time.Sleep(delay)
     return next(ctx, in, send)
 }
 
-func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
+func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) error {
     // Inject a custom metadata field for the handler
     entry := &gorums.MetadataEntry{}
     entry.SetKey("customKey")
@@ -1479,13 +1468,14 @@ func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func
 #### Rejecting Requests (Filtering)
 
 A server interceptor can also stop a request from reaching the handler entirely.
+It returns an error without calling `next`, and the server sends the error to the caller.
 
 ```go
 // NoFooAllowedInterceptor rejects requests for messages with key "foo".
-func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
+func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) error {
     if req, ok := gorums.AsProto[proto.Message](in).(T); ok {
         if req.GetKey() == "foo" {
-            return nil, fmt.Errorf("requests for key 'foo' are not allowed")
+            return fmt.Errorf("requests for key 'foo' are not allowed")
         }
     }
     return next(ctx, in, send)

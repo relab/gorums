@@ -144,21 +144,23 @@ func WaitForPeers(t testing.TB, srvs []*gorums.Server) {
 func newDefaultServer(i int, opts ...gorums.ServerOption) ServerIface {
 	srv := gorums.NewServer(opts...)
 	ts := testSrv{val: int32((i + 1) * 10)}
-	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*pb.StringValue](in)
 		resp, err := ts.Test(ctx, req)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return resp, nil
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler(mock.GetValueMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler(mock.GetValueMethod, func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*pb.Int32Value](in)
 		resp, err := ts.GetValue(ctx, req)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return resp, nil
+		send(resp)
+		return nil
 	})
 	return srv
 }
@@ -178,9 +180,10 @@ func (ts testSrv) GetValue(_ gorums.ServerContext, _ *pb.Int32Value) (*pb.Int32V
 // EchoHandler returns a handler that replies to a string-valued request with
 // prefix+": "+value.
 func EchoHandler(prefix string) gorums.Handler {
-	return func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	return func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*pb.StringValue](in)
-		return pb.String(prefix + ": " + req.GetValue()), nil
+		send(pb.String(prefix + ": " + req.GetValue()))
+		return nil
 	}
 }
 
@@ -199,7 +202,7 @@ func EchoServer(_ int) ServerIface {
 func StreamServer(delay time.Duration) func(int) ServerIface {
 	return func(int) ServerIface {
 		srv := gorums.NewServer()
-		srv.RegisterHandler(mock.StreamMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) (proto.Message, error) {
+		srv.RegisterHandler(mock.StreamMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 			req := gorums.AsProto[*pb.StringValue](in)
 			val := req.GetValue()
 
@@ -211,7 +214,7 @@ func StreamServer(delay time.Duration) func(int) ServerIface {
 					time.Sleep(delay)
 				}
 			}
-			return nil, nil
+			return nil
 		})
 		return srv
 	}
