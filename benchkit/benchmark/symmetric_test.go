@@ -896,12 +896,38 @@ func TestSymmetricSignalDoneSurvivesImmediateStop(t *testing.T) {
 
 			SignalDone(ctx, waiter) // the waiter's own Done, so only the sender's can be missing
 			SignalDone(ctx, sender)
-			stopFlushed(sender.servers[0], stopFlushBound) // the benchmark process exits right after the wait
+			sender.servers[0].Stop() // the benchmark process exits right after the wait
 
 			if !AwaitPeersDoneOrGrace(ctx, waiter, 2*time.Second) {
 				t.Fatalf("peer missed Done from a node that stopped immediately after SignalDone; missing %v",
 					waiter.controls[0].MissingDone())
 			}
 		})
+	}
+}
+
+// TestSymmetricSignalDoneBoundedWhenPeerNeverAcknowledges verifies that a peer
+// which receives Done but never replies cannot hold SignalDone past its
+// ExitGrace bound: the acknowledgement is advisory, not a barrier.
+func TestSymmetricSignalDoneBoundedWhenPeerNeverAcknowledges(t *testing.T) {
+	servers := localServers(t, 2, nil)
+	target := singleServerTarget(servers[0], 2)
+	servers[1].RegisterHandler("benchkit.Control.Done", func(gorums.ServerContext, *gorums.Message, func(proto.Message)) error {
+		return nil // receives Done, sends no reply
+	})
+	for _, srv := range servers {
+		go func() { _ = srv.ListenAndServe() }()
+	}
+
+	grace := ExitGrace(2)
+	start := time.Now()
+	SignalDone(context.Background(), target)
+	elapsed := time.Since(start)
+
+	if elapsed < grace/2 {
+		t.Errorf("SignalDone returned after %v, want it to wait for the silent peer up to grace=%v", elapsed, grace)
+	}
+	if elapsed > grace+2*time.Second {
+		t.Errorf("SignalDone returned after %v, want within grace=%v", elapsed, grace)
 	}
 }

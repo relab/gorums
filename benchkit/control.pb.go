@@ -10,7 +10,6 @@ import (
 	_ "github.com/relab/gorums"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	reflect "reflect"
 	unsafe "unsafe"
 )
@@ -273,7 +272,7 @@ func (b0 ClockSyncResponse_builder) Build() *ClockSyncResponse {
 	return m0
 }
 
-// DoneRequest is multicast to advise peers that the sender has finished its
+// DoneRequest is sent to every peer to advise that the sender has finished its
 // own benchmark work and will issue no further calls. The receiver takes the
 // sender's Gorums node ID from the request context. It uses that ID to
 // de-duplicate signals, and to name the peers that have not yet signaled when
@@ -321,11 +320,56 @@ func (b0 DoneRequest_builder) Build() *DoneRequest {
 	return m0
 }
 
+// DoneResponse acknowledges a DoneRequest: the receiver has recorded the
+// signal. The sender uses it to know the signal arrived before it exits.
+type DoneResponse struct {
+	state         protoimpl.MessageState `protogen:"opaque.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DoneResponse) Reset() {
+	*x = DoneResponse{}
+	mi := &file_benchkit_control_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DoneResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DoneResponse) ProtoMessage() {}
+
+func (x *DoneResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_benchkit_control_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+type DoneResponse_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+}
+
+func (b0 DoneResponse_builder) Build() *DoneResponse {
+	m0 := &DoneResponse{}
+	b, x := &b0, m0
+	_, _ = b, x
+	return m0
+}
+
 var File_benchkit_control_proto protoreflect.FileDescriptor
 
 const file_benchkit_control_proto_rawDesc = "" +
 	"\n" +
-	"\x16benchkit/control.proto\x12\bbenchkit\x1a\x1bgoogle/protobuf/empty.proto\x1a\fgorums.proto\x1a\x17benchkit/benchkit.proto\"B\n" +
+	"\x16benchkit/control.proto\x12\bbenchkit\x1a\fgorums.proto\x1a\x17benchkit/benchkit.proto\"B\n" +
 	"\fStartRequest\x122\n" +
 	"\n" +
 	"stats_mode\x18\x01 \x01(\x0e2\x13.benchkit.StatsModeR\tstatsMode\"\x0f\n" +
@@ -335,14 +379,15 @@ const file_benchkit_control_proto_rawDesc = "" +
 	"\x11ClockSyncResponse\x12\x1f\n" +
 	"\vserver_time\x18\x01 \x01(\x03R\n" +
 	"serverTime\"\r\n" +
-	"\vDoneRequest2\x89\x02\n" +
+	"\vDoneRequest\"\x0e\n" +
+	"\fDoneResponse2\x89\x02\n" +
 	"\aControl\x12>\n" +
 	"\x05Start\x12\x16.benchkit.StartRequest\x1a\x17.benchkit.StartResponse\"\x04\xa0\xb5\x18\x01\x125\n" +
 	"\x04Stop\x12\x15.benchkit.StopRequest\x1a\x10.benchkit.Result\"\x04\xa0\xb5\x18\x01\x12J\n" +
 	"\tClockSync\x12\x1a.benchkit.ClockSyncRequest\x1a\x1b.benchkit.ClockSyncResponse\"\x04\xa0\xb5\x18\x01\x12;\n" +
-	"\x04Done\x12\x15.benchkit.DoneRequest\x1a\x16.google.protobuf.Empty\"\x04\x98\xb5\x18\x01B'Z github.com/relab/gorums/benchkit\x92\x03\x02\b\x02b\beditionsp\xe9\a"
+	"\x04Done\x12\x15.benchkit.DoneRequest\x1a\x16.benchkit.DoneResponse\"\x04\xa0\xb5\x18\x01B'Z github.com/relab/gorums/benchkit\x92\x03\x02\b\x02b\beditionsp\xe9\a"
 
-var file_benchkit_control_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_benchkit_control_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_benchkit_control_proto_goTypes = []any{
 	(*StartRequest)(nil),      // 0: benchkit.StartRequest
 	(*StartResponse)(nil),     // 1: benchkit.StartResponse
@@ -350,20 +395,20 @@ var file_benchkit_control_proto_goTypes = []any{
 	(*ClockSyncRequest)(nil),  // 3: benchkit.ClockSyncRequest
 	(*ClockSyncResponse)(nil), // 4: benchkit.ClockSyncResponse
 	(*DoneRequest)(nil),       // 5: benchkit.DoneRequest
-	(StatsMode)(0),            // 6: benchkit.StatsMode
-	(*Result)(nil),            // 7: benchkit.Result
-	(*emptypb.Empty)(nil),     // 8: google.protobuf.Empty
+	(*DoneResponse)(nil),      // 6: benchkit.DoneResponse
+	(StatsMode)(0),            // 7: benchkit.StatsMode
+	(*Result)(nil),            // 8: benchkit.Result
 }
 var file_benchkit_control_proto_depIdxs = []int32{
-	6, // 0: benchkit.StartRequest.stats_mode:type_name -> benchkit.StatsMode
+	7, // 0: benchkit.StartRequest.stats_mode:type_name -> benchkit.StatsMode
 	0, // 1: benchkit.Control.Start:input_type -> benchkit.StartRequest
 	2, // 2: benchkit.Control.Stop:input_type -> benchkit.StopRequest
 	3, // 3: benchkit.Control.ClockSync:input_type -> benchkit.ClockSyncRequest
 	5, // 4: benchkit.Control.Done:input_type -> benchkit.DoneRequest
 	1, // 5: benchkit.Control.Start:output_type -> benchkit.StartResponse
-	7, // 6: benchkit.Control.Stop:output_type -> benchkit.Result
+	8, // 6: benchkit.Control.Stop:output_type -> benchkit.Result
 	4, // 7: benchkit.Control.ClockSync:output_type -> benchkit.ClockSyncResponse
-	8, // 8: benchkit.Control.Done:output_type -> google.protobuf.Empty
+	6, // 8: benchkit.Control.Done:output_type -> benchkit.DoneResponse
 	5, // [5:9] is the sub-list for method output_type
 	1, // [1:5] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
@@ -383,7 +428,7 @@ func file_benchkit_control_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_benchkit_control_proto_rawDesc), len(file_benchkit_control_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
