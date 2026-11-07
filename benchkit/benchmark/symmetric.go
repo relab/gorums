@@ -100,9 +100,37 @@ func setupRemoteServer(selfAddr string, peerAddrs []string, serverOpts []gorums.
 		selfAddr: selfAddr,
 	}
 	return t, func() {
-		srv.Stop()
+		stopFlushed(srv, stopFlushBound)
 		benchkit.Logf("[%s %s] server stopped\n", time.Now().Format(time.TimeOnly), label)
 	}, nil
+}
+
+// stopFlushBound caps how long [stopFlushed] waits for a graceful stop.
+const stopFlushBound = time.Second
+
+// stopFlushed stops srv, letting a message already handed to a peer stream
+// (such as the Done signal of [SignalDone]) reach the wire first. An immediate
+// [gorums.Server.Stop] can discard it, so the last node to finish would exit
+// without its peers ever seeing its Done and they would wait out their grace
+// period. A graceful stop can block on peers that keep their streams open, so
+// after bound it falls back to [gorums.Server.Stop]. That fallback needs gRPC
+// to let Stop abort a GracefulStop that waits on a running handler
+// (grpc-go v1.85.0 or later).
+//
+// The graceful stop flushes the transport only; it does not drain accepted
+// one-way handlers, which is not needed for the advisory Done signal.
+func stopFlushed(srv *gorums.Server, bound time.Duration) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		srv.GracefulStop()
+	}()
+	select {
+	case <-done:
+	case <-time.After(bound):
+		srv.Stop()
+		<-done
+	}
 }
 
 // ExitGrace returns the fallback ceiling a distributed-mode replica waits,
