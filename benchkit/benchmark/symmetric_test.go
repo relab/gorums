@@ -875,3 +875,50 @@ func TestSymmetricMulticastLatencySeries(t *testing.T) {
 		})
 	}
 }
+
+// TestSymmetricSignalDoneSurvivesImmediateStop verifies that a node whose Done
+// signal is the last one a peer awaits can stop its server right after
+// SignalDone returns without the peer missing the signal (the peer would
+// otherwise wait out its full grace period). The sender first queues a
+// 16 MiB backlog of multicasts to the waiter, so Done is still queued behind
+// them when the stop begins. A plain Stop then loses Done in almost every
+// subtest, so a stop that discards queued requests fails this test.
+//
+// The stop bound here is longer than [stopFlushBound], so a slow test machine
+// cannot reach the Stop fallback while the backlog drains.
+func TestSymmetricSignalDoneSurvivesImmediateStop(t *testing.T) {
+	const (
+		backlog   = 256
+		stopBound = 10 * time.Second
+	)
+	payload := make([]byte, 64<<10)
+	for i := range 10 {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			targets := localSymmetricTargets(t, 2, nil)
+			sender, waiter := targets[0], targets[1]
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*stopBound)
+			defer cancel()
+			for _, tg := range targets {
+				if err := awaitReady(ctx, tg); err != nil {
+					t.Fatalf("awaitReady: %v", err)
+				}
+			}
+
+			SignalDone(ctx, waiter) // the waiter's own Done, so only the sender's can be missing
+			client := NewBenchmarkClient(sender.servers[0].PeerConfig())
+			for range backlog {
+				if err := client.Multicast(ctx, TimedMsg_builder{Payload: payload}.Build()).Send(); err != nil {
+					t.Fatalf("Multicast: %v", err)
+				}
+			}
+			SignalDone(ctx, sender)
+			stopFlushed(sender.servers[0], stopBound) // the benchmark process exits right after the wait
+
+			if !AwaitPeersDoneOrGrace(ctx, waiter, 2*time.Second) {
+				t.Fatalf("peer missed Done from a node that stopped immediately after SignalDone; missing %v",
+					waiter.controls[0].MissingDone())
+			}
+		})
+	}
+}
