@@ -250,8 +250,8 @@ func TestRunAsyncQCBenchmarkRejectsRateRamp(t *testing.T) {
 // to registerReplyDroppingPeer's silent drop, which instead times out). Call
 // before serving srv, since it registers a service.
 func registerFailingQuorumCallPeer(srv *gorums.Server, errMsg string) {
-	srv.RegisterHandler("benchmark.Benchmark.QuorumCall", func(_ gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
-		return nil, errors.New(errMsg)
+	srv.RegisterHandler("benchmark.Benchmark.QuorumCall", func(_ gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) error {
+		return errors.New(errMsg)
 	})
 }
 
@@ -646,7 +646,7 @@ func TestServerMeasuredVerify(t *testing.T) {
 // leak deterministically detectable.
 func TestServerMeasuredWindowExcludesClockSync(t *testing.T) {
 	const clockSyncDelay = 2 * time.Millisecond
-	delayClockSync := func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
+	delayClockSync := func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) error {
 		if in.GetMethod() == "benchkit.Control.ClockSync" {
 			time.Sleep(clockSyncDelay)
 		}

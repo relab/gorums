@@ -60,11 +60,12 @@ func peerGroup(t *testing.T, ca *testCA, n int, certIDs []gorums.ID, opts ...gor
 		count := new(atomic.Int32)
 		calls = append(calls, count)
 		self := srv.NodeID()
-		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 			count.Add(1)
 			req := gorums.AsProto[*pb.StringValue](in)
 			reply := fmt.Sprintf("server %d from %d: %s", self, ctx.SenderID(), req.GetValue())
-			return pb.String(reply), nil
+			send(pb.String(reply))
+			return nil
 		})
 	}
 	return servers, calls

@@ -181,7 +181,7 @@ func TestCallAsyncSendsBeforeReturn(t *testing.T) {
 	config := gorumstest.Config(t, numNodes, func(int) gorumstest.ServerIface {
 		srv := gorums.NewServer()
 		echo := gorumstest.EchoHandler("echo")
-		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) (proto.Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 			received <- struct{}{}
 			return echo(ctx, in, send)
 		})

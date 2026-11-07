@@ -52,7 +52,7 @@ func TestServerConnectCallback(t *testing.T) {
 }
 
 func appendStringInterceptor(inStr, outStr string) gorums.ServerInterceptor {
-	return func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
+	return func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) error {
 		req := gorums.AsProto[*pb.StringValue](in)
 		// update the underlying request gorums.Message's message field
 		// (pb.StringValue in this case)
@@ -62,16 +62,14 @@ func appendStringInterceptor(inStr, outStr string) gorums.ServerInterceptor {
 		// The next handler in the chain will access req via
 		// gorums.AsProto(in) which reads in.Proto.
 
-		// call the next handler
-		out, err := next(ctx, in, send)
-		if err != nil {
-			return nil, err
-		}
-		resp := out.(*pb.StringValue)
-		// update the response (pb.StringValue in this case)
-		resp.Value += outStr
+		// Call the next handler with a send function that updates the
+		// response (pb.StringValue in this case) before passing it on.
 		// The server marshals the response before sending it on the wire.
-		return out, err
+		return next(ctx, in, func(out proto.Message) {
+			resp := out.(*pb.StringValue)
+			resp.Value += outStr
+			send(resp)
+		})
 	}
 }
 
@@ -90,13 +88,14 @@ func TestServerInterceptorsChain(t *testing.T) {
 			appendStringInterceptor("i2in-", "i2out-"),
 		))
 		// register final handler which appends "final-" to the request value
-		s.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+		s.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 			req := gorums.AsProto[*pb.StringValue](in)
 			resp, err := interceptorSrv.Test(ctx, req)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			return resp, nil
+			send(resp)
+			return nil
 		})
 		return s
 	}
@@ -120,7 +119,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 // the send callbacks of the interceptor chain before they reach the client.
 func TestServerInterceptorsStream(t *testing.T) {
 	wrapSend := func(suffix string) gorums.ServerInterceptor {
-		return func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) (proto.Message, error) {
+		return func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) error {
 			return next(ctx, in, func(resp proto.Message) {
 				send(pb.String(resp.(*pb.StringValue).GetValue() + suffix))
 			})
@@ -128,12 +127,12 @@ func TestServerInterceptorsStream(t *testing.T) {
 	}
 	streamServerFn := func(_ int) gorumstest.ServerIface {
 		s := gorums.NewServer(gorums.WithServerInterceptors(wrapSend("-i1"), wrapSend("-i2")))
-		s.RegisterHandler(mock.StreamMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) (proto.Message, error) {
+		s.RegisterHandler(mock.StreamMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 			req := gorums.AsProto[*pb.StringValue](in)
 			for i := 1; i <= 3; i++ {
 				send(pb.String(fmt.Sprintf("%s-%d", req.GetValue(), i)))
 			}
-			return nil, nil
+			return nil
 		})
 		return s
 	}
@@ -329,17 +328,19 @@ func TestServerHandleRequestRelease(t *testing.T) {
 		{
 			name:   "HandlerReturns",
 			method: mock.TestMethod,
-			handler: func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
-				return gorums.AsProto[*pb.StringValue](in), nil
+			handler: func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
+				send(gorums.AsProto[*pb.StringValue](in))
+				return nil
 			},
 			wantReleases: 0,
 		},
 		{
 			name:   "HandlerReleases",
 			method: mock.TestMethod,
-			handler: func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+			handler: func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 				ctx.Release()
-				return gorums.AsProto[*pb.StringValue](in), nil
+				send(gorums.AsProto[*pb.StringValue](in))
+				return nil
 			},
 			wantReleases: 1,
 		},
@@ -363,6 +364,76 @@ func TestServerHandleRequestRelease(t *testing.T) {
 			}
 			if sends != 1 {
 				t.Errorf("send called %d times, want 1", sends)
+			}
+		})
+	}
+}
+
+// TestServerHandleRequestReplies verifies that HandleRequest sends one reply
+// for each response the handler sends, then one error reply if the handler
+// returns an error. A handler that sends nothing and returns nil gets no reply.
+func TestServerHandleRequestReplies(t *testing.T) {
+	payload, err := proto.Marshal(pb.String("x"))
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	errAborted := status.Error(codes.Aborted, "aborted")
+	tests := []struct {
+		name    string
+		handler gorums.Handler
+		want    []string
+	}{
+		{
+			name: "OneResponse",
+			handler: func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
+				send(gorums.AsProto[*pb.StringValue](in))
+				return nil
+			},
+			want: []string{"x"},
+		},
+		{
+			name: "NoResponse",
+			handler: func(gorums.ServerContext, *gorums.Message, func(proto.Message)) error {
+				return nil
+			},
+			want: nil,
+		},
+		{
+			name: "Error",
+			handler: func(gorums.ServerContext, *gorums.Message, func(proto.Message)) error {
+				return errAborted
+			},
+			want: []string{"error: Aborted"},
+		},
+		{
+			name: "ResponsesThenError",
+			handler: func(_ gorums.ServerContext, _ *gorums.Message, send func(proto.Message)) error {
+				send(pb.String("a"))
+				send(pb.String("b"))
+				return errAborted
+			},
+			want: []string{"a", "b", "error: Aborted"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := gorums.NewServer()
+			srv.RegisterHandler(mock.TestMethod, tt.handler)
+			req := stream.Message_builder{Method: mock.TestMethod, Payload: payload}.Build()
+			var got []string
+			srv.HandleRequest(t.Context(), 0, req, func() {}, func(reply *stream.Message) {
+				if code := status.FromProto(reply.GetStatus()).Code(); code != codes.OK {
+					got = append(got, "error: "+code.String())
+					return
+				}
+				var resp pb.StringValue
+				if err := proto.Unmarshal(reply.GetPayload(), &resp); err != nil {
+					t.Fatalf("Unmarshal reply: %v", err)
+				}
+				got = append(got, resp.GetValue())
+			})
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("replies = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -485,7 +556,7 @@ func outerChainedHandler(
 	respFn func(*gorums.Responses[*pb.StringValue]) (*pb.StringValue, error),
 ) gorums.Handler {
 	t.Helper()
-	return func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	return func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*pb.StringValue](in)
 		t.Logf("Server %d received outer request: %s", myID, req.GetValue())
 		// Release before making the inner quorum call, so the next request on
@@ -494,7 +565,7 @@ func outerChainedHandler(
 		ctx.Release()
 		config, err := callConfig(ctx, client)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		responses := gorumsimpl.QuorumCall[*pb.StringValue, *pb.StringValue](
 			ctx,
@@ -504,9 +575,10 @@ func outerChainedHandler(
 		)
 		res, err := respFn(responses.Responses)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return pb.String(req.GetValue() + " | " + res.GetValue()), nil
+		send(pb.String(req.GetValue() + " | " + res.GetValue()))
+		return nil
 	}
 }
 
@@ -573,9 +645,9 @@ func TestServerSymmetricConfigurationRoutesMulticast(t *testing.T) {
 
 	// Register mock handler to each server
 	for _, srv := range servers {
-		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) error {
 			wg.Done()
-			return nil, nil
+			return nil
 		})
 	}
 
@@ -598,7 +670,7 @@ func TestServerHandlerCanMulticastViaConfig(t *testing.T) {
 	wg.Add(9)
 
 	for i, srv := range servers {
-		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) error {
 			t.Logf("Server %d received multicast on %v: %v", i+1, mock.TestMethod, in.Proto)
 			// Release before the nested multicast: the peer configuration
 			// includes the local node, whose in-process dispatch waits for
@@ -607,16 +679,16 @@ func TestServerHandlerCanMulticastViaConfig(t *testing.T) {
 			if cfg := ctx.PeerConfig(); cfg.Size() == 3 {
 				err := gorumsimpl.Multicast(t.Context(), cfg, pb.String("inner-multicast"), mock.StreamMethod).Send()
 				if err != nil {
-					return nil, err // failed to multicast
+					return err // failed to multicast
 				}
 			}
-			return nil, nil // one-way
+			return nil // one-way
 		})
 
-		srv.RegisterHandler(mock.StreamMethod, func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+		srv.RegisterHandler(mock.StreamMethod, func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) error {
 			t.Logf("Server %d received multicast on %v: %v", i+1, mock.StreamMethod, in.Proto)
 			wg.Done()
-			return nil, nil
+			return nil
 		})
 	}
 
@@ -723,22 +795,22 @@ func TestServerHandlerCanMulticastViaConnectedClients(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) error {
 		t.Logf("SERVER received multicast: %v", in.Proto)
 		if cfg := ctx.ConnectedClients(); cfg.Size() == 1 {
 			err := gorumsimpl.Multicast(t.Context(), cfg, pb.String("inner-call"), mock.StreamMethod).Send()
 			if err != nil {
-				return nil, err // failed to multicast
+				return err // failed to multicast
 			}
 		}
-		return nil, nil // one-way
+		return nil // one-way
 	})
 
 	// Client handles the back-channel multicast dispatched by the server.
-	clientSrv.RegisterHandler(mock.StreamMethod, func(_ gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	clientSrv.RegisterHandler(mock.StreamMethod, func(_ gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) error {
 		t.Log("CLIENT received inner multicast")
 		wg.Done()
-		return nil, nil
+		return nil
 	})
 
 	awaitClientReady(t, srv, 1)
@@ -764,9 +836,10 @@ func TestServerLocalDispatchContention(t *testing.T) {
 		t.Helper()
 		servers := gorumstest.LocalServers(t, 3)
 		for _, srv := range servers {
-			srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+			srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 				req := gorums.AsProto[*pb.StringValue](in)
-				return pb.String("echo: " + req.GetValue()), nil
+				send(pb.String("echo: " + req.GetValue()))
+				return nil
 			})
 		}
 		gorumstest.WaitForPeers(t, servers)
@@ -847,10 +920,11 @@ func TestServerLocalDispatchContentionSlowReplica(t *testing.T) {
 	for i, srv := range servers {
 		if i == 0 {
 			// Server 0 (self-node): block until signaled.
-			srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+			srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 				<-blocker
 				req := gorums.AsProto[*pb.StringValue](in)
-				return pb.String("echo: " + req.GetValue()), nil
+				send(pb.String("echo: " + req.GetValue()))
+				return nil
 			})
 		} else {
 			// Servers 1, 2 (remote): respond immediately.
@@ -1033,8 +1107,9 @@ func TestServerGracefulStopReleasesPeerConfig(t *testing.T) {
 // during the drain.
 func TestServerGracefulStopWithOpenClientStream(t *testing.T) {
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
-		return pb.String("echo"), nil
+	srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
+		send(pb.String("echo"))
+		return nil
 	})
 	cfg := gorumstest.Config(t, 1, func(int) gorumstest.ServerIface { return srv })
 	node := cfg.Nodes()[0]
@@ -1069,8 +1144,9 @@ func TestServerGracefulStopWithOpenClientStream(t *testing.T) {
 // second in-flight request does not stop the reply from being read.
 func TestServerBackChannelNestedCallBeforeRelease(t *testing.T) {
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.EchoMethod, func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
-		return pb.String("echo"), nil
+	srv.RegisterHandler(mock.EchoMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
+		send(pb.String("echo"))
+		return nil
 	})
 	addrs := gorumstest.Servers(t, 1, func(int) gorumstest.ServerIface { return srv })
 
@@ -1081,7 +1157,7 @@ func TestServerBackChannelNestedCallBeforeRelease(t *testing.T) {
 		secondInFlight = make(chan struct{})
 	)
 	clientSrv := gorums.NewServer()
-	clientSrv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	clientSrv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		if handlers.Add(1) == 1 {
 			close(firstStarted)
 			<-secondInFlight
@@ -1090,9 +1166,10 @@ func TestServerBackChannelNestedCallBeforeRelease(t *testing.T) {
 		defer cancel()
 		resp, err := mockcall.EchoRemoteCall(nctx, clientCfg.Nodes()[0], "nested")
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return resp, nil
+		send(resp)
+		return nil
 	})
 	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs), gorumstest.DialOptions(t), gorums.WithBackChannel(clientSrv))
 	if err != nil {
@@ -1142,25 +1219,27 @@ func TestServerBackChannelNestedCallBeforeRelease(t *testing.T) {
 // arrives on the same stream the handler's request was read from.
 func TestServerHandlerNestedCallBeforeRelease(t *testing.T) {
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		clients := ctx.ConnectedClients()
 		if clients.Size() == 0 {
 			t.Error("ConnectedClients is empty")
-			return nil, context.DeadlineExceeded
+			return context.DeadlineExceeded
 		}
 		nctx, cancel := context.WithTimeout(t.Context(), time.Second)
 		defer cancel()
 		resp, err := mockcall.EchoRemoteCall(nctx, clients.Nodes()[0], "nested")
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return resp, nil
+		send(resp)
+		return nil
 	})
 	addrs := gorumstest.Servers(t, 1, func(int) gorumstest.ServerIface { return srv })
 
 	clientSrv := gorums.NewServer()
-	clientSrv.RegisterHandler(mock.EchoMethod, func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
-		return pb.String("echo"), nil
+	clientSrv.RegisterHandler(mock.EchoMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
+		send(pb.String("echo"))
+		return nil
 	})
 	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs), gorumstest.DialOptions(t), gorums.WithBackChannel(clientSrv))
 	if err != nil {
@@ -1185,9 +1264,9 @@ type senderRecord struct {
 // senderRecorder returns a one-way handler that reports the request's
 // [gorums.ServerContext.SenderID] as observed by receiver.
 func senderRecorder(receiver gorums.ID, records chan<- senderRecord) gorums.Handler {
-	return func(ctx gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	return func(ctx gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) error {
 		records <- senderRecord{receiver: receiver, sender: ctx.SenderID()}
-		return nil, nil
+		return nil
 	}
 }
 
@@ -1408,9 +1487,10 @@ func TestServerIdentityRequiresTLS(t *testing.T) {
 			}), gorumstest.DialOptions(t), gorums.WithTransportCredentials(insecure.NewCredentials())),
 			gorums.WithConnectCallback(func(_ context.Context) { callbacks.Add(1) }),
 		)
-		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 			calls.Add(1)
-			return pb.String("accepted"), nil
+			send(pb.String("accepted"))
+			return nil
 		})
 		return srv
 	}, gorums.WithMetadata(metadata.Pairs("gorums-node-id", "2")))
