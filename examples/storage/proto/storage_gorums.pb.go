@@ -165,45 +165,75 @@ type StorageServer interface {
 }
 
 func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
-	srv.RegisterHandler("proto.Storage.ReadRPC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("proto.Storage.ReadRPC", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*ReadRequest](in)
-		return impl.ReadRPC(ctx, req)
+		resp, err := impl.ReadRPC(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler("proto.Storage.WriteRPC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("proto.Storage.WriteRPC", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*WriteRequest](in)
-		return impl.WriteRPC(ctx, req)
+		resp, err := impl.WriteRPC(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler("proto.Storage.WriteUnicast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("proto.Storage.WriteUnicast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) error {
 		req := gorums.AsProto[*WriteRequest](in)
 		impl.WriteUnicast(ctx, req)
-		return nil, nil
+		return nil
 	})
-	srv.RegisterHandler("proto.Storage.WriteMulticast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("proto.Storage.WriteMulticast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) error {
 		req := gorums.AsProto[*WriteRequest](in)
 		impl.WriteMulticast(ctx, req)
-		return nil, nil
+		return nil
 	})
-	srv.RegisterHandler("proto.Storage.ReadQC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("proto.Storage.ReadQC", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*ReadRequest](in)
-		return impl.ReadQC(ctx, req)
+		resp, err := impl.ReadQC(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler("proto.Storage.WriteQC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("proto.Storage.WriteQC", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*WriteRequest](in)
-		return impl.WriteQC(ctx, req)
+		resp, err := impl.WriteQC(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler("proto.Storage.ReadNestedQC", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("proto.Storage.ReadNestedQC", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*ReadRequest](in)
-		return impl.ReadNestedQC(ctx, req)
+		resp, err := impl.ReadNestedQC(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler("proto.Storage.WriteNestedMulticast", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("proto.Storage.WriteNestedMulticast", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*WriteRequest](in)
-		return impl.WriteNestedMulticast(ctx, req)
+		resp, err := impl.WriteNestedMulticast(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler("proto.Storage.ReadCorrectable", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("proto.Storage.ReadCorrectable", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*ReadRequest](in)
 		impl.ReadCorrectable(ctx, req, func(resp *ReadResponse) {
 			send(resp)
 		})
-		return nil, nil
+		return nil
 	})
 }

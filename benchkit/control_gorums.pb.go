@@ -102,21 +102,36 @@ type ControlServer interface {
 }
 
 func RegisterControlServer(srv *gorums.Server, impl ControlServer) {
-	srv.RegisterHandler("benchkit.Control.Start", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("benchkit.Control.Start", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*StartRequest](in)
-		return impl.Start(ctx, req)
+		resp, err := impl.Start(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler("benchkit.Control.Stop", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("benchkit.Control.Stop", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*StopRequest](in)
-		return impl.Stop(ctx, req)
+		resp, err := impl.Stop(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler("benchkit.Control.ClockSync", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("benchkit.Control.ClockSync", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*ClockSyncRequest](in)
-		return impl.ClockSync(ctx, req)
+		resp, err := impl.ClockSync(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
-	srv.RegisterHandler("benchkit.Control.Done", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("benchkit.Control.Done", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) error {
 		req := gorums.AsProto[*DoneRequest](in)
 		impl.Done(ctx, req)
-		return nil, nil
+		return nil
 	})
 }

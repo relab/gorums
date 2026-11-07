@@ -54,8 +54,13 @@ type UnresponsiveServer interface {
 }
 
 func RegisterUnresponsiveServer(srv *gorums.Server, impl UnresponsiveServer) {
-	srv.RegisterHandler("unresponsive.Unresponsive.TestUnresponsive", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) (proto.Message, error) {
+	srv.RegisterHandler("unresponsive.Unresponsive.TestUnresponsive", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 		req := gorums.AsProto[*Empty](in)
-		return impl.TestUnresponsive(ctx, req)
+		resp, err := impl.TestUnresponsive(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
+		return nil
 	})
 }
