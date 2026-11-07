@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"runtime"
 	"slices"
@@ -372,7 +374,8 @@ func TestServerHandleRequestRelease(t *testing.T) {
 // TestServerHandleRequestReplies verifies that HandleRequest sends one reply
 // for each response the handler sends, and an error reply only if the handler
 // returns an error without sending. A handler that sends nothing and returns
-// nil gets no reply.
+// nil gets no reply. An error returned after send is logged as a programming
+// error.
 func TestServerHandleRequestReplies(t *testing.T) {
 	payload, err := proto.Marshal(pb.String("x"))
 	if err != nil {
@@ -383,6 +386,7 @@ func TestServerHandleRequestReplies(t *testing.T) {
 		name    string
 		handler gorums.Handler
 		want    []string
+		wantLog bool
 	}{
 		{
 			name: "OneResponse",
@@ -413,12 +417,14 @@ func TestServerHandleRequestReplies(t *testing.T) {
 				send(pb.String("b"))
 				return errAborted
 			},
-			want: []string{"a", "b"},
+			want:    []string{"a", "b"},
+			wantLog: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := gorums.NewServer()
+			var logs strings.Builder
+			srv := gorums.NewServer(gorums.WithServerLogger(log.New(&logs, "", 0)))
 			srv.RegisterHandler(mock.TestMethod, tt.handler)
 			req := stream.Message_builder{Method: mock.TestMethod, Payload: payload}.Build()
 			var got []string
@@ -435,6 +441,18 @@ func TestServerHandleRequestReplies(t *testing.T) {
 			})
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("replies = %q, want %q", got, tt.want)
+			}
+			logged := logs.String()
+			if !tt.wantLog {
+				if logged != "" {
+					t.Errorf("unexpected log: %q", logged)
+				}
+				return
+			}
+			for _, want := range []string{"programming error", mock.TestMethod, "aborted"} {
+				if !strings.Contains(logged, want) {
+					t.Errorf("log = %q, want it to contain %q", logged, want)
+				}
 			}
 		})
 	}
@@ -915,7 +933,8 @@ func TestServerLocalDispatchContention(t *testing.T) {
 // error. The local node delivers its replies directly to the call, so a second
 // reply from it would take the place of a remote node's reply.
 func TestServerLocalDispatchErrorAfterSend(t *testing.T) {
-	servers := gorumstest.LocalServers(t, 3)
+	// The handlers return an error after send on purpose, so discard the log.
+	servers := gorumstest.LocalServers(t, 3, gorums.WithServerLogger(log.New(io.Discard, "", 0)))
 	for i, srv := range servers {
 		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
 			if i != 0 {

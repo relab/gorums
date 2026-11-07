@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"slices"
 	"sync"
@@ -22,14 +23,16 @@ type (
 	// error: a unary handler calls send once, a streaming handler calls send
 	// once for each response, and a one-way handler never calls send. If the
 	// handler returns an error before it calls send, the caller receives the
-	// error as the call's reply. An error returned after send is discarded.
+	// error as the call's reply. An error returned after send is a programming
+	// error: the server discards it and logs it, see [WithServerLogger].
 	Handler func(ctx ServerContext, in *Message, send func(proto.Message)) error
 	// ServerInterceptor intercepts and may modify incoming requests and outgoing
 	// responses of every call type. It receives the request and the send
 	// function of the call, and calls next to continue the chain. To observe or
 	// modify responses, it passes next a send function that wraps send. To
 	// reject a request, it returns an error without calling next. An error it
-	// returns after a response was sent is discarded, as for a [Handler].
+	// returns after a response was sent is discarded and logged, as for a
+	// [Handler].
 	ServerInterceptor func(ctx ServerContext, in *Message, send func(proto.Message), next Handler) error
 )
 
@@ -40,6 +43,7 @@ type Server struct {
 	grpcServer   *grpc.Server
 	handlers     map[string]Handler
 	interceptors []ServerInterceptor
+	logger       *log.Logger // logs programming errors in handlers; never nil
 	im           *conn.InboundManager
 
 	mu         sync.Mutex   // guards lis
@@ -130,17 +134,21 @@ func newServer(opts ...ServerOption) (*Server, error) {
 	if serverOpts.recvBufferSize == 0 {
 		serverOpts.recvBufferSize = conn.DefaultRecvBufferSize
 	}
+	if serverOpts.logger == nil {
+		serverOpts.logger = log.Default()
+	}
 	verify, err := conn.NewPeerVerifier(serverOpts.peerNodes)
 	if err != nil {
 		return nil, err
 	}
 	// Allocate s first so it can serve as the self-node handler for the [conn.InboundManager].
-	// HandleRequest only accesses s.handlers and s.interceptors, both of which are
+	// HandleRequest only accesses s.handlers, s.interceptors, and s.logger, which are
 	// set below before NewInboundManager is called, so the reference is safe to pass.
 	s := &Server{
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
 		handlers:     make(map[string]Handler),
 		interceptors: serverOpts.interceptors,
+		logger:       serverOpts.logger,
 		listenAddr:   serverOpts.listenAddr,
 	}
 	im, err := conn.NewInboundManager(
@@ -214,7 +222,8 @@ func chainInterceptors(final Handler, interceptors ...ServerInterceptor) Handler
 // no handler is registered for the method, or the request cannot be unmarshaled.
 // For requests that reach the handler, send is invoked once for each response
 // the handler sends. If the handler returns an error before it sends a
-// response, send is invoked once with the error.
+// response, send is invoked once with the error. An error returned after a
+// response is discarded and logged with the server's logger.
 //
 // This is the "default interceptor"; it is the first and last handler in the chain.
 // It calls release only when the handler or an interceptor calls
@@ -246,9 +255,15 @@ func (s *Server) HandleRequest(ctx context.Context, senderID ID, reqMsg *stream.
 		call.sent.Store(true)
 		send(newResponse(reqMsg, resp, nil))
 	})
-	if err != nil && !call.sent.Load() {
-		send(newResponse(reqMsg, nil, err))
+	if err == nil {
+		return
 	}
+	if call.sent.Load() {
+		s.logger.Printf("gorums: programming error: the handler for %s returned an error after it called send; the error is discarded: %v",
+			reqMsg.GetMethod(), err)
+		return
+	}
+	send(newResponse(reqMsg, nil, err))
 }
 
 // inboundCall holds the state of one request in [Server.HandleRequest]. It

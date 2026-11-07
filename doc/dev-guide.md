@@ -661,6 +661,7 @@ A handler delivers every response through its `send func(proto.Message)` callbac
 A handler either sends its responses or returns an error.
 If it returns an error before it calls `send`, the caller receives the error as the call's reply.
 `Server.HandleRequest` discards an error returned after `send`, so a unary call never gets two replies.
+It logs the discarded error as a programming error, with the logger from `WithServerLogger`.
 This matters most for the local node, which delivers its replies directly to the call: a second reply would take the place of another node's reply.
 `Server.HandleRequest` builds the response envelope for each sent response and for a returned error, so handlers never touch envelopes.
 
