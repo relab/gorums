@@ -6,6 +6,7 @@ import (
 	"net"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/relab/gorums/internal/conn"
 	"github.com/relab/gorums/internal/impl"
@@ -17,18 +18,18 @@ import (
 )
 
 type (
-	// Handler processes a request. It calls send once for each response:
-	// exactly once for a unary call, once per response for a streaming call,
-	// and never for a one-way call. A non-nil returned error is sent to the
-	// caller as one more reply, after the sent responses. A streaming caller
-	// receives it as one more response; its call still ends only when the
-	// caller stops iterating or its context ends.
+	// Handler processes a request. It either sends its responses or returns an
+	// error: a unary handler calls send once, a streaming handler calls send
+	// once for each response, and a one-way handler never calls send. If the
+	// handler returns an error before it calls send, the caller receives the
+	// error as the call's reply. An error returned after send is discarded.
 	Handler func(ctx ServerContext, in *Message, send func(proto.Message)) error
 	// ServerInterceptor intercepts and may modify incoming requests and outgoing
 	// responses of every call type. It receives the request and the send
 	// function of the call, and calls next to continue the chain. To observe or
 	// modify responses, it passes next a send function that wraps send. To
-	// reject a request, it returns an error without calling next.
+	// reject a request, it returns an error without calling next. An error it
+	// returns after a response was sent is discarded, as for a [Handler].
 	ServerInterceptor func(ctx ServerContext, in *Message, send func(proto.Message), next Handler) error
 )
 
@@ -212,7 +213,8 @@ func chainInterceptors(final Handler, interceptors ...ServerInterceptor) Handler
 // send is invoked in two infrastructure-level error cases regardless of call type:
 // no handler is registered for the method, or the request cannot be unmarshaled.
 // For requests that reach the handler, send is invoked once for each response
-// the handler sends, and once more if the handler returns an error.
+// the handler sends. If the handler returns an error before it sends a
+// response, send is invoked once with the error.
 //
 // This is the "default interceptor"; it is the first and last handler in the chain.
 // It calls release only when the handler or an interceptor calls
@@ -239,13 +241,21 @@ func (s *Server) HandleRequest(ctx context.Context, senderID ID, reqMsg *stream.
 		return
 	}
 
-	in := &Message{Proto: msg, Message: reqMsg}
-	err = handler(srvCtx, in, func(resp proto.Message) {
+	call := &inboundCall{in: Message{Proto: msg, Message: reqMsg}}
+	err = handler(srvCtx, &call.in, func(resp proto.Message) {
+		call.sent.Store(true)
 		send(newResponse(reqMsg, resp, nil))
 	})
-	if err != nil {
+	if err != nil && !call.sent.Load() {
 		send(newResponse(reqMsg, nil, err))
 	}
+}
+
+// inboundCall holds the state of one request in [Server.HandleRequest]. It
+// keeps the request and the sent flag in one allocation.
+type inboundCall struct {
+	in   Message
+	sent atomic.Bool // set when the handler calls send
 }
 
 // Serve serves on the externally supplied listener and records it so that

@@ -370,8 +370,9 @@ func TestServerHandleRequestRelease(t *testing.T) {
 }
 
 // TestServerHandleRequestReplies verifies that HandleRequest sends one reply
-// for each response the handler sends, then one error reply if the handler
-// returns an error. A handler that sends nothing and returns nil gets no reply.
+// for each response the handler sends, and an error reply only if the handler
+// returns an error without sending. A handler that sends nothing and returns
+// nil gets no reply.
 func TestServerHandleRequestReplies(t *testing.T) {
 	payload, err := proto.Marshal(pb.String("x"))
 	if err != nil {
@@ -406,13 +407,13 @@ func TestServerHandleRequestReplies(t *testing.T) {
 			want: []string{"error: Aborted"},
 		},
 		{
-			name: "ResponsesThenError",
+			name: "ErrorAfterSendDiscarded",
 			handler: func(_ gorums.ServerContext, _ *gorums.Message, send func(proto.Message)) error {
 				send(pb.String("a"))
 				send(pb.String("b"))
 				return errAborted
 			},
-			want: []string{"a", "b", "error: Aborted"},
+			want: []string{"a", "b"},
 		},
 	}
 	for _, tt := range tests {
@@ -909,6 +910,39 @@ func TestServerLocalDispatchContention(t *testing.T) {
 // local replica is intentionally delayed, then immediately issues an All call.
 // The All call must observe remote progress right away and complete once the
 // delayed local reply is finally allowed through.
+// TestServerLocalDispatchErrorAfterSend verifies that a quorum call gets one
+// reply from each node when a handler sends a response and then returns an
+// error. The local node delivers its replies directly to the call, so a second
+// reply from it would take the place of a remote node's reply.
+func TestServerLocalDispatchErrorAfterSend(t *testing.T) {
+	servers := gorumstest.LocalServers(t, 3)
+	for i, srv := range servers {
+		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
+			if i != 0 {
+				// Let the local node's replies arrive first.
+				time.Sleep(100 * time.Millisecond)
+			}
+			send(pb.String("echo: " + gorums.AsProto[*pb.StringValue](in).GetValue()))
+			return errors.New("error after send")
+		})
+	}
+	gorumstest.WaitForPeers(t, servers)
+	cfg := servers[0].PeerConfig()
+
+	ctx := gorumstest.Context(t, 2*time.Second)
+	var nodeIDs []uint32
+	for resp := range mockcall.QuorumCall(ctx, cfg, "x").Results() {
+		if resp.Err != nil {
+			t.Errorf("node %d: unexpected error: %v", resp.NodeID, resp.Err)
+		}
+		nodeIDs = append(nodeIDs, resp.NodeID)
+	}
+	slices.Sort(nodeIDs)
+	if want := cfg.NodeIDs(); !slices.Equal(nodeIDs, want) {
+		t.Errorf("replies from nodes %v, want one from each of %v", nodeIDs, want)
+	}
+}
+
 func TestServerLocalDispatchContentionSlowReplica(t *testing.T) {
 	servers := gorumstest.LocalServers(t, 3)
 

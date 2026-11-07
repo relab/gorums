@@ -1413,8 +1413,10 @@ The same rule holds for every call type:
 
 To inspect or replace the responses, the interceptor gives `next` a new `send` function.
 This function inspects or replaces each response, and then calls the original `send`.
-The server sends a non-nil error that `next` returns to the caller as one more reply, after the sent responses.
-A streaming caller receives this error as one more response; the call still ends only when the caller stops iterating or its context ends.
+A call either responds or fails.
+If `next` returns an error before any response was sent, the server sends the error to the caller as the call's reply.
+An error returned after a response was sent is discarded.
+A streaming handler that must report a problem after its first response puts it in a response message.
 An interceptor that does not need the responses passes its `send` argument to `next` unchanged.
 It must not pass `nil`, because then the handler cannot send its responses.
 
@@ -1443,6 +1445,8 @@ func LoggingInterceptor(addr string) gorums.ServerInterceptor {
 ```
 
 A unary handler calls `send` before it returns, so the reply leaves the server before the interceptor's code after `next` runs.
+For the same reason, an interceptor cannot fail a call after `next` has sent a response: such an error is discarded.
+To reject a request, return the error before calling `next`.
 
 #### Delay and Metadata Interceptors
 
