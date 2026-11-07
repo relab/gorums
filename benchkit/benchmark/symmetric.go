@@ -100,9 +100,41 @@ func setupRemoteServer(selfAddr string, peerAddrs []string, serverOpts []gorums.
 		selfAddr: selfAddr,
 	}
 	return t, func() {
-		srv.Stop()
+		stopFlushed(srv, stopFlushBound)
 		benchkit.Logf("[%s %s] server stopped\n", time.Now().Format(time.TimeOnly), label)
 	}, nil
+}
+
+// stopFlushBound caps how long [stopFlushed] waits for a graceful stop.
+const stopFlushBound = time.Second
+
+// stopFlushed stops srv so that a one-way message queued just before the stop,
+// such as the Done signal of [SignalDone], reaches its peer before the process
+// exits. [gorums.Server.GracefulStop] first waits until the peers have ended
+// the streams that they dialed to srv. The streams that srv dialed keep sending
+// during that wait, which normally gives a request queued before the stop the
+// time to leave the queue. GracefulStop then drains the streams that srv
+// dialed, and a request still queued at that point fails with
+// [gorums.ErrNodeClosed]. [gorums.Server.Stop] discards every queued request at
+// once, so the last node to finish would exit without its peers seeing its
+// Done, and they would wait out their grace period.
+//
+// A graceful stop also waits for running handlers and for slow peers, so after
+// bound stopFlushed falls back to [gorums.Server.Stop] and returns. It does not
+// wait for the graceful stop to end after that: Stop does not end in-process
+// handlers that ignore their context, and the graceful stop waits for them. The
+// process exits right after, which ends that wait.
+func stopFlushed(srv *gorums.Server, bound time.Duration) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		srv.GracefulStop()
+	}()
+	select {
+	case <-done:
+	case <-time.After(bound):
+		srv.Stop()
+	}
 }
 
 // ExitGrace returns the fallback ceiling a distributed-mode replica waits,
@@ -148,6 +180,11 @@ func ExitGrace(numNodes int) time.Duration {
 // cluster size): never spend longer announcing Done than a peer will wait to
 // hear it. Wait blocks until each send completes or the deadline fires,
 // keeping the deferred cancel from aborting a send still in flight.
+//
+// Send returns once the request is queued, not once a peer has it. The
+// server's cleanup stops it with [stopFlushed], which keeps the streams
+// sending while the peers end theirs, so the queued Done normally reaches each
+// peer before the process exits.
 func SignalDone(ctx context.Context, t *SymmetricTarget) {
 	ctx, cancel := context.WithTimeout(ctx, ExitGrace(t.numPeers))
 	defer cancel()
