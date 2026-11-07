@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"log"
 
 	"github.com/relab/gorums/internal/conn"
 	"google.golang.org/grpc"
@@ -14,6 +15,7 @@ type serverOptions struct {
 	grpcOpts        []grpc.ServerOption
 	connectCallback func(context.Context)
 	interceptors    []ServerInterceptor
+	logger          *log.Logger // set by WithServerLogger; nil selects log.Default()
 	// Peer management options
 	myID             ID
 	peerNodes        NodeSource   // Peers this server tracks and calls; set by WithPeers.
@@ -77,6 +79,17 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 func WithServerInterceptors(i ...ServerInterceptor) ServerOption {
 	return func(opts *serverOptions) {
 		opts.interceptors = append(opts.interceptors, i...)
+	}
+}
+
+// WithServerLogger sets the logger for the programming errors that the server
+// detects in handlers and interceptors. One such error is a handler that
+// returns an error after it calls send: the server discards that error and
+// logs it. The default logger is [log.Default]. A logger that writes to
+// [io.Discard] turns the logging off.
+func WithServerLogger(logger *log.Logger) ServerOption {
+	return func(opts *serverOptions) {
+		opts.logger = logger
 	}
 }
 
