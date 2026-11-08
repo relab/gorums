@@ -1933,8 +1933,16 @@ It then builds on gRPC's own graceful shutdown:
    This includes one-way requests, which have no reply, and handlers that called `Release`.
    These handlers run even if the client disconnects after it has closed its side.
 4. The server ends the stream.
-5. The server waits for the handlers of the calls that it sent to its own node, through `PeerConfig` or `ConnectedPeers`.
+5. The server ends the streams that it dialed to its peers in the same way, with itself in the client's role.
+   This includes the nodes that `Extend` added to `PeerConfig`.
+   Each peer handles the server's requests, and the server waits for the handlers of the requests that the peer sent on such a stream, as `WithStreamDedup` peers do.
+   Once the server has closed its side, it cannot reply, so the peer's two-way calls on that stream fail with `ErrStreamDown` even if their handlers finish.
+6. The server waits for the handlers of the calls that it sent to its own node, through `PeerConfig` or `ConnectedPeers`.
    These handlers run with their caller's context, so `Stop` does not end them.
+
+Later calls on `PeerConfig` fail with `ErrNodeClosed`, with two exceptions.
+Calls to the server's own node still run in process.
+Calls to a node that borrows a peer's stream under `WithStreamDedup` fail with `ErrStreamDown`, because the server no longer has that stream.
 
 A client cannot answer calls from the server after it has closed its side of a stream.
 The server fails such calls with `ErrStreamDown`, including calls whose handlers on the client are still running.
@@ -1956,7 +1964,7 @@ case <-time.After(10 * time.Second):
 }
 ```
 
-The same steps apply when a server rotates connections, for example with gRPC's `MaxConnectionAge`, so rotation does not lose one-way requests either.
+Steps 1 to 4 also apply when a server rotates connections, for example with gRPC's `MaxConnectionAge`, so rotation does not lose one-way requests either.
 
 ## Node IDs
 

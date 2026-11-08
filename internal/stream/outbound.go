@@ -3,6 +3,8 @@ package stream
 import (
 	"context"
 	"log"
+	"maps"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -85,8 +87,9 @@ type OutboundChannel struct {
 	streamUp       atomic.Bool
 
 	mu       sync.Mutex
-	sessions map[*session]struct{} // sessions still receiving; two during a GOAWAY handover
+	sessions map[*session]struct{} // sessions still receiving; after a GOAWAY, also the old one until its stream ends
 	live     *session              // the session whose acceptance brings the stream up
+	stopping atomic.Bool           // set by Drain under mu; no new streams open
 
 	wg        sync.WaitGroup
 	closeOnce func() error
@@ -186,12 +189,20 @@ func (c *OutboundChannel) await(b *backoff) (req *NodeRequest, ok bool) {
 		case <-c.ctx.Done():
 			return nil, false
 		case r := <-c.queue.ch:
+			if c.stopping.Load() {
+				c.queue.fail(r, ErrNodeClosed)
+				continue
+			}
 			if err := b.refusing(); err != nil {
 				c.queue.fail(r, err)
 				continue
 			}
 			return &r, true
 		case <-b.retry:
+			if c.stopping.Load() {
+				b.retry = nil
+				continue
+			}
 			return nil, true
 		}
 	}
@@ -274,8 +285,11 @@ func (b *backoff) next() time.Time {
 }
 
 // open returns a session on a new stream. A suspect session follows a refused
-// stream.
+// stream. Once Drain has started, open returns [ErrNodeClosed].
 func (c *OutboundChannel) open(suspect bool) (*session, error) {
+	if c.stopping.Load() {
+		return nil, ErrNodeClosed
+	}
 	ctx, cancel := context.WithCancel(c.ctx)
 	st, err := NewGorumsClient(c.conn).NodeStream(ctx)
 	if err != nil {
@@ -286,6 +300,11 @@ func (c *OutboundChannel) open(suspect bool) (*session, error) {
 	s.suspect = suspect
 	s.onAccept = func() { c.setStreamUp(s, true) }
 	c.mu.Lock()
+	if c.stopping.Load() {
+		c.mu.Unlock()
+		cancel()
+		return nil, ErrNodeClosed
+	}
 	c.sessions[s] = struct{}{}
 	c.live = s
 	c.mu.Unlock()
@@ -362,6 +381,31 @@ func (c *OutboundChannel) PendingCount() int {
 		n += s.pending.len()
 	}
 	return n
+}
+
+// Drain ends the channel's streams as a server GOAWAY does: each stream sends
+// no more requests, closes its side, and ends when the server has handled the
+// requests it received. The channel opens no new stream, and later requests
+// fail with [ErrNodeClosed]. Drain then waits for the handlers of the requests
+// that the server sent on the streams. Close the channel afterwards. Closing
+// it during Drain ends the streams and discards the queued handlers, so Drain
+// then waits only for the running ones.
+func (c *OutboundChannel) Drain() {
+	c.mu.Lock()
+	c.stopping.Store(true)
+	sessions := slices.Collect(maps.Keys(c.sessions))
+	c.mu.Unlock()
+	// After the server sends a GOAWAY, the channel has two streams for a
+	// while: the old one, which still receives replies, and the new one that
+	// carries later requests. Every stream stops sending before Drain waits
+	// for any of them, so Drain does not depend on the order in which they end.
+	for _, s := range sessions {
+		s.startDrain()
+	}
+	for _, s := range sessions {
+		<-s.done
+	}
+	c.requests.wait(nil)
 }
 
 // Close closes the channel and its connection, fails queued and pending

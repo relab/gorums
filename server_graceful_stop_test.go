@@ -187,3 +187,102 @@ func TestServerGracefulStopWaitsForLocalCalls(t *testing.T) {
 		})
 	}
 }
+
+// TestServerGracefulStopWaitsForRequestsOnDialedStreams verifies that, with
+// stream dedup, GracefulStop waits for the handler of a one-way request that
+// a peer sent on a stream that this server dialed.
+func TestServerGracefulStopWaitsForRequestsOnDialedStreams(t *testing.T) {
+	srvs := setupDedupServers(t, 2)
+	// The server with the lower ID dials; the other sends its requests to it
+	// on that stream.
+	dialer, peer := srvs[0], srvs[1]
+	if dialer.NodeID() > peer.NodeID() {
+		dialer, peer = peer, dialer
+	}
+	gate := make(chan struct{})
+	started := make(chan struct{}, 1)
+	var finished atomic.Bool
+	dialer.RegisterHandler(mock.TestMethod, func(gorums.ServerContext, *gorums.Message, func(proto.Message)) error {
+		started <- struct{}{}
+		<-gate
+		finished.Store(true)
+		return nil
+	})
+	ctx := gorumstest.Context(t, 2*time.Second)
+	if err := mockcall.Unicast(ctx, gorumstest.PeerNode(t, peer.PeerConfig(), dialer.NodeID()), "x").Send(); err != nil {
+		t.Fatalf("Unicast to the dialer: %v", err)
+	}
+	<-started
+
+	stopped := make(chan struct{})
+	go func() {
+		dialer.GracefulStop()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+		t.Fatal("GracefulStop returned while a handler on a dialed stream was blocked")
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(gate)
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("GracefulStop did not return after the handler returned")
+	}
+	if !finished.Load() {
+		t.Error("GracefulStop returned before the handler finished")
+	}
+}
+
+// TestServerGracefulStopDrainsExtendedPeerNodes verifies that GracefulStop
+// also ends the streams of the nodes that Config.Extend added to the peer
+// configuration in the same way as the other dialed streams: it returns only
+// after the peer has handled the requests sent through such a node.
+func TestServerGracefulStopDrainsExtendedPeerNodes(t *testing.T) {
+	gate := make(chan struct{})
+	started := make(chan struct{}, 1)
+	var finished atomic.Bool
+	peer := gorums.NewServer()
+	peer.RegisterHandler(mock.TestMethod, func(gorums.ServerContext, *gorums.Message, func(proto.Message)) error {
+		started <- struct{}{}
+		<-gate
+		finished.Store(true)
+		return nil
+	})
+	addrs := gorumstest.Servers(t, 1, func(int) gorumstest.ServerIface { return peer })
+	srv := gorumstest.LocalServers(t, 1)[0]
+	// Stop the peer before the goroutine-leak check that LocalServers
+	// registered; Servers stops it again, which does nothing.
+	t.Cleanup(peer.Stop)
+	peerID := srv.NodeID() + 1
+	cfg, err := srv.PeerConfig().Extend(gorums.WithNodes(map[gorums.ID]mock.NodeAddr{peerID: mock.NodeAddr(addrs[0])}))
+	if err != nil {
+		t.Fatalf("Extend: %v", err)
+	}
+	ctx := gorumstest.Context(t, 2*time.Second)
+	if err := mockcall.Unicast(ctx, cfg.Node(peerID), "x").Send(); err != nil {
+		t.Fatalf("Unicast to the added node: %v", err)
+	}
+	<-started
+
+	stopped := make(chan struct{})
+	go func() {
+		srv.GracefulStop()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+		t.Fatal("GracefulStop returned while the peer was handling a request sent through an added node")
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(gate)
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("GracefulStop did not return after the peer handled the request")
+	}
+	if !finished.Load() {
+		t.Error("GracefulStop returned before the peer finished handling the request")
+	}
+}
