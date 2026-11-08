@@ -96,7 +96,7 @@ func (t *Transport) StoreChannel(ch Channel) {
 
 // Enqueue sends req on the current channel; see [Channel.Enqueue]. Without a
 // channel, or on a nil transport, it fails req with [ErrStreamDown].
-func (t *Transport) Enqueue(req Request) {
+func (t *Transport) Enqueue(req NodeRequest) {
 	ch := t.LoadChannel()
 	if ch == nil {
 		var id ID

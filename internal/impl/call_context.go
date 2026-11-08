@@ -151,10 +151,10 @@ func (c *CallContext[Req, Resp]) reportNodeError(nodeID ID, err error) {
 	}
 }
 
-// enqueue sends a stream.Request to the node, populating the shared fields
+// enqueue sends a stream.NodeRequest to the node, populating the shared fields
 // from CallContext so call sites only need to supply the message.
 func (c *CallContext[Req, Resp]) enqueue(n *Node, msg *stream.Message) {
-	conn.NodeTransport(n).Enqueue(stream.Request{
+	conn.NodeTransport(n).Enqueue(stream.NodeRequest{
 		Ctx:          c.Context,
 		Msg:          msg,
 		Streaming:    c.streaming,

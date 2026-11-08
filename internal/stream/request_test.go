@@ -15,7 +15,7 @@ func TestRequestSendErrorResponseDoesNotBlockOnCanceledRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	responseChan := make(chan response, 1)
 	responseChan <- response{NodeID: 99} // fill the channel
-	req := Request{
+	req := NodeRequest{
 		Ctx:          ctx,
 		ResponseChan: responseChan,
 	}
@@ -37,7 +37,7 @@ func TestRequestSendErrorResponseDoesNotBlockOnCanceledRequest(t *testing.T) {
 func TestRequestSendErrorResponsePrefersDeliveryWhenCanceledAndResponseChanReady(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	responseChan := make(chan response, 1)
-	req := Request{
+	req := NodeRequest{
 		Ctx:          ctx,
 		ResponseChan: responseChan,
 	}

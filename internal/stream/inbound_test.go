@@ -20,7 +20,7 @@ func TestInboundChannel(t *testing.T) {
 	})
 
 	// Send a message and verify it is delivered to the stream.
-	resp := sendRequest(t, c, Request{Oneway: true}, 1)
+	resp := sendRequest(t, c, NodeRequest{Oneway: true}, 1)
 	if resp.Err != nil {
 		t.Errorf("unexpected error: %v", resp.Err)
 	}
@@ -48,7 +48,7 @@ func TestInboundChannelClose(t *testing.T) {
 	}
 
 	// Subsequent sends should fail with ErrNodeClosed.
-	resp := sendRequest(t, c, Request{Oneway: true}, 2)
+	resp := sendRequest(t, c, NodeRequest{Oneway: true}, 2)
 	if resp.Err == nil {
 		t.Error("expected error after close, got nil")
 	} else if !errors.Is(resp.Err, ErrNodeClosed) {
@@ -67,7 +67,7 @@ func TestInboundChannelStreamDown(t *testing.T) {
 	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{RecvBufferSize: testRecvBufferSize, SendBufferSize: 10})
 
 	// Verify initial send works.
-	resp := sendRequest(t, c, Request{Oneway: true}, 1)
+	resp := sendRequest(t, c, NodeRequest{Oneway: true}, 1)
 	if resp.Err != nil {
 		t.Fatalf("initial send failed: %v", resp.Err)
 	}
@@ -83,7 +83,7 @@ func TestInboundChannelStreamDown(t *testing.T) {
 	}
 
 	// Sends after close must fail with ErrNodeClosed, not silently reconnect.
-	resp = sendRequest(t, c, Request{Oneway: true}, 2)
+	resp = sendRequest(t, c, NodeRequest{Oneway: true}, 2)
 	if resp.Err == nil {
 		t.Error("expected error after stream down, got nil")
 	} else if !errors.Is(resp.Err, ErrNodeClosed) {
@@ -103,7 +103,7 @@ func TestInboundChannelCloseReturnsWhileSendBlocked(t *testing.T) {
 	c := NewInboundChannel(context.Background(), 1, stream, InboundOptions{RecvBufferSize: testRecvBufferSize})
 	t.Cleanup(func() { _ = c.Close() })
 
-	c.Enqueue(Request{
+	c.Enqueue(NodeRequest{
 		Ctx:    context.Background(),
 		Oneway: true,
 		Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),

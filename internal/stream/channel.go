@@ -15,7 +15,7 @@ type Channel interface {
 	// [ErrSendQueueFull] and a one-way request waits for space until its
 	// context ends. A closed stream channel fails req with [ErrNodeClosed].
 	// Enqueue panics if req is both Oneway and Streaming.
-	Enqueue(req Request)
+	Enqueue(req NodeRequest)
 	// StreamUp reports whether the channel can currently carry requests.
 	StreamUp() bool
 	// LastErr returns [ErrSendStalled] while a send has been blocked for
@@ -104,7 +104,7 @@ func newEndpoint(parent context.Context, id ID, sendBufferSize, recvBufferSize u
 }
 
 // Enqueue implements [Channel.Enqueue].
-func (e *endpoint) Enqueue(req Request) {
+func (e *endpoint) Enqueue(req NodeRequest) {
 	if req.Oneway && req.Streaming {
 		panic("gorums: Oneway and Streaming are mutually exclusive")
 	}
@@ -114,7 +114,7 @@ func (e *endpoint) Enqueue(req Request) {
 // reply queues a handler's reply to the peer. Without waitingReplies, it does
 // not wait for queue space, so receiving never waits on a reply.
 func (e *endpoint) reply(msg *Message) {
-	e.queue.push(Request{Ctx: e.ctx, Msg: msg}, e.waitingReplies)
+	e.queue.push(NodeRequest{Ctx: e.ctx, Msg: msg}, e.waitingReplies)
 }
 
 // DroppedReplies implements [Channel.DroppedReplies].

@@ -33,7 +33,7 @@ func TestSendQueuePush(t *testing.T) {
 			done := make(chan struct{})
 			q := newSendQueue(1, 1, done)
 			// Fill the queue with a request that has its own response channel.
-			q.push(Request{Ctx: context.Background(), Msg: &Message{}, ResponseChan: make(chan response, 1)}, false)
+			q.push(NodeRequest{Ctx: context.Background(), Msg: &Message{}, ResponseChan: make(chan response, 1)}, false)
 			if tt.closeDone {
 				close(done)
 			}
@@ -41,7 +41,7 @@ func TestSendQueuePush(t *testing.T) {
 				q.close()
 			}
 			responseChan := make(chan response, 1)
-			req := Request{Ctx: tt.ctx, Msg: &Message{}, ResponseChan: responseChan}
+			req := NodeRequest{Ctx: tt.ctx, Msg: &Message{}, ResponseChan: responseChan}
 			if tt.noResponseChan {
 				req.ResponseChan = nil
 			}
@@ -68,10 +68,10 @@ func TestSendQueuePush(t *testing.T) {
 // consumer makes room.
 func TestSendQueueWaitsForSpace(t *testing.T) {
 	q := newSendQueue(1, 1, nil)
-	q.push(Request{Ctx: context.Background(), Msg: &Message{}}, false)
+	q.push(NodeRequest{Ctx: context.Background(), Msg: &Message{}}, false)
 	pushed := make(chan struct{})
 	go func() {
-		q.push(Request{Ctx: context.Background(), Msg: &Message{}}, true)
+		q.push(NodeRequest{Ctx: context.Background(), Msg: &Message{}}, true)
 		close(pushed)
 	}()
 	select {
@@ -101,7 +101,7 @@ func TestSendQueueCloseAnswersEveryRequest(t *testing.T) {
 		for range pushers {
 			wg.Go(func() {
 				for range perPusher {
-					q.push(Request{Ctx: context.Background(), Msg: &Message{}, ResponseChan: responseChan}, false)
+					q.push(NodeRequest{Ctx: context.Background(), Msg: &Message{}, ResponseChan: responseChan}, false)
 				}
 			})
 		}

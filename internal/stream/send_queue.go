@@ -9,7 +9,7 @@ import (
 // Once closed, it fails every queued and later request with [ErrNodeClosed].
 type sendQueue struct {
 	id   ID
-	ch   chan Request
+	ch   chan NodeRequest
 	done <-chan struct{} // ends waits for queue space
 
 	mu     sync.RWMutex // held for reading by push, for writing by close
@@ -21,14 +21,14 @@ type sendQueue struct {
 // newSendQueue returns a queue with the given capacity. Closing done ends
 // waits for queue space; [sendQueue.close] waits for those to end.
 func newSendQueue(id ID, capacity uint, done <-chan struct{}) *sendQueue {
-	return &sendQueue{id: id, ch: make(chan Request, capacity), done: done}
+	return &sendQueue{id: id, ch: make(chan NodeRequest, capacity), done: done}
 }
 
 // push adds req to the queue. If the queue is full and wait is false, it
 // fails req with [ErrSendQueueFull]. If wait is true, it waits for space until
 // req's context or the queue's done channel ends, and fails req with the
 // corresponding error. A closed queue fails req with [ErrNodeClosed].
-func (q *sendQueue) push(req Request, wait bool) {
+func (q *sendQueue) push(req NodeRequest, wait bool) {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 	if q.closed {
@@ -70,7 +70,7 @@ func (q *sendQueue) close() {
 
 // fail sends a response with err to req, or counts req as dropped if it has
 // no response channel.
-func (q *sendQueue) fail(req Request, err error) {
+func (q *sendQueue) fail(req NodeRequest, err error) {
 	if req.ResponseChan == nil {
 		q.dropped.Add(1)
 		return

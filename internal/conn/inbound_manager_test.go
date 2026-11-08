@@ -935,7 +935,7 @@ func TestInboundManagerAcceptPeerCleanupDoesNotHoldManagerLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AcceptPeer: %v", err)
 	}
-	ch.Enqueue(stream.Request{Ctx: t.Context(), Oneway: true, Msg: stream.Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build()})
+	ch.Enqueue(stream.NodeRequest{Ctx: t.Context(), Oneway: true, Msg: stream.Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build()})
 	<-st.entered
 
 	cleanupDone := make(chan struct{})

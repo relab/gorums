@@ -119,8 +119,8 @@ func NewOutboundChannel(ctx context.Context, id ID, conn *grpc.ClientConn, opts 
 func (c *OutboundChannel) run() {
 	defer c.queue.close()
 	b := newBackoff(c.eagerReconnect)
-	var req *Request // taken from the queue, not yet sent
-	connect := true  // open a stream without waiting for a request or timer
+	var req *NodeRequest // taken from the queue, not yet sent
+	connect := true      // open a stream without waiting for a request or timer
 	for {
 		if !connect {
 			var ok bool
@@ -167,7 +167,7 @@ func (c *OutboundChannel) run() {
 
 // streamFailed handles a stream that could not be opened, or that the server
 // refused, with err. It fails req, which is not sent again.
-func (c *OutboundChannel) streamFailed(b *backoff, req *Request, err error) {
+func (c *OutboundChannel) streamFailed(b *backoff, req *NodeRequest, err error) {
 	if c.ctx.Err() != nil {
 		err = ErrNodeClosed
 	} else {
@@ -180,7 +180,7 @@ func (c *OutboundChannel) streamFailed(b *backoff, req *Request, err error) {
 // await returns the next request, or nil when the retry timer fires first.
 // Requests that arrive during a refusal backoff fail with the refusal. It
 // returns false when the channel closes.
-func (c *OutboundChannel) await(b *backoff) (req *Request, ok bool) {
+func (c *OutboundChannel) await(b *backoff) (req *NodeRequest, ok bool) {
 	for {
 		select {
 		case <-c.ctx.Done():
@@ -198,7 +198,7 @@ func (c *OutboundChannel) await(b *backoff) (req *Request, ok bool) {
 }
 
 // failRequest fails req with err. It ignores a nil req.
-func (c *OutboundChannel) failRequest(req *Request, err error) {
+func (c *OutboundChannel) failRequest(req *NodeRequest, err error) {
 	if req != nil {
 		c.queue.fail(*req, err)
 	}

@@ -30,7 +30,7 @@ func TestLocalChannelReentrantCall(t *testing.T) {
 		}
 		nestedCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 		defer cancel()
-		c.Enqueue(Request{
+		c.Enqueue(NodeRequest{
 			Ctx:          nestedCtx,
 			Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
 			ResponseChan: nestedResponseChan,
@@ -44,7 +44,7 @@ func TestLocalChannelReentrantCall(t *testing.T) {
 	})
 	c = NewLocalChannel(1, handler, testRecvBufferSize, nil)
 
-	c.Enqueue(Request{
+	c.Enqueue(NodeRequest{
 		Ctx:          t.Context(),
 		Msg:          Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
 		ResponseChan: make(chan response, 1),
@@ -87,7 +87,7 @@ func TestLocalChannelUnmatchedErrors(t *testing.T) {
 	c := NewLocalChannel(1, handler, testRecvBufferSize, log.New(&logBuf, "", 0))
 
 	responseChan := make(chan response, 1)
-	c.Enqueue(Request{
+	c.Enqueue(NodeRequest{
 		Ctx:          t.Context(),
 		Msg:          Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
 		ResponseChan: responseChan,
@@ -104,7 +104,7 @@ func TestLocalChannelUnmatchedErrors(t *testing.T) {
 		t.Errorf("UnmatchedErrors() = %d after a two-way error, want 0", got)
 	}
 
-	c.Enqueue(Request{
+	c.Enqueue(NodeRequest{
 		Ctx:    t.Context(),
 		Oneway: true,
 		Msg:    Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
@@ -137,7 +137,7 @@ func TestLocalChannelUnmatchedErrorsEndedCall(t *testing.T) {
 	c := NewLocalChannel(1, handler, testRecvBufferSize, log.New(&logBuf, "", 0))
 
 	ctx, cancel := context.WithCancel(t.Context())
-	c.Enqueue(Request{
+	c.Enqueue(NodeRequest{
 		Ctx:          ctx,
 		Msg:          Message_builder{MessageSeqNo: 3, Method: mock.TestMethod}.Build(),
 		ResponseChan: make(chan response, 1),

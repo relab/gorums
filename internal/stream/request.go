@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// Request is a message to send to a node, together with how to report its outcome.
-type Request struct {
+// NodeRequest is a message to send to a node, together with how to report its outcome.
+type NodeRequest struct {
 	Ctx          context.Context
 	Msg          *Message
 	Streaming    bool
@@ -17,20 +17,20 @@ type Request struct {
 
 // wantServerResponse reports whether the request expects server responses:
 // two-way calls (RPC, quorum call) and streaming calls (correctable).
-func (r Request) wantServerResponse() bool {
+func (r NodeRequest) wantServerResponse() bool {
 	return r.ResponseChan != nil && !r.Oneway
 }
 
 // wantSendConfirmation reports whether the request expects confirmation that
 // it was sent: one-way calls (unicast, multicast) with a response channel.
-func (r Request) wantSendConfirmation() bool {
+func (r NodeRequest) wantSendConfirmation() bool {
 	return r.Oneway && r.ResponseChan != nil
 }
 
 // deliver sends resp on the request's response channel, preferring delivery
 // even if the request's context has ended. If the channel is full, it waits
 // until the context ends. It reports whether resp was delivered.
-func (r Request) deliver(resp response) bool {
+func (r NodeRequest) deliver(resp response) bool {
 	select {
 	case r.ResponseChan <- resp:
 		return true
@@ -46,7 +46,7 @@ func (r Request) deliver(resp response) bool {
 
 // sendErrorResponse sends a response with err on the request's response
 // channel, if it has one.
-func (r Request) sendErrorResponse(nodeID ID, err error) {
+func (r NodeRequest) sendErrorResponse(nodeID ID, err error) {
 	if r.ResponseChan != nil {
 		r.deliver(response{NodeID: nodeID, Err: err})
 	}

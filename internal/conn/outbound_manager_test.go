@@ -98,7 +98,7 @@ func TestOutboundManagerPeerVerifier(t *testing.T) {
 
 			responseChan := make(chan stream.NodeResponse[*stream.Message], 1)
 			msg := stream.Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build()
-			NodeTransport(n).Enqueue(stream.Request{Ctx: t.Context(), Msg: msg, Oneway: true, ResponseChan: responseChan})
+			NodeTransport(n).Enqueue(stream.NodeRequest{Ctx: t.Context(), Msg: msg, Oneway: true, ResponseChan: responseChan})
 			select {
 			case r := <-responseChan:
 				if got := status.Code(r.Err); got != tt.wantCode {
