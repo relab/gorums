@@ -1932,7 +1932,9 @@ It then builds on gRPC's own graceful shutdown:
 3. The server finishes the handlers of the requests it received on that stream, and sends their replies.
    This includes one-way requests, which have no reply, and handlers that called `Release`.
    These handlers run even if the client disconnects after it has closed its side.
-4. The server ends the stream, and `GracefulStop` returns once all streams have ended.
+4. The server ends the stream.
+5. The server waits for the handlers of the calls that it sent to its own node, through `PeerConfig` or `ConnectedPeers`.
+   These handlers run with their caller's context, so `Stop` does not end them.
 
 A client cannot answer calls from the server after it has closed its side of a stream.
 The server fails such calls with `ErrStreamDown`, including calls whose handlers on the client are still running.

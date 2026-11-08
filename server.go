@@ -368,7 +368,7 @@ func (s *Server) WaitForAll(ctx context.Context) (Config, error) {
 
 // GracefulStop stops the server after it has handled every request it has
 // received, and then closes the peer [Config] built by [WithPeers]. This
-// includes one-way requests.
+// includes one-way requests and calls that the server sent to its own node.
 //
 // GracefulStop first unblocks [Server.WaitForPeers], [Server.WaitForClients],
 // and [Server.WaitForAll] with [ErrStopped]. It then refuses new streams and
@@ -382,6 +382,7 @@ func (s *Server) GracefulStop() {
 	s.im.Close()
 	s.grpcServer.GracefulStop()
 	if s.closePeers != nil {
+		conn.DrainPool(s.outbound)
 		s.closePeers()
 	}
 }

@@ -85,6 +85,12 @@ func TestServerGracefulStopUnblocksWaiters(t *testing.T) {
 		wait func(*gorums.Server) error
 	}{
 		{
+			name: "WaitForPeersInLocalCall",
+			srv:  func(t *testing.T) *gorums.Server { return gorumstest.LocalServers(t, 1)[0] },
+			node: func(_ *testing.T, srv *gorums.Server) *gorums.Node { return srv.PeerConfig().Node(srv.NodeID()) },
+			wait: func(srv *gorums.Server) error { return srv.WaitForPeers(context.Background(), never) },
+		},
+		{
 			name: "WaitForClientsInStreamCall",
 			srv:  func(*testing.T) *gorums.Server { return gorums.NewServer() },
 			node: func(t *testing.T, srv *gorums.Server) *gorums.Node {
@@ -121,6 +127,62 @@ func TestServerGracefulStopUnblocksWaiters(t *testing.T) {
 			}
 			if err := <-waitErr; !errors.Is(err, gorums.ErrStopped) {
 				t.Errorf("wait in handler: err = %v, want %v", err, gorums.ErrStopped)
+			}
+		})
+	}
+}
+
+// TestServerGracefulStopWaitsForLocalCalls verifies that GracefulStop waits
+// for the handler of a one-way call that the server sent to itself, through
+// either of its configurations that include its own node.
+func TestServerGracefulStopWaitsForLocalCalls(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  func(*gorums.Server) gorums.Config
+	}{
+		{name: "PeerConfig", cfg: (*gorums.Server).PeerConfig},
+		{name: "ConnectedPeers", cfg: (*gorums.Server).ConnectedPeers},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := gorumstest.LocalServers(t, 1)[0]
+			gate := make(chan struct{})
+			started := make(chan struct{}, 1)
+			var finished atomic.Bool
+			srv.RegisterHandler(mock.TestMethod, func(gorums.ServerContext, *gorums.Message, func(proto.Message)) error {
+				started <- struct{}{}
+				<-gate
+				finished.Store(true)
+				return nil
+			})
+			self := tt.cfg(srv).Node(srv.NodeID())
+			if self == nil {
+				t.Fatalf("%s has no node %d", tt.name, srv.NodeID())
+			}
+			ctx := gorumstest.Context(t, 2*time.Second)
+			if err := mockcall.Unicast(ctx, self, "x").Send(); err != nil {
+				t.Fatalf("Unicast to self: %v", err)
+			}
+			<-started
+
+			stopped := make(chan struct{})
+			go func() {
+				srv.GracefulStop()
+				close(stopped)
+			}()
+			select {
+			case <-stopped:
+				t.Fatal("GracefulStop returned while a local handler was blocked")
+			case <-time.After(200 * time.Millisecond):
+			}
+			close(gate)
+			select {
+			case <-stopped:
+			case <-time.After(5 * time.Second):
+				t.Fatal("GracefulStop did not return after the local handler returned")
+			}
+			if !finished.Load() {
+				t.Error("GracefulStop returned before the local handler finished")
 			}
 		})
 	}
