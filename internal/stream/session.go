@@ -83,7 +83,7 @@ func newSession(ctx context.Context, cancel context.CancelFunc, e *endpoint, str
 // sendLoop sends req, if non-nil, and then requests from the send queue,
 // until the session ends or starts draining. It returns the request it took
 // from the queue but did not send, or nil.
-func (s *session) sendLoop(req *Request) *Request {
+func (s *session) sendLoop(req *NodeRequest) *NodeRequest {
 	defer s.stopSending()
 	for {
 		if req == nil {
@@ -117,7 +117,7 @@ func (s *session) sendLoop(req *Request) *Request {
 // send sends req on the stream and reports whether the stream is still usable.
 // A two-way request must already be pending; a one-way request is confirmed
 // once it is sent.
-func (s *session) send(req Request) bool {
+func (s *session) send(req NodeRequest) bool {
 	s.sendStart.Store(time.Now().UnixNano())
 	err := s.stream.Send(req.Msg)
 	s.sendStart.Store(0)
@@ -329,7 +329,7 @@ func (s *session) outcome() (accepted bool, refusal error) {
 // [ErrSendQueueFull] if the send queue is full or [ErrNodeClosed] if the
 // channel is closed. An inbound session has no next session, so retryOrFail fails
 // every call with [ErrStreamDown].
-func (s *session) retryOrFail(req Request, err error) {
+func (s *session) retryOrFail(req NodeRequest, err error) {
 	switch refusal := s.refused(); {
 	case refusal != nil:
 		req.sendErrorResponse(s.id, refusal)

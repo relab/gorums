@@ -41,7 +41,7 @@ func TestNodeEnqueueWithoutChannel(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			responseChan := make(chan stream.NodeResponse[*stream.Message], 1)
-			NodeTransport(tt.node).Enqueue(stream.Request{Ctx: t.Context(), ResponseChan: responseChan})
+			NodeTransport(tt.node).Enqueue(stream.NodeRequest{Ctx: t.Context(), ResponseChan: responseChan})
 			select {
 			case r := <-responseChan:
 				if !errors.Is(r.Err, stream.ErrStreamDown) {
@@ -61,7 +61,7 @@ func TestNodeCloseCancelsAllPendingRequests(t *testing.T) {
 	ch := stream.NewInboundChannel(t.Context(), 1, mock.NewBidiStream[*stream.Message](), stream.InboundOptions{SendBufferSize: 1, RecvBufferSize: DefaultRecvBufferSize})
 	node := newTestNode(1, ch)
 	responseChan := make(chan stream.NodeResponse[*stream.Message], 1)
-	NodeTransport(node).Enqueue(stream.Request{
+	NodeTransport(node).Enqueue(stream.NodeRequest{
 		Ctx:          t.Context(),
 		Msg:          stream.Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
 		ResponseChan: responseChan,
@@ -148,7 +148,7 @@ func TestNodeDetail(t *testing.T) {
 // See BenchmarkChannelSend in internal/stream and BenchmarkNodeEnqueueSend
 // below for the full send-path cost.
 func BenchmarkNodeEnqueue(b *testing.B) {
-	req := stream.Request{}
+	req := stream.NodeRequest{}
 
 	b.Run("ChannelNil", func(b *testing.B) {
 		// No stream attached, so the channel lookup returns nil immediately.
@@ -221,7 +221,7 @@ func BenchmarkNodeEnqueueSend(b *testing.B) {
 					Method:       mock.TestMethod,
 					Payload:      payload,
 				}.Build()
-				NodeTransport(n).Enqueue(stream.Request{
+				NodeTransport(n).Enqueue(stream.NodeRequest{
 					Ctx:          context.Background(),
 					Msg:          reqMsg,
 					Oneway:       true,

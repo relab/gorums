@@ -33,7 +33,7 @@ func newTestSession(t *testing.T, sendBufferSize uint, handler RequestHandler, s
 func TestSessionHandleDeliversResponse(t *testing.T) {
 	s := newTestSession(t, 1, nil, true, true)
 	responseChan := make(chan response, 2)
-	s.pending.add(42, Request{Ctx: t.Context(), Msg: &Message{}, ResponseChan: responseChan})
+	s.pending.add(42, NodeRequest{Ctx: t.Context(), Msg: &Message{}, ResponseChan: responseChan})
 
 	msg := Message_builder{MessageSeqNo: 42}.Build()
 	s.handle(msg)
@@ -56,7 +56,7 @@ func TestSessionHandleDoesNotBlockOnCanceledRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	responseChan := make(chan response, 1)
 	responseChan <- response{NodeID: 99} // fill the channel
-	s.pending.add(42, Request{Ctx: ctx, Msg: &Message{}, ResponseChan: responseChan})
+	s.pending.add(42, NodeRequest{Ctx: ctx, Msg: &Message{}, ResponseChan: responseChan})
 	cancel()
 
 	done := make(chan struct{})
@@ -91,7 +91,7 @@ func TestSessionEndRetriesPendingCalls(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newTestSession(t, 1, nil, true, tt.requeue)
 			responseChan := make(chan response, 1)
-			s.pending.add(1, Request{Ctx: t.Context(), Msg: &Message{}, Streaming: tt.streaming, ResponseChan: responseChan})
+			s.pending.add(1, NodeRequest{Ctx: t.Context(), Msg: &Message{}, Streaming: tt.streaming, ResponseChan: responseChan})
 			if tt.closeChannel {
 				s.endpoint.cancel()
 			}
@@ -120,8 +120,8 @@ func TestSessionEndRetriesPendingCalls(t *testing.T) {
 // ends once it has stopped sending and its pending calls have completed.
 func TestSessionDrain(t *testing.T) {
 	s := newTestSession(t, 4, nil, true, true)
-	s.pending.add(1, Request{Ctx: t.Context(), Msg: &Message{}, ResponseChan: make(chan response, 1)})
-	queued := Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 2}.Build()}
+	s.pending.add(1, NodeRequest{Ctx: t.Context(), Msg: &Message{}, ResponseChan: make(chan response, 1)})
+	queued := NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 2}.Build()}
 	s.queue.push(queued, false)
 
 	s.startDrain()
@@ -160,7 +160,7 @@ func TestSessionFailRecordsOnlyLiveErrors(t *testing.T) {
 func TestSessionDrainEndsWhenCallerIsDone(t *testing.T) {
 	s := newTestSession(t, 1, nil, true, true)
 	ctx, cancel := context.WithCancel(t.Context())
-	s.pending.add(1, Request{Ctx: ctx, Msg: &Message{}, Streaming: true, ResponseChan: make(chan response, 1)})
+	s.pending.add(1, NodeRequest{Ctx: ctx, Msg: &Message{}, Streaming: true, ResponseChan: make(chan response, 1)})
 	s.startDrain()
 	s.stopSending()
 	if s.ended() {
@@ -216,7 +216,7 @@ func TestSessionSendMarksSendInProgress(t *testing.T) {
 	ctx, cancel := context.WithCancel(e.ctx)
 	s := newSession(ctx, cancel, &e, stream, true, true)
 
-	e.Enqueue(Request{Ctx: t.Context(), Oneway: true, Msg: Message_builder{MessageSeqNo: 1}.Build()})
+	e.Enqueue(NodeRequest{Ctx: t.Context(), Oneway: true, Msg: Message_builder{MessageSeqNo: 1}.Build()})
 	go s.sendLoop(nil)
 	<-stream.Entered()
 	if e.sendStart.Load() == 0 {
@@ -268,7 +268,7 @@ func TestSessionDispatchNotWedgedByReentrantReply(t *testing.T) {
 
 		// Occupy the send loop: this one-way request is handed to it, and it
 		// then blocks in Send on a transport that never drains.
-		e.Enqueue(Request{
+		e.Enqueue(NodeRequest{
 			Ctx:    context.Background(),
 			Oneway: true,
 			Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
@@ -323,7 +323,7 @@ func TestSessionHandleKeepsReadingWhileHandlerUnreleased(t *testing.T) {
 	s := newTestSession(t, 0, handler, true, true)
 
 	responseChan := make(chan response, 1)
-	s.pending.add(42, Request{
+	s.pending.add(42, NodeRequest{
 		Ctx:          context.Background(),
 		Msg:          &Message{},
 		ResponseChan: responseChan,
@@ -471,7 +471,7 @@ func TestSessionHandleUnmatchedErrors(t *testing.T) {
 					cancel()
 				}
 				defer cancel()
-				s.pending.add(msgID, Request{Ctx: ctx, Msg: &Message{}, ResponseChan: responseChan})
+				s.pending.add(msgID, NodeRequest{Ctx: ctx, Msg: &Message{}, ResponseChan: responseChan})
 			}
 
 			s.handle(tt.msg)
@@ -578,8 +578,8 @@ func TestSessionRefusalFailsPendingCalls(t *testing.T) {
 			s, stream := newScriptedSession(t, nil, !tt.inbound)
 			twoWay := make(chan response, 1)
 			streaming := make(chan response, 1)
-			s.pending.add(1, Request{Ctx: t.Context(), Msg: &Message{}, ResponseChan: twoWay})
-			s.pending.add(2, Request{Ctx: t.Context(), Msg: &Message{}, Streaming: true, ResponseChan: streaming})
+			s.pending.add(1, NodeRequest{Ctx: t.Context(), Msg: &Message{}, ResponseChan: twoWay})
+			s.pending.add(2, NodeRequest{Ctx: t.Context(), Msg: &Message{}, Streaming: true, ResponseChan: streaming})
 			if tt.afterFrame {
 				stream.frame(Message_builder{MessageSeqNo: 999}.Build()) // an unknown response
 			}
@@ -626,8 +626,8 @@ func TestSessionSendResourceExhaustedFailsPendingCalls(t *testing.T) {
 	s, _ := newScriptedSession(t, sizeErr, true)
 	oversized := make(chan response, 1)
 	other := make(chan response, 1)
-	s.pending.add(2, Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 2}.Build(), ResponseChan: other})
-	req := Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), ResponseChan: oversized}
+	s.pending.add(2, NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 2}.Build(), ResponseChan: other})
+	req := NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), ResponseChan: oversized}
 	if left := s.sendLoop(&req); left != nil {
 		t.Fatalf("sendLoop returned unsent request %d", left.Msg.GetMessageSeqNo())
 	}
@@ -684,7 +684,7 @@ func TestSessionFailedSendLeavesCallsToReceive(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s, stream := newScriptedSession(t, io.EOF, true)
 			responseChan := make(chan response, 1)
-			s.queue.push(Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), ResponseChan: responseChan}, false)
+			s.queue.push(NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), ResponseChan: responseChan}, false)
 			if req := s.sendLoop(nil); req != nil {
 				t.Fatalf("send loop returned request %d, want none", req.Msg.GetMessageSeqNo())
 			}
@@ -744,8 +744,8 @@ func TestSessionFailedSendAfterFrameLeavesCallsToReceive(t *testing.T) {
 
 				twoWay := make(chan response, 1)
 				streaming := make(chan response, 1)
-				s.pending.add(2, Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 2}.Build(), Streaming: true, ResponseChan: streaming})
-				s.queue.push(Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), ResponseChan: twoWay}, false)
+				s.pending.add(2, NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 2}.Build(), Streaming: true, ResponseChan: streaming})
+				s.queue.push(NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), ResponseChan: twoWay}, false)
 				if req := s.sendLoop(nil); req != nil {
 					t.Fatalf("send loop returned request %d, want none", req.Msg.GetMessageSeqNo())
 				}
@@ -795,7 +795,7 @@ func TestSessionOnewaySendFailure(t *testing.T) {
 				s, stream := newScriptedSession(t, io.EOF, true)
 				go func() { _ = s.receive() }()
 				responseChan := make(chan response, 1)
-				s.queue.push(Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), Oneway: true, ResponseChan: responseChan}, false)
+				s.queue.push(NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), Oneway: true, ResponseChan: responseChan}, false)
 				go s.sendLoop(nil)
 				synctest.Wait() // the send has failed; the stream has not ended yet
 				stream.end(tt.end)
@@ -830,7 +830,7 @@ func TestSessionRefusalOwnsPendingAfterCancellation(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				s, _ := newScriptedSession(t, nil, true)
 				responseChan := make(chan response, 1)
-				s.pending.add(1, Request{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), Streaming: streaming, ResponseChan: responseChan})
+				s.pending.add(1, NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), Streaming: streaming, ResponseChan: responseChan})
 				refusal := status.Error(codes.Unauthenticated, "refused")
 				canceled, resume := make(chan struct{}), make(chan struct{})
 				cancel := s.cancel

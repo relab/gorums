@@ -21,7 +21,7 @@ func RemoteCall[Req, Resp proto.Message](ctx context.Context, node *Node, req Re
 		var zero Resp
 		return zero, err
 	}
-	transport.Enqueue(stream.Request{Ctx: ctx, Msg: reqMsg, ResponseChan: responseChan})
+	transport.Enqueue(stream.NodeRequest{Ctx: ctx, Msg: reqMsg, ResponseChan: responseChan})
 
 	select {
 	case r := <-responseChan:

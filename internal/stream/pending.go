@@ -27,14 +27,14 @@ type pendingCalls struct {
 
 // pendingCall is a call in a [pendingCalls] table.
 type pendingCall struct {
-	req  Request
+	req  NodeRequest
 	seq  uint64
 	stop func() bool // stops the expiry watch; nil if there is none
 }
 
 // add records req under msgID and stamps its send time. It reports false,
 // without recording req, once the table is drained.
-func (p *pendingCalls) add(msgID uint64, req Request) bool {
+func (p *pendingCalls) add(msgID uint64, req NodeRequest) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
@@ -58,7 +58,7 @@ func (p *pendingCalls) add(msgID uint64, req Request) bool {
 
 // take returns the call for msgID and reports whether there was one. A
 // non-streaming call is removed; a streaming call stays for later responses.
-func (p *pendingCalls) take(msgID uint64) (Request, bool) {
+func (p *pendingCalls) take(msgID uint64) (NodeRequest, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	call, ok := p.calls[msgID]
@@ -69,11 +69,11 @@ func (p *pendingCalls) take(msgID uint64) (Request, bool) {
 }
 
 // drain removes and returns all calls and makes later adds fail.
-func (p *pendingCalls) drain() []Request {
+func (p *pendingCalls) drain() []NodeRequest {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.closed = true
-	reqs := make([]Request, 0, len(p.calls))
+	reqs := make([]NodeRequest, 0, len(p.calls))
 	for msgID, call := range p.calls {
 		reqs = append(reqs, call.req)
 		p.deleteLocked(msgID, call)

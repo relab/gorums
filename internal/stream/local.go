@@ -31,7 +31,7 @@ func NewLocalChannel(id ID, handler RequestHandler, recvBufferSize uint, logger 
 // queued. When the queue is full, a two-way request fails with
 // [ErrSendQueueFull] and a one-way request waits for space until its context
 // ends. Without a handler, req fails with [codes.Unimplemented].
-func (c *LocalChannel) Enqueue(req Request) {
+func (c *LocalChannel) Enqueue(req NodeRequest) {
 	if req.Oneway && req.Streaming {
 		panic("gorums: Oneway and Streaming are mutually exclusive")
 	}

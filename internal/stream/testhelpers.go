@@ -16,13 +16,13 @@ type stateChannel struct {
 	lastErr error
 }
 
-func (stateChannel) Enqueue(req Request)    { req.sendErrorResponse(0, ErrStreamDown) }
-func (stateChannel) StreamUp() bool         { return false }
-func (c stateChannel) LastErr() error       { return c.lastErr }
-func (stateChannel) DroppedReplies() int64  { return 0 }
-func (stateChannel) UnmatchedErrors() int64 { return 0 }
-func (stateChannel) PendingCount() int      { return 0 }
-func (stateChannel) Close() error           { return nil }
+func (stateChannel) Enqueue(req NodeRequest) { req.sendErrorResponse(0, ErrStreamDown) }
+func (stateChannel) StreamUp() bool          { return false }
+func (c stateChannel) LastErr() error        { return c.lastErr }
+func (stateChannel) DroppedReplies() int64   { return 0 }
+func (stateChannel) UnmatchedErrors() int64  { return 0 }
+func (stateChannel) PendingCount() int       { return 0 }
+func (stateChannel) Close() error            { return nil }
 
 // NewSharedTransportWithGen is like [NewSharedTransport] but overrides the
 // message-ID generator, so a test can simulate a deduplicated transport that
