@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/emptypb"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -48,6 +50,38 @@ func TestMessageConstructorsPreservePayloadAndMetadata(t *testing.T) {
 	}
 }
 
+func TestMessageNewRequestMatchesBuilder(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		ctx         context.Context
+		payload     []byte
+		wantEntries []string
+	}{
+		{name: "NilPayload", ctx: context.Background()},
+		{name: "EmptyPayload", ctx: context.Background(), payload: []byte{}},
+		{name: "PayloadAndMetadata", ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-id", "42")), payload: []byte("request"), wantEntries: []string{"x-id=42"}},
+		{name: "RepeatedMetadataValues", ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-id", "42", "x-id", "43")), payload: []byte("request"), wantEntries: []string{"x-id=42", "x-id=43"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NewRequestFromPayload(tc.ctx, 7, "test.Method", tc.payload)
+			want := requestWithBuilder(tc.ctx, tc.payload)
+			if !proto.Equal(got, want) {
+				t.Errorf("NewRequestFromPayload = %v, want %v", got, want)
+			}
+			if (got.GetPayload() == nil) != (want.GetPayload() == nil) {
+				t.Errorf("payload nil = %v, want %v", got.GetPayload() == nil, want.GetPayload() == nil)
+			}
+			var entries []string
+			for _, entry := range got.GetEntry() {
+				entries = append(entries, entry.GetKey()+"="+entry.GetValue())
+			}
+			if !slices.Equal(entries, tc.wantEntries) {
+				t.Errorf("metadata entries = %v, want %v", entries, tc.wantEntries)
+			}
+		})
+	}
+}
+
 func TestMessageNewResponse(t *testing.T) {
 	in := Message_builder{
 		MessageSeqNo: 100,
@@ -76,6 +110,7 @@ func TestMessageNewResponse(t *testing.T) {
 		want *Message
 	}{
 		{name: "NilResp", resp: nil, err: nil, want: response(nil, codes.OK, "")},
+		{name: "EmptyResp", resp: &emptypb.Empty{}, err: nil, want: response([]byte{}, codes.OK, "")},
 		{name: "Resp", resp: pb.String("response"), err: nil, want: response(payload, codes.OK, "")},
 		{name: "StatusErr", resp: nil, err: status.Error(codes.NotFound, "missing"), want: response(nil, codes.NotFound, "missing")},
 		{name: "PlainErr", resp: nil, err: errors.New("failed"), want: response(nil, codes.Unknown, "failed")},
@@ -86,6 +121,9 @@ func TestMessageNewResponse(t *testing.T) {
 			got := NewResponse(in, tt.resp, tt.err)
 			if diff := cmp.Diff(tt.want, got, protocmp.Transform()); diff != "" {
 				t.Errorf("NewResponse mismatch (-want, +got):\n%s", diff)
+			}
+			if (got.GetPayload() == nil) != (tt.want.GetPayload() == nil) {
+				t.Errorf("payload nil = %v, want %v", got.GetPayload() == nil, tt.want.GetPayload() == nil)
 			}
 		})
 	}
@@ -144,4 +182,78 @@ func TestMessageAppendToIncomingContext(t *testing.T) {
 	if allocs := testing.AllocsPerRun(100, func() { noEntries.appendToIncomingContext(ctx) }); allocs != 0 {
 		t.Errorf("AppendToIncomingContext without entries: %v allocs, want 0", allocs)
 	}
+}
+
+// BenchmarkMessageNewRequest compares request envelopes built by
+// [NewRequestFromPayload] with envelopes built by the protobuf builder,
+// with and without outgoing metadata. The payload is prepared outside the timed
+// loop.
+func BenchmarkMessageNewRequest(b *testing.B) {
+	payload := []byte("request payload")
+	for _, tc := range []struct {
+		name string
+		ctx  context.Context
+	}{
+		{name: "NoMetadata", ctx: context.Background()},
+		{name: "OneEntry", ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-id", "42"))},
+		{name: "ThreeEntries", ctx: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-id", "42", "x-role", "replica", "x-zone", "one"))},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.Run("Production", func(b *testing.B) {
+				b.ReportAllocs()
+				for b.Loop() {
+					_ = NewRequestFromPayload(tc.ctx, 7, "test.Method", payload)
+				}
+			})
+			b.Run("Builder", func(b *testing.B) {
+				b.ReportAllocs()
+				for b.Loop() {
+					_ = requestWithBuilder(tc.ctx, payload)
+				}
+			})
+		})
+	}
+}
+
+// BenchmarkMessageNewResponse compares response envelopes built by
+// [NewResponse] with envelopes built by the protobuf builder. It isolates
+// construction from marshaling.
+func BenchmarkMessageNewResponse(b *testing.B) {
+	in := Message_builder{MessageSeqNo: 7, Method: "test.Method"}.Build()
+	b.Run("Production", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			_ = NewResponse(in, nil, nil)
+		}
+	})
+	b.Run("Builder", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			_ = responseWithBuilder(in)
+		}
+	})
+}
+
+// responseWithBuilder returns the response envelope that the protobuf builder
+// creates for the request in. It must not be inlined: an inlined Build lets the
+// compiler keep the discarded envelope on the stack, whereas a real response
+// escapes to the heap when it is sent.
+//
+//go:noinline
+func responseWithBuilder(in *Message) *Message {
+	return Message_builder{MessageSeqNo: in.GetMessageSeqNo(), Method: in.GetMethod()}.Build()
+}
+
+// requestWithBuilder returns the request envelope that the protobuf builder
+// creates for message ID 7, method "test.Method", payload, and the outgoing
+// metadata in ctx. It is the reference for [NewRequestFromPayload].
+func requestWithBuilder(ctx context.Context, payload []byte) *Message {
+	builder := Message_builder{MessageSeqNo: 7, Method: "test.Method", Payload: payload}
+	md, _ := metadata.FromOutgoingContext(ctx)
+	for k, vv := range md {
+		for _, v := range vv {
+			builder.Entry = append(builder.Entry, MetadataEntry_builder{Key: k, Value: v}.Build())
+		}
+	}
+	return builder.Build()
 }
