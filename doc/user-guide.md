@@ -1919,6 +1919,43 @@ It returns no error, because closing a connection has no failure that a caller c
 
 A `Server` configured with `WithPeers` owns its peer configuration, and `Stop` and `GracefulStop` close it.
 
+### Graceful Shutdown
+
+`Server.GracefulStop` stops the server after it has handled the requests it received.
+It first unblocks `WaitForPeers`, `WaitForClients`, and `WaitForAll` with `ErrStopped`, so a handler that waits in one of them does not block the shutdown.
+It then builds on gRPC's own graceful shutdown:
+
+1. The server refuses new streams and sends each client a GOAWAY, which tells it to stop using the connection.
+2. The client stops sending requests on that stream, and closes its side of the stream after the last one.
+   The client's gRPC connection opens a new connection for later requests.
+   While the server is down, those requests fail with an `Unavailable` error.
+3. The server finishes the handlers of the requests it received on that stream, and sends their replies.
+   This includes one-way requests, which have no reply, and handlers that called `Release`.
+   These handlers run even if the client disconnects after it has closed its side.
+4. The server ends the stream, and `GracefulStop` returns once all streams have ended.
+
+A client cannot answer calls from the server after it has closed its side of a stream.
+The server fails such calls with `ErrStreamDown`, including calls whose handlers on the client are still running.
+A two-way call whose reply the server dropped, for example because its send queue was full, also fails with `ErrStreamDown` when the stream ends.
+
+`GracefulStop` waits until every handler has returned.
+To bound the wait, call `Stop` from another goroutine:
+
+```go
+stopped := make(chan struct{})
+go func() {
+	srv.GracefulStop()
+	close(stopped)
+}()
+select {
+case <-stopped:
+case <-time.After(10 * time.Second):
+	srv.Stop() // ends the streams and cancels the handlers' contexts
+}
+```
+
+The same steps apply when a server rotates connections, for example with gRPC's `MaxConnectionAge`, so rotation does not lose one-way requests either.
+
 ## Node IDs
 
 Gorums identifies each node with a `gorums.ID`.

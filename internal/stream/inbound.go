@@ -2,6 +2,8 @@ package stream
 
 import (
 	"context"
+	"errors"
+	"io"
 	"log"
 	"sync"
 
@@ -43,6 +45,7 @@ type InboundChannel struct {
 	endpoint
 	session   *session
 	closeOnce func() error
+	sent      chan struct{} // closed when the send loop has stopped
 }
 
 // NewInboundChannel returns a channel over stream and starts its send loop.
@@ -55,6 +58,7 @@ type InboundChannel struct {
 func NewInboundChannel(ctx context.Context, id ID, stream InboundStream, opts InboundOptions) *InboundChannel {
 	c := &InboundChannel{
 		endpoint: newEndpoint(ctx, id, opts.SendBufferSize, opts.RecvBufferSize, opts.Handler, opts.Latency),
+		sent:     make(chan struct{}),
 	}
 	c.waitingReplies = opts.WaitingReplies
 	c.unmatchedErrors.logger = opts.Logger
@@ -67,6 +71,7 @@ func NewInboundChannel(ctx context.Context, id ID, stream InboundStream, opts In
 		return nil
 	})
 	go func() {
+		defer close(c.sent)
 		c.accept(stream)
 		if req := c.session.sendLoop(nil); req != nil {
 			c.queue.fail(*req, ErrStreamDown)
@@ -90,9 +95,31 @@ func (c *InboundChannel) accept(stream InboundStream) {
 }
 
 // Serve receives from the stream and routes what it receives until receiving
-// fails, and returns the receive error.
+// fails, and returns the receive error. If the dialer closed its side of the
+// stream, as it does after a server GOAWAY, Serve instead fails the calls that
+// await the dialer's replies, since the dialer can no longer send them. It then
+// waits for the handlers of the requests it received, sends their replies, and
+// returns nil. Those handlers run even if the dialer disconnects; Serve then
+// returns without waiting for them.
 func (c *InboundChannel) Serve() error {
-	return c.session.receive()
+	err := c.session.receiveFrames()
+	if !errors.Is(err, io.EOF) {
+		c.session.receiveFailed(err)
+		return err
+	}
+	c.session.peerClosed.Store(true)
+	for _, req := range c.session.pending.drain() {
+		req.sendErrorResponse(c.id, ErrStreamDown)
+	}
+	c.requests.seal()
+	if !c.requests.wait(c.ctx.Done()) {
+		c.session.end(nil)
+		return c.ctx.Err()
+	}
+	close(c.session.flush)
+	<-c.sent
+	c.session.end(nil)
+	return nil
 }
 
 // StreamUp reports true; an inbound channel is detached from its node when its
