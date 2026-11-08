@@ -9,26 +9,22 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// NewMessage creates a new [Message] proto message for the given method and message ID.
-// If a non-nil proto message is provided, it is marshaled and included in the message payload.
-// This function also extracts any client-specific metadata from the context and appends
-// it to the message, allowing client-specific metadata to be passed to the server.
-//
-// This method is intended for Gorums internal use.
-// This function is used on the client-side to create outgoing request messages.
-func NewMessage(ctx context.Context, msgID uint64, method string, msg proto.Message) (*Message, error) {
+// NewRequest creates a request [Message] for the given method, message ID, and
+// proto message. The proto message is marshaled into the message payload, and
+// any client-specific metadata in ctx is extracted and appended to the message.
+// If the proto message is nil, the message payload will be empty.
+func NewRequest(ctx context.Context, msgID uint64, method string, msg proto.Message) (*Message, error) {
 	// Marshal the message to bytes (nil message returns nil bytes and no error)
 	payload, err := proto.Marshal(msg)
 	if err != nil {
 		return nil, err
 	}
-	return NewMessageFromPayload(ctx, msgID, method, payload), nil
+	return NewRequestFromPayload(ctx, msgID, method, payload), nil
 }
 
-// NewMessageFromPayload creates a [Message] from already-marshaled protobuf
-// payload bytes. It is useful when the same request body is sent to many nodes
-// but each node requires a different message sequence number.
-func NewMessageFromPayload(ctx context.Context, msgID uint64, method string, payload []byte) *Message {
+// NewRequestFromPayload creates a request [Message] from already-marshaled
+// protobuf payload bytes.
+func NewRequestFromPayload(ctx context.Context, msgID uint64, method string, payload []byte) *Message {
 	msgBuilder := Message_builder{
 		MessageSeqNo: msgID,
 		Method:       method,

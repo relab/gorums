@@ -390,9 +390,9 @@ func TestSessionHandleBackChannel(t *testing.T) {
 		s := newTestSession(t, 0, handler, true, true)
 
 		msgCtx := metadata.NewOutgoingContext(t.Context(), metadata.Pairs(key, want))
-		msg, err := NewMessage(msgCtx, ServerSequenceNumber(1), mock.TestMethod, nil)
+		msg, err := NewRequest(msgCtx, ServerSequenceNumber(1), mock.TestMethod, nil)
 		if err != nil {
-			t.Fatalf("NewMessage: %v", err)
+			t.Fatalf("NewRequest: %v", err)
 		}
 		s.handle(msg)
 		select {

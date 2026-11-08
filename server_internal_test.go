@@ -274,9 +274,9 @@ func TestSelfNodeIDStreamRejectedEndToEnd(t *testing.T) {
 	// Bound the request by more than the wait below, so that the call fails
 	// with the refusal, not with its deadline.
 	reqCtx := testTimeoutContext(t, 5*time.Second)
-	reqMsg, err := stream.NewMessage(reqCtx, conn.NodeTransport(node).NextMsgID(), mock.TestMethod, pb.String("hello"))
+	reqMsg, err := stream.NewRequest(reqCtx, conn.NodeTransport(node).NextMsgID(), mock.TestMethod, pb.String("hello"))
 	if err != nil {
-		t.Fatalf("NewMessage() error: %v", err)
+		t.Fatalf("NewRequest() error: %v", err)
 	}
 	responseChan := make(chan NodeResponse[*stream.Message], 1)
 	conn.NodeTransport(node).Enqueue(stream.NodeRequest{Ctx: reqCtx, Msg: reqMsg, ResponseChan: responseChan})
@@ -403,9 +403,9 @@ func TestKnownPeerServerCallsClient(t *testing.T) {
 
 	// Create the request message.
 	ctx := testTimeoutContext(t, 5*time.Second)
-	reqMsg, err := stream.NewMessage(ctx, conn.NodeTransport(pNode).NextMsgID(), mock.TestMethod, pb.String("hello"))
+	reqMsg, err := stream.NewRequest(ctx, conn.NodeTransport(pNode).NextMsgID(), mock.TestMethod, pb.String("hello"))
 	if err != nil {
-		t.Fatalf("NewMessage() error: %v", err)
+		t.Fatalf("NewRequest() error: %v", err)
 	}
 	responseChan := make(chan NodeResponse[*stream.Message], 1)
 
