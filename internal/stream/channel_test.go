@@ -2598,3 +2598,131 @@ func TestChannelGoAwayHalfClosesStream(t *testing.T) {
 		t.Fatal("GracefulStop did not return")
 	}
 }
+
+// TestChannelDrain verifies that Drain returns once the server has ended the
+// channel's stream after the client closed its side, and that later requests
+// fail with ErrNodeClosed without opening a new stream.
+func TestChannelDrain(t *testing.T) {
+	var streams atomic.Int32
+	echo := holdFirstServer(0)
+	tc := setupChannelEager(t, true, func(stream Gorums_NodeStreamServer) error {
+		streams.Add(1)
+		return echo(stream)
+	})
+	if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{}, 2); resp.Err != nil {
+		t.Fatalf("call before Drain: %v", resp.Err)
+	}
+
+	drained := make(chan struct{})
+	go func() {
+		tc.Drain()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Drain did not return")
+	}
+	if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{}, 3); !errors.Is(resp.Err, ErrNodeClosed) {
+		t.Errorf("call after Drain: err = %v, want %v", resp.Err, ErrNodeClosed)
+	}
+	if n := streams.Load(); n != 1 {
+		t.Errorf("server saw %d streams, want 1", n)
+	}
+}
+
+// TestChannelDrainSignalsEverySession verifies that Drain tells every stream of
+// the channel to stop sending before it waits for any of them to end. During
+// a GOAWAY handover, the old stream may end only after its replacement does.
+func TestChannelDrainSignalsEverySession(t *testing.T) {
+	c := &OutboundChannel{
+		endpoint: newEndpoint(t.Context(), 1, 1, testRecvBufferSize, nil, nil),
+		sessions: make(map[*session]struct{}),
+	}
+	t.Cleanup(c.cancel)
+	sessions := make([]*session, 2)
+	for i := range sessions {
+		ctx, cancel := context.WithCancel(c.ctx)
+		sessions[i] = newSession(ctx, cancel, &c.endpoint, mock.NewBidiStream[*Message](), true, true)
+		c.sessions[sessions[i]] = struct{}{}
+	}
+	drained := make(chan struct{})
+	go func() {
+		c.Drain()
+		close(drained)
+	}()
+	if !waitUntil(defaultTestTimeout, func() bool { return sessions[0].draining.Load() && sessions[1].draining.Load() }) {
+		t.Fatal("Drain did not signal every session before one of them ended")
+	}
+	for _, s := range sessions {
+		s.end(nil)
+	}
+	select {
+	case <-drained:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Drain did not return after the sessions ended")
+	}
+}
+
+// TestChannelDrainKeepsHandlerContext verifies that the handler of a request
+// that the server sent on the channel's stream keeps a live context after the
+// server ended the stream during Drain, and that Drain waits for it. Handlers
+// run with the channel's context, not the stream's.
+func TestChannelDrainKeepsHandlerContext(t *testing.T) {
+	gate := make(chan struct{})
+	started := make(chan struct{})
+	ctxErr := make(chan error, 1)
+	handler := requestHandlerFunc(func(ctx context.Context, _ *Message, _ func(), _ func(*Message)) {
+		close(started)
+		<-gate
+		ctxErr <- ctx.Err()
+	})
+	tc := setupChannelOptions(t, OutboundOptions{RecvBufferSize: testRecvBufferSize, Handler: handler}, func(stream Gorums_NodeStreamServer) error {
+		acceptStream(stream)
+		req := NewRequestFromPayload(context.Background(), ServerSequenceNumber(1), mock.TestMethod, nil)
+		if err := stream.Send(req); err != nil {
+			return err
+		}
+		for {
+			if _, err := stream.Recv(); err != nil {
+				if errors.Is(err, io.EOF) {
+					return nil
+				}
+				return err
+			}
+		}
+	})
+	select {
+	case <-started:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("the server's request did not reach the handler")
+	}
+
+	drained := make(chan struct{})
+	go func() {
+		tc.Drain()
+		close(drained)
+	}()
+	noSessions := func() bool {
+		tc.mu.Lock()
+		defer tc.mu.Unlock()
+		return len(tc.sessions) == 0
+	}
+	if !waitUntil(defaultTestTimeout, noSessions) {
+		t.Fatal("the server did not end the stream")
+	}
+	select {
+	case <-drained:
+		t.Fatal("Drain returned while the handler was blocked")
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(gate)
+	if err := <-ctxErr; err != nil {
+		t.Errorf("handler context ended with the stream: %v", err)
+	}
+	select {
+	case <-drained:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Drain did not return after the handler returned")
+	}
+}

@@ -76,9 +76,12 @@ func (m *outboundManager) Close() {
 	})
 }
 
-// DrainPool waits for the handlers of the calls to an in-process node of cfg's
-// connection pool. Once DrainPool starts, the pool rejects new nodes. Close the
-// pool afterwards. It is used by [gorums.Server.GracefulStop].
+// DrainPool ends the streams of every node in cfg's connection pool, including
+// the nodes that [Config.Extend] added, as [stream.OutboundChannel.Drain]
+// does, and waits for the handlers of the calls to an in-process node. Once
+// DrainPool starts, the pool rejects new nodes. A node that borrows a server's
+// inbound stream is skipped; the server drains that stream. Close the pool
+// afterwards. It is used by [gorums.Server.GracefulStop].
 func DrainPool(cfg Config) {
 	m := cfg.mgr()
 	if m == nil {
@@ -88,11 +91,16 @@ func DrainPool(cfg Config) {
 	m.closed = true
 	nodes := m.nodes
 	m.mu.Unlock()
+	var wg sync.WaitGroup
 	for _, node := range nodes {
-		if ch, ok := node.activeChannel().(*stream.LocalChannel); ok {
-			ch.Wait()
+		switch ch := node.activeChannel().(type) {
+		case *stream.OutboundChannel:
+			wg.Go(ch.Drain)
+		case *stream.LocalChannel:
+			wg.Go(ch.Wait)
 		}
 	}
+	wg.Wait()
 }
 
 // Node returns the node with the given identifier if present.

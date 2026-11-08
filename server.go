@@ -368,12 +368,14 @@ func (s *Server) WaitForAll(ctx context.Context) (Config, error) {
 
 // GracefulStop stops the server after it has handled every request it has
 // received, and then closes the peer [Config] built by [WithPeers]. This
-// includes one-way requests and calls that the server sent to its own node.
+// includes one-way requests, requests that peers sent on streams that this
+// server dialed, and calls that the server sent to its own node.
 //
 // GracefulStop first unblocks [Server.WaitForPeers], [Server.WaitForClients],
-// and [Server.WaitForAll] with [ErrStopped]. It then refuses new streams and
-// tells clients to stop sending. A two-way call on a stream whose replying
-// side has stopped sending fails with [ErrStreamDown].
+// and [Server.WaitForAll] with [ErrStopped]. It then refuses new streams, tells
+// clients to stop sending, and stops sending on the streams that it dialed. A
+// two-way call on a stream whose replying side has stopped sending fails with
+// [ErrStreamDown].
 //
 // GracefulStop waits until every handler has returned, even one that ignores
 // its context. To bound the wait, call [Server.Stop] from another goroutine;
