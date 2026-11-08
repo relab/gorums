@@ -240,20 +240,20 @@ func (s *Server) HandleRequest(ctx context.Context, senderID ID, reqMsg *stream.
 
 	handler, ok := s.handlers[reqMsg.GetMethod()]
 	if !ok {
-		send(newResponse(reqMsg, nil, status.Errorf(codes.Unimplemented, "no handler registered for method %s", reqMsg.GetMethod())))
+		send(stream.NewResponse(reqMsg, nil, status.Errorf(codes.Unimplemented, "no handler registered for method %s", reqMsg.GetMethod())))
 		return
 	}
 
 	msg, err := impl.UnmarshalRequest(reqMsg)
 	if err != nil {
-		send(newResponse(reqMsg, nil, err))
+		send(stream.NewResponse(reqMsg, nil, err))
 		return
 	}
 
 	call := &inboundCall{in: Message{Proto: msg, Message: reqMsg}}
 	err = handler(srvCtx, &call.in, func(resp proto.Message) {
 		call.sent.Store(true)
-		send(newResponse(reqMsg, resp, nil))
+		send(stream.NewResponse(reqMsg, resp, nil))
 	})
 	if err == nil {
 		return
@@ -263,7 +263,7 @@ func (s *Server) HandleRequest(ctx context.Context, senderID ID, reqMsg *stream.
 			reqMsg.GetMethod(), err)
 		return
 	}
-	send(newResponse(reqMsg, nil, err))
+	send(stream.NewResponse(reqMsg, nil, err))
 }
 
 // inboundCall holds the state of one request in [Server.HandleRequest]. It

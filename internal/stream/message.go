@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -41,6 +42,30 @@ func NewMessageFromPayload(ctx context.Context, msgID uint64, method string, pay
 		}
 	}
 	return msgBuilder.Build()
+}
+
+// NewResponse returns the response [Message] to the request in. It carries the
+// request's message ID and method, and either the status of err or the
+// marshaled resp. A marshal failure becomes the response status.
+func NewResponse(in *Message, resp proto.Message, err error) *Message {
+	out := Message_builder{
+		MessageSeqNo: in.GetMessageSeqNo(), // routes the response to the pending call
+		Method:       in.GetMethod(),       // selects the response type on the client
+	}.Build()
+	if err == nil && resp != nil {
+		var payload []byte
+		if payload, err = proto.Marshal(resp); err == nil {
+			out.SetPayload(payload)
+		}
+	}
+	if err != nil {
+		errStatus, ok := status.FromError(err)
+		if !ok {
+			errStatus = status.New(codes.Unknown, err.Error())
+		}
+		out.SetStatus(errStatus.Proto())
+	}
+	return out
 }
 
 // appendToIncomingContext appends client-specific metadata from the [Message] proto message
