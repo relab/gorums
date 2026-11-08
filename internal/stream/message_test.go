@@ -19,17 +19,17 @@ func TestMessageConstructorsPreservePayloadAndMetadata(t *testing.T) {
 	ctx := metadata.NewOutgoingContext(t.Context(), metadata.Pairs("x-request-id", "42", "x-role", "replica"))
 	payload := []byte("payload")
 
-	fromProto, err := NewMessage(ctx, 7, "test.Method", nil)
+	fromProto, err := NewRequest(ctx, 7, "test.Method", nil)
 	if err != nil {
-		t.Fatalf("NewMessage: %v", err)
+		t.Fatalf("NewRequest: %v", err)
 	}
-	fromPayload := NewMessageFromPayload(ctx, 8, "test.Method", payload)
+	fromPayload := NewRequestFromPayload(ctx, 8, "test.Method", payload)
 
 	if got := fromProto.GetPayload(); len(got) != 0 {
-		t.Fatalf("NewMessage payload = %q, want empty payload", got)
+		t.Fatalf("NewRequest payload = %q, want empty payload", got)
 	}
 	if got := string(fromPayload.GetPayload()); got != string(payload) {
-		t.Fatalf("NewMessageFromPayload payload = %q, want %q", got, payload)
+		t.Fatalf("NewRequestFromPayload payload = %q, want %q", got, payload)
 	}
 	for name, msg := range map[string]*Message{"proto": fromProto, "payload": fromPayload} {
 		t.Run(name, func(t *testing.T) {
@@ -106,8 +106,8 @@ func TestMessageNewResponse(t *testing.T) {
 // original metadata unchanged, and that a message without entries returns ctx
 // as it is, without allocating.
 func TestMessageAppendToIncomingContext(t *testing.T) {
-	withEntries := NewMessageFromPayload(metadata.NewOutgoingContext(t.Context(), metadata.Pairs("x-role", "replica")), 1, "test.Method", nil)
-	noEntries := NewMessageFromPayload(t.Context(), 2, "test.Method", nil)
+	withEntries := NewRequestFromPayload(metadata.NewOutgoingContext(t.Context(), metadata.Pairs("x-role", "replica")), 1, "test.Method", nil)
+	noEntries := NewRequestFromPayload(t.Context(), 2, "test.Method", nil)
 	tests := []struct {
 		name     string
 		incoming metadata.MD // nil means no incoming metadata

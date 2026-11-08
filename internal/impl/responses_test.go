@@ -20,7 +20,7 @@ func makeCallContext[Req, Resp proto.Message](t *testing.T, numNodes int, respon
 		var sm *stream.Message
 		if r.Value != nil {
 			var err error
-			sm, err = stream.NewMessage(t.Context(), 1, mock.TestMethod, r.Value)
+			sm, err = stream.NewRequest(t.Context(), 1, mock.TestMethod, r.Value)
 			if err != nil {
 				t.Fatalf("failed to marshal mock response: %v", err)
 			}

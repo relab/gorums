@@ -16,7 +16,7 @@ func RemoteCall[Req, Resp proto.Message](ctx context.Context, node *Node, req Re
 	}
 	responseChan := make(chan NodeResponse[*stream.Message], 1)
 	transport := conn.NodeTransport(node)
-	reqMsg, err := stream.NewMessage(ctx, transport.NextMsgID(), method, req)
+	reqMsg, err := stream.NewRequest(ctx, transport.NextMsgID(), method, req)
 	if err != nil {
 		var zero Resp
 		return zero, err

@@ -329,9 +329,9 @@ func trySendRequest(c Channel, req NodeRequest, msgID uint64) (response, error) 
 	if req.Ctx == nil {
 		req.Ctx = context.Background()
 	}
-	reqMsg, err := NewMessage(req.Ctx, msgID, mock.TestMethod, nil)
+	reqMsg, err := NewRequest(req.Ctx, msgID, mock.TestMethod, nil)
 	if err != nil {
-		return response{}, fmt.Errorf("NewMessage failed: %w", err)
+		return response{}, fmt.Errorf("NewRequest failed: %w", err)
 	}
 	req.Msg = reqMsg
 	responseChan := make(chan response, 1)
@@ -504,9 +504,9 @@ func TestChannelErrors(t *testing.T) {
 func TestChannelStreamFailureRecordsLastErr(t *testing.T) {
 	tc := setupChannelWithoutServer(t)
 
-	msg, err := NewMessage(context.Background(), 1, mock.TestMethod, nil)
+	msg, err := NewRequest(context.Background(), 1, mock.TestMethod, nil)
 	if err != nil {
-		t.Fatalf("NewMessage failed: %v", err)
+		t.Fatalf("NewRequest failed: %v", err)
 	}
 	tc.Enqueue(NodeRequest{Ctx: context.Background(), Msg: msg})
 
@@ -1821,7 +1821,7 @@ func TestChannelResponseRouting(t *testing.T) {
 			responseChan := make(chan response, 1)
 			tc.Enqueue(NodeRequest{
 				Ctx:          t.Context(),
-				Msg:          NewMessageFromPayload(t.Context(), msgID, mock.TestMethod, payload),
+				Msg:          NewRequestFromPayload(t.Context(), msgID, mock.TestMethod, payload),
 				ResponseChan: responseChan,
 			})
 			select {
@@ -1898,7 +1898,7 @@ func TestChannelDeadlock(t *testing.T) {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			reqMsg, _ := NewMessage(ctx, uint64(100+id), mock.TestMethod, nil)
+			reqMsg, _ := NewRequest(ctx, uint64(100+id), mock.TestMethod, nil)
 			req := NodeRequest{Ctx: ctx, Msg: reqMsg}
 
 			select {
@@ -1989,7 +1989,7 @@ func BenchmarkChannelFirstRequest(b *testing.B) {
 
 		// Use a fresh context for the benchmark request
 		ctx, cancel := context.WithTimeout(b.Context(), defaultTestTimeout)
-		reqMsg, _ := NewMessage(ctx, 1, mock.TestMethod, nil)
+		reqMsg, _ := NewRequest(ctx, 1, mock.TestMethod, nil)
 		req := NodeRequest{Ctx: ctx, Msg: reqMsg}
 		responseChan := make(chan response, 1)
 		req.ResponseChan = responseChan
@@ -2018,7 +2018,7 @@ func BenchmarkChannelReconnect(b *testing.B) {
 
 	// Establish initial stream with a fresh context
 	ctx := context.Background()
-	reqMsg, _ := NewMessage(ctx, 0, mock.TestMethod, nil)
+	reqMsg, _ := NewRequest(ctx, 0, mock.TestMethod, nil)
 	req := NodeRequest{Ctx: ctx, Msg: reqMsg}
 	responseChan := make(chan response, 1)
 	req.ResponseChan = responseChan
@@ -2039,7 +2039,7 @@ func BenchmarkChannelReconnect(b *testing.B) {
 
 		// Now send a request, which opens a new stream.
 		ctx := context.Background()
-		reqMsg, _ := NewMessage(ctx, uint64(i+1), mock.TestMethod, nil)
+		reqMsg, _ := NewRequest(ctx, uint64(i+1), mock.TestMethod, nil)
 		req := NodeRequest{Ctx: ctx, Msg: reqMsg}
 		responseChan := make(chan response, 1)
 		req.ResponseChan = responseChan

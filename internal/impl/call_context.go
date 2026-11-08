@@ -201,11 +201,11 @@ func (c *CallContext[Req, Resp]) sendShared() {
 	for i := range c.config {
 		n := c.config[(start+i)%len(c.config)]
 		if n.IsShared() {
-			c.enqueue(n, stream.NewMessageFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload))
+			c.enqueue(n, stream.NewRequestFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload))
 			continue
 		}
 		if sharedMsg == nil {
-			sharedMsg = stream.NewMessageFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload)
+			sharedMsg = stream.NewRequestFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload)
 		}
 		c.enqueue(n, sharedMsg)
 	}
@@ -236,7 +236,7 @@ func (c *CallContext[Req, Resp]) transformAndMarshal(n *Node) *stream.Message {
 		c.reportNodeError(n.ID(), ErrSkipNode)
 		return nil
 	}
-	streamMsg, err := stream.NewMessage(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, transformedRequest)
+	streamMsg, err := stream.NewRequest(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, transformedRequest)
 	if err != nil {
 		c.reportNodeError(n.ID(), err)
 		return nil
