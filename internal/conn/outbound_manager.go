@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 )
@@ -17,7 +18,7 @@ type outboundManager struct {
 	mu        sync.Mutex
 	nodes     []*Node
 	lookup    map[ID]*Node
-	closed    bool // guarded by mu; set once by Close
+	closed    bool // guarded by mu; set by Close or DrainPool, after which the manager rejects new nodes
 	closeOnce sync.Once
 	logger    *log.Logger
 	opts      DialOptions
@@ -75,6 +76,25 @@ func (m *outboundManager) Close() {
 	})
 }
 
+// DrainPool waits for the handlers of the calls to an in-process node of cfg's
+// connection pool. Once DrainPool starts, the pool rejects new nodes. Close the
+// pool afterwards. It is used by [gorums.Server.GracefulStop].
+func DrainPool(cfg Config) {
+	m := cfg.mgr()
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.closed = true
+	nodes := m.nodes
+	m.mu.Unlock()
+	for _, node := range nodes {
+		if ch, ok := node.activeChannel().(*stream.LocalChannel); ok {
+			ch.Wait()
+		}
+	}
+}
+
 // Node returns the node with the given identifier if present.
 func (m *outboundManager) Node(id ID) (node *Node, found bool) {
 	m.mu.Lock()
@@ -109,7 +129,7 @@ func (m *outboundManager) addNode(node *Node) error {
 	return nil
 }
 
-// isClosed reports whether Close has started.
+// isClosed reports whether Close or [DrainPool] has started.
 func (m *outboundManager) isClosed() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -83,5 +83,11 @@ func (*LocalChannel) DroppedReplies() int64 { return 0 }
 // PendingCount returns 0: a local channel delivers replies directly.
 func (*LocalChannel) PendingCount() int { return 0 }
 
+// Wait waits until the handlers of the requests enqueued on the channel have
+// returned.
+func (c *LocalChannel) Wait() {
+	c.requests.wait(nil)
+}
+
 // Close does nothing; queued requests still run.
 func (*LocalChannel) Close() error { return nil }
