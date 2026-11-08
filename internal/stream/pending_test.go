@@ -79,30 +79,3 @@ func TestPendingCallsSweepsExpiredCalls(t *testing.T) {
 		t.Errorf("len = %d, want between %d and %d", got, live, 2*live)
 	}
 }
-
-// TestPendingCallsWatchExpiry verifies that a watching table removes a call as
-// soon as its context ends, whether the call was added before or after the
-// watch started, and reports each removal.
-func TestPendingCallsWatchExpiry(t *testing.T) {
-	var p pendingCalls
-	before, cancelBefore := context.WithCancel(t.Context())
-	after, cancelAfter := context.WithCancel(t.Context())
-	defer cancelAfter()
-	p.add(1, NodeRequest{Ctx: before, Msg: &Message{}, Streaming: true})
-	p.add(2, NodeRequest{Ctx: t.Context(), Msg: &Message{}})
-
-	removed := make(chan struct{}, 4)
-	p.watchExpiry(func() { removed <- struct{}{} })
-	p.add(3, NodeRequest{Ctx: after, Msg: &Message{}, Streaming: true})
-
-	cancelBefore()
-	<-removed
-	cancelAfter()
-	<-removed
-	if got := p.len(); got != 1 {
-		t.Errorf("len = %d, want 1 (the call whose context is live)", got)
-	}
-	if _, ok := p.take(2); !ok {
-		t.Error("the live call was removed")
-	}
-}

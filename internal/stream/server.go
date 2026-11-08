@@ -40,12 +40,18 @@ func NewServer(onConnect func(context.Context), acceptor PeerAcceptor) *Server {
 }
 
 // NodeStream serves one client stream on the channel the acceptor returns for
-// it, until receiving from the stream fails.
+// it, until receiving from the stream fails or the client closes its side of
+// the stream; see [InboundChannel.Serve]. It returns after the handlers of the
+// requests that it received have returned.
 func (s *Server) NodeStream(srv Gorums_NodeStreamServer) error {
 	ch, cleanup, err := s.acceptor.AcceptPeer(srv.Context(), srv)
 	if err != nil {
 		return err
 	}
+	// gRPC's GracefulStop waits for NodeStream to return, so NodeStream
+	// returns only after the stream's handlers have returned. The wait runs
+	// after cleanup, which ends the handlers' contexts.
+	defer ch.requests.wait(nil)
 	defer cleanup()
 	if s.onConnect != nil {
 		s.onConnect(srv.Context())

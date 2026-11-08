@@ -17,11 +17,14 @@ type dispatcher struct {
 	mu      sync.Mutex
 	queue   []func(release func())
 	running bool
+	sealed  bool          // no more handlers are pushed; queued handlers run even after done closes
+	active  int           // queued and running handlers
+	idle    chan struct{} // closed when active drops to zero; nil until wait needs it
 }
 
 // newDispatcher returns a dispatcher that queues up to size handlers; size
-// must be positive. Closing done stops it: queued handlers are discarded and
-// pushes fail.
+// must be positive. Closing done stops it: queued handlers are discarded,
+// unless the dispatcher is sealed, and pushes fail.
 func newDispatcher(done <-chan struct{}, size uint) *dispatcher {
 	return &dispatcher{done: done, slots: make(chan struct{}, size)}
 }
@@ -58,6 +61,7 @@ func (d *dispatcher) admit(run func(release func())) bool {
 		<-d.slots
 		return false
 	}
+	d.active++
 	if d.running {
 		d.queue = append(d.queue, run)
 		d.mu.Unlock()
@@ -78,6 +82,7 @@ func (d *dispatcher) start(run func(release func())) {
 		for run != nil {
 			var once sync.Once
 			run(func() { once.Do(d.next) })
+			d.finished()
 			run = nil
 			once.Do(func() { run = d.take() })
 		}
@@ -93,13 +98,14 @@ func (d *dispatcher) next() {
 
 // take removes and returns the oldest queued handler, or nil if the queue is
 // empty or the dispatcher has stopped, in which case it discards the queue and
-// marks the dispatcher idle.
+// marks the dispatcher idle. A sealed dispatcher keeps its queue.
 func (d *dispatcher) take() func(release func()) {
 	d.mu.Lock()
-	if d.stopped() {
+	if d.stopped() && !d.sealed {
 		for range d.queue {
 			<-d.slots
 		}
+		d.finishedLocked(len(d.queue))
 		d.queue = nil
 	}
 	if len(d.queue) == 0 {
@@ -113,6 +119,53 @@ func (d *dispatcher) take() func(release func()) {
 	d.mu.Unlock()
 	<-d.slots
 	return run
+}
+
+// seal records that no more handlers will be pushed. The queued handlers then
+// run even if the dispatcher stops.
+func (d *dispatcher) seal() {
+	d.mu.Lock()
+	d.sealed = true
+	d.mu.Unlock()
+}
+
+// wait waits until no handler is queued or running, or until stop is closed,
+// and reports whether the dispatcher became idle. A nil stop never closes.
+// Handlers that a stopped dispatcher discards count as done.
+func (d *dispatcher) wait(stop <-chan struct{}) bool {
+	d.mu.Lock()
+	if d.active == 0 {
+		d.mu.Unlock()
+		return true
+	}
+	if d.idle == nil {
+		d.idle = make(chan struct{})
+	}
+	idle := d.idle
+	d.mu.Unlock()
+	select {
+	case <-idle:
+		return true
+	case <-stop:
+		return false
+	}
+}
+
+// finished records that a handler returned.
+func (d *dispatcher) finished() {
+	d.mu.Lock()
+	d.finishedLocked(1)
+	d.mu.Unlock()
+}
+
+// finishedLocked records that n handlers returned or were discarded, and
+// wakes the waiters once none is queued or running. The caller must hold mu.
+func (d *dispatcher) finishedLocked(n int) {
+	d.active -= n
+	if d.active == 0 && d.idle != nil {
+		close(d.idle)
+		d.idle = nil
+	}
 }
 
 // stopped reports whether done is closed.

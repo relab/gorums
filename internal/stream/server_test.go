@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -171,5 +172,184 @@ func TestServerNodeStreamReplyDoesNotWedgeReceiveLoop(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Error("NodeStream did not return after the stream closed")
+	}
+}
+
+// handlerAcceptor is a [PeerAcceptor] that accepts each stream on a new
+// inbound channel that serves requests with handler. It stores the latest
+// channel in last.
+type handlerAcceptor struct {
+	handler RequestHandler
+	last    atomic.Pointer[InboundChannel]
+}
+
+func (a *handlerAcceptor) AcceptPeer(ctx context.Context, stream InboundStream) (*InboundChannel, func(), error) {
+	ch := NewInboundChannel(ctx, 0, stream, InboundOptions{SendBufferSize: 10, RecvBufferSize: testRecvBufferSize, Handler: a.handler})
+	a.last.Store(ch)
+	return ch, func() { _ = ch.Close() }, nil
+}
+
+// gracefulStop runs srv.GracefulStop and returns a channel that is closed
+// when it returns.
+func gracefulStop(srv *grpc.Server) <-chan struct{} {
+	stopped := make(chan struct{})
+	go func() {
+		srv.GracefulStop()
+		close(stopped)
+	}()
+	return stopped
+}
+
+// TestServerNodeStreamWaitsForHandlers verifies that gRPC's GracefulStop,
+// which waits for NodeStream, waits for the stream's handlers. After a GOAWAY
+// the dialer closes its side of the stream, and the server sends the replies
+// of the handlers that finish later. If the dialer disconnects instead, the
+// server still waits for the running handler. If the dialer disconnects after
+// it closed its side, the server still runs every request it received.
+func TestServerNodeStreamWaitsForHandlers(t *testing.T) {
+	t.Run("Reply", func(t *testing.T) {
+		gate := make(chan struct{})
+		started := make(chan struct{}, 1)
+		acceptor := &handlerAcceptor{handler: requestHandlerFunc(func(_ context.Context, msg *Message, _ func(), send func(*Message)) {
+			started <- struct{}{}
+			<-gate
+			send(NewResponse(msg, nil, nil))
+		})}
+		tc := setupChannel(t, NewServer(nil, acceptor).NodeStream)
+		reply := make(chan response, 1)
+		go func() {
+			resp, _ := trySendRequest(tc.OutboundChannel, NodeRequest{}, 1)
+			reply <- resp
+		}()
+		<-started
+
+		stopped := gracefulStop(tc.srv)
+		select {
+		case <-stopped:
+			t.Fatal("GracefulStop returned while a handler was blocked")
+		case <-time.After(200 * time.Millisecond):
+		}
+		close(gate)
+		if resp := <-reply; resp.Err != nil {
+			t.Errorf("reply after GOAWAY: %v", resp.Err)
+		}
+		select {
+		case <-stopped:
+		case <-time.After(defaultTestTimeout):
+			t.Fatal("GracefulStop did not return after the handler returned")
+		}
+	})
+	t.Run("Disconnect", func(t *testing.T) {
+		gate := make(chan struct{})
+		started := make(chan struct{}, 1)
+		var finished atomic.Bool
+		acceptor := &handlerAcceptor{handler: requestHandlerFunc(func(context.Context, *Message, func(), func(*Message)) {
+			started <- struct{}{}
+			<-gate
+			finished.Store(true)
+		})}
+		tc := setupChannel(t, NewServer(nil, acceptor).NodeStream)
+		if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{Oneway: true}, 1); resp.Err != nil {
+			t.Fatalf("one-way send: %v", resp.Err)
+		}
+		<-started
+		if err := tc.Close(); err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+
+		stopped := gracefulStop(tc.srv)
+		select {
+		case <-stopped:
+			t.Fatal("GracefulStop returned while a disconnected stream's handler was blocked")
+		case <-time.After(200 * time.Millisecond):
+		}
+		close(gate)
+		select {
+		case <-stopped:
+		case <-time.After(defaultTestTimeout):
+			t.Fatal("GracefulStop did not return after the handler returned")
+		}
+		if !finished.Load() {
+			t.Error("GracefulStop returned before the handler finished")
+		}
+	})
+	t.Run("DisconnectAfterHalfClose", func(t *testing.T) {
+		gate := make(chan struct{})
+		started := make(chan struct{}, 2)
+		var finished atomic.Int32
+		acceptor := &handlerAcceptor{handler: requestHandlerFunc(func(context.Context, *Message, func(), func(*Message)) {
+			started <- struct{}{}
+			<-gate
+			finished.Add(1)
+		})}
+		tc := setupChannel(t, NewServer(nil, acceptor).NodeStream)
+		for id := range uint64(2) {
+			if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{Oneway: true}, id+1); resp.Err != nil {
+				t.Fatalf("one-way send %d: %v", id+1, resp.Err)
+			}
+		}
+		<-started
+
+		stopped := gracefulStop(tc.srv)
+		ch := acceptor.last.Load()
+		if !waitUntil(defaultTestTimeout, ch.session.peerClosed.Load) {
+			t.Fatal("the server did not see the client close its side of the stream")
+		}
+		if err := tc.Close(); err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+		if !waitUntil(defaultTestTimeout, func() bool { return ch.ctx.Err() != nil }) {
+			t.Fatal("the server did not see the client disconnect")
+		}
+		close(gate)
+		select {
+		case <-stopped:
+		case <-time.After(defaultTestTimeout):
+			t.Fatal("GracefulStop did not return after the handlers returned")
+		}
+		if got := finished.Load(); got != 2 {
+			t.Errorf("finished handlers = %d, want 2", got)
+		}
+	})
+}
+
+// TestServerNodeStreamFailsCallsToClosedDialer verifies that a call that the
+// server sent to the dialer fails with ErrStreamDown once the dialer has
+// closed its side of the stream, since the dialer can no longer reply. A
+// handler that waits for such a call therefore does not stall GracefulStop.
+func TestServerNodeStreamFailsCallsToClosedDialer(t *testing.T) {
+	callErr := make(chan error, 1)
+	started := make(chan struct{})
+	acceptor := &handlerAcceptor{}
+	acceptor.handler = requestHandlerFunc(func(ctx context.Context, _ *Message, _ func(), _ func(*Message)) {
+		// The dialer has no handler, so it never answers this call.
+		respCh := make(chan response, 1)
+		acceptor.last.Load().Enqueue(NodeRequest{
+			Ctx:          ctx,
+			Msg:          NewRequestFromPayload(ctx, ServerSequenceNumber(1), mock.TestMethod, nil),
+			ResponseChan: respCh,
+		})
+		close(started)
+		callErr <- (<-respCh).Err
+	})
+	tc := setupChannel(t, NewServer(nil, acceptor).NodeStream)
+	if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{Oneway: true}, 1); resp.Err != nil {
+		t.Fatalf("one-way send: %v", resp.Err)
+	}
+	<-started
+
+	stopped := gracefulStop(tc.srv)
+	select {
+	case err := <-callErr:
+		if !errors.Is(err, ErrStreamDown) {
+			t.Errorf("call to the closed dialer: err = %v, want %v", err, ErrStreamDown)
+		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("the call to the closed dialer did not fail")
+	}
+	select {
+	case <-stopped:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("GracefulStop did not return")
 	}
 }

@@ -116,25 +116,59 @@ func TestSessionEndRetriesPendingCalls(t *testing.T) {
 	}
 }
 
-// TestSessionDrain verifies that a draining session stops taking requests and
-// ends once it has stopped sending and its pending calls have completed.
+// closeSendStream is a mock client stream that records CloseSend.
+type closeSendStream struct {
+	*mock.BidiStream[*Message]
+	closed atomic.Bool
+}
+
+func (c *closeSendStream) CloseSend() error {
+	c.closed.Store(true)
+	return nil
+}
+
+// newDrainTestSession returns an outbound test session over a stream that
+// records CloseSend.
+func newDrainTestSession(t *testing.T) (*session, *closeSendStream) {
+	t.Helper()
+	e := newEndpoint(t.Context(), 1, 4, testRecvBufferSize, nil, newLatency())
+	t.Cleanup(e.cancel)
+	ctx, cancel := context.WithCancel(e.ctx)
+	st := &closeSendStream{BidiStream: mock.NewBidiStream[*Message]()}
+	return newSession(ctx, cancel, &e, st, true, true), st
+}
+
+// TestSessionDrain verifies that a draining session stops taking requests,
+// closes its side of the stream once its send loop has stopped, and still
+// delivers the reply to a pending call.
 func TestSessionDrain(t *testing.T) {
-	s := newTestSession(t, 4, nil, true, true)
-	s.pending.add(1, NodeRequest{Ctx: t.Context(), Msg: &Message{}, ResponseChan: make(chan response, 1)})
+	s, st := newDrainTestSession(t)
+	responseChan := make(chan response, 1)
+	s.pending.add(1, NodeRequest{Ctx: t.Context(), Msg: &Message{}, ResponseChan: responseChan})
 	queued := NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 2}.Build()}
 	s.queue.push(queued, false)
 
 	s.startDrain()
+	if st.closed.Load() {
+		t.Fatal("session closed its side of the stream before its send loop stopped")
+	}
 	if carry := s.sendLoop(nil); carry != nil && carry.Msg.GetMessageSeqNo() != 2 {
 		t.Fatalf("send loop returned request %d, want 2 or none", carry.Msg.GetMessageSeqNo())
 	}
+	if !st.closed.Load() {
+		t.Fatal("session did not close its side of the stream after its send loop stopped")
+	}
 	if s.ended() {
-		t.Fatal("session ended with a call still pending")
+		t.Fatal("session ended before the server ended the stream")
 	}
 	s.handle(Message_builder{MessageSeqNo: 1}.Build())
-	s.endIfDrained()
-	if !s.ended() {
-		t.Fatal("drained session did not end after its last pending call completed")
+	select {
+	case resp := <-responseChan:
+		if resp.Err != nil {
+			t.Errorf("reply after drain: %v", resp.Err)
+		}
+	default:
+		t.Error("reply to the pending call was not delivered")
 	}
 }
 
@@ -155,22 +189,33 @@ func TestSessionFailRecordsOnlyLiveErrors(t *testing.T) {
 	}
 }
 
-// TestSessionDrainEndsWhenCallerIsDone verifies that a draining session whose
-// remaining pending call is streaming ends once that call's context ends.
-func TestSessionDrainEndsWhenCallerIsDone(t *testing.T) {
-	s := newTestSession(t, 1, nil, true, true)
-	ctx, cancel := context.WithCancel(t.Context())
-	s.pending.add(1, NodeRequest{Ctx: ctx, Msg: &Message{}, Streaming: true, ResponseChan: make(chan response, 1)})
+// TestSessionDrainEndsWhenServerEndsStream verifies that a draining session
+// ends when the server ends the stream, and that a call still pending fails
+// with ErrStreamDown without being queued again or recorded as an error.
+func TestSessionDrainEndsWhenServerEndsStream(t *testing.T) {
+	s, _ := newDrainTestSession(t)
+	responseChan := make(chan response, 1)
+	s.pending.add(1, NodeRequest{Ctx: t.Context(), Msg: &Message{}, ResponseChan: responseChan})
+	s.accept()
 	s.startDrain()
-	s.stopSending()
-	if s.ended() {
-		t.Fatal("session ended while a streaming call was live")
+
+	s.receiveFailed(io.EOF)
+	if !s.ended() {
+		t.Fatal("session did not end when the server ended the stream")
 	}
-	cancel()
 	select {
-	case <-s.done:
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("draining session did not end after its streaming call's context ended")
+	case resp := <-responseChan:
+		if !errors.Is(resp.Err, ErrStreamDown) {
+			t.Errorf("pending call error = %v, want %v", resp.Err, ErrStreamDown)
+		}
+	default:
+		t.Error("pending call did not fail")
+	}
+	if n := len(s.queue.ch); n != 0 {
+		t.Errorf("queued %d calls again, want 0", n)
+	}
+	if err := s.LastErr(); err != nil {
+		t.Errorf("LastErr = %v, want nil", err)
 	}
 }
 

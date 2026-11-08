@@ -72,11 +72,11 @@ func TestInboundChannelStreamDown(t *testing.T) {
 		t.Fatalf("initial send failed: %v", resp.Err)
 	}
 
-	// The stream ends, as Serve observes, and the channel is closed, as the
-	// NodeStream cleanup does.
+	// The dialer closes its side of the stream, which Serve observes, and the
+	// channel is closed, as the NodeStream cleanup does.
 	stream.Close()
-	if err := c.Serve(); err == nil {
-		t.Fatal("Serve returned nil after the stream ended")
+	if err := c.Serve(); err != nil {
+		t.Fatalf("Serve() error after the dialer closed its side: %v", err)
 	}
 	if err := c.Close(); err != nil {
 		t.Fatalf("Close() error: %v", err)

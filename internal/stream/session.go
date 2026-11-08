@@ -37,10 +37,11 @@ type session struct {
 
 	pending pendingCalls
 
-	drain       chan struct{} // closed when the session starts draining
-	draining    atomic.Bool
-	sendStopped atomic.Bool
-	accepted    atomic.Bool // the server accepted the stream
+	drain      chan struct{} // closed when the session starts draining
+	draining   atomic.Bool
+	flush      chan struct{} // closed to stop the send loop once the queue is empty
+	peerClosed atomic.Bool   // the peer closed its side of the stream
+	accepted   atomic.Bool   // the server accepted the stream
 
 	// verdict is closed when the server accepts the stream or receiving
 	// ends. refusal is set before that if the server refused the stream.
@@ -76,15 +77,24 @@ func newSession(ctx context.Context, cancel context.CancelFunc, e *endpoint, str
 		serverRequests: serverRequests,
 		requeue:        requeue,
 		drain:          make(chan struct{}),
+		flush:          make(chan struct{}),
 		verdict:        make(chan struct{}),
 	}
 }
 
 // sendLoop sends req, if non-nil, and then requests from the send queue,
-// until the session ends or starts draining. It returns the request it took
-// from the queue but did not send, or nil.
+// until the session ends or starts draining, or until the queue is empty after
+// a flush. It returns the request it took from the queue but did not send, or
+// nil.
+//
+// The send loop is the stream's only sender, and nothing is sent on the stream
+// after it returns. On a stream that this side dialed, it therefore closes this
+// side of the stream when it returns, which tells the server that no more
+// requests follow.
 func (s *session) sendLoop(req *NodeRequest) *NodeRequest {
-	defer s.stopSending()
+	if cs, ok := s.stream.(interface{ CloseSend() error }); ok {
+		defer func() { _ = cs.CloseSend() }()
+	}
 	for {
 		if req == nil {
 			select {
@@ -94,6 +104,13 @@ func (s *session) sendLoop(req *NodeRequest) *NodeRequest {
 				return nil
 			case r := <-s.queue.ch:
 				req = &r
+			case <-s.flush:
+				select {
+				case r := <-s.queue.ch:
+					req = &r
+				default:
+					return nil
+				}
 			}
 		}
 		if s.ended() || s.draining.Load() {
@@ -105,7 +122,13 @@ func (s *session) sendLoop(req *NodeRequest) *NodeRequest {
 			continue
 		}
 		if req.wantServerResponse() && !s.pending.add(req.Msg.GetMessageSeqNo(), *req) {
-			return req // the session ended concurrently
+			if !s.peerClosed.Load() {
+				return req // the session ended concurrently
+			}
+			// The peer closed its side of the stream and cannot reply.
+			req.sendErrorResponse(s.id, ErrStreamDown)
+			req = nil
+			continue
 		}
 		if !s.send(*req) {
 			return nil
@@ -185,10 +208,17 @@ func (s *session) sendFailed(err error) bool {
 // receive routes the frames received on the stream until receiving fails, then
 // ends the session and returns the receive error.
 func (s *session) receive() error {
+	err := s.receiveFrames()
+	s.receiveFailed(err)
+	return err
+}
+
+// receiveFrames routes the frames received on the stream until receiving
+// fails, and returns the receive error.
+func (s *session) receiveFrames() error {
 	for {
 		msg, err := s.stream.Recv()
 		if err != nil {
-			s.receiveFailed(err)
 			return err
 		}
 		s.recordHealth(nil)
@@ -196,7 +226,6 @@ func (s *session) receive() error {
 			s.accept()
 		}
 		s.handle(msg)
-		s.endIfDrained()
 	}
 }
 
@@ -213,7 +242,9 @@ func (s *session) accept() {
 
 // receiveFailed ends the session after a receive failed with err. If the
 // session is outbound and err is due to a refused stream or resource
-// exhaustion, pending calls fail with err. Otherwise, they are retried.
+// exhaustion, pending calls fail with err. If the session is draining and the
+// server ended the stream, pending calls fail with [ErrStreamDown]. Otherwise,
+// they are retried.
 func (s *session) receiveFailed(err error) {
 	prev := s.handoff.Swap(streamClosed)
 	if prev != streamAccepted {
@@ -227,6 +258,15 @@ func (s *session) receiveFailed(err error) {
 		// session, is recorded even though the session has ended.
 		s.recordHealth(err)
 		s.end(err)
+		return
+	}
+	if s.draining.Load() && errors.Is(err, io.EOF) {
+		// The server ended the stream after it handled every request sent
+		// on it. A call still pending lost its reply; it is not sent again.
+		s.cancel()
+		for _, req := range s.pending.drain() {
+			req.sendErrorResponse(s.id, ErrStreamDown)
+		}
 		return
 	}
 	s.fail(err)
@@ -345,25 +385,10 @@ func (s *session) retryOrFail(req NodeRequest, err error) {
 }
 
 // startDrain stops the session from taking requests from the send queue. The
-// session ends once each pending call has completed or its context has ended.
+// send loop then returns and closes this side of the stream. The session ends
+// when the server ends the stream.
 func (s *session) startDrain() {
 	if s.draining.CompareAndSwap(false, true) {
-		s.pending.watchExpiry(s.endIfDrained)
 		close(s.drain)
-	}
-	s.endIfDrained()
-}
-
-// stopSending records that the send loop has returned.
-func (s *session) stopSending() {
-	s.sendStopped.Store(true)
-	s.endIfDrained()
-}
-
-// endIfDrained ends a draining session that has stopped sending and has no
-// pending calls left.
-func (s *session) endIfDrained() {
-	if s.draining.Load() && s.sendStopped.Load() && s.pending.len() == 0 {
-		s.end(nil)
 	}
 }
