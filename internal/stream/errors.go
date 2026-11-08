@@ -27,11 +27,12 @@ func isResourceExhausted(err error) bool {
 	return status.Code(err) == codes.ResourceExhausted
 }
 
-// isRefusal reports whether err is due to a refused stream.
+// isRefusal reports whether err is due to a refused stream, including a
+// stream that a draining server refused.
 func isRefusal(err error) bool {
 	switch status.Code(err) {
 	case codes.Unauthenticated, codes.PermissionDenied, codes.InvalidArgument, codes.Unimplemented:
 		return true
 	}
-	return false
+	return isServerDraining(err)
 }

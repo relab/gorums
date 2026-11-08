@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/relab/gorums/internal/conn"
 	"google.golang.org/grpc"
@@ -15,7 +16,8 @@ type serverOptions struct {
 	grpcOpts        []grpc.ServerOption
 	connectCallback func(context.Context)
 	interceptors    []ServerInterceptor
-	logger          *log.Logger // set by WithServerLogger; nil selects log.Default()
+	logger          *log.Logger   // set by WithServerLogger; nil selects log.Default()
+	drainTimeout    time.Duration // set by WithDrainTimeout; 0 selects defaultDrainTimeout
 	// Peer management options
 	myID             ID
 	peerNodes        NodeSource   // Peers this server tracks and calls; set by WithPeers.
@@ -169,5 +171,18 @@ func WithAddr(addr string) ServerOption {
 func WithStreamDedup() ServerOption {
 	return func(o *serverOptions) {
 		o.outboundDialOpts = append(o.outboundDialOpts, conn.WithStreamDedup())
+	}
+}
+
+// defaultDrainTimeout is the drain deadline of [Server.GracefulStop].
+const defaultDrainTimeout = 10 * time.Second
+
+// WithDrainTimeout sets how long [Server.GracefulStop] waits for the requests
+// that its streams accepted, and then for the streams to close, before it
+// stops the server immediately. A timeout of 0 selects the default of ten
+// seconds.
+func WithDrainTimeout(d time.Duration) ServerOption {
+	return func(o *serverOptions) {
+		o.drainTimeout = d
 	}
 }

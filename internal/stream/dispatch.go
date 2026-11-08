@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 )
 
 // dispatcher runs request handlers one at a time, in push order. The next
@@ -10,6 +11,9 @@ import (
 // whichever comes first. A handler that returns without releasing hands its
 // goroutine to the next queued handler; a release before return starts the
 // next handler on a new goroutine.
+//
+// The dispatcher counts its accepted handlers: each one from the time it is
+// queued until it returns or is discarded.
 type dispatcher struct {
 	done  <-chan struct{} // stops the dispatcher; nil for one that never stops
 	slots chan struct{}   // one token per queued handler, bounding the queue
@@ -17,6 +21,15 @@ type dispatcher struct {
 	mu      sync.Mutex
 	queue   []func(release func())
 	running bool
+
+	// keep makes a stopped dispatcher run its queued handlers instead of
+	// discarding them.
+	keep atomic.Bool
+	// active counts the accepted handlers.
+	active atomic.Int64
+	// shared, if non-nil, counts the accepted handlers together with those of
+	// other dispatchers. Set it before the first push.
+	shared *atomic.Int64
 }
 
 // newDispatcher returns a dispatcher that queues up to size handlers; size
@@ -58,6 +71,7 @@ func (d *dispatcher) admit(run func(release func())) bool {
 		<-d.slots
 		return false
 	}
+	d.count(1)
 	if d.running {
 		d.queue = append(d.queue, run)
 		d.mu.Unlock()
@@ -78,6 +92,7 @@ func (d *dispatcher) start(run func(release func())) {
 		for run != nil {
 			var once sync.Once
 			run(func() { once.Do(d.next) })
+			d.count(-1)
 			run = nil
 			once.Do(func() { run = d.take() })
 		}
@@ -92,14 +107,15 @@ func (d *dispatcher) next() {
 }
 
 // take removes and returns the oldest queued handler, or nil if the queue is
-// empty or the dispatcher has stopped, in which case it discards the queue and
-// marks the dispatcher idle.
+// empty. A stopped dispatcher discards its queue first, unless keep is set. If
+// take returns nil, it marks the dispatcher idle.
 func (d *dispatcher) take() func(release func()) {
 	d.mu.Lock()
-	if d.stopped() {
+	if d.stopped() && !d.keep.Load() {
 		for range d.queue {
 			<-d.slots
 		}
+		d.count(-int64(len(d.queue)))
 		d.queue = nil
 	}
 	if len(d.queue) == 0 {
@@ -113,6 +129,14 @@ func (d *dispatcher) take() func(release func()) {
 	d.mu.Unlock()
 	<-d.slots
 	return run
+}
+
+// count adds n to the counts of accepted handlers.
+func (d *dispatcher) count(n int64) {
+	d.active.Add(n)
+	if d.shared != nil {
+		d.shared.Add(n)
+	}
 }
 
 // stopped reports whether done is closed.

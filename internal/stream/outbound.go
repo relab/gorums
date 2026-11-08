@@ -141,10 +141,32 @@ func (c *OutboundChannel) run() {
 			req, connect = nil, false
 			continue
 		}
+		if b.draining() {
+			// A server drained this channel: send nothing until a server
+			// accepts a new stream.
+			if !c.probe(s) {
+				c.setStreamUp(s, false)
+				c.failRequest(req, ErrServerDraining)
+				b.failed(ErrServerDraining)
+				req, connect = nil, false
+				continue
+			}
+			b.recovered()
+		}
 		// Send until the stream ends or starts draining. A request taken
 		// from the queue but not sent comes back in req.
 		req = s.sendLoop(req)
 		c.setStreamUp(s, false)
+		if s.peerDraining.Load() {
+			// The server drained the stream: requests that were not sent
+			// fail, and so do later ones until a server accepts a new stream.
+			c.recordHealth(ErrServerDraining)
+			c.failRequest(req, ErrServerDraining)
+			c.failQueued(ErrServerDraining)
+			b.failed(ErrServerDraining)
+			req, connect = nil, false
+			continue
+		}
 		accepted, refusalErr := s.outcome()
 		if accepted {
 			b.recovered()
@@ -197,6 +219,32 @@ func (c *OutboundChannel) await(b *backoff) (req *NodeRequest, ok bool) {
 	}
 }
 
+// probe waits until the server accepts or refuses the stream of s, and
+// reports whether it accepted. Requests that arrive meanwhile fail with
+// [ErrServerDraining].
+func (c *OutboundChannel) probe(s *session) bool {
+	for {
+		select {
+		case <-s.verdict:
+			return s.accepted.Load()
+		case r := <-c.queue.ch:
+			c.queue.fail(r, ErrServerDraining)
+		}
+	}
+}
+
+// failQueued fails the requests in the send queue with err.
+func (c *OutboundChannel) failQueued(err error) {
+	for {
+		select {
+		case r := <-c.queue.ch:
+			c.queue.fail(r, err)
+		default:
+			return
+		}
+	}
+}
+
 // failRequest fails req with err. It ignores a nil req.
 func (c *OutboundChannel) failRequest(req *NodeRequest, err error) {
 	if req != nil {
@@ -208,12 +256,18 @@ func (c *OutboundChannel) failRequest(req *NodeRequest, err error) {
 // delay; other failures impose one only under eager reconnect, where the
 // delay is the time to the next attempt. The delay doubles up to
 // eagerReconnectMaxDelay and starts over when the server accepts a stream.
+//
+// After a server drained the channel, or refused a stream because it was
+// draining, requests fail with [ErrServerDraining] until a server accepts a
+// stream. The channel attempts a new stream after each delay, also without
+// eager reconnect.
 type backoff struct {
 	eager   bool
 	delay   time.Duration
-	retry   <-chan time.Time // fires when to attempt again; nil unless eager
+	retry   <-chan time.Time // fires when to attempt again; nil unless eager or draining
 	refusal error            // the latest refusal, until the server accepts a stream
 	until   time.Time        // when the delay after refusal ends
+	drain   bool             // a server drained the channel; no server has accepted a stream since
 }
 
 func newBackoff(eager bool) backoff {
@@ -235,10 +289,24 @@ func (b *backoff) suspect() bool {
 func (b *backoff) recovered() {
 	b.delay = eagerReconnectBaseDelay
 	b.refusal = nil
+	b.drain = false
+}
+
+// draining reports whether a server drained the channel and no server has
+// accepted a stream since.
+func (b *backoff) draining() bool {
+	return b.drain
 }
 
 // failed records a failed attempt, which was refused if err is a refusal.
+// While the channel is draining, or if err is [ErrServerDraining], the next
+// attempt follows the delay whether or not reconnection is eager.
 func (b *backoff) failed(err error) {
+	if b.drain || isServerDraining(err) {
+		b.drain = true
+		b.retry = time.After(time.Until(b.next()))
+		return
+	}
 	if !isRefusal(err) {
 		b.pace()
 		return
@@ -258,8 +326,12 @@ func (b *backoff) pace() {
 }
 
 // refusing returns the refusal that requests fail with, or nil once its
-// delay has ended.
+// delay has ended. While the channel is draining, it returns
+// [ErrServerDraining].
 func (b *backoff) refusing() error {
+	if b.drain {
+		return ErrServerDraining
+	}
 	if b.refusal != nil && time.Now().Before(b.until) {
 		return b.refusal
 	}

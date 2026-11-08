@@ -36,6 +36,7 @@ type session struct {
 	requeue bool
 
 	pending pendingCalls
+	drainState
 
 	drain       chan struct{} // closed when the session starts draining
 	draining    atomic.Bool
@@ -77,21 +78,35 @@ func newSession(ctx context.Context, cancel context.CancelFunc, e *endpoint, str
 		requeue:        requeue,
 		drain:          make(chan struct{}),
 		verdict:        make(chan struct{}),
+		drainState:     newDrainState(),
 	}
 }
 
 // sendLoop sends req, if non-nil, and then requests from the send queue,
 // until the session ends or starts draining. It returns the request it took
 // from the queue but did not send, or nil.
+//
+// Once the peer is draining, the send loop sends the final frame and then
+// fails this side's own requests with [ErrServerDraining]; replies still pass.
 func (s *session) sendLoop(req *NodeRequest) *NodeRequest {
 	defer s.stopSending()
+	notice := s.notice
 	for {
+		if notice != nil && s.peerDraining.Load() {
+			notice = nil
+			if err := s.sendFinal(); err != nil {
+				s.sendFailed(err)
+				return req
+			}
+		}
 		if req == nil {
 			select {
 			case <-s.done:
 				return nil
 			case <-s.drain:
 				return nil
+			case <-notice:
+				continue
 			case r := <-s.queue.ch:
 				req = &r
 			}
@@ -101,6 +116,11 @@ func (s *session) sendLoop(req *NodeRequest) *NodeRequest {
 		}
 		if err := req.Ctx.Err(); err != nil {
 			req.sendErrorResponse(s.id, err)
+			req = nil
+			continue
+		}
+		if s.rejectsDraining(req) {
+			req.sendErrorResponse(s.id, ErrServerDraining)
 			req = nil
 			continue
 		}
@@ -136,6 +156,9 @@ func (s *session) send(req NodeRequest) bool {
 	}
 	if s.healthy() {
 		s.recordHealth(nil)
+	}
+	if req.Msg.GetMessageSeqNo() == 0 && isControl(req.Msg) {
+		s.controlSent(req.Msg)
 	}
 	if req.wantSendConfirmation() {
 		req.deliver(response{NodeID: s.id})
@@ -240,7 +263,16 @@ func (s *session) receiveFailed(err error) {
 // error.
 func (s *session) handle(msg *Message) {
 	msgID := msg.GetMessageSeqNo()
+	if msgID == 0 && isControl(msg) {
+		s.control(msg)
+		return
+	}
 	if isServerSequenceNumber(msgID) == s.serverRequests {
+		if s.finalReceived.Load() {
+			// The peer sent this request after its final frame.
+			s.reply(NewResponse(msg, nil, ErrServerDraining))
+			return
+		}
 		if s.handler != nil {
 			ctx := msg.appendToIncomingContext(s.ctx)
 			s.requests.push(s.ctx, func(release func()) {
@@ -282,6 +314,7 @@ func (s *session) fail(err error) {
 // pending calls; see [session.retryOrFail]. It is idempotent.
 func (s *session) end(err error) {
 	s.cancel()
+	s.closeDrained()
 	for _, req := range s.pending.drain() {
 		s.retryOrFail(req, err)
 	}
@@ -324,17 +357,21 @@ func (s *session) outcome() (accepted bool, refusal error) {
 // retryOrFail queues a call that was pending when the session ended after err, to
 // be sent on the channel's next session. If the server refused the stream,
 // the call fails with the refusal. If the session is outbound and err
-// is due to resource exhaustion, the call fails with err. Otherwise, retryOrFail
-// fails a streaming call with [ErrStreamDown], and any call with
-// [ErrSendQueueFull] if the send queue is full or [ErrNodeClosed] if the
-// channel is closed. An inbound session has no next session, so retryOrFail fails
-// every call with [ErrStreamDown].
+// is due to resource exhaustion, the call fails with err. A call that was sent
+// on a stream whose peer is draining fails with [ErrStreamDown]: the peer may
+// have run it, so it is neither sent again nor failed with [ErrServerDraining].
+// Otherwise, retryOrFail fails a streaming call with [ErrStreamDown], and any
+// call with [ErrSendQueueFull] if the send queue is full or [ErrNodeClosed] if
+// the channel is closed. An inbound session has no next session, so
+// retryOrFail fails every call with [ErrStreamDown].
 func (s *session) retryOrFail(req NodeRequest, err error) {
 	switch refusal := s.refused(); {
 	case refusal != nil:
 		req.sendErrorResponse(s.id, refusal)
 	case s.requeue && isResourceExhausted(err):
 		req.sendErrorResponse(s.id, err)
+	case s.peerDraining.Load():
+		req.sendErrorResponse(s.id, ErrStreamDown)
 	case s.requeue && !req.Streaming:
 		s.queue.push(req, false)
 	case s.requeue && s.ctx.Err() != nil:
@@ -357,13 +394,16 @@ func (s *session) startDrain() {
 // stopSending records that the send loop has returned.
 func (s *session) stopSending() {
 	s.sendStopped.Store(true)
+	s.sendFinalIfStopped()
 	s.endIfDrained()
 }
 
 // endIfDrained ends a draining session that has stopped sending and has no
-// pending calls left.
+// pending calls left. If the peer is also draining, the session first waits
+// for the peer's drained frame.
 func (s *session) endIfDrained() {
-	if s.draining.Load() && s.sendStopped.Load() && s.pending.len() == 0 {
+	if s.draining.Load() && s.sendStopped.Load() && s.pending.len() == 0 &&
+		(!s.peerDraining.Load() || s.peerDrained.Load()) {
 		s.end(nil)
 	}
 }

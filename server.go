@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/relab/gorums/internal/conn"
 	"github.com/relab/gorums/internal/impl"
@@ -45,6 +47,7 @@ type Server struct {
 	interceptors []ServerInterceptor
 	logger       *log.Logger // logs programming errors in handlers; never nil
 	im           *conn.InboundManager
+	drainTimeout time.Duration // bounds GracefulStop; never zero
 
 	mu         sync.Mutex   // guards lis
 	lis        net.Listener // active listener; set by Serve, ListenAndServe, or NewLocalServers
@@ -150,6 +153,7 @@ func newServer(opts ...ServerOption) (*Server, error) {
 		interceptors: serverOpts.interceptors,
 		logger:       serverOpts.logger,
 		listenAddr:   serverOpts.listenAddr,
+		drainTimeout: cmp.Or(serverOpts.drainTimeout, defaultDrainTimeout),
 	}
 	im, err := conn.NewInboundManager(
 		serverOpts.myID,
@@ -366,15 +370,45 @@ func (s *Server) WaitForAll(ctx context.Context) (Config, error) {
 	return cfg, nil
 }
 
-// GracefulStop waits for all RPCs to finish, then unblocks
-// [Server.WaitForPeers], [Server.WaitForClients], and [Server.WaitForAll] with
-// [ErrStopped] and closes the peer [Config] built by [WithPeers].
+// GracefulStop stops the server after it has finished the requests it
+// accepted, then unblocks [Server.WaitForPeers], [Server.WaitForClients], and
+// [Server.WaitForAll] with [ErrStopped] and closes the peer [Config] built by
+// [WithPeers].
+//
+// GracefulStop first refuses new streams and tells the peers on the streams
+// it serves that it is draining. When a peer learns this, it stops sending
+// requests to the server and fails those it has not sent with
+// [ErrServerDraining]. The server finishes every request that it received
+// before that point. This includes one-way requests, requests whose handlers
+// called [ServerContext.Release], and requests whose stream ended during the
+// drain. The server sends the replies before it closes the stream.
+//
+// Draining covers the streams that this server accepts. Calls to the local
+// node and streams that this server dialed use the transport's own shutdown.
+// [WithDrainTimeout] bounds GracefulStop; when the timeout ends, the server
+// stops as [Server.Stop] does, and GracefulStop returns.
 func (s *Server) GracefulStop() {
-	s.grpcServer.GracefulStop()
-	s.im.Close()
-	if s.closePeers != nil {
-		s.closePeers()
+	ctx, cancel := context.WithTimeout(context.Background(), s.drainTimeout)
+	defer cancel()
+	if s.srv.Drain(ctx) {
+		stopped := make(chan struct{})
+		go func() {
+			s.grpcServer.GracefulStop()
+			close(stopped)
+		}()
+		select {
+		case <-stopped:
+			s.im.Close()
+			if s.closePeers != nil {
+				s.closePeers()
+			}
+			return
+		case <-ctx.Done():
+			// gRPC may still wait for a handler, such as a stream
+			// interceptor, after Stop; it returns when the handler does.
+		}
 	}
+	s.Stop()
 }
 
 // Stop stops the server immediately and releases its resources. It unblocks any
@@ -382,11 +416,13 @@ func (s *Server) GracefulStop() {
 // callers, stops the gRPC server, closes the listener owned by
 // [Server.Serve], [Server.ListenAndServe], or [NewLocalServers], and closes the
 // peer [Config]. It stops without waiting for in-flight RPCs, since one-way
-// methods do not respond. Stop is safe to call before serving starts, and safe
-// to call more than once.
+// methods do not respond, and it discards the requests that wait for a
+// handler. Stop is safe to call before serving starts, and safe to call more
+// than once.
 func (s *Server) Stop() {
 	// Unblock any WaitForPeers / WaitForClients / WaitForAll callers.
 	s.im.Close()
+	s.srv.Stop()
 	s.grpcServer.Stop()
 	s.mu.Lock()
 	lis := s.lis

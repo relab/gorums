@@ -31,6 +31,17 @@ var ErrStreamDown = stream.ErrStreamDown
 // node errors.
 var ErrNodeClosed = stream.ErrNodeClosed
 
+// ErrServerDraining is returned for a request that a server refuses, or that
+// the sender does not send, because the server is shutting down gracefully;
+// see [Server.GracefulStop]. A request that failed with it was not run, so it
+// is safe to send again to the server's replacement. A node fails new requests
+// with it until a server at the same address accepts a new stream. A two-way
+// call that was sent before the server began draining fails with
+// [ErrStreamDown] instead. It is a gRPC status error with the Unavailable
+// code; test for it with [errors.Is]. The Unavailable code alone does not tell
+// it apart from other node errors.
+var ErrServerDraining = stream.ErrServerDraining
+
 // ErrNoNode is the error of a remote call or unicast on a nil node.
 // It is a gRPC status error with the InvalidArgument code; test for it with
 // [errors.Is]. The InvalidArgument code alone does not tell it apart from

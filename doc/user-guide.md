@@ -1919,6 +1919,35 @@ It returns no error, because closing a connection has no failure that a caller c
 
 A `Server` configured with `WithPeers` owns its peer configuration, and `Stop` and `GracefulStop` close it.
 
+### Graceful Shutdown
+
+`Server.GracefulStop` finishes the requests that the server accepted before it closes its streams.
+This includes one-way requests, which have no reply, and handlers that called `Release`.
+
+`GracefulStop` follows these steps:
+
+1. The server refuses new streams and tells the peer on each stream that it is draining.
+2. When the notice arrives, the peer stops sending requests on that stream.
+   It fails the requests that it has not sent, including queued ones, with `ErrServerDraining`.
+   It then sends a final marker, so the server knows that no more requests follow.
+3. The server finishes the accepted handlers and sends their replies.
+   A handler whose stream ends during the drain still finishes, and so do the requests queued behind it.
+4. The server tells the peer that it is drained, and the peer closes the stream.
+
+Replies still pass in both directions while a stream drains.
+
+After a server drained it, a node fails new requests with `ErrServerDraining`.
+It sends requests again once a server at the same address accepts a new stream, for example after a restart.
+
+A request that failed with `ErrServerDraining` did not run, so the caller can send it again to the server's replacement.
+A two-way call that the peer sent before the notice, and whose reply never arrives, fails with `ErrStreamDown` instead, because the server may have run it.
+
+`WithDrainTimeout` bounds `GracefulStop`; when the timeout ends, the server stops as `Stop` does, and `GracefulStop` returns.
+The default is ten seconds.
+
+The drain covers the streams that the server accepts.
+Calls to the local node and streams that the server dialed use the transport's own shutdown.
+
 ## Node IDs
 
 Gorums identifies each node with a `gorums.ID`.
