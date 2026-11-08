@@ -25,29 +25,35 @@ func NewRequest(ctx context.Context, msgID uint64, method string, msg proto.Mess
 // NewRequestFromPayload creates a request [Message] from already-marshaled
 // protobuf payload bytes.
 func NewRequestFromPayload(ctx context.Context, msgID uint64, method string, payload []byte) *Message {
-	msgBuilder := Message_builder{
-		MessageSeqNo: msgID,
-		Method:       method,
-		Payload:      payload,
+	msg := &Message{}
+	msg.SetMessageSeqNo(msgID)
+	msg.SetMethod(method)
+	if payload != nil {
+		msg.SetPayload(payload)
 	}
 	md, _ := metadata.FromOutgoingContext(ctx)
+	var entries []*MetadataEntry
 	for k, vv := range md {
 		for _, v := range vv {
-			entry := MetadataEntry_builder{Key: k, Value: v}.Build()
-			msgBuilder.Entry = append(msgBuilder.Entry, entry)
+			entry := &MetadataEntry{}
+			entry.SetKey(k)
+			entry.SetValue(v)
+			entries = append(entries, entry)
 		}
 	}
-	return msgBuilder.Build()
+	if len(entries) != 0 {
+		msg.SetEntry(entries)
+	}
+	return msg
 }
 
 // NewResponse returns the response [Message] to the request in. It carries the
 // request's message ID and method, and either the status of err or the
 // marshaled resp. A marshal failure becomes the response status.
 func NewResponse(in *Message, resp proto.Message, err error) *Message {
-	out := Message_builder{
-		MessageSeqNo: in.GetMessageSeqNo(), // routes the response to the pending call
-		Method:       in.GetMethod(),       // selects the response type on the client
-	}.Build()
+	out := &Message{}
+	out.SetMessageSeqNo(in.GetMessageSeqNo()) // routes the response to the pending call
+	out.SetMethod(in.GetMethod())             // selects the response type on the client
 	if err == nil && resp != nil {
 		var payload []byte
 		if payload, err = proto.Marshal(resp); err == nil {
