@@ -45,31 +45,30 @@ jobs:
           cache: true
           cache-dependency-path: "**/go.sum"
       - uses: ./.github/actions/setup-protoc
-      # Same golangci-lint version as golangci-lint.yml, so make lint agrees.
+      - uses: extractions/setup-just@v3
+      # Same golangci-lint version as golangci-lint.yml, so just lint agrees.
       - uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.14.0
+          version: v2.15.0
           install-only: true
 
       - name: Install tools
         run: |
-          make tools
-          make installgorums
           go install github.com/bufbuild/buf/cmd/buf@v1.75.0
           go install golang.org/x/tools/gopls@v0.23.0
 
       - name: Integration tests (real TCP)
-        run: make integrationtest
+        run: just integrationtest
       - name: Stress tests (ordering under load)
-        run: make stresstest
+        run: just stresstest
       - name: Lint
-        run: make lint
+        run: just lint
       - name: Modernize changes nothing
         run: |
-          make modernize
+          just modernize
           git diff --exit-code
       - name: gopls diagnostics
-        run: make goplscheck
+        run: just goplscheck
 
   docker-smoke:
     runs-on: ubuntu-latest
@@ -82,16 +81,12 @@ jobs:
           cache: true
           cache-dependency-path: "**/go.sum"
       - uses: ./.github/actions/setup-protoc
+      - uses: extractions/setup-just@v3
       # Typst builds report.pdf; without it the smoke test still passes.
       - uses: typst-community/setup-typst@v5
 
-      - name: Install tools
-        run: |
-          make tools
-          make installgorums
-
       - name: Sweep smoke test on Docker
-        run: make smoke-docker
+        run: just smoke-docker
 
       - name: Publish the verdict
         if: always()
