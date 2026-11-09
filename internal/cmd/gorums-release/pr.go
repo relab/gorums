@@ -122,7 +122,7 @@ func prBody(tag, report string) string {
 // The groups of files that a release changes. Each group is one commit.
 const (
 	groupVersion   = "version"   // version constants and dependency files
-	groupGenerated = "generated" // output of make genproto
+	groupGenerated = "generated" // output of just genproto
 )
 
 // releaseGroup returns the group of a file that prepare changes, or "" for a
@@ -137,7 +137,7 @@ func releaseGroup(p string) string {
 	return ""
 }
 
-// isGenerated reports whether p is produced by make genproto or is a golden
+// isGenerated reports whether p is produced by just genproto or is a golden
 // copy of generated code that embeds the runtime versions.
 func isGenerated(p string) bool {
 	return strings.HasSuffix(p, ".pb.go") ||

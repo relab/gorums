@@ -66,10 +66,6 @@ func (t *tool) prepare(o prepareOptions) error {
 			return err
 		}
 	}
-	// Install the code generators pinned by the upgraded go.mod.
-	if err := t.exec("make", "tools"); err != nil {
-		return err
-	}
 	if err := t.setVersion(v); err != nil {
 		return err
 	}
@@ -86,7 +82,7 @@ func (t *tool) prepare(o prepareOptions) error {
 	if err := t.setWorkReplace(v); err != nil {
 		return err
 	}
-	if err := t.exec("make", "genproto"); err != nil {
+	if err := t.exec("just", "genproto"); err != nil {
 		return err
 	}
 	// The golden files embed the runtime versions that genproto just wrote.
@@ -99,10 +95,10 @@ func (t *tool) prepare(o prepareOptions) error {
 		return err
 	}
 	if !o.skipTests {
-		if err := t.exec("make", "test"); err != nil {
+		if err := t.exec("just", "test"); err != nil {
 			return err
 		}
-		if err := t.exec("make", "testrace"); err != nil {
+		if err := t.exec("just", "testrace"); err != nil {
 			return err
 		}
 	}
@@ -111,7 +107,7 @@ func (t *tool) prepare(o prepareOptions) error {
 
 // checkPrerequisites checks the programs and settings that the release needs.
 func (t *tool) checkPrerequisites() error {
-	for _, name := range []string{"git", "make", "go", "protoc", "gh"} {
+	for _, name := range []string{"git", "just", "go", "protoc", "gh"} {
 		if _, err := t.lookPath(name); err != nil {
 			return fmt.Errorf("%s is required but is not on PATH", name)
 		}
@@ -126,7 +122,7 @@ func (t *tool) checkPrerequisites() error {
 }
 
 // checkGoBinOnPath requires that the directory where go install puts programs
-// is on PATH, because protoc finds the code generators there.
+// is on PATH, because the program runs gorelease from there.
 func (t *tool) checkGoBinOnPath() error {
 	out, err := t.query("go", "env", "GOBIN", "GOPATH")
 	if err != nil {
@@ -149,7 +145,7 @@ func (t *tool) checkGoBinOnPath() error {
 			return nil
 		}
 	}
-	return fmt.Errorf("%s is not on PATH: go install puts gorelease and the code generators there", bin)
+	return fmt.Errorf("%s is not on PATH: go install puts gorelease there", bin)
 }
 
 // checkWorkTree requires a clean, up-to-date master.
