@@ -29,11 +29,7 @@ jobs:
           cache: true
           cache-dependency-path: "**/go.sum"
       - uses: ./.github/actions/setup-protoc
-
-      - name: Install tools
-        run: |
-          make tools
-          make installgorums
+      - uses: extractions/setup-just@v3
 
       - name: Run Tests
-        run: make test
+        run: just test

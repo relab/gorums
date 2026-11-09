@@ -25,14 +25,17 @@ jobs:
           cache: true
           cache-dependency-path: "**/go.sum"
       - uses: ./.github/actions/setup-protoc
+      - uses: extractions/setup-just@v3
 
-      - name: Run Make
-        run: make
+      - name: Build and check generated files
+        run: |
+          just all
+          just check-generated
 
-      # Lints the whole tree with the same version and arguments as make lint,
+      # Lints the whole tree with the same version and arguments as just lint,
       # so a clean local run means a clean CI run.
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.14.0
+          version: v2.15.0
           args: ./... ./examples/... ./benchkit/...
