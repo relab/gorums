@@ -17,7 +17,7 @@ import (
 const devDir = "cmd/protoc-gen-gorums/dev"
 
 // generateZorums generates code for zorums.proto with the import paths that
-// make dev uses.
+// just dev uses.
 func generateZorums(t *testing.T, dev bool) map[string]string {
 	t.Helper()
 	root := gentest.RootDir(t)
@@ -46,7 +46,7 @@ func TestStabilityZorums(t *testing.T) {
 }
 
 // TestStabilityDevFilesUpToDate checks that the committed dev zorums*.pb.go
-// files match what the generator in this tree produces. Run make dev to
+// files match what the generator in this tree produces. Run just dev to
 // regenerate them.
 func TestStabilityDevFilesUpToDate(t *testing.T) {
 	root := gentest.RootDir(t)
@@ -55,12 +55,12 @@ func TestStabilityDevFilesUpToDate(t *testing.T) {
 		t.Run(filepath.Base(name), func(t *testing.T) {
 			committed, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(name)))
 			if err != nil {
-				t.Fatalf("%v; run make dev", err)
+				t.Fatalf("%v; run just dev", err)
 			}
 			want := strings.Split(gentest.Normalize(string(committed)), "\n")
 			got := strings.Split(gentest.Normalize(files[name]), "\n")
 			if diff := cmp.Diff(want, got); diff != "" {
-				t.Errorf("%s is out of date (-committed +generated); run make dev:\n%s", name, diff)
+				t.Errorf("%s is out of date (-committed +generated); run just dev:\n%s", name, diff)
 			}
 		})
 	}
@@ -75,7 +75,7 @@ func TestStabilityDevFilesUpToDate(t *testing.T) {
 			t.Fatal(err)
 		}
 		if _, ok := files[filepath.ToSlash(rel)]; !ok {
-			t.Errorf("%s is not generated any more; remove it or run make dev", rel)
+			t.Errorf("%s is not generated any more; remove it or run just dev", rel)
 		}
 	}
 }

@@ -444,7 +444,7 @@ launcher that drains only stderr.</p>
     <li><strong>Busy ports and stale binaries.</strong> A busy benchmark port is skipped by the per-run port
         preflight in ~1&nbsp;s with a message naming the listener; a peer that dies at startup fails the run in
         ~20&nbsp;s via the progress-based stall check in <code>awaitReady</code>. <code>sweep -check</code> reports
-        busy ports and lingering processes per host before a sweep, and sweep warns "rebuild with 'make sweep'"
+        busy ports and lingering processes per host before a sweep, and sweep warns "rebuild with 'just sweep'"
         when the running binary's embedded VCS revision differs from the repository HEAD.</li>
     <li><strong>File-descriptor limits.</strong> A full N-node mesh holds N&minus;1 persistent gRPC connections
         per node plus the clock-sync streams. sweep prefixes every node command (and the driven sweep itself)

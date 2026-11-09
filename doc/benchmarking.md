@@ -9,7 +9,7 @@ Using the `benchmark` program, it is possible to run benchmarks on both local an
 To compile the benchmark program, run:
 
 ```shell
-make benchmark
+just benchmark
 ```
 
 By default, the program runs all of the built-in benchmarks on local servers.
@@ -79,7 +79,7 @@ To copy the benchmark binary to the remote servers, run the `deploy.yml` ansible
 ansible-playbook -i [your inventory file] deploy.yml
 ```
 
-(remember to build it using `make benchmark` first).
+(remember to build it using `just benchmark` first).
 
 The `benchmark.sh` script runs the appropriate ansible-playbook command and parses the output.
 Hence, to run `benchmark.sh`:

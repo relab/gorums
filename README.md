@@ -24,7 +24,7 @@ language.
 To build and deploy Gorums, you need the following software installed:
 
 * Protobuf compiler (protoc)
-* Make
+* [just](https://github.com/casey/just) (a command runner; only needed to run the development recipes)
 
 ## Contributors Guide
 

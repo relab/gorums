@@ -9,11 +9,10 @@ The `storage` example implements a simple key-value storage service.
 The client features an interactive command line interface that allows you to send RPCs and quorum calls to different configurations of servers, called nodes.
 Both the client and the server are included in the same binary, and four local servers will be started automatically.
 
-To install:
+To build, run this from the repository root with [just](https://github.com/casey/just) installed:
 
 ```shell
-make tools
-make
+just storage
 ```
 
 Optionally:
@@ -31,5 +30,5 @@ To run:
 To recompile the proto files:
 
 ```shell
-make -B
+just examples-proto
 ```

@@ -29,11 +29,11 @@ The maintainer's job is oversight, so make output easy to understand.
 
 ## Code Generation
 
-Generated `zorums_*_gorums.pb.go` files in `cmd/protoc-gen-gorums/dev/` are outputs; edit their sources, then run `make dev`.
+Generated `zorums_*_gorums.pb.go` files in `cmd/protoc-gen-gorums/dev/` are outputs; edit their sources, then run `just dev`.
 
 - Template change: edit `cmd/protoc-gen-gorums/gengorums/template_*.go`.
 - Static code change: edit the non-`zorums_*` files in `cmd/protoc-gen-gorums/dev/`.
-- `make genproto` regenerates every `_gorums.pb.go` file.
+- `just genproto` regenerates every `_gorums.pb.go` file.
 
 Never edit any generated file to satisfy a linter; fix the generator or its inputs and regenerate.
 
@@ -72,7 +72,7 @@ The default mode uses in-memory bufconn; `-tags=integration` uses real TCP.
 - Never add an exported function whose only body calls an unexported twin.
   Export the original and update its call sites.
   Exceptions: wrappers that add behavior, and re-exports of internal generics that a type alias cannot express (`runtime/gorumsimpl` constructors, `MapRequest`, `MapResponse`, `NewConfig`, `WithNodeList`).
-- Before finishing a session that changes Go code: run `make modernize` and review its changes, then run `make goplscheck` and fix every diagnostic in non-generated code (including hints), and rerun until clean.
+- Before finishing a session that changes Go code: run `just modernize` and review its changes, then run `just goplscheck` and fix every diagnostic in non-generated code (including hints), and rerun until clean.
 
 ## Documentation
 

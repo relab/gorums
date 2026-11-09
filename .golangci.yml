@@ -6,7 +6,7 @@ run:
 linters:
   # errcheck reports every unchecked error return, which this repository does
   # not treat as a defect on its own. Disabling it here rather than on the
-  # command line keeps make and CI in agreement.
+  # command line keeps `just lint` and CI in agreement.
   disable:
     - errcheck
   # These linters report likely defects rather than style, so each finding

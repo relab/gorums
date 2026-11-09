@@ -1,7 +1,7 @@
 // Package dev is the development and testing scaffold for protoc-gen-gorums.
 //
 // It holds the static support code and the generated example output
-// (the zorums_*.pb.go files, regenerated from zorums.proto by `make dev`) used
+// (the zorums_*.pb.go files, regenerated from zorums.proto by `just dev`) used
 // to develop and test the plugin. The plugin bundler copies the declarations
 // of the other non-test Go files here (the static code, see aliases.go) into
 // the generator.
