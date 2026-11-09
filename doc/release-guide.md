@@ -11,12 +11,13 @@ The `examples` module has no tag.
 You need these programs on your `PATH`:
 
 - `go`, at the version that `go.mod` asks for;
-- `git`, `make`, and `protoc`;
+- `git`, [`just`](https://github.com/casey/just), and `protoc`;
 - the GitHub CLI `gh`, logged in with `gh auth login`.
 
 The directory where `go install` puts programs must also be on your `PATH`.
 It is `$(go env GOBIN)`, or `$(go env GOPATH)/bin` if `GOBIN` is empty.
-The program installs `gorelease` and the code generators there, and `protoc` finds the generators by `PATH`.
+The program installs `gorelease` there.
+The `Justfile` runs the code generators with `go tool`, so they need no installation.
 You need permission to push branches and merge pull requests in `relab/gorums`.
 
 `prepare` checks all of this and says what is missing.
@@ -130,7 +131,7 @@ These flags belong to one command:
 | `prepare` | `-bump-gen`     | off                              | Set `GenVersion` to the new minor version.                                   |
 | `prepare` | `-bump-min`     | off                              | Set `MinVersion` and `GenVersion` to the new minor version.                  |
 | `prepare` | `-skip-upgrade` | off                              | Do not upgrade dependencies. Use it when you run it again.                   |
-| `prepare` | `-skip-tests`   | off                              | Do not run `make test` and `make testrace`.                                  |
+| `prepare` | `-skip-tests`   | off                              | Do not run `just test` and `just testrace`.                                  |
 | `pr`      | `-web`          | off                              | Open the pull request in the browser.                                        |
 | `publish` | `-yes`          | off                              | Merge the pull request without asking.                                       |
 | `publish` | `-draft`        | off                              | Create the GitHub release as a draft.                                        |

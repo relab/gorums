@@ -52,13 +52,12 @@ func TestPrepare(t *testing.T) {
 		"exec (examples) go get -u ./...",
 		"exec (benchkit) go get -u ./...",
 		"exec (benchkit) go mod tidy",
-		"exec make tools",
 		"exec (examples) go mod edit -require=github.com/relab/gorums@v0.12.0",
 		"exec (benchkit) go mod edit -require=github.com/relab/gorums@v0.12.0",
 		"query go work edit -json",
 		"exec go work edit -dropreplace=github.com/relab/gorums@v0.11.0",
 		"exec go work edit -replace=github.com/relab/gorums@v0.12.0=./",
-		"exec make genproto",
+		"exec just genproto",
 		"exec go test ./internal/testprotos -update",
 		"exec go mod tidy",
 		"exec (examples) go mod edit -replace=github.com/relab/gorums=../",
@@ -67,8 +66,8 @@ func TestPrepare(t *testing.T) {
 		"exec (benchkit) go mod edit -replace=github.com/relab/gorums=../",
 		"exec (benchkit) go mod tidy",
 		"exec (benchkit) go mod edit -dropreplace=github.com/relab/gorums",
-		"exec make test",
-		"exec make testrace",
+		"exec just test",
+		"exec just testrace",
 	)
 	assertAbsent(t, f.calls, "exec git commit")
 }
@@ -173,8 +172,8 @@ func TestPrepareSkips(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertAbsent(t, f.calls, "exec go get")
-	assertAbsent(t, f.calls, "exec make test")
-	assertOrder(t, f.calls, "exec make genproto")
+	assertAbsent(t, f.calls, "exec just test")
+	assertOrder(t, f.calls, "exec just genproto")
 }
 
 func TestPreparePreconditions(t *testing.T) {
@@ -229,7 +228,7 @@ func TestPrepareDryRun(t *testing.T) {
 		"? git status --porcelain",
 		"? gorelease",
 		"+ git fetch origin master",
-		"+ make genproto",
+		"+ just genproto",
 		"+ go test ./internal/testprotos -update",
 		"+ write internal/version/version.go",
 	} {
@@ -254,12 +253,12 @@ func TestPrepareDryRunWarns(t *testing.T) {
 
 func TestPrepareFailureStops(t *testing.T) {
 	f := readyRunner()
-	f.fail["make genproto"] = errBoom
+	f.fail["just genproto"] = errBoom
 	tl, _ := newTestTool(t, f)
 	if err := tl.prepare(prepareOptions{}); err == nil {
 		t.Fatal("expected an error")
 	}
-	assertAbsent(t, f.calls, "exec make test")
+	assertAbsent(t, f.calls, "exec just test")
 }
 
 func TestPrepareGoldenUpdateFailureStops(t *testing.T) {
@@ -269,7 +268,7 @@ func TestPrepareGoldenUpdateFailureStops(t *testing.T) {
 	if err := tl.prepare(prepareOptions{}); err == nil {
 		t.Fatal("expected an error")
 	}
-	assertAbsent(t, f.calls, "exec make test")
+	assertAbsent(t, f.calls, "exec just test")
 }
 
 func TestPrepareVersionHint(t *testing.T) {
@@ -304,7 +303,7 @@ func TestPrepareVersionHint(t *testing.T) {
 }
 
 func TestPreparePrerequisites(t *testing.T) {
-	for _, missing := range []string{"git", "make", "go", "protoc", "gh"} {
+	for _, missing := range []string{"git", "just", "go", "protoc", "gh"} {
 		t.Run("missing "+missing, func(t *testing.T) {
 			f := readyRunner()
 			tl, _ := newTestTool(t, f)
@@ -379,7 +378,7 @@ func TestPrepareBumpRuntime(t *testing.T) {
 			// when code generation starts.
 			var atGenproto string
 			f.onExec = func(line string) {
-				if line == "make genproto" {
+				if line == "just genproto" {
 					b, _ := tl.readFile(runtimeFile)
 					atGenproto = string(b)
 				}
@@ -393,7 +392,7 @@ func TestPrepareBumpRuntime(t *testing.T) {
 				t.Errorf("runtime versions = %d, %d, %v; want %d, %d", gen, minV, err, tt.wantGen, tt.wantMin)
 			}
 			if atGenproto != string(b) {
-				t.Errorf("the runtime file changed after make genproto started")
+				t.Errorf("the runtime file changed after just genproto started")
 			}
 			if tt.wantFileSame && string(b) != implSrc {
 				t.Errorf("runtime file changed unexpectedly:\n%s", b)

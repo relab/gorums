@@ -141,7 +141,7 @@ func TestParseStatus(t *testing.T) {
 	}
 }
 
-// releaseGroup must accept every file that prepare, go get -u, and make
+// releaseGroup must accept every file that prepare, go get -u, and just
 // genproto can change, and nothing else.
 func TestReleaseGroup(t *testing.T) {
 	tests := []struct {
