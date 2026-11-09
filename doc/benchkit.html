@@ -532,7 +532,7 @@
                 <tr>
                     <td><code>cmd/benchmark/</code></td>
                     <td>Node binary. Registers the standard flags, builds the targets, runs the selected benchmarks, and
-                        writes a result file. Built with <code>make benchmark</code>.</td>
+                        writes a result file. Built with <code>just benchmark</code>.</td>
                 </tr>
                 <tr>
                     <td><code>cmd/sweep/</code></td>
@@ -540,7 +540,7 @@
                         result files, prints an aggregated summary table, and — with <code>-plot</code> — generates
                         the Typst report (see <a href="#plot">§14</a>). Imports <code>benchkit</code> for the result
                         schema, the read-time trim, the latency statistics, and the time-series renderer. Built with
-                        <code>make sweep</code>.</td>
+                        <code>just sweep</code>.</td>
                 </tr>
                 <tr>
                     <td><code>cmd/sweep/typst/gorumsplot.typ</code></td>
@@ -1672,8 +1672,8 @@
 
     <p>Commands to exercise the benchmarks and produce each figure family. All assume the repository root, SSH host
         aliases like <code>bb1…bb30</code> in <code>~/.ssh/config</code> (see
-        <code>scripts/bbchain-ssh-config</code>), and the tools built via <code>make sweep</code> and (for local
-        runs) <code>make benchmark</code>. Quote bracketed host ranges so the shell does not expand them. Compiling
+        <code>scripts/bbchain-ssh-config</code>), and the tools built via <code>just sweep</code> and (for local
+        runs) <code>just benchmark</code>. Quote bracketed host ranges so the shell does not expand them. Compiling
         the report to PDF needs <a href="https://typst.app">Typst</a> installed; without it the sweep still writes
         the CSVs and <code>report.typ</code>.</p>
 
@@ -1688,7 +1688,7 @@
         <pre>./cmd/sweep/sweep -hosts 'bb[1-3]' -test 3</pre>
     </div>
     <p>Without a cluster, run the same detached smoke test on throwaway Docker containers. From the
-        repository root, <code>make smoke-docker</code> starts a driver and five peer containers
+        repository root, <code>just smoke-docker</code> starts a driver and five peer containers
         (<code>SMOKE_N</code> sets the count), runs a <code>-test</code> sweep of
         <code>SymmetricQuorumCall</code> and <code>SymmetricMulticast</code> in both stream modes, collects it
         with <code>-collect -wait</code>, and checks it with <code>-verify</code>. It needs Docker and
@@ -1697,7 +1697,7 @@
         branch.</p>
     <div class="command-block">
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
-        <pre>make smoke-docker</pre>
+        <pre>just smoke-docker</pre>
     </div>
 
     <h3>Stream deduplication evaluation</h3>
@@ -1942,7 +1942,7 @@ cat out/dedup-eval/plotdata/plotdata.binpb out/dedup-eval-baseline/plotdata/plot
         rate-ramp event stream; build the local binary first.</p>
     <div class="command-block">
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
-        <pre>make benchmark</pre>
+        <pre>just benchmark</pre>
     </div>
     <div class="command-block">
         <div class="command-toolbar"><button type="button" class="copy-command">Copy</button></div>
@@ -2050,7 +2050,7 @@ ANTHROPIC_API_KEY=... ./cmd/sweep/sweep -explain-check -explain-provider claude 
     <p class="lead">Seven independent sweep runs covering the key performance dimensions of Gorums.
         Each run is self-contained so it can be rerun in isolation if needed.
         All runs assume 30 cluster nodes <code>bb1…bb30</code> with SSH aliases configured as in
-        <code>scripts/bbchain-ssh-config</code>, tools built via <code>make sweep</code>, and
+        <code>scripts/bbchain-ssh-config</code>, tools built via <code>just sweep</code>, and
         <a href="https://typst.app">Typst</a> installed to compile the report to PDF.</p>
     <div class="callout warn">
         <h4>Before any run</h4>

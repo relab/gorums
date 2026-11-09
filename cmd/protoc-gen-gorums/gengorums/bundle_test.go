@@ -35,7 +35,7 @@ func TestBundleReservedIdentifiers(t *testing.T) {
 
 // TestBundleStaticFileUpToDate checks that template_static.go matches
 // the bundle generated from the static files in the dev package.
-// If this test fails, run make dev to regenerate template_static.go.
+// If this test fails, run just dev to regenerate template_static.go.
 func TestBundleStaticFileUpToDate(t *testing.T) {
 	committed, err := os.ReadFile("template_static.go")
 	if err != nil {
@@ -48,7 +48,7 @@ func TestBundleStaticFileUpToDate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if diff := cmp.Diff(string(committed), string(generated)); diff != "" {
-		t.Errorf("template_static.go is out of date; run make dev (-committed +generated):\n%s", diff)
+		t.Errorf("template_static.go is out of date; run just dev (-committed +generated):\n%s", diff)
 	}
 }
 
@@ -90,7 +90,7 @@ func TestStaticFilesEmpty(t *testing.T) {
 
 // TestLoadPackageIgnoresBrokenGeneratedFile checks that a broken generated
 // dev file, whether it replaces an existing one or is new, does not stop the
-// bundler. make dev bundles the static files before it regenerates the
+// bundler. just dev bundles the static files before it regenerates the
 // generated files.
 func TestLoadPackageIgnoresBrokenGeneratedFile(t *testing.T) {
 	existing := filepath.Join(devDir(t), "zorums_server_gorums.pb.go")
