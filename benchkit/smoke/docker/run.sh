@@ -140,7 +140,7 @@ eval "$(ssh-agent -s)" > /dev/null
 own_agent=$SSH_AGENT_PID
 ssh-add -q "$tmp/id_ed25519"
 
-make -C "$root" --no-print-directory sweep
+just --justfile "$root/Justfile" sweep
 
 export GOARCH="${GOARCH:-$(go env GOARCH)}"
 cd "$root/benchkit"

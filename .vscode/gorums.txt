@@ -189,6 +189,7 @@ PBFT
 pcts
 Pedersen
 pgrep
+pipefail
 pkgs
 pkill
 Pkts
