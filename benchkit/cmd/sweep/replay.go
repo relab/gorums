@@ -9,7 +9,7 @@ import (
 )
 
 const replayScriptName = "sweep.sh"
-const rebuildSweepCommand = "make -C .. sweep"
+const rebuildSweepCommand = "just sweep"
 
 func writeReplayScript(outDir string, args []string) (string, error) {
 	path := filepath.Join(outDir, replayScriptName)
