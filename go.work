@@ -6,4 +6,4 @@ use (
 	./examples
 )
 
-replace github.com/relab/gorums v0.13.0 => ./
+replace github.com/relab/gorums v0.14.0 => ./
