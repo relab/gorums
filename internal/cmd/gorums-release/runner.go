@@ -15,6 +15,9 @@ type cmd struct {
 	env  []string // extra KEY=VALUE entries
 	name string
 	args []string
+	// stdin is the command's standard input. It can hold a secret, so String
+	// leaves it out.
+	stdin string
 }
 
 // String formats the command for display, in the form "(dir) name args".
@@ -53,6 +56,9 @@ func (r execRunner) command(c cmd) *exec.Cmd {
 	}
 	if len(c.env) > 0 {
 		e.Env = append(e.Environ(), c.env...)
+	}
+	if c.stdin != "" {
+		e.Stdin = strings.NewReader(c.stdin)
 	}
 	return e
 }
