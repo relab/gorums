@@ -11,10 +11,24 @@ import (
 // releaseSHA is the merge commit of the release pull request in the tests.
 const releaseSHA = "abc123"
 
-const prOpenGreen = `{"number":999,"url":"https://github.com/relab/gorums/pull/999","state":"OPEN","mergeCommit":null,"statusCheckRollup":[
+// headSHA is the head commit of the release pull request in the tests.
+const headSHA = "def456"
+
+const prOpenGreen = `{"number":999,"url":"https://github.com/relab/gorums/pull/999","state":"OPEN","headRefOid":"def456","mergeCommit":null,"statusCheckRollup":[
 {"__typename":"CheckRun","name":"test","status":"COMPLETED","conclusion":"SUCCESS"},
 {"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"SKIPPED"},
-{"__typename":"StatusContext","context":"ci","state":"SUCCESS"}]}`
+{"__typename":"StatusContext","context":"ci","state":"SUCCESS"},
+` + smokeChecksGreen + `]}`
+
+// smokeChecksGreen are the release-smoke check runs of a release pull request
+// whose smoke checks all passed.
+const smokeChecksGreen = `{"__typename":"CheckRun","name":"local-checks","workflowName":"release-smoke","status":"COMPLETED","conclusion":"SUCCESS"},
+{"__typename":"CheckRun","name":"docker-smoke","workflowName":"release-smoke","status":"COMPLETED","conclusion":"SUCCESS"},
+{"__typename":"CheckRun","name":"cluster-smoke","workflowName":"release-smoke","status":"COMPLETED","conclusion":"SUCCESS"}`
+
+// otherChecksGreen are passing checks from the pull request CI.
+const otherChecksGreen = `{"__typename":"CheckRun","name":"test","workflowName":"Go Test","status":"COMPLETED","conclusion":"SUCCESS"},
+{"__typename":"CheckRun","name":"lint","workflowName":"golangci-lint","status":"COMPLETED","conclusion":"SUCCESS"}`
 
 // prJSON returns the pull request JSON that gh prints. A merged pull request
 // has a merge commit.
@@ -23,7 +37,7 @@ func prJSON(state, checks string) string {
 	if state == "MERGED" {
 		merge = `{"oid":"` + releaseSHA + `"}`
 	}
-	return `{"number":999,"url":"u","state":"` + state + `","mergeCommit":` + merge + `,"statusCheckRollup":[` + checks + `]}`
+	return `{"number":999,"url":"u","state":"` + state + `","headRefOid":"` + headSHA + `","mergeCommit":` + merge + `,"statusCheckRollup":[` + checks + `]}`
 }
 
 func publishRunner(pr string) *fakeRunner {
@@ -71,7 +85,7 @@ func TestPublishOpenPR(t *testing.T) {
 	}
 	assertOrder(t, f.calls,
 		"query gh pr view release/v0.12.0 --json",
-		"exec gh pr merge release/v0.12.0 --squash --delete-branch",
+		"exec gh pr merge release/v0.12.0 --squash --delete-branch --match-head-commit def456",
 		"query gh pr view release/v0.12.0 --json",
 		"exec git fetch origin master",
 		"query git cat-file -e abc123^{commit}",
@@ -187,6 +201,8 @@ func TestPublishRefusals(t *testing.T) {
 		{name: "PR lookup fails", pr: "", prep: func(f *fakeRunner) { f.fail["gh pr view"] = errBoom }, wantErr: "cannot look up"},
 		{name: "closed PR", pr: prJSON("CLOSED", ""), wantErr: "closed"},
 		{name: "not confirmed", pr: prOpenGreen, opts: func(o *publishOptions) { o.yes = false }, wantErr: "--yes"},
+		{name: "open without a head commit", pr: `{"number":999,"url":"u","state":"OPEN","mergeCommit":null,"statusCheckRollup":[` + smokeChecksGreen + `]}`,
+			wantErr: "no head commit"},
 		{name: "local tag exists", pr: prJSON("MERGED", ""),
 			prep: func(f *fakeRunner) { f.answers["git tag -l"] = "v0.12.0\n" }, wantErr: "already exists"},
 		{name: "remote tag exists", pr: prJSON("MERGED", ""),
@@ -359,4 +375,88 @@ func TestPublishVerifyCacheOutsideModule(t *testing.T) {
 	if !checked {
 		t.Error("no verification command found")
 	}
+}
+
+// TestPublishSmokeChecks checks that publish merges an open release pull
+// request only when every release-smoke job succeeded on it: a missing,
+// skipped, or neutral smoke check stops the merge.
+func TestPublishSmokeChecks(t *testing.T) {
+	smoke := func(job, conclusion string) string {
+		return `{"__typename":"CheckRun","name":"` + job + `","workflowName":"release-smoke","status":"COMPLETED","conclusion":"` + conclusion + `"}`
+	}
+	tests := []struct {
+		name    string
+		checks  string
+		wantErr []string // "" entries: no error
+	}{
+		{name: "AllGreen", checks: otherChecksGreen + "," + smokeChecksGreen},
+		{
+			name:    "NoSmokeChecks",
+			checks:  otherChecksGreen,
+			wantErr: []string{"release-smoke / local-checks", "release-smoke / docker-smoke", "release-smoke / cluster-smoke"},
+		},
+		{
+			name:    "ClusterSmokeSkipped",
+			checks:  otherChecksGreen + "," + smoke("local-checks", "SUCCESS") + "," + smoke("docker-smoke", "SUCCESS") + "," + smoke("cluster-smoke", "SKIPPED"),
+			wantErr: []string{"release-smoke / cluster-smoke"},
+		},
+		{
+			name:    "DockerSmokeNeutral",
+			checks:  otherChecksGreen + "," + smoke("local-checks", "SUCCESS") + "," + smoke("docker-smoke", "NEUTRAL") + "," + smoke("cluster-smoke", "SUCCESS"),
+			wantErr: []string{"release-smoke / docker-smoke"},
+		},
+		{
+			// A job of the same name in another workflow does not count.
+			name: "SameJobNameOtherWorkflow",
+			checks: otherChecksGreen + "," + smoke("local-checks", "SUCCESS") + "," + smoke("docker-smoke", "SUCCESS") +
+				`,{"__typename":"CheckRun","name":"cluster-smoke","workflowName":"other","status":"COMPLETED","conclusion":"SUCCESS"}`,
+			wantErr: []string{"release-smoke / cluster-smoke"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := publishRunner(prJSON("OPEN", tt.checks))
+			tl := publishTool(t, f, "v0.12.0")
+			f.onExec = func(line string) {
+				if strings.HasPrefix(line, "gh pr merge") {
+					f.answers["gh pr view"] = prJSON("MERGED", "")
+				}
+			}
+			err := tl.publish(publishDefaults)
+			if len(tt.wantErr) == 0 {
+				if err != nil {
+					t.Fatalf("publish() = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("publish() = nil, want an error naming %v", tt.wantErr)
+			}
+			for _, want := range tt.wantErr {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("publish() error %q does not name %q", err, want)
+				}
+			}
+			assertAbsent(t, f.calls, "exec gh pr merge")
+		})
+	}
+}
+
+// TestPublishMergedPRWarnsOnMissingSmoke checks the escape hatch: a release
+// pull request merged by hand, for example during a cluster outage, still
+// publishes, but publish warns about each smoke check that did not pass.
+func TestPublishMergedPRWarnsOnMissingSmoke(t *testing.T) {
+	f := publishRunner(prJSON("MERGED", otherChecksGreen))
+	tl, out := newTestTool(t, f)
+	setTestVersion(t, tl, "v0.12.0")
+	f.answers["git show "+releaseSHA+":"+versionFile] = versionFileAt(t, "v0.12.0")
+	if err := tl.publish(publishDefaults); err != nil {
+		t.Fatalf("publish() = %v, want nil", err)
+	}
+	for _, want := range []string{"warning:", "release-smoke / cluster-smoke", "release-smoke / docker-smoke", "release-smoke / local-checks"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("output does not contain %q:\n%s", want, out.String())
+		}
+	}
+	assertCalled(t, f.calls, "exec git push --atomic")
 }
