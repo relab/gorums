@@ -1,6 +1,8 @@
 # The runner's SSH config for the bbchain cluster. sweep reaches the driver
 # through the jump host; the driver dials the pool hosts by their short names.
 # sweep's SSH library needs ProxyJump to name a Host alias in this file.
+# The jump host admits the key only for the driver's HostName; gorums-release
+# cluster-key writes that key line.
 Host jump
     HostName ssh4.ux.uis.no
     User gorums

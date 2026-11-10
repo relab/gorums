@@ -1,8 +1,9 @@
 // Command gorums-release prepares and publishes a Gorums release.
 //
 // Its three release subcommands run in this order: prepare, pr, and publish.
-// A fourth, check-branch, checks that a branch is the release branch for the
-// current version; the release smoke workflow runs it.
+// check-branch checks that a branch is the release branch for the current
+// version; the release smoke workflow runs it. cluster-key adds or rotates the
+// key that the release smoke workflow uses on the bbchain cluster.
 // Every subcommand works without flags and accepts -dry-run, which shows what
 // would be done and changes nothing.
 // Run "gorums-release help" for an overview and "gorums-release <command> -h"
@@ -39,9 +40,11 @@ Commands:
   publish   merge the pull request, tag the root and benchkit modules, create the GitHub release
 
   check-branch  check that a branch is the release branch for the version in version.go
+  cluster-key   add or rotate the key that the release smoke workflow uses on the cluster
 
 Run prepare, pr, and publish in this order, inside a checkout of the repository.
 The release smoke workflow runs check-branch.
+Run cluster-key once to set up cluster access, and again to rotate the key.
 Every command accepts -dry-run, which shows what would be done and changes nothing.
 Run "gorums-release <command> -h" for what a command does and its flags.
 `
@@ -132,6 +135,30 @@ version in internal/version/version.go, such as release/v0.12.0-rc.1. The
 release smoke workflow runs it, so that its release-only jobs build only a
 release candidate commit. It changes nothing.
 `,
+	"cluster-key": `Adds a new key for the release smoke workflow's access to the bbchain cluster.
+
+It needs ssh-keygen, ssh, and gh, logged in as a repository admin. It logs in
+to the account gorums with your own SSH access, on the jump host (-jump) and on
+the cluster (-cluster). It does the following:
+
+  1. Creates an ed25519 key pair without a passphrase. The key's comment holds
+     today's date, such as gorums-release-smoke-2026-11-11.
+  2. Adds the public key to ~/.ssh/authorized_keys of the account: on the jump
+     host it can only forward SSH to the driver, and on the cluster it works
+     only from the jump host and the cluster network. Older keys stay.
+  3. Creates or updates the GitHub environment cluster: you are its required
+     reviewer, and only release/v* branches may use it.
+  4. Sets the environment secret CLUSTER_SSH_KEY to the private key, and deletes
+     the private key file.
+  5. Requires approval of workflows from all outside collaborators.
+
+Then check the key with the cluster-check workflow, as the command prints.
+When it passes, run "gorums-release cluster-key -prune" to remove the older
+keys from authorized_keys on the jump host and the cluster.
+
+Rotate the key once a year, and at once if it may have leaked or someone with
+admin access to the repository leaves.
+`,
 }
 
 // run executes one subcommand and returns the process exit code.
@@ -145,7 +172,7 @@ func run(args []string, in io.Reader, stdout, stderr io.Writer) int {
 	case "-h", "-help", "--help", "help":
 		fmt.Fprint(stdout, usage)
 		return 0
-	case "prepare", "pr", "publish", "check-branch":
+	case "prepare", "pr", "publish", "check-branch", "cluster-key":
 	default:
 		fmt.Fprintf(stderr, "%s: unknown command %q\n\n%s", progName, name, usage)
 		return 2
@@ -181,6 +208,12 @@ func run(args []string, in io.Reader, stdout, stderr io.Writer) int {
 		var o checkBranchOptions
 		fs.StringVar(&o.branch, "branch", "", "the `branch` to check, such as release/v0.12.0 (default: the checked-out branch)")
 		do = func(t *tool) error { return t.checkBranch(o) }
+	case "cluster-key":
+		var o clusterKeyOptions
+		fs.BoolVar(&o.prune, "prune", false, "remove all but the newest release smoke key, after cluster-check passed with it")
+		fs.StringVar(&o.jump, "jump", "gorums@ssh4.ux.uis.no", "the ssh `destination` of the account gorums on the jump host")
+		fs.StringVar(&o.cluster, "cluster", "gorums@bb1", "the ssh `destination` of the account gorums on the cluster, as your SSH config resolves it")
+		do = func(t *tool) error { return t.clusterKey(o) }
 	}
 	if err := fs.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -207,6 +240,7 @@ func run(args []string, in io.Reader, stdout, stderr io.Writer) int {
 		sleep:         time.Sleep,
 		lookPath:      exec.LookPath,
 		path:          os.Getenv("PATH"),
+		now:           time.Now,
 		verifyTimeout: defaultVerifyTimeout,
 	}
 	if err := do(t); err != nil {
