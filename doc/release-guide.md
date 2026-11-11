@@ -192,50 +192,38 @@ No sweep, binary, or file is ever placed there.
 
 The runner's SSH config, the pinned host keys, the driver, and the pool are in `.github/actions/cluster-ssh/`.
 To change the driver or the pool, edit those files in a pull request.
+A new driver also needs a new key line on the jump host: change the driver in `internal/cmd/gorums-release/clusterkey.go` too, and run `gorums-release cluster-key` again.
 The pool needs at least 9 hosts, because the smoke sweep runs `-test 9`, and every host in it must be reachable.
 
 ### Set Up Access
 
 Do this once.
-The account `gorums` must have one home directory on `ssh4.ux.uis.no` and another, shared one on the cluster hosts.
 
-1. Create a key pair for the workflow, without a passphrase.
-   Put the year in its comment, so that its age shows in `authorized_keys`:
+1. Get the account `gorums` on `ssh4.ux.uis.no` and on the cluster, with one home directory on the jump host and another, shared one on the cluster hosts.
+   You must be able to log in to it with `ssh gorums@ssh4.ux.uis.no` and `ssh gorums@bb1`, with a password or your own key.
+
+2. Run `cluster-key`, logged in to `gh` as a repository admin:
 
    ```shell
-   ssh-keygen -t ed25519 -C gorums-release-smoke-2026 -N '' -f gorums-release-smoke
+   gorums-release cluster-key
    ```
 
-2. Install the public key for the account `gorums`, with one line on the jump host and one on the cluster.
-
-   In `~/.ssh/authorized_keys` on `ssh4.ux.uis.no`:
+   It creates a key pair, with today's date in the key's comment.
+   It adds the public key to `~/.ssh/authorized_keys` of the account `gorums`:
 
    ```text
-   command="/bin/false",restrict,port-forwarding,permitopen="bb1.ux.uis.no:22" <contents of gorums-release-smoke.pub>
+   ssh4.ux.uis.no:  command="/bin/false",restrict,port-forwarding,permitopen="bb1.ux.uis.no:22" <public key>
+   cluster hosts:   from="152.94.1.60,152.94.162.0/26",restrict,port-forwarding,agent-forwarding,pty <public key>
    ```
 
-   In `~/.ssh/authorized_keys` on the cluster hosts:
+   On the jump host, the key can only forward SSH to the driver.
+   On the cluster, the key works only from the jump host and the cluster network.
+   Then it creates the environment `cluster`, with you as required reviewer and only `release/v*` branches admitted, and sets its secret `CLUSTER_SSH_KEY` to the private key.
+   Last, it requires approval of workflows from all outside collaborators.
+   No copy of the private key stays on your machine.
+   Use `-jump` and `-cluster` if your SSH config reaches the account under other names.
 
-   ```text
-   from="152.94.1.60,152.94.162.0/26",restrict,port-forwarding,agent-forwarding,pty <contents of gorums-release-smoke.pub>
-   ```
-
-   - On the jump host, the key can only forward SSH to the driver.
-     Any command runs `/bin/false` instead; `ProxyJump` still works.
-     The `permitopen` host must match the driver's `HostName` in `.github/actions/cluster-ssh/ssh_config`.
-   - On the cluster, the key works only from the jump host (`152.94.1.60`) and the cluster network.
-     Use addresses, not names.
-
-3. In the repository settings, create the environment `cluster`:
-   - deployment branches: only the pattern `release/v*`;
-   - required reviewer: the maintainer;
-   - the secret `CLUSTER_SSH_KEY`: the private key `gorums-release-smoke` from step 1.
-
-   Then delete the private key file.
-
-4. In the repository settings under Actions, require approval for workflows from all outside collaborators.
-
-5. Check the access with the `cluster-check` workflow.
+3. Check the access with the `cluster-check` workflow.
    Push any commit to a branch named `release/v0-probe`, approve the `cluster` environment in the Actions tab, and wait for the job:
 
    ```shell
@@ -259,7 +247,11 @@ Only people with write access can push such a branch, and a pull request from a 
 Rotate the key once a year.
 Rotate it at once if it may have leaked, or if someone with admin access to the repository leaves.
 
-1. Create a new key pair as in step 1, with the current year in its comment.
-2. Add the new public key next to the old one, as in step 2.
-3. Replace the secret `CLUSTER_SSH_KEY`, and run the `cluster-check` workflow as in step 5.
-4. Remove the old key's lines from `authorized_keys` on the jump host and on the cluster.
+1. Run `gorums-release cluster-key`.
+   It adds the new key next to the old one and replaces the secret.
+2. Run the `cluster-check` workflow as in step 3.
+3. Remove the old key from the jump host and the cluster:
+
+   ```shell
+   gorums-release cluster-key -prune
+   ```
