@@ -14,6 +14,8 @@ Keep the root `go.mod` free of benchmarking and orchestration dependencies.
 
 - STOP and ASK when a design decision is unclear.
   Discuss architectural changes and backward-incompatible changes before implementing them.
+- While Gorums is v0.x.y, do not check or preserve compatibility between versions, such as mixed-version peers or the wire format.
+  The project is experimental with no production deployments, and downstream projects restart their experiments with synchronized versions.
 - Prepare a plan before larger features and refactors.
 - Push back on bad ideas with technical reasoning.
 - Private issues, designs, reviews, plans, and notes live in `.scratch/<feature>/`; never stage them.
