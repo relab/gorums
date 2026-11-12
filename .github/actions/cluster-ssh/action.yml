@@ -1,0 +1,41 @@
+name: Cluster SSH
+description: >
+  Prepares SSH access to the bbchain cluster for sweep, as the account gorums
+  through the jump host ssh4.ux.uis.no: loads the cluster key into an
+  ssh-agent that later steps inherit, installs ssh_config and known_hosts from
+  this directory, and sets CLUSTER_DRIVER and CLUSTER_HOSTS for later steps.
+inputs:
+  ssh-key:
+    description: The private key that the account gorums accepts on the jump host, the driver, and the pool hosts.
+    required: true
+runs:
+  using: composite
+  steps:
+    # sweep -detach forwards this agent to the driver, which uses it to dial the
+    # pool hosts; -collect uses it again later in the job.
+    - name: Start ssh-agent with the cluster key
+      shell: bash
+      env:
+        SSH_KEY: ${{ inputs.ssh-key }}
+      run: |
+        eval "$(ssh-agent -s)" > /dev/null
+        printf '%s\n' "$SSH_KEY" | ssh-add -q -
+        {
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID"
+        } >> "$GITHUB_ENV"
+
+    # The driver runs the sweep; the pool hosts run the benchmark. The pool has
+    # at least 9 hosts, for the -test 9 smoke sweep, and leaves out the driver
+    # and the faulty hosts bb9 and bb16. sweep -check fails on any unreachable
+    # host.
+    - name: Install the SSH config and known hosts
+      shell: bash
+      run: |
+        install -d -m 700 ~/.ssh
+        install -m 600 "$GITHUB_ACTION_PATH/ssh_config" ~/.ssh/config
+        install -m 600 "$GITHUB_ACTION_PATH/known_hosts" ~/.ssh/known_hosts
+        {
+          echo "CLUSTER_DRIVER=bb1"
+          echo "CLUSTER_HOSTS=bb[2-8],bb10,bb11"
+        } >> "$GITHUB_ENV"
