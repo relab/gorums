@@ -526,9 +526,12 @@ On a nil `*Node`, `RemoteCall` returns `ErrNoNode`, and `Unicast` returns a `One
 A quorum call constructor builds a `CallContext` that holds the request, the target `Config`, the response channel, and the response iterator (`ResponseSeq`).
 `Multicast` and `Unicast` build a `CallContext` that holds the request and the target `Config`, but no response iterator.
 A unicast's `CallContext` holds a one-node `Config`.
-A one-way `CallContext` gets a response channel only when `Async` dispatches the call; it carries admission failures and local send confirmations.
-`Send` aggregates admission errors yielded by the call's fan-out iterator.
-Queue rejection is returned only to the caller; the call layer forwards it to the response channel for asynchronous and two-way calls.
+A one-way `CallContext` gets a response channel only when `Async` dispatches the call; it carries the local send confirmations of the accepted requests.
+The fan-out of a `CallContext` attempts every destination and returns the admission failures; a transport reports a rejection only to its caller.
+`Send` returns the admission failures at once.
+`Async` keeps them in the `OnewayAsync` handle, and `Wait` adds the stream-write outcomes.
+A two-way call forwards them to its response channel.
+`Send` queues its requests with a context that cannot be canceled, so an accepted request stays queued when the caller's context ends.
 `RemoteCall` builds no `CallContext`; it enqueues one request on the node's transport and waits for the response.
 A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`), as well as the `Correctable` future.
 `Call.Async` sends the requests at once and returns the dispatched `Responses`, so any terminal method collects the replies later.

@@ -143,54 +143,75 @@ func (c *CallContext[Req, Resp]) Size() int {
 	return c.config.Size()
 }
 
-// send dispatches requests and feeds admission failures to the response
-// sequence. Accepted requests report their later outcomes through the transport.
+// send dispatches the call and delivers the admission failures on the
+// response channel. Accepted requests report their later outcomes through the
+// transport. If the response channel is full, as it can be with the replies of
+// a streaming call, send waits for space until the context ends.
 func (c *CallContext[Req, Resp]) send() {
-	for r := range c.admit() {
-		if r.Err != nil {
-			c.responseChan <- r
+	for _, r := range c.admit(c.Context) {
+		select {
+		case c.responseChan <- r:
+			continue
+		default:
+		}
+		select {
+		case c.responseChan <- r:
+		case <-c.Done():
+			return
 		}
 	}
 }
 
-// admit attempts every destination and yields its admission result. With no
-// transforms, the payload and ordinary-node message are shared. Shared-stream
-// nodes need individual IDs from their server-initiated ID space.
-func (c *CallContext[Req, Resp]) admit() ResponseSeq[*stream.Message] {
-	return func(yield func(NodeResponse[*stream.Message]) bool) {
-		var payload []byte
-		var marshalErr error
-		var sharedMsg *stream.Message
-		start := 0
-		if len(c.reqTransforms) == 0 {
-			payload, marshalErr = proto.Marshal(c.request)
-			// Rotate fan-out so no destination is always last.
-			start = rand.IntN(max(len(c.config), 1))
+// admit attempts to queue the request for every destination and returns the
+// admission failures; it never waits for queue space. Accepted requests carry
+// ctx, which bounds the time they may wait for transmission.
+func (c *CallContext[Req, Resp]) admit(ctx context.Context) (failed []NodeResponse[*stream.Message]) {
+	message := c.messages()
+	// The fan-out starts at a random node and wraps around, so no node is
+	// always last. Each node still receives its requests in call order.
+	start := rand.IntN(max(len(c.config), 1))
+	for i := range c.config {
+		n := c.config[(start+i)%len(c.config)]
+		msg, err := message(n)
+		if err == nil {
+			err = conn.NodeTransport(n).Enqueue(stream.NodeRequest{
+				Ctx:          ctx,
+				Msg:          msg,
+				Streaming:    c.streaming,
+				Oneway:       c.oneway,
+				ResponseChan: c.responseChan,
+			})
 		}
-		for i := range c.config {
-			n := c.config[(start+i)%len(c.config)]
-			msg, err := sharedMsg, marshalErr
-			if len(c.reqTransforms) != 0 {
-				msg, err = c.transformAndMarshal(n)
-			} else if err == nil && (msg == nil || n.IsShared()) {
-				msg = stream.NewRequestFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload)
-				if !n.IsShared() {
-					sharedMsg = msg
-				}
-			}
-			if err == nil {
-				err = conn.NodeTransport(n).Enqueue(stream.NodeRequest{
-					Ctx:          c.Context,
-					Msg:          msg,
-					Streaming:    c.streaming,
-					Oneway:       c.oneway,
-					ResponseChan: c.responseChan,
-				})
-			}
-			if !yield(NodeResponse[*stream.Message]{NodeID: n.ID(), Err: err}) {
-				return
-			}
+		if err != nil {
+			failed = append(failed, NodeResponse[*stream.Message]{NodeID: n.ID(), Err: err})
 		}
+	}
+	return failed
+}
+
+// messages returns the function that builds the message for a node. With
+// request transforms, each node gets its own transformed message. Otherwise,
+// the request is marshaled once and the ordinary nodes share one message: each
+// such node matches responses only against its own pending calls. A node with
+// a shared stream also carries the remote peer's client-initiated IDs, so it
+// gets its own message with an ID from the server-initiated ID space.
+func (c *CallContext[Req, Resp]) messages() func(*Node) (*stream.Message, error) {
+	if len(c.reqTransforms) != 0 {
+		return c.transformAndMarshal
+	}
+	payload, err := proto.Marshal(c.request)
+	var sharedMsg *stream.Message
+	return func(n *Node) (*stream.Message, error) {
+		if err != nil {
+			return nil, err
+		}
+		if n.IsShared() {
+			return stream.NewRequestFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload), nil
+		}
+		if sharedMsg == nil {
+			sharedMsg = stream.NewRequestFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload)
+		}
+		return sharedMsg, nil
 	}
 }
 
