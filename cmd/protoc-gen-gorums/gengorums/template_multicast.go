@@ -18,15 +18,17 @@ var multicastComment = `
 // No reply is returned. Use gorums.MapRequest to send a different message to
 // each node.
 //
-// Send blocks until every send completes and returns any send errors.
-// Async returns a handle at once; Wait on the handle returns the send errors.
+// Send queues the request for every node and returns the admission errors;
+// it does not wait for queue space or for the stream writes. Async queues the
+// request the same way and returns a handle; Wait on the handle returns the
+// admission errors and the stream-write errors.
 {{end -}}
 //
 // Example:
 //
 //	err := client.{{$method}}(ctx, in).Send()
 //
-// To dispatch without waiting for the sends:
+// To wait for the stream writes:
 //
 //	h := client.{{$method}}(ctx, in).Async()
 //	err = h.Wait()

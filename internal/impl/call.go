@@ -1,7 +1,9 @@
 package impl
 
 import (
+	"context"
 	"errors"
+	"slices"
 	"sync"
 
 	"github.com/relab/gorums/internal/conn"
@@ -123,27 +125,19 @@ func (c *OnewayCall[Req]) Intercept(ics ...ClientInterceptor[Req, *emptypb.Empty
 // followed by [OnewayAsync.Wait]. Neither operation confirms remote processing. A local
 // self-call completes at admission to its handler queue.
 //
-// The context must remain live while queued messages await transmission.
-// Cancelling it after Send returns can discard messages still in the queue.
+// The context bounds admission only. If the context has already ended, Send
+// returns its error and sends nothing; a call without a target returns
+// [ErrNoNode] or [ErrEmptyConfig] instead. An accepted request stays queued when
+// the context ends later, so the caller may cancel the context as soon as
+// Send returns. To let the context withdraw requests that still wait in the
+// queue, use [OnewayCall.Async].
+//
 // Send dispatches the call; calling Send or Async again panics.
 func (c *OnewayCall[Req]) Send() error {
-	c.markDispatched()
-	if c.ctx.err != nil {
-		return c.ctx.err
+	if err := c.dispatch(); err != nil {
+		return err
 	}
-	var errs []conn.NodeError
-	for r := range c.ctx.admit() {
-		if c.unicast {
-			return r.Err
-		}
-		if r.Err != nil && !errors.Is(r.Err, ErrSkipNode) {
-			errs = append(errs, conn.NewNodeError(r.NodeID, r.Err))
-		}
-	}
-	if len(errs) > 0 {
-		return conn.NewQuorumCallError(ErrSendFailure, errs)
-	}
-	return nil
+	return c.result(c.ctx.admit(context.WithoutCancel(c.ctx.Context)))
 }
 
 // Async attempts nonblocking admission to every destination and returns a
@@ -158,48 +152,81 @@ func (c *OnewayCall[Req]) Send() error {
 // on the caller's goroutine. Dropping the handle without calling Wait is safe,
 // but the send errors are then lost.
 //
+// The context bounds the call until its stream writes complete. If the
+// context has already ended, the call sends nothing and Wait returns the
+// context error; a call without a target returns [ErrNoNode] or
+// [ErrEmptyConfig] instead. A request that still waits in the queue when the
+// context ends is discarded.
+//
 // Async dispatches the call; calling Send or Async on the same handle after
 // dispatch panics.
 func (c *OnewayCall[Req]) Async() *OnewayAsync {
-	c.markDispatched()
-	if c.ctx.err == nil {
-		c.ctx.responseChan = make(chan NodeResponse[*stream.Message], c.ctx.config.Size())
-		c.ctx.send()
+	if err := c.dispatch(); err != nil {
+		return &OnewayAsync{collect: func() error { return err }}
 	}
-	return &OnewayAsync{collect: c.collect}
+	c.ctx.responseChan = make(chan NodeResponse[*stream.Message], c.ctx.config.Size())
+	failed := c.ctx.admit(c.ctx.Context)
+	return &OnewayAsync{collect: func() error { return c.collect(failed) }}
 }
 
-// markDispatched rejects a second dispatch of the one-way call.
-func (c *OnewayCall[Req]) markDispatched() {
+// dispatch marks the call as dispatched and returns the error that the call
+// reports instead of sending, if any: the error that the handle holds, or the
+// error of a context that has already ended. It panics if the call was already
+// dispatched.
+func (c *OnewayCall[Req]) dispatch() error {
 	if c.ctx.dispatched.Swap(true) {
 		panic("gorums: OnewayCall.Send or OnewayCall.Async called more than once on the same handle")
 	}
-}
-
-// collect gathers one send confirmation per node and reports the failures,
-// aggregating them for multicast and passing the single error through for
-// unicast. A node skipped by a request transform ([ErrSkipNode]) is dropped
-// from the multicast aggregate, since the sends to the other nodes still went
-// out. A skipped unicast sent nothing at all, so its [ErrSkipNode] is returned.
-// A handle that holds an error returns that error.
-func (c *OnewayCall[Req]) collect() error {
 	if c.ctx.err != nil {
 		return c.ctx.err
 	}
-	if c.unicast {
+	return c.ctx.Err()
+}
+
+// collect waits for the outcome of every accepted request and returns the
+// result of the call. The failed responses hold the admission failures. If the
+// context ends first, each node whose request has no outcome fails with the
+// context error.
+func (c *OnewayCall[Req]) collect(failed []NodeResponse[*stream.Message]) error {
+	// pending holds the nodes whose accepted request has no outcome yet.
+	pending := make([]ID, 0, c.ctx.config.Size()-len(failed))
+	for _, n := range c.ctx.config {
+		if !slices.ContainsFunc(failed, func(r NodeResponse[*stream.Message]) bool { return r.NodeID == n.ID() }) {
+			pending = append(pending, n.ID())
+		}
+	}
+	for range len(pending) {
 		r, err := c.receive()
 		if err != nil {
-			return err
+			for _, id := range pending {
+				failed = append(failed, NodeResponse[*stream.Message]{NodeID: id, Err: err})
+			}
+			break
 		}
-		return r.Err
+		pending = slices.DeleteFunc(pending, func(id ID) bool { return id == r.NodeID })
+		if r.Err != nil {
+			failed = append(failed, r)
+		}
+	}
+	return c.result(failed)
+}
+
+// result returns the error of a one-way call whose failed responses hold one
+// error per failed node. Unicast returns its single error. Multicast returns
+// the errors in a [conn.QuorumCallError] with cause [ErrSendFailure]. A node
+// skipped by a request transform ([ErrSkipNode]) is left out of it, since the
+// sends to the other nodes still went out; a skipped unicast sent nothing at
+// all, so its [ErrSkipNode] is returned.
+func (c *OnewayCall[Req]) result(failed []NodeResponse[*stream.Message]) error {
+	if c.unicast {
+		if len(failed) == 0 {
+			return nil
+		}
+		return failed[0].Err
 	}
 	var errs []conn.NodeError
-	for range c.ctx.config.Size() {
-		r, err := c.receive()
-		if err != nil {
-			return err
-		}
-		if r.Err != nil && !errors.Is(r.Err, ErrSkipNode) {
+	for _, r := range failed {
+		if !errors.Is(r.Err, ErrSkipNode) {
 			errs = append(errs, conn.NewNodeError(r.NodeID, r.Err))
 		}
 	}
@@ -240,6 +267,11 @@ type OnewayAsync struct {
 // self-calls complete at handler-queue admission. Do not wait while holding a
 // lock needed for protocol progress. In a server handler, dispatch before
 // ServerContext.Release and wait afterward to preserve relay order.
+//
+// If the context ends first, a unicast returns the context error. A multicast
+// returns a [conn.QuorumCallError] that holds the failures known so far and
+// the context error for each node whose stream write has no outcome; see
+// [conn.QuorumCallError.NodeErrors].
 func (a *OnewayAsync) Wait() error {
 	a.once.Do(func() { a.err = a.collect() })
 	return a.err

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/relab/gorums/internal/conn"
@@ -62,10 +63,10 @@ func (h *seqNoRecorder) wait(t *testing.T, n int) []uint64 {
 	return nil
 }
 
-// TestCallContextSendSharedMessageIDs verifies that sendShared reuses a
+// TestCallContextAdmitMessageIDs verifies that admit reuses a
 // single message with one client-initiated ID for all regular nodes, while a
 // shared dedup node gets its own message with a server-initiated ID.
-func TestCallContextSendSharedMessageIDs(t *testing.T) {
+func TestCallContextAdmitMessageIDs(t *testing.T) {
 	var clientID, serverID atomic.Uint64
 	clientGen := func() uint64 { return clientID.Add(1) }
 	serverGen := func() uint64 { return stream.ServerSequenceNumber(serverID.Add(1)) }
@@ -92,10 +93,8 @@ func TestCallContextSendSharedMessageIDs(t *testing.T) {
 		method:  "test.Method",
 		oneway:  true, // fire-and-forget: no response channel needed
 	}
-	for r := range c.admit() {
-		if r.Err != nil {
-			t.Fatal(r.Err)
-		}
+	if failed := c.admit(c.Context); len(failed) != 0 {
+		t.Fatal(failed)
 	}
 
 	regular1, regular2 := recorders[0].first(t), recorders[1].first(t)
@@ -111,57 +110,100 @@ func TestCallContextSendSharedMessageIDs(t *testing.T) {
 	}
 }
 
-// TestCallContextSendSharedFanOutStart verifies that sendShared reaches every
-// node once per call and starts its fan-out at varying nodes, so that no node
-// is reached last in every call. Each node is a shared node that draws its
-// message ID from one counter when it is visited, so the node holding a call's
-// lowest ID was visited first.
-func TestCallContextSendSharedFanOutStart(t *testing.T) {
-	const nodes, calls = 4, 200
-	var serverID atomic.Uint64
-	serverGen := func() uint64 { return stream.ServerSequenceNumber(serverID.Add(1)) }
-	clientGen := func() uint64 { return 0 }
-
-	recorders := make([]*seqNoRecorder, nodes)
-	config := make(Config, nodes)
-	for i := range config {
-		recorders[i] = &seqNoRecorder{}
-		id := uint32(i + 1)
-		transport := stream.NewTransport(id, clientGen)
-		transport.StoreChannel(stream.NewLocalChannel(id, recorders[i], conn.DefaultRecvBufferSize, nil))
-		config[i] = conn.NewNodeForTest(id, stream.NewSharedTransportWithGen(transport, serverGen))
+// TestCallContextAdmitFanOutStart verifies that admit reaches every node once
+// per call and starts its fan-out at varying nodes, so that no node is reached
+// last in every call, with and without a request transform. Each node is a
+// shared node that draws its message ID from one counter when it is visited,
+// so the node holding a call's lowest ID was visited first.
+func TestCallContextAdmitFanOutStart(t *testing.T) {
+	identity := func(req *pb.StringValue, _ *Node) *pb.StringValue { return req }
+	tests := []struct {
+		name          string
+		reqTransforms []func(*pb.StringValue, *Node) *pb.StringValue
+	}{
+		{name: "SharedPayload"},
+		{name: "Transformed", reqTransforms: []func(*pb.StringValue, *Node) *pb.StringValue{identity}},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const nodes, calls = 4, 200
+			var serverID atomic.Uint64
+			serverGen := func() uint64 { return stream.ServerSequenceNumber(serverID.Add(1)) }
+			clientGen := func() uint64 { return 0 }
 
-	for range calls {
+			recorders := make([]*seqNoRecorder, nodes)
+			config := make(Config, nodes)
+			for i := range config {
+				recorders[i] = &seqNoRecorder{}
+				id := uint32(i + 1)
+				transport := stream.NewTransport(id, clientGen)
+				transport.StoreChannel(stream.NewLocalChannel(id, recorders[i], conn.DefaultRecvBufferSize, nil))
+				config[i] = conn.NewNodeForTest(id, stream.NewSharedTransportWithGen(transport, serverGen))
+			}
+
+			for range calls {
+				c := &CallContext[*pb.StringValue, *pb.StringValue]{
+					Context:       t.Context(),
+					config:        config,
+					request:       pb.String("hello"),
+					method:        "test.Method",
+					oneway:        true,
+					reqTransforms: tt.reqTransforms,
+				}
+				if failed := c.admit(c.Context); len(failed) != 0 {
+					t.Fatal(failed)
+				}
+			}
+
+			// Call k holds the IDs nodes*k+1 through nodes*k+nodes, in visit order.
+			serverBit := stream.ServerSequenceNumber(0)
+			for i, r := range recorders {
+				seqNos := r.wait(t, calls)
+				if len(seqNos) != calls {
+					t.Fatalf("node %d got %d requests, want %d", i+1, len(seqNos), calls)
+				}
+				first := 0
+				for _, seqNo := range seqNos {
+					if (seqNo&^serverBit-1)%nodes == 0 {
+						first++
+					}
+				}
+				if first == 0 {
+					t.Errorf("node %d was never visited first in %d calls", i+1, calls)
+				}
+			}
+		})
+	}
+}
+
+// TestCallContextSendResponseChannelFull verifies that send does not wait for
+// space on the response channel once the call's context has ended. A streaming
+// call's response channel can be full of replies when an admission fails.
+func TestCallContextSendResponseChannelFull(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		down := conn.NewNodeForTest(1, stream.NewTransport(1, func() uint64 { return 1 }))
 		c := &CallContext[*pb.StringValue, *pb.StringValue]{
-			Context: t.Context(),
-			config:  config,
-			request: pb.String("hello"),
-			method:  "test.Method",
-			oneway:  true,
+			Context:      ctx,
+			config:       Config{down},
+			request:      pb.String("hello"),
+			method:       "test.Method",
+			streaming:    true,
+			responseChan: make(chan NodeResponse[*stream.Message]),
 		}
-		for r := range c.admit() {
-			if r.Err != nil {
-				t.Fatal(r.Err)
-			}
+		done := make(chan struct{})
+		go func() {
+			c.send()
+			close(done)
+		}()
+		synctest.Wait()
+		cancel()
+		synctest.Wait()
+		select {
+		case <-done:
+		default:
+			<-c.responseChan // let send return
+			t.Error("send still waits for the response channel after the context ended")
 		}
-	}
-
-	// Call k holds the IDs nodes*k+1 through nodes*k+nodes, in visit order.
-	serverBit := stream.ServerSequenceNumber(0)
-	for i, r := range recorders {
-		seqNos := r.wait(t, calls)
-		if len(seqNos) != calls {
-			t.Fatalf("node %d got %d requests, want %d", i+1, len(seqNos), calls)
-		}
-		first := 0
-		for _, seqNo := range seqNos {
-			if (seqNo&^serverBit-1)%nodes == 0 {
-				first++
-			}
-		}
-		if first == 0 {
-			t.Errorf("node %d was never visited first in %d calls", i+1, calls)
-		}
-	}
+	})
 }
