@@ -325,7 +325,7 @@ classDiagram
     direction LR
     class Channel {
         <<interface>>
-        Enqueue(Request)
+        Enqueue(Request) error
         StreamUp() bool
         PendingCount() int
         Close() error
@@ -346,7 +346,7 @@ classDiagram
     class Transport {
         id ID
         shared bool
-        Enqueue(Request)
+        Enqueue(Request) error
         StoreChannel(Channel)
         NextMsgID() uint64
     }
@@ -526,11 +526,13 @@ On a nil `*Node`, `RemoteCall` returns `ErrNoNode`, and `Unicast` returns a `One
 A quorum call constructor builds a `CallContext` that holds the request, the target `Config`, the response channel, and the response iterator (`ResponseSeq`).
 `Multicast` and `Unicast` build a `CallContext` that holds the request and the target `Config`, but no response iterator.
 A unicast's `CallContext` holds a one-node `Config`.
-A one-way `CallContext` gets its response channel when `Send` or `Async` dispatches the call; the channel carries the local send confirmations.
+A one-way `CallContext` gets a response channel only when `Async` dispatches the call; it carries admission failures and local send confirmations.
+`Send` aggregates admission errors yielded by the call's fan-out iterator.
+Queue rejection is returned only to the caller; the call layer forwards it to the response channel for asynchronous and two-way calls.
 `RemoteCall` builds no `CallContext`; it enqueues one request on the node's transport and waits for the response.
 A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`), as well as the `Correctable` future.
 `Call.Async` sends the requests at once and returns the dispatched `Responses`, so any terminal method collects the replies later.
-A one-way call (`Multicast`, `Unicast`) returns a `OnewayCall`, whose `Send` waits for local send confirmations and whose `Async` returns a `OnewayAsync`.
+A one-way call (`Multicast`, `Unicast`) returns a `OnewayCall`, whose `Send` returns queue-admission errors and whose `Async` returns a `OnewayAsync` that collects admission failures and stream-write outcomes through `Wait`.
 A `ClientInterceptor` wraps the response iterator and may register per-node request transformations before the call is dispatched.
 `CallContext` reaches each node's send path through `conn.NodeTransport`.
 
@@ -620,7 +622,7 @@ sequenceDiagram
     Gen->>Call: Majority()
     Call->>CC: iterate ResponseSeq (sendNow)
     loop each node in Config, from a random start
-        CC->>T: conn.NodeTransport(n).Enqueue(Request)
+        CC->>T: conn.NodeTransport(n).Enqueue(Request) error
         T->>Ch: Channel.Enqueue: push on sendQueue
     end
     Note over Ch,S: channel goroutine

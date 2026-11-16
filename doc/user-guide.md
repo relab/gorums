@@ -237,22 +237,20 @@ The handle embeds `*gorums.Responses[*ReadResponse]`, which provides the termina
 The `Call` type also has an `Intercept` method, which registers client interceptors before the call is sent.
 The one-way `WriteMulticast` method returns a `*gorums.OnewayCall[*WriteRequest]` handle, which also has an `Intercept` method.
 
-Both handles follow one pattern.
-A method can send the request and wait in one step.
-Or `Async` can send the request at once, and a method on the handle that `Async` returns waits later.
-A quorum call waits for the replies.
-A one-way call has no reply; it waits until each message reaches the stream of its node.
+A quorum call waits for replies when a terminal method is called.
+Its `Async` method dispatches immediately and returns responses to collect later.
+A one-way call has two completion stages:
 
-| Call type    | Send and wait                            | Send now, wait later                                            |
-| ------------ | ---------------------------------------- | --------------------------------------------------------------- |
-| Quorum call  | `client.ReadQC(ctx, req).Majority()`     | `h := client.ReadQC(ctx, req).Async()`, then `h.Majority()`     |
-| One-way call | `client.WriteMulticast(ctx, req).Send()` | `h := client.WriteMulticast(ctx, req).Async()`, then `h.Wait()` |
+| Operation | Result |
+| --- | --- |
+| `client.WriteMulticast(ctx, req).Send()` | Queue-admission errors, without waiting for stream writes |
+| `h := client.WriteMulticast(ctx, req).Async()` | Dispatch immediately and retain a completion handle |
+| `h.Wait()` | Admission failures and stream-write outcomes, bounded by the context |
 
 For a quorum call, `Async` returns a `*gorums.Responses`, which has all the terminal methods.
-For a one-way call, `Async` returns a `*gorums.OnewayAsync`, and its `Wait` method returns the send errors.
-So `Send` is the same as `Async().Wait()`.
+For a one-way call, it returns a `*gorums.OnewayAsync`.
 
-When this guide says that a call *fails with* an error, the method that waits returns that error.
+When this guide says that a call *fails with* an error, the completion method returns that error.
 For a quorum call, this is a terminal method.
 For a one-way call, this is `Send` or `Wait`.
 
@@ -857,11 +855,15 @@ Collecting the replies one call after the other takes about as long as the slowe
 
 **Multicast and unicast follow the same pattern.** A one-way call is not dispatched until the caller calls `Send` or `Async`.
 If the caller drops the handle without calling either method, the call is never dispatched.
-`Send` is the same as `Async().Wait()`.
-
-A send completes when the message reaches the stream of its node.
-`Send` and `Wait` return every send failure.
-They cannot return errors that occur later in the server handler, because a one-way call has no reply.
+`Send` returns after attempting admission to every destination.
+A full destination queue fails with `ErrSendQueueFull`, while fan-out continues to the remaining destinations.
+Multicast can partially succeed; its error holds the failures for rejected destinations.
+Accepted requests retain their dispatch order.
+`Wait` also collects later stream-write failures.
+A successful stream write confirms local transport completion, without confirming remote receipt or handler execution.
+For a self-call, completion means admission to the local handler queue.
+`Node.LastErr` provides current stream-health diagnostics for callers using `Send`; it cannot identify the outcome of a particular message.
+`Send` and `Wait` cannot report errors from remote handler execution, because a one-way call has no application reply.
 If the caller drops the `*OnewayAsync` handle without calling `Wait`, the sends still complete, but their errors are lost.
 
 The server still replies with an error if it cannot run the handler: it has no handler for the method, or it cannot decode the request.
@@ -879,7 +881,20 @@ cfg, closeFn, err := gorums.NewConfig(nodes,
 The count also includes an error reply to a two-way call that ended before its reply arrived.
 A count of zero does not show that the server received a message or ran its handler; one-way calls have no acknowledgements.
 
-`Send` blocks until the sends complete, so one goroutine holds a single outstanding message per node — the same depth a quorum call has.
+The context must remain live while accepted messages await transmission.
+Returning from `Send` and immediately calling a deferred `cancel()` can discard queued messages.
+Use a longer-lived context for admission-only sends, or await stream writes before cancelling:
+
+```go
+ctx, cancel := context.WithTimeout(parent, time.Second)
+defer cancel()
+return client.WriteMulticast(ctx, req).Async().Wait()
+```
+
+`Wait` can block on a stalled destination until the context ends.
+Do not call it while holding a lock needed for protocol progress.
+Local self-call completion does not guarantee that its handler runs before cancellation.
+To keep only one outstanding stream write per destination, use `Async().Wait()`.
 As with a quorum call, `Async` lets one goroutine keep several calls in flight:
 
 ```go
@@ -912,7 +927,7 @@ Summary:
 
 **A cancelled call leaves the node's stream intact.**
 When a call's context ends, the call returns, but the request may still be sent if it was already queued or in flight, and a late reply is discarded.
-A node that stops reading its stream while its connection stays open stalls the sends behind it; two-way calls to that node then fail fast with `ErrSendQueueFull` once its queue fills, so quorum calls proceed with the remaining nodes.
+A node that stops reading its stream while its connection stays open stalls the sends behind it; calls to that node then fail fast with `ErrSendQueueFull` once its queue fills, so quorum calls proceed with the remaining nodes.
 While a send to a node has been blocked for a second or longer, `Node.LastErr` reports `gorums.ErrSendStalled`, so `ByLastError` orders the node last.
 gRPC keepalive, enabled with `gorums.WithGRPCDialOptions(grpc.WithKeepaliveParams(...))`, detects a node whose connection or process is gone; it does not detect a live node that has stopped reading one stream, since the transport still answers keepalive pings.
 
@@ -2938,8 +2953,8 @@ Peer identity checks do not authenticate clients that claim no peer ID; the tran
 
 The per-node send queue defaults to 4096 entries.
 Passing zero as the send-size argument of `WithBufferSizes` or `WithDialBufferSizes` selects that default.
-Two-way requests fail fast with an unavailable error when a real buffered queue is full.
-One-way client calls (`Unicast`, `Multicast`) wait for space instead, since backpressure on the caller is what paces them.
+All application requests fail with `ErrSendQueueFull` when their destination queue is full.
+Admission never waits for space, including for the local self-node, so a stalled destination cannot stop fan-out to the remaining nodes.
 Replies to two-way requests follow one of two rules, depending on whether the two nodes send requests to each other.
 
 * Some pairs of nodes send requests in both directions: a server and a peer from `WithPeers`, a server and a client in `ConnectedClients`, and a client that serves back-channel requests and its server.

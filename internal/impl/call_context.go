@@ -143,105 +143,68 @@ func (c *CallContext[Req, Resp]) Size() int {
 	return c.config.Size()
 }
 
-// reportNodeError sends an error response for the given node to responseChan.
-// It is a no-op for fire-and-forget calls where responseChan is nil.
-func (c *CallContext[Req, Resp]) reportNodeError(nodeID ID, err error) {
-	if c.responseChan != nil {
-		c.responseChan <- NodeResponse[*stream.Message]{NodeID: nodeID, Err: err}
-	}
-}
-
-// enqueue sends a stream.NodeRequest to the node, populating the shared fields
-// from CallContext so call sites only need to supply the message.
-func (c *CallContext[Req, Resp]) enqueue(n *Node, msg *stream.Message) {
-	conn.NodeTransport(n).Enqueue(stream.NodeRequest{
-		Ctx:          c.Context,
-		Msg:          msg,
-		Streaming:    c.streaming,
-		Oneway:       c.oneway,
-		ResponseChan: c.responseChan,
-	})
-}
-
-// send dispatches requests to all nodes. It delegates to sendWithPerNodeTransformation
-// if any per-node request transformations are registered. Otherwise, it uses sendShared
-// to marshal the request once and send the same message to all nodes.
+// send dispatches requests and feeds admission failures to the response
+// sequence. Accepted requests report their later outcomes through the transport.
 func (c *CallContext[Req, Resp]) send() {
-	if len(c.reqTransforms) == 0 {
-		c.sendShared()
-	} else {
-		c.sendWithPerNodeTransformation()
+	for r := range c.admit() {
+		if r.Err != nil {
+			c.responseChan <- r
+		}
 	}
 }
 
-// sendShared marshals the request payload once and enqueues it to all nodes.
-// Each ordinary node matches responses only against its own pending calls, so
-// a single message with one ID is shared across all of them, avoiding
-// per-node message construction. A shared dedup node sends on a stream that
-// also carries the remote peer's client-initiated IDs, so it gets its own
-// message with an ID from the server-initiated ID space to avoid collisions.
-//
-// The fan-out starts at a random node and wraps around, so no node is
-// always enqueued last; the node reached last waits longest for its share of
-// every call. Each node still receives its requests in call order.
-func (c *CallContext[Req, Resp]) sendShared() {
-	payload, err := proto.Marshal(c.request)
-	if err != nil {
-		// Marshaling fails identically for all nodes; report and return.
-		for _, n := range c.config {
-			c.reportNodeError(n.ID(), err)
+// admit attempts every destination and yields its admission result. With no
+// transforms, the payload and ordinary-node message are shared. Shared-stream
+// nodes need individual IDs from their server-initiated ID space.
+func (c *CallContext[Req, Resp]) admit() ResponseSeq[*stream.Message] {
+	return func(yield func(NodeResponse[*stream.Message]) bool) {
+		var payload []byte
+		var marshalErr error
+		var sharedMsg *stream.Message
+		start := 0
+		if len(c.reqTransforms) == 0 {
+			payload, marshalErr = proto.Marshal(c.request)
+			// Rotate fan-out so no destination is always last.
+			start = rand.IntN(max(len(c.config), 1))
 		}
-		return
-	}
-	// sharedMsg is one message instance reused across all ordinary nodes;
-	// a node with a shared (deduplicated) stream needs a fresh server-space
-	// ID per send, so each such node gets its own message instead.
-	var sharedMsg *stream.Message
-	start := rand.IntN(max(len(c.config), 1))
-	for i := range c.config {
-		n := c.config[(start+i)%len(c.config)]
-		if n.IsShared() {
-			c.enqueue(n, stream.NewRequestFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload))
-			continue
+		for i := range c.config {
+			n := c.config[(start+i)%len(c.config)]
+			msg, err := sharedMsg, marshalErr
+			if len(c.reqTransforms) != 0 {
+				msg, err = c.transformAndMarshal(n)
+			} else if err == nil && (msg == nil || n.IsShared()) {
+				msg = stream.NewRequestFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload)
+				if !n.IsShared() {
+					sharedMsg = msg
+				}
+			}
+			if err == nil {
+				err = conn.NodeTransport(n).Enqueue(stream.NodeRequest{
+					Ctx:          c.Context,
+					Msg:          msg,
+					Streaming:    c.streaming,
+					Oneway:       c.oneway,
+					ResponseChan: c.responseChan,
+				})
+			}
+			if !yield(NodeResponse[*stream.Message]{NodeID: n.ID(), Err: err}) {
+				return
+			}
 		}
-		if sharedMsg == nil {
-			sharedMsg = stream.NewRequestFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload)
-		}
-		c.enqueue(n, sharedMsg)
-	}
-}
-
-// sendWithPerNodeTransformation applies per-node request transformations before
-// marshaling and enqueues each individually transformed message to its node.
-func (c *CallContext[Req, Resp]) sendWithPerNodeTransformation() {
-	for _, n := range c.config {
-		streamMsg := c.transformAndMarshal(n)
-		if streamMsg == nil {
-			continue // Skip node: transformAndMarshal already sent ErrSkipNode
-		}
-		c.enqueue(n, streamMsg)
 	}
 }
 
-// transformAndMarshal applies transformations to the request for the given node,
-// then marshals it into a stream.Message. Returns nil if transformation fails
-// or marshaling fails (in which case the error is reported via reportNodeError).
-func (c *CallContext[Req, Resp]) transformAndMarshal(n *Node) *stream.Message {
+// transformAndMarshal applies per-node transformations and returns the message
+// or the admission error. An invalid transformed message skips the node.
+func (c *CallContext[Req, Resp]) transformAndMarshal(n *Node) (*stream.Message, error) {
 	transformedRequest := c.request
 	for _, transform := range c.reqTransforms {
 		transformedRequest = transform(transformedRequest, n)
 	}
-	// Check if the result is valid
 	if protoReq, ok := any(transformedRequest).(proto.Message); !ok || protoReq == nil || !protoReq.ProtoReflect().IsValid() {
-		c.reportNodeError(n.ID(), ErrSkipNode)
-		return nil
+		return nil, ErrSkipNode
 	}
-	streamMsg, err := stream.NewRequest(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, transformedRequest)
-	if err != nil {
-		c.reportNodeError(n.ID(), err)
-		return nil
-	}
-	return streamMsg
+	return stream.NewRequest(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, transformedRequest)
 }
 
 // defaultResponseSeq returns an iterator that yields at most c.Size() responses

@@ -146,7 +146,7 @@ func TestSessionDrain(t *testing.T) {
 	responseChan := make(chan response, 1)
 	s.pending.add(1, NodeRequest{Ctx: t.Context(), Msg: &Message{}, ResponseChan: responseChan})
 	queued := NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 2}.Build()}
-	s.queue.push(queued, false)
+	s.queue.tryPush(queued)
 
 	s.startDrain()
 	if st.closed.Load() {
@@ -313,7 +313,7 @@ func TestSessionDispatchNotWedgedByReentrantReply(t *testing.T) {
 
 		// Occupy the send loop: this one-way request is handed to it, and it
 		// then blocks in Send on a transport that never drains.
-		e.Enqueue(NodeRequest{
+		e.queue.push(NodeRequest{
 			Ctx:    context.Background(),
 			Oneway: true,
 			Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
@@ -729,7 +729,7 @@ func TestSessionFailedSendLeavesCallsToReceive(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s, stream := newScriptedSession(t, io.EOF, true)
 			responseChan := make(chan response, 1)
-			s.queue.push(NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), ResponseChan: responseChan}, false)
+			s.queue.tryPush(NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), ResponseChan: responseChan})
 			if req := s.sendLoop(nil); req != nil {
 				t.Fatalf("send loop returned request %d, want none", req.Msg.GetMessageSeqNo())
 			}
@@ -790,7 +790,7 @@ func TestSessionFailedSendAfterFrameLeavesCallsToReceive(t *testing.T) {
 				twoWay := make(chan response, 1)
 				streaming := make(chan response, 1)
 				s.pending.add(2, NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 2}.Build(), Streaming: true, ResponseChan: streaming})
-				s.queue.push(NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), ResponseChan: twoWay}, false)
+				s.queue.tryPush(NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), ResponseChan: twoWay})
 				if req := s.sendLoop(nil); req != nil {
 					t.Fatalf("send loop returned request %d, want none", req.Msg.GetMessageSeqNo())
 				}
@@ -840,7 +840,7 @@ func TestSessionOnewaySendFailure(t *testing.T) {
 				s, stream := newScriptedSession(t, io.EOF, true)
 				go func() { _ = s.receive() }()
 				responseChan := make(chan response, 1)
-				s.queue.push(NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), Oneway: true, ResponseChan: responseChan}, false)
+				s.queue.tryPush(NodeRequest{Ctx: t.Context(), Msg: Message_builder{MessageSeqNo: 1}.Build(), Oneway: true, ResponseChan: responseChan})
 				go s.sendLoop(nil)
 				synctest.Wait() // the send has failed; the stream has not ended yet
 				stream.end(tt.end)

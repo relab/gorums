@@ -908,7 +908,7 @@ func TestSymmetricSignalDoneSurvivesImmediateStop(t *testing.T) {
 			SignalDone(ctx, waiter) // the waiter's own Done, so only the sender's can be missing
 			client := NewBenchmarkClient(sender.servers[0].PeerConfig())
 			for range backlog {
-				if err := client.Multicast(ctx, TimedMsg_builder{Payload: payload}.Build()).Send(); err != nil {
+				if err := client.Multicast(ctx, TimedMsg_builder{Payload: payload}.Build()).Async().Wait(); err != nil {
 					t.Fatalf("Multicast: %v", err)
 				}
 			}

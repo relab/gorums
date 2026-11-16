@@ -29,13 +29,12 @@
 // progressively better results. A one-way call sends its request on Send or
 // on Async.
 //
-// Quorum calls and one-way calls follow one pattern. A terminal method of a
-// quorum call sends the request and waits for the replies. Send of a one-way
-// call sends the request and waits until each message reaches its node's
-// stream; no reply follows. Async sends the request at once and returns a
-// handle that waits later: [Responses] has the terminal methods, and
-// [OnewayAsync] has Wait. So Send is the same as Async followed by Wait. A
-// call that fails returns its error from the method that waits.
+// A quorum call's terminal method dispatches and waits for replies. A
+// one-way call's Send reports queue-admission errors without waiting for
+// stream writes. Async dispatches immediately and returns a handle:
+// [Responses] collects quorum replies, while [OnewayAsync.Wait] collects
+// admission failures and stream-write outcomes. Request admission never
+// waits for queue space; a full queue returns [ErrSendQueueFull].
 //
 // # Service clients
 //

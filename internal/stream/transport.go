@@ -94,19 +94,15 @@ func (t *Transport) StoreChannel(ch Channel) {
 	t.channel.store(ch)
 }
 
-// Enqueue sends req on the current channel; see [Channel.Enqueue]. Without a
-// channel, or on a nil transport, it fails req with [ErrStreamDown].
-func (t *Transport) Enqueue(req NodeRequest) {
+// Enqueue queues req on the current channel and returns the admission error;
+// see [Channel.Enqueue]. Without a channel, or on a nil transport, it returns
+// [ErrStreamDown]. A rejected request reports nothing on its response channel.
+func (t *Transport) Enqueue(req NodeRequest) error {
 	ch := t.LoadChannel()
 	if ch == nil {
-		var id ID
-		if t != nil {
-			id = t.id
-		}
-		req.sendErrorResponse(id, ErrStreamDown)
-		return
+		return ErrStreamDown
 	}
-	ch.Enqueue(req)
+	return ch.Enqueue(req)
 }
 
 // Close closes the owned channel. Closing a shared transport, whose channel

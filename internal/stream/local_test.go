@@ -151,3 +151,36 @@ func TestLocalChannelUnmatchedErrorsEndedCall(t *testing.T) {
 		t.Errorf("logged %q, want it to contain %q", logged, "message 3")
 	}
 }
+
+// TestLocalChannelFull rejects both call types without waiting for the
+// running handler, including a one-way self-send from a locked core.
+func TestLocalChannelFull(t *testing.T) {
+	started, release := make(chan struct{}), make(chan struct{})
+	handler := requestHandlerFunc(func(_ context.Context, msg *Message, _ func(), _ func(*Message)) {
+		if msg.GetMessageSeqNo() == 1 {
+			close(started)
+			<-release
+		}
+	})
+	c := NewLocalChannel(1, handler, 1, nil)
+	t.Cleanup(func() { close(release); c.Wait() })
+	req := NodeRequest{Ctx: t.Context(), Oneway: true, Msg: Message_builder{MessageSeqNo: 1}.Build()}
+	if err := c.Enqueue(req); err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	req.Msg = Message_builder{MessageSeqNo: 2}.Build()
+	if err := c.Enqueue(req); err != nil {
+		t.Fatal(err)
+	}
+	for _, oneway := range []bool{true, false} {
+		responses := make(chan response, 1)
+		req.Oneway, req.ResponseChan = oneway, responses
+		if err := c.Enqueue(req); !errors.Is(err, ErrSendQueueFull) {
+			t.Fatalf("Enqueue(oneway=%v) = %v", oneway, err)
+		}
+		if len(responses) != 0 {
+			t.Fatal("rejection also reported asynchronously")
+		}
+	}
+}

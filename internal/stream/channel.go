@@ -10,12 +10,12 @@ import (
 // Channel carries requests to one node. It is implemented by
 // [OutboundChannel], [InboundChannel], and [LocalChannel].
 type Channel interface {
-	// Enqueue sends req, reporting its outcome on req's response channel.
-	// When the send queue is full, a two-way request fails with
-	// [ErrSendQueueFull] and a one-way request waits for space until its
-	// context ends. A closed stream channel fails req with [ErrNodeClosed].
+	// Enqueue returns the admission error without waiting for queue space.
+	// A full queue returns [ErrSendQueueFull]; a closed stream channel
+	// returns [ErrNodeClosed]. Only accepted requests report subsequent
+	// outcomes on req's response channel.
 	// Enqueue panics if req is both Oneway and Streaming.
-	Enqueue(req NodeRequest)
+	Enqueue(req NodeRequest) error
 	// StreamUp reports whether the channel can currently carry requests.
 	StreamUp() bool
 	// LastErr returns [ErrSendStalled] while a send has been blocked for
@@ -104,17 +104,29 @@ func newEndpoint(parent context.Context, id ID, sendBufferSize, recvBufferSize u
 }
 
 // Enqueue implements [Channel.Enqueue].
-func (e *endpoint) Enqueue(req NodeRequest) {
+func (e *endpoint) Enqueue(req NodeRequest) error {
 	if req.Oneway && req.Streaming {
 		panic("gorums: Oneway and Streaming are mutually exclusive")
 	}
-	e.queue.push(req, !req.wantServerResponse())
+	if err := req.Ctx.Err(); err != nil {
+		return err
+	}
+	return e.queue.tryPush(req)
 }
 
 // reply queues a handler's reply to the peer. Without waitingReplies, it does
 // not wait for queue space, so receiving never waits on a reply.
 func (e *endpoint) reply(msg *Message) {
-	e.queue.push(NodeRequest{Ctx: e.ctx, Msg: msg}, e.waitingReplies)
+	req := NodeRequest{Ctx: e.ctx, Msg: msg}
+	var err error
+	if e.waitingReplies {
+		err = e.queue.push(req)
+	} else {
+		err = e.queue.tryPush(req)
+	}
+	if err != nil {
+		e.queue.fail(req, err)
+	}
 }
 
 // DroppedReplies implements [Channel.DroppedReplies].

@@ -27,21 +27,20 @@ func NewLocalChannel(id ID, handler RequestHandler, recvBufferSize uint, logger 
 	return c
 }
 
-// Enqueue queues req for the handler. A one-way request is confirmed once
-// queued. When the queue is full, a two-way request fails with
-// [ErrSendQueueFull] and a one-way request waits for space until its context
-// ends. Without a handler, req fails with [codes.Unimplemented].
-func (c *LocalChannel) Enqueue(req NodeRequest) {
+// Enqueue queues req for the handler and returns the admission error. A
+// one-way request is confirmed once queued. Admission never waits for space:
+// a full queue returns [ErrSendQueueFull]. Without a handler, Enqueue returns
+// an error with the code [codes.Unimplemented]. A rejected request reports
+// nothing on its response channel.
+func (c *LocalChannel) Enqueue(req NodeRequest) error {
 	if req.Oneway && req.Streaming {
 		panic("gorums: Oneway and Streaming are mutually exclusive")
 	}
 	if err := req.Ctx.Err(); err != nil {
-		req.sendErrorResponse(c.id, err)
-		return
+		return err
 	}
 	if c.handler == nil {
-		req.sendErrorResponse(c.id, status.Error(codes.Unimplemented, "no request handler registered"))
-		return
+		return status.Error(codes.Unimplemented, "no request handler registered")
 	}
 	ctx := req.Msg.appendToIncomingContext(req.Ctx)
 	send := func(msg *Message) {
@@ -56,19 +55,14 @@ func (c *LocalChannel) Enqueue(req NodeRequest) {
 		}
 	}
 	run := func(release func()) { c.handler.HandleRequest(ctx, c.id, req.Msg, release, send) }
-	if req.wantServerResponse() {
-		if !c.requests.tryPush(run) {
-			req.sendErrorResponse(c.id, ErrSendQueueFull)
-		}
-		return
+	if !c.requests.tryPush(run) {
+		return ErrSendQueueFull
 	}
-	if !c.requests.push(req.Ctx, run) {
-		req.sendErrorResponse(c.id, req.Ctx.Err())
-		return
-	}
+
 	if req.wantSendConfirmation() {
 		req.deliver(response{NodeID: c.id})
 	}
+	return nil
 }
 
 // StreamUp reports true: a local channel can always carry requests.

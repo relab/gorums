@@ -38,8 +38,8 @@ type ServerOption func(*serverOptions)
 //
 // The sendSize is the capacity of each per-node send queue of the server.
 // These queues carry the server's requests to its peers and its replies to
-// callers. When a queue is full, a two-way request fails with
-// [ErrSendQueueFull], and a one-way request waits for space. A reply to a
+// callers. When a queue is full, an application request fails with
+// [ErrSendQueueFull] without waiting for space. A reply to a
 // peer from [WithPeers], or to a client in [Server.ConnectedClients], is
 // dropped and counted by [Node.DroppedReplies]: the server also sends
 // requests to these nodes, and a waiting reply could stop both nodes. A

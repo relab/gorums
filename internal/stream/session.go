@@ -376,7 +376,9 @@ func (s *session) retryOrFail(req NodeRequest, err error) {
 	case s.requeue && isResourceExhausted(err):
 		req.sendErrorResponse(s.id, err)
 	case s.requeue && !req.Streaming:
-		s.queue.push(req, false)
+		if err := s.queue.tryPush(req); err != nil {
+			req.sendErrorResponse(s.id, err)
+		}
 	case s.requeue && s.ctx.Err() != nil:
 		req.sendErrorResponse(s.id, ErrNodeClosed)
 	default:

@@ -92,7 +92,11 @@ func TestCallContextSendSharedMessageIDs(t *testing.T) {
 		method:  "test.Method",
 		oneway:  true, // fire-and-forget: no response channel needed
 	}
-	c.sendShared()
+	for r := range c.admit() {
+		if r.Err != nil {
+			t.Fatal(r.Err)
+		}
+	}
 
 	regular1, regular2 := recorders[0].first(t), recorders[1].first(t)
 	shared := recorders[2].first(t)
@@ -136,7 +140,11 @@ func TestCallContextSendSharedFanOutStart(t *testing.T) {
 			method:  "test.Method",
 			oneway:  true,
 		}
-		c.sendShared()
+		for r := range c.admit() {
+			if r.Err != nil {
+				t.Fatal(r.Err)
+			}
+		}
 	}
 
 	// Call k holds the IDs nodes*k+1 through nodes*k+nodes, in visit order.

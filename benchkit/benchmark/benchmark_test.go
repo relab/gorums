@@ -537,7 +537,7 @@ func TestServerMeasuredMulticastHDR(t *testing.T) {
 			client := NewBenchmarkClient(cfg)
 			return func() error {
 				msg := TimedMsg_builder{SendTime: time.Now().UnixNano()}.Build()
-				return client.Multicast(ctx, msg).Send()
+				return client.Multicast(ctx, msg).Async().Wait()
 			}
 		})
 
@@ -574,7 +574,7 @@ func TestServerMeasuredQuiesce(t *testing.T) {
 			client := NewBenchmarkClient(cfg)
 			return func() error {
 				msg := TimedMsg_builder{SendTime: time.Now().UnixNano()}.Build()
-				return client.Multicast(ctx, msg).Send()
+				return client.Multicast(ctx, msg).Async().Wait()
 			}
 		},
 		benchkit.WithQuiesce(func(context.Context) error {
@@ -610,7 +610,7 @@ func TestServerMeasuredVerify(t *testing.T) {
 		client := NewBenchmarkClient(cfg)
 		return func() error {
 			msg := TimedMsg_builder{SendTime: time.Now().UnixNano()}.Build()
-			return client.Multicast(ctx, msg).Send()
+			return client.Multicast(ctx, msg).Async().Wait()
 		}
 	}
 
@@ -664,7 +664,7 @@ func TestServerMeasuredWindowExcludesClockSync(t *testing.T) {
 		client := NewBenchmarkClient(cfg)
 		return func() error {
 			msg := TimedMsg_builder{SendTime: time.Now().UnixNano()}.Build()
-			return client.Multicast(ctx, msg).Send()
+			return client.Multicast(ctx, msg).Async().Wait()
 		}
 	}
 
