@@ -3,6 +3,7 @@ package conn
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"google.golang.org/grpc/codes"
@@ -199,5 +200,31 @@ func TestQuorumCallErrorUnwrapWithAs(t *testing.T) {
 	}
 	if target.msg != "custom node error" {
 		t.Errorf("extracted customError.msg = %q, want %q", target.msg, "custom node error")
+	}
+}
+
+func TestQuorumCallErrorNodeErrors(t *testing.T) {
+	errDown, errFull := errors.New("node down"), errors.New("queue full")
+	qcErr := NewQuorumCallError(errSendFailure, []NodeError{
+		NewNodeError(3, errDown),
+		NewNodeError(1, errFull),
+	})
+	type nodeErr struct {
+		id  ID
+		err error
+	}
+	var got []nodeErr
+	for id, err := range qcErr.NodeErrors() {
+		got = append(got, nodeErr{id, err})
+	}
+	want := []nodeErr{{3, errDown}, {1, errFull}}
+	if !slices.Equal(got, want) {
+		t.Errorf("NodeErrors() = %v, want %v", got, want)
+	}
+	for range qcErr.NodeErrors() {
+		break // stopping early must not panic
+	}
+	for id, err := range NewQuorumCallError(errIncomplete, nil).NodeErrors() {
+		t.Errorf("NodeErrors() yielded node %d: %v, want nothing", id, err)
 	}
 }
