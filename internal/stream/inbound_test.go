@@ -103,7 +103,7 @@ func TestInboundChannelCloseReturnsWhileSendBlocked(t *testing.T) {
 	c := NewInboundChannel(context.Background(), 1, stream, InboundOptions{RecvBufferSize: testRecvBufferSize})
 	t.Cleanup(func() { _ = c.Close() })
 
-	c.Enqueue(NodeRequest{
+	c.queue.push(NodeRequest{
 		Ctx:    context.Background(),
 		Oneway: true,
 		Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),

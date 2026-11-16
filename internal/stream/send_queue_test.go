@@ -8,57 +8,44 @@ import (
 	"time"
 )
 
+// TestSendQueuePush verifies rejection has no asynchronous side effects.
 func TestSendQueuePush(t *testing.T) {
-	cancelled, cancel := context.WithCancel(context.Background())
+	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	tests := []struct {
-		name           string
-		closeDone      bool // close the done channel before pushing
-		closeQueue     bool // close the queue before pushing
-		ctx            context.Context
-		wait           bool
-		noResponseChan bool
-		wantErr        error
-		wantDropped    int64
+		name            string
+		push            func(*sendQueue, NodeRequest) error
+		ctx             context.Context
+		closed, stopped bool
+		want            error
 	}{
-		{name: "FullNoWaitFailsFast", ctx: context.Background(), wantErr: ErrSendQueueFull},
-		{name: "FullNoWaitDropsReply", ctx: context.Background(), noResponseChan: true, wantDropped: 1},
-		{name: "FullWaitEndsWithContext", ctx: cancelled, wait: true, wantErr: context.Canceled},
-		{name: "FullWaitEndsWithDone", ctx: context.Background(), wait: true, closeDone: true, wantErr: ErrNodeClosed},
-		{name: "ClosedFails", ctx: context.Background(), closeQueue: true, wantErr: ErrNodeClosed},
-		{name: "ClosedDropsReply", ctx: context.Background(), closeQueue: true, noResponseChan: true, wantDropped: 1},
+		{name: "Full", push: (*sendQueue).tryPush, ctx: context.Background(), want: ErrSendQueueFull},
+		{name: "CanceledWait", push: (*sendQueue).push, ctx: canceled, want: context.Canceled},
+		{name: "StoppedWait", push: (*sendQueue).push, ctx: context.Background(), stopped: true, want: ErrNodeClosed},
+		{name: "Closed", push: (*sendQueue).tryPush, ctx: context.Background(), closed: true, want: ErrNodeClosed},
+		{name: "ClosedWait", push: (*sendQueue).push, ctx: context.Background(), closed: true, want: ErrNodeClosed},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			done := make(chan struct{})
 			q := newSendQueue(1, 1, done)
-			// Fill the queue with a request that has its own response channel.
-			q.push(NodeRequest{Ctx: context.Background(), Msg: &Message{}, ResponseChan: make(chan response, 1)}, false)
-			if tt.closeDone {
-				close(done)
-			}
-			if tt.closeQueue {
+			q.tryPush(NodeRequest{Ctx: context.Background(), Oneway: true})
+			if tt.closed {
 				q.close()
 			}
-			responseChan := make(chan response, 1)
-			req := NodeRequest{Ctx: tt.ctx, Msg: &Message{}, ResponseChan: responseChan}
-			if tt.noResponseChan {
-				req.ResponseChan = nil
+			if tt.stopped {
+				close(done)
 			}
-			q.push(req, tt.wait)
-
-			if tt.wantErr != nil {
-				select {
-				case resp := <-responseChan:
-					if !errors.Is(resp.Err, tt.wantErr) {
-						t.Errorf("response error = %v, want %v", resp.Err, tt.wantErr)
-					}
-				default:
-					t.Errorf("no response, want %v", tt.wantErr)
-				}
+			responses := make(chan response, 1)
+			err := tt.push(q, NodeRequest{Ctx: tt.ctx, ResponseChan: responses})
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("admission = %v, want %v", err, tt.want)
 			}
-			if got := q.dropped.Load(); got != tt.wantDropped {
-				t.Errorf("dropped = %d, want %d", got, tt.wantDropped)
+			if len(responses) != 0 {
+				t.Fatal("rejection also sent on response channel")
+			}
+			if q.dropped.Load() != 0 {
+				t.Fatal("rejection counted as a dropped reply")
 			}
 		})
 	}
@@ -68,10 +55,10 @@ func TestSendQueuePush(t *testing.T) {
 // consumer makes room.
 func TestSendQueueWaitsForSpace(t *testing.T) {
 	q := newSendQueue(1, 1, nil)
-	q.push(NodeRequest{Ctx: context.Background(), Msg: &Message{}}, false)
+	q.tryPush(NodeRequest{Ctx: context.Background(), Msg: &Message{}})
 	pushed := make(chan struct{})
 	go func() {
-		q.push(NodeRequest{Ctx: context.Background(), Msg: &Message{}}, true)
+		q.push(NodeRequest{Ctx: context.Background(), Msg: &Message{}})
 		close(pushed)
 	}()
 	select {
@@ -101,7 +88,9 @@ func TestSendQueueCloseAnswersEveryRequest(t *testing.T) {
 		for range pushers {
 			wg.Go(func() {
 				for range perPusher {
-					q.push(NodeRequest{Ctx: context.Background(), Msg: &Message{}, ResponseChan: responseChan}, false)
+					if err := q.tryPush(NodeRequest{Ctx: context.Background(), Msg: &Message{}, ResponseChan: responseChan}); err != nil {
+						responseChan <- response{Err: err}
+					}
 				}
 			})
 		}

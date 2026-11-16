@@ -930,6 +930,7 @@ func (*stuckSendStream) SendHeader(metadata.MD) error { return nil }
 // that send loop is stuck on the peer.
 func TestInboundManagerAcceptPeerCleanupDoesNotHoldManagerLock(t *testing.T) {
 	im := newTestInboundManager(t, 1)
+	im.sendBufferSize = 1
 	st := &stuckSendStream{entered: make(chan struct{}, 1), closed: make(chan struct{})}
 	ch, cleanup, err := im.AcceptPeer(inboundCtx(t.Context(), 2), st)
 	if err != nil {

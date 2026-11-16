@@ -124,7 +124,7 @@ func TestQuorumCallPartialFailures(t *testing.T) {
 		return callInfo{
 			name: "Multicast/" + name,
 			callFunc: func(ctx context.Context, config gorums.Config, req *pb.StringValue) error {
-				return mockcall.Multicast(ctx, config, req.GetValue()).Send()
+				return mockcall.Multicast(ctx, config, req.GetValue()).Async().Wait()
 			},
 		}
 	}

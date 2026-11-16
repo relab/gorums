@@ -198,7 +198,7 @@ func SignalDone(ctx context.Context, t *SymmetricTarget) {
 		// finished and exited makes a failed send the expected outcome, not a
 		// fault. Logging it still distinguishes that from a run where every
 		// send failed and no peer was ever told.
-		if err := benchkit.NewControlClient(out).Done(ctx, req).Send(); err != nil {
+		if err := benchkit.NewControlClient(out).Done(ctx, req).Async().Wait(); err != nil {
 			benchkit.Logf("Done signal from node %d: %v\n", t.controls[i].ID(), err)
 		}
 	}
@@ -586,7 +586,7 @@ func runSymmetricMulticast(t *SymmetricTarget, opts benchkit.Options) (*benchkit
 	for i, srv := range t.servers {
 		client := NewBenchmarkClient(srv.PeerConfig())
 		sends[i] = func() error {
-			if err := client.Multicast(ctx, newMsg()).Send(); err != nil {
+			if err := client.Multicast(ctx, newMsg()).Async().Wait(); err != nil {
 				return err
 			}
 			totalSent.Add(1)

@@ -307,7 +307,7 @@ var benchDescs = []benchDesc{
 				payload := make([]byte, opts.Payload)
 				return func() error {
 					msg := TimedMsg_builder{SendTime: time.Now().UnixNano(), Payload: payload}.Build()
-					return client.Multicast(ctx, msg).Send()
+					return client.Multicast(ctx, msg).Async().Wait()
 				}
 			})
 		},

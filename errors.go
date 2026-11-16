@@ -44,9 +44,9 @@ var ErrNoNode = impl.ErrNoNode
 // from [ErrNoNode].
 var ErrEmptyConfig = impl.ErrEmptyConfig
 
-// ErrSendQueueFull is returned for a two-way call enqueued while the node's
-// send queue is full, so quorum logic counts the peer as failed; see
-// [WithDialBufferSizes]. A one-way call waits for space instead. It is a gRPC
+// ErrSendQueueFull is returned when a request finds the node's send queue
+// full; see [WithDialBufferSizes]. Admission never waits for queue space.
+// It is a gRPC
 // status error with the Unavailable code; test for it with [errors.Is]. The
 // Unavailable code alone does not tell it apart from other node errors.
 var ErrSendQueueFull = stream.ErrSendQueueFull

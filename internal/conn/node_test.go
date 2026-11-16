@@ -30,29 +30,24 @@ func newTestNodeWithLatency(id uint32, latency time.Duration) *Node {
 func TestNodeEnqueueWithoutChannel(t *testing.T) {
 	peer := stream.NewTransport(1, func() uint64 { return 0 })
 	tests := []struct {
-		name       string
-		node       *Node
-		wantNodeID uint32
+		name string
+		node *Node
 	}{
-		{name: "Owned", node: newNode(1, "", nil, peer), wantNodeID: 1},
-		{name: "Shared", node: newNode(1, "", nil, stream.NewSharedTransport(peer)), wantNodeID: 1},
-		{name: "NoTransport", node: &Node{}, wantNodeID: 0},
+		{name: "Owned", node: newNode(1, "", nil, peer)},
+		{name: "Shared", node: newNode(1, "", nil, stream.NewSharedTransport(peer))},
+		{name: "NoTransport", node: &Node{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			responseChan := make(chan stream.NodeResponse[*stream.Message], 1)
-			NodeTransport(tt.node).Enqueue(stream.NodeRequest{Ctx: t.Context(), ResponseChan: responseChan})
-			select {
-			case r := <-responseChan:
-				if !errors.Is(r.Err, stream.ErrStreamDown) {
-					t.Errorf("Enqueue error = %v, want %v", r.Err, stream.ErrStreamDown)
-				}
-				if r.NodeID != tt.wantNodeID {
-					t.Errorf("Enqueue response NodeID = %d, want %d", r.NodeID, tt.wantNodeID)
-				}
-			default:
-				t.Fatal("expected error response for a node without a channel")
+			err := NodeTransport(tt.node).Enqueue(stream.NodeRequest{Ctx: t.Context(), ResponseChan: responseChan})
+			if !errors.Is(err, stream.ErrStreamDown) {
+				t.Fatalf("Enqueue = %v", err)
 			}
+			if len(responseChan) != 0 {
+				t.Fatal("admission rejection sent on response channel")
+			}
+
 		})
 	}
 }

@@ -133,7 +133,7 @@ func TestServerNodeStreamReplyDoesNotWedgeReceiveLoop(t *testing.T) {
 
 	// Occupy the send loop: this one-way request blocks in Send on a
 	// transport that never drains.
-	ch.Enqueue(NodeRequest{
+	ch.queue.push(NodeRequest{
 		Ctx:    ctx,
 		Oneway: true,
 		Msg:    Message_builder{MessageSeqNo: 100, Method: mock.TestMethod}.Build(),

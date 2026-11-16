@@ -111,30 +111,43 @@ func (c *OnewayCall[Req]) Intercept(ics ...ClientInterceptor[Req, *emptypb.Empty
 	return c
 }
 
-// Send is the same as [OnewayCall.Async] followed by [OnewayAsync.Wait]: it
-// dispatches the request and blocks until every message has reached its
-// node's stream. A one-way call carries no reply, so there is nothing further
-// to await.
+// Send attempts to queue the request for every destination and returns the
+// admission errors, without waiting for queue space or stream writes.
+// A full queue rejects that destination with [stream.ErrSendQueueFull]; multicast
+// continues to the remaining nodes and returns per-node failures in a
+// [conn.QuorumCallError] with cause [ErrSendFailure]. Unicast returns its single error.
+// Intentionally skipped multicast destinations do not count as failures.
 //
-// For multicast, Send returns nil only if the send completes for every target
-// node; send failures are returned as a [QuorumCallError] with cause
-// [ErrSendFailure] and per-node errors. For unicast, Send returns the single
-// send error, or the context error if the context is cancelled first.
+// Success means local queue acceptance. Later transport failures are available
+// through [Node.LastErr]. To await stream-write outcomes, use [OnewayCall.Async]
+// followed by [OnewayAsync.Wait]. Neither operation confirms remote processing. A local
+// self-call completes at admission to its handler queue.
 //
-// A server handler that relays a request in FIFO order dispatches the relay
-// with [OnewayCall.Async] before it calls ServerContext.Release, and waits for
-// it with [OnewayAsync.Wait] after Release, so that the next request does not
-// wait for the send. Use [OnewayCall.Async] also to keep several sends in
-// flight from a single goroutine.
-//
-// Send dispatches the call; calling Send or Async on the same handle after
-// dispatch panics.
+// The context must remain live while queued messages await transmission.
+// Cancelling it after Send returns can discard messages still in the queue.
+// Send dispatches the call; calling Send or Async again panics.
 func (c *OnewayCall[Req]) Send() error {
-	c.dispatch()
-	return c.collect()
+	c.markDispatched()
+	if c.ctx.err != nil {
+		return c.ctx.err
+	}
+	var errs []conn.NodeError
+	for r := range c.ctx.admit() {
+		if c.unicast {
+			return r.Err
+		}
+		if r.Err != nil && !errors.Is(r.Err, ErrSkipNode) {
+			errs = append(errs, conn.NewNodeError(r.NodeID, r.Err))
+		}
+	}
+	if len(errs) > 0 {
+		return conn.NewQuorumCallError(ErrSendFailure, errs)
+	}
+	return nil
 }
 
-// Async dispatches the request without waiting for the sends to complete, so a
+// Async attempts nonblocking admission to every destination and returns a
+// handle for admission failures and stream-write outcomes, so a
 // single goroutine can keep several one-way calls in flight:
 //
 //	h := client.WriteMulticast(ctx, msg).Async()
@@ -148,22 +161,19 @@ func (c *OnewayCall[Req]) Send() error {
 // Async dispatches the call; calling Send or Async on the same handle after
 // dispatch panics.
 func (c *OnewayCall[Req]) Async() *OnewayAsync {
-	c.dispatch()
+	c.markDispatched()
+	if c.ctx.err == nil {
+		c.ctx.responseChan = make(chan NodeResponse[*stream.Message], c.ctx.config.Size())
+		c.ctx.send()
+	}
 	return &OnewayAsync{collect: c.collect}
 }
 
-// dispatch installs the response channel and sends the request exactly once.
-// A handle that holds an error sends nothing. It panics if the handle was
-// already dispatched.
-func (c *OnewayCall[Req]) dispatch() {
+// markDispatched rejects a second dispatch of the one-way call.
+func (c *OnewayCall[Req]) markDispatched() {
 	if c.ctx.dispatched.Swap(true) {
 		panic("gorums: OnewayCall.Send or OnewayCall.Async called more than once on the same handle")
 	}
-	if c.ctx.err != nil {
-		return
-	}
-	c.ctx.responseChan = make(chan NodeResponse[*stream.Message], c.ctx.config.Size())
-	c.ctx.sendOnce.Do(c.ctx.send)
 }
 
 // collect gathers one send confirmation per node and reports the failures,
@@ -224,9 +234,12 @@ type OnewayAsync struct {
 	err     error
 }
 
-// Wait blocks until send completion is known and returns the same error
-// [OnewayCall.Send] would have returned. It may be called more than once and
-// returns the same result each time.
+// Wait collects admission failures and stream-write outcomes until all are
+// known or the call context ends. It may be called more than once and returns
+// the same result each time. It does not confirm remote processing; local
+// self-calls complete at handler-queue admission. Do not wait while holding a
+// lock needed for protocol progress. In a server handler, dispatch before
+// ServerContext.Release and wait afterward to preserve relay order.
 func (a *OnewayAsync) Wait() error {
 	a.once.Do(func() { a.err = a.collect() })
 	return a.err

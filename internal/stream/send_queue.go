@@ -6,7 +6,7 @@ import (
 )
 
 // sendQueue is a bounded FIFO of requests awaiting a stream send.
-// Once closed, it fails every queued and later request with [ErrNodeClosed].
+// Closing fails queued requests with [ErrNodeClosed] and rejects later admissions.
 type sendQueue struct {
 	id   ID
 	ch   chan NodeRequest
@@ -24,31 +24,37 @@ func newSendQueue(id ID, capacity uint, done <-chan struct{}) *sendQueue {
 	return &sendQueue{id: id, ch: make(chan NodeRequest, capacity), done: done}
 }
 
-// push adds req to the queue. If the queue is full and wait is false, it
-// fails req with [ErrSendQueueFull]. If wait is true, it waits for space until
-// req's context or the queue's done channel ends, and fails req with the
-// corresponding error. A closed queue fails req with [ErrNodeClosed].
-func (q *sendQueue) push(req NodeRequest, wait bool) {
+// tryPush admits req immediately or returns an error. Rejection is reported
+// only to the caller; the request has not entered the asynchronous send path.
+func (q *sendQueue) tryPush(req NodeRequest) error {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 	if q.closed {
-		q.fail(req, ErrNodeClosed)
-		return
-	}
-	if !wait {
-		select {
-		case q.ch <- req:
-		default:
-			q.fail(req, ErrSendQueueFull)
-		}
-		return
+		return ErrNodeClosed
 	}
 	select {
 	case q.ch <- req:
+		return nil
+	default:
+		return ErrSendQueueFull
+	}
+}
+
+// push waits for queue space until the request or queue lifetime ends.
+// It is used for replies on ordinary client streams.
+func (q *sendQueue) push(req NodeRequest) error {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	if q.closed {
+		return ErrNodeClosed
+	}
+	select {
+	case q.ch <- req:
+		return nil
 	case <-req.Ctx.Done():
-		q.fail(req, req.Ctx.Err())
+		return req.Ctx.Err()
 	case <-q.done:
-		q.fail(req, ErrNodeClosed)
+		return ErrNodeClosed
 	}
 }
 
@@ -68,10 +74,10 @@ func (q *sendQueue) close() {
 	}
 }
 
-// fail sends a response with err to req, or counts req as dropped if it has
-// no response channel.
+// fail reports a failure of an accepted request, or counts a discarded
+// handler reply.
 func (q *sendQueue) fail(req NodeRequest, err error) {
-	if req.ResponseChan == nil {
+	if req.ResponseChan == nil && !req.Oneway {
 		q.dropped.Add(1)
 		return
 	}

@@ -382,7 +382,7 @@ func TestRemoteCallOversizedRequest(t *testing.T) {
 			large := strings.Repeat("x", 2*limit)
 			var err error
 			if tt.oneway {
-				err = mockcall.Unicast(ctx, node, large).Send()
+				err = mockcall.Unicast(ctx, node, large).Async().Wait()
 			} else {
 				_, err = mockcall.RemoteCall(ctx, node, large)
 			}

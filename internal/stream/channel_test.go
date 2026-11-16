@@ -337,7 +337,11 @@ func trySendRequest(c Channel, req NodeRequest, msgID uint64) (response, error) 
 	req.Msg = reqMsg
 	responseChan := make(chan response, 1)
 	req.ResponseChan = responseChan
-	c.Enqueue(req)
+	if err := c.Enqueue(req); err != nil {
+		// A rejected request has its outcome at once; report it like the
+		// outcome of an accepted request.
+		responseChan <- response{Err: err}
+	}
 
 	select {
 	case resp := <-responseChan:
@@ -748,59 +752,21 @@ func waitID(t *testing.T, ch <-chan *Message, want uint64, what string) {
 	}
 }
 
-// TestChannelEnqueueRespectsRequestContext verifies that a caller blocked in
-// Enqueue on a full send queue is released when its own request context is
-// cancelled, so a per-call deadline unblocks a worker stuck behind a peer that
-// stopped reading.
+// TestChannelEnqueueRespectsRequestContext rejects a canceled request even
+// when the queue has space.
 func TestChannelEnqueueRespectsRequestContext(t *testing.T) {
-	stream := mock.NewGatedBidiStream[*Message]()
-	// Capacity 0: the queue has no slack, so a second request blocks in
-	// Enqueue as soon as the sender goroutine is occupied in Send.
-	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{RecvBufferSize: testRecvBufferSize, SendBufferSize: 0})
-	t.Cleanup(func() {
-		stream.Close()
-		_ = c.Close()
-	})
-
-	// Occupy the sender: the first request is handed off directly to the
-	// sender goroutine, whose Send then blocks on the stream.
-	c.Enqueue(NodeRequest{
-		Ctx:    context.Background(),
-		Oneway: true,
-		Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
-	})
-
-	// The second request cannot be handed off; its Enqueue must block until
-	// the request's own context is cancelled.
-	ctx, cancel := context.WithCancel(context.Background())
-	responseChan := make(chan response, 1)
-	enqueueReturned := make(chan struct{})
-	go func() {
-		defer close(enqueueReturned)
-		c.Enqueue(NodeRequest{
-			Ctx:          ctx,
-			Oneway:       true,
-			ResponseChan: responseChan,
-			Msg:          Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
-		})
-	}()
-
-	// Let the goroutine reach the blocking Enqueue before cancelling.
-	time.Sleep(20 * time.Millisecond)
+	st := mock.NewBidiStream[*Message]()
+	c := NewInboundChannel(t.Context(), 1, st, InboundOptions{RecvBufferSize: testRecvBufferSize, SendBufferSize: 1})
+	t.Cleanup(func() { st.Close(); _ = c.Close() })
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-
-	select {
-	case resp := <-responseChan:
-		if !errors.Is(resp.Err, context.Canceled) {
-			t.Errorf("blocked Enqueue response error = %v, want context.Canceled", resp.Err)
-		}
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("Enqueue ignored request context cancellation; caller is stuck")
+	responses := make(chan response, 1)
+	err := c.Enqueue(NodeRequest{Ctx: ctx, Oneway: true, Msg: &Message{}, ResponseChan: responses})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Enqueue = %v", err)
 	}
-	select {
-	case <-enqueueReturned:
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("Enqueue did not return after request context cancellation")
+	if len(responses) != 0 {
+		t.Fatal("rejection also reported asynchronously")
 	}
 }
 
@@ -843,18 +809,16 @@ func TestChannelEnqueueTwoWayFailsFastWhenFull(t *testing.T) {
 
 	// The next two-way request finds the queue full and must fail fast.
 	responseChan3 := make(chan response, 1)
-	c.Enqueue(NodeRequest{
+	err := c.Enqueue(NodeRequest{
 		Ctx:          context.Background(),
 		ResponseChan: responseChan3,
 		Msg:          Message_builder{MessageSeqNo: 3, Method: mock.TestMethod}.Build(),
 	})
-	select {
-	case resp := <-responseChan3:
-		if !errors.Is(resp.Err, ErrSendQueueFull) {
-			t.Errorf("full-queue response error = %v, want ErrSendQueueFull", resp.Err)
-		}
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("two-way Enqueue blocked on a full send queue instead of failing fast")
+	if !errors.Is(err, ErrSendQueueFull) {
+		t.Fatalf("overflow = %v", err)
+	}
+	if len(responseChan3) != 0 {
+		t.Fatal("rejection also reported asynchronously")
 	}
 
 	// FIFO: releasing the stream completes message 1, then message 2 follows.
@@ -863,65 +827,31 @@ func TestChannelEnqueueTwoWayFailsFastWhenFull(t *testing.T) {
 	waitID(t, stream.Sent(), 2, "queued send completion")
 }
 
-// TestChannelEnqueueOnewayBlocksWhenFull verifies that one-way requests wait
-// on a full queue: with no response to await, backpressure paces a one-way
-// producer, so the producer waits (cancellable via the request context) and
-// the message is kept.
-func TestChannelEnqueueOnewayBlocksWhenFull(t *testing.T) {
-	stream := mock.NewGatedBidiStream[*Message]()
-	c := NewInboundChannel(t.Context(), 1, stream, InboundOptions{RecvBufferSize: testRecvBufferSize, SendBufferSize: 1})
-	t.Cleanup(func() {
-		stream.Close()
-		_ = c.Close()
-	})
-
-	// Occupy the sender and fill the queue's single slot.
-	c.Enqueue(NodeRequest{
-		Ctx:    context.Background(),
-		Oneway: true,
-		Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
-	})
-	waitID(t, stream.Entered(), 1, "first send")
-	c.Enqueue(NodeRequest{
-		Ctx:    context.Background(),
-		Oneway: true,
-		Msg:    Message_builder{MessageSeqNo: 2, Method: mock.TestMethod}.Build(),
-	})
-
-	// The third one-way request must block in Enqueue, not fail.
-	responseChan3 := make(chan response, 1)
-	enqueueReturned := make(chan struct{})
-	go func() {
-		defer close(enqueueReturned)
-		c.Enqueue(NodeRequest{
-			Ctx:          context.Background(),
-			Oneway:       true,
-			ResponseChan: responseChan3,
-			Msg:          Message_builder{MessageSeqNo: 3, Method: mock.TestMethod}.Build(),
-		})
-	}()
-	select {
-	case resp := <-responseChan3:
-		t.Fatalf("one-way Enqueue on a full queue returned early with: %v", resp.Err)
-	case <-enqueueReturned:
-		t.Fatal("one-way Enqueue returned without queue space; expected it to block")
-	case <-time.After(100 * time.Millisecond):
-		// Still blocked, as intended.
+// TestChannelEnqueueOnewayFailsFastWhenFull verifies that one-way admission
+// rejects overflow and retains the FIFO order of accepted messages.
+func TestChannelEnqueueOnewayFailsFastWhenFull(t *testing.T) {
+	st := mock.NewGatedBidiStream[*Message]()
+	c := NewInboundChannel(t.Context(), 1, st, InboundOptions{RecvBufferSize: testRecvBufferSize, SendBufferSize: 1})
+	t.Cleanup(func() { st.Close(); _ = c.Close() })
+	request := func(id uint64) NodeRequest {
+		return NodeRequest{Ctx: t.Context(), Oneway: true, Msg: Message_builder{MessageSeqNo: id, Method: mock.TestMethod}.Build()}
 	}
-
-	// Releasing the stream drains the queue; the blocked request completes.
-	stream.Release()
-	select {
-	case resp := <-responseChan3:
-		if resp.Err != nil {
-			t.Errorf("blocked one-way request failed after release: %v", resp.Err)
-		}
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("blocked one-way request did not complete after queue drained")
+	if err := c.Enqueue(request(1)); err != nil {
+		t.Fatal(err)
 	}
-	waitID(t, stream.Sent(), 1, "first send completion")
-	waitID(t, stream.Sent(), 2, "queued send completion")
-	waitID(t, stream.Sent(), 3, "unblocked send completion")
+	waitID(t, st.Entered(), 1, "first send")
+	if err := c.Enqueue(request(2)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Enqueue(request(3)); !errors.Is(err, ErrSendQueueFull) {
+		t.Fatalf("overflow = %v", err)
+	}
+	st.Release()
+	waitID(t, st.Sent(), 1, "first send completion")
+	waitID(t, st.Sent(), 2, "second send completion")
+	if got := c.DroppedReplies(); got != 0 {
+		t.Fatalf("DroppedReplies = %d", got)
+	}
 }
 
 // TestChannelFirstRequestLatency verifies that the first request does not wait
@@ -2081,8 +2011,9 @@ func BenchmarkChannelSend(b *testing.B) {
 					Payload:      payload,
 				}.Build()
 				req := NodeRequest{Ctx: context.Background(), Msg: msg, Oneway: true, ResponseChan: responseChan}
-				tc.Enqueue(req)
-				<-responseChan
+				if err := tc.Enqueue(req); err == nil {
+					<-responseChan
+				}
 			}
 		})
 	}
@@ -2117,8 +2048,9 @@ func BenchmarkChannelSendParallel(b *testing.B) {
 						Payload:      payload,
 					}.Build()
 					req := NodeRequest{Ctx: context.Background(), Msg: msg, Oneway: true, ResponseChan: responseChan}
-					tc.Enqueue(req)
-					<-responseChan
+					if err := tc.Enqueue(req); err == nil {
+						<-responseChan
+					}
 				}
 			})
 		})
@@ -2149,7 +2081,7 @@ func TestChannelReplyOnFullQueue(t *testing.T) {
 				}()
 
 				// Occupy the send loop so the queue is full and cannot drain.
-				c.Enqueue(NodeRequest{
+				c.queue.push(NodeRequest{
 					Ctx:    context.Background(),
 					Oneway: true,
 					Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
@@ -2209,7 +2141,7 @@ func TestChannelDroppedRepliesCountsOnlyUnreportableDrops(t *testing.T) {
 		}()
 
 		// Occupy the send loop so the queue is full and cannot drain.
-		c.Enqueue(NodeRequest{
+		c.queue.push(NodeRequest{
 			Ctx:    context.Background(),
 			Oneway: true,
 			Msg:    Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
@@ -2227,20 +2159,18 @@ func TestChannelDroppedRepliesCountsOnlyUnreportableDrops(t *testing.T) {
 		}
 
 		responseChan := make(chan response, 1)
-		c.Enqueue(NodeRequest{
+		err := c.Enqueue(NodeRequest{
 			Ctx:          context.Background(),
 			ResponseChan: responseChan,
 			Msg:          Message_builder{MessageSeqNo: 3, Method: mock.TestMethod}.Build(),
 		})
-		synctest.Wait()
-		select {
-		case resp := <-responseChan:
-			if !errors.Is(resp.Err, ErrSendQueueFull) {
-				t.Errorf("response error = %v, want ErrSendQueueFull", resp.Err)
-			}
-		default:
-			t.Fatal("two-way request did not fail on the full queue")
+		if !errors.Is(err, ErrSendQueueFull) {
+			t.Fatalf("overflow = %v", err)
 		}
+		if len(responseChan) != 0 {
+			t.Fatal("rejection also reported asynchronously")
+		}
+
 		if got := c.DroppedReplies(); got != 1 {
 			t.Errorf("DroppedReplies() = %d after a two-way failure, want unchanged at 1", got)
 		}

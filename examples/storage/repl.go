@@ -196,7 +196,7 @@ func (r repl) unicast(args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	err = pb.NewStorageNodeClient(node).WriteUnicast(ctx, pb.WriteRequest_builder{
 		Key: args[1], Value: args[2], Time: timestamppb.Now(),
-	}.Build()).Send()
+	}.Build()).Async().Wait()
 	cancel()
 	if err != nil {
 		fmt.Printf("Write unicast failed to send: %v\n", err)
@@ -215,7 +215,7 @@ func (r repl) multicast(args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	err := pb.NewStorageClient(r.cfg).WriteMulticast(ctx, pb.WriteRequest_builder{
 		Key: args[0], Value: args[1], Time: timestamppb.Now(),
-	}.Build()).Send()
+	}.Build()).Async().Wait()
 	cancel()
 	if err != nil {
 		fmt.Printf("Write multicast failed to send: %v\n", err)
