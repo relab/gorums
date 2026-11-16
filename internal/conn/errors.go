@@ -3,6 +3,7 @@ package conn
 import (
 	"errors"
 	"fmt"
+	"iter"
 	"strings"
 )
 
@@ -29,6 +30,18 @@ func (e QuorumCallError) Cause() error {
 // NumErrors returns the number of nodes that failed during the quorum call.
 func (e QuorumCallError) NumErrors() int {
 	return len(e.errors)
+}
+
+// NodeErrors returns an iterator over the failed nodes and their errors, in
+// the order in which the call recorded them.
+func (e QuorumCallError) NodeErrors() iter.Seq2[ID, error] {
+	return func(yield func(ID, error) bool) {
+		for _, ne := range e.errors {
+			if !yield(ne.nodeID, ne.cause) {
+				return
+			}
+		}
+	}
 }
 
 // Is reports whether the target error is the same as the cause of the QuorumCallError.
