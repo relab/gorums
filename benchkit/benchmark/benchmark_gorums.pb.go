@@ -44,7 +44,7 @@ type BenchmarkClient interface {
 	//
 	//	err := client.Multicast(ctx, in).Send()
 	//
-	// To dispatch without waiting for the sends:
+	// To wait for the stream writes:
 	//
 	//	h := client.Multicast(ctx, in).Async()
 	//	err = h.Wait()
