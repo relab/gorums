@@ -39,14 +39,16 @@ type NodeOnlyNodeClient interface {
 	// Write returns a one-way call handle for the client's node.
 	// No reply is returned.
 	//
-	// Send blocks until the send completes and returns any send error.
-	// Async returns a handle at once; Wait on the handle returns the send error.
+	// Send queues the request and returns the admission error; it does not wait
+	// for queue space or for the stream write. Async queues the request the same
+	// way and returns a handle; Wait on the handle returns the admission error or
+	// the stream-write error.
 	//
 	// Example:
 	//
 	//	err := nodeClient.Write(ctx, in).Send()
 	//
-	// To dispatch without waiting for the sends:
+	// To wait for the stream write:
 	//
 	//	h := nodeClient.Write(ctx, in).Async()
 	//	err = h.Wait()

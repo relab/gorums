@@ -52,7 +52,7 @@ type ZorumsServiceClient interface {
 	//
 	//	err := client.MulticastWithEmptyResponse(ctx, in).Send()
 	//
-	// To dispatch without waiting for the sends:
+	// To wait for the stream writes:
 	//
 	//	h := client.MulticastWithEmptyResponse(ctx, in).Async()
 	//	err = h.Wait()
@@ -64,7 +64,7 @@ type ZorumsServiceClient interface {
 	//
 	//	err := client.MulticastSecondMethod(ctx, in).Send()
 	//
-	// To dispatch without waiting for the sends:
+	// To wait for the stream writes:
 	//
 	//	h := client.MulticastSecondMethod(ctx, in).Async()
 	//	err = h.Wait()
@@ -77,7 +77,7 @@ type ZorumsServiceClient interface {
 	//
 	//	err := client.MulticastWithEmptyRequestAndResponse(ctx, in).Send()
 	//
-	// To dispatch without waiting for the sends:
+	// To wait for the stream writes:
 	//
 	//	h := client.MulticastWithEmptyRequestAndResponse(ctx, in).Async()
 	//	err = h.Wait()
@@ -130,7 +130,7 @@ type ZorumsServiceNodeClient interface {
 	//
 	//	err := nodeClient.Unicast(ctx, in).Send()
 	//
-	// To dispatch without waiting for the sends:
+	// To wait for the stream write:
 	//
 	//	h := nodeClient.Unicast(ctx, in).Async()
 	//	err = h.Wait()

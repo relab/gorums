@@ -55,7 +55,7 @@ type ControlClient interface {
 	//
 	//	err := client.Done(ctx, in).Send()
 	//
-	// To dispatch without waiting for the sends:
+	// To wait for the stream writes:
 	//
 	//	h := client.Done(ctx, in).Async()
 	//	err = h.Wait()

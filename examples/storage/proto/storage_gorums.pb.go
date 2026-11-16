@@ -37,7 +37,7 @@ type StorageClient interface {
 	//
 	//	err := client.WriteMulticast(ctx, in).Send()
 	//
-	// To dispatch without waiting for the sends:
+	// To wait for the stream writes:
 	//
 	//	h := client.WriteMulticast(ctx, in).Async()
 	//	err = h.Wait()
@@ -95,7 +95,7 @@ type StorageNodeClient interface {
 	//
 	//	err := nodeClient.WriteUnicast(ctx, in).Send()
 	//
-	// To dispatch without waiting for the sends:
+	// To wait for the stream write:
 	//
 	//	h := nodeClient.WriteUnicast(ctx, in).Async()
 	//	err = h.Wait()
