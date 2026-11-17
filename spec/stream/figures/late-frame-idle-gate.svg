@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 470" width="840" height="470" role="img" aria-label="late c1 runs after c2 despite the idle gate" class="seq">
+<style>
+:root {
+  --bg: #ffffff; --card: #ffffff; --fg: #1d1d1f; --muted: #60646c; --line: #c9cbd1;
+  --d: #2c63c9; --d-bg: #e8effb; --a: #127a5c; --a-bg: #e4f3ee;
+  --wire: #7d828b; --wire-bg: #f1f2f4; --bad: #c42b2b; --bad-bg: #fcebea;
+  --ok: #2a7a32; --ok-bg: #e7f4e8; --warn: #9a6400;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117; --card: #161b22; --fg: #e6edf3; --muted: #9aa4af; --line: #3d444d;
+    --d: #7ea8f2; --d-bg: #1a2638; --a: #5fcba6; --a-bg: #14291f;
+    --wire: #9aa0a8; --wire-bg: #1f242b; --bad: #f07a72; --bad-bg: #3a1f1e;
+    --ok: #79c47f; --ok-bg: #1d3220; --warn: #e2b04f;
+  }
+}
+.bg { fill: var(--bg); }
+text { fill: var(--fg); font-family: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+.t-title { font-size: 17px; font-weight: 700; }
+.t-sub { font-size: 13px; fill: var(--muted); }
+.t-node { font-size: 15px; font-weight: 600; }
+.t-var { font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--muted); }
+.t-lbl { font-size: 13px; fill: var(--muted); }
+.t-bad { fill: var(--bad); font-weight: 600; }
+.seq .t-lbl, .seq .t-var { font-size: 14.5px; }
+.seq .t-node { font-size: 16px; }
+.panel-d { fill: var(--d-bg); stroke: var(--d); stroke-width: 1.5; }
+.panel-a { fill: var(--a-bg); stroke: var(--a); stroke-width: 1.5; }
+.node { fill: var(--card); stroke-width: 1.5; }
+.node-d { stroke: var(--d); }
+.node-a { stroke: var(--a); }
+.node-side { fill: none; stroke-dasharray: 5 4; }
+.wirebox { fill: var(--wire-bg); stroke: var(--wire); stroke-dasharray: 6 5; }
+.flow { fill: none; stroke: var(--fg); stroke-width: 1.6; }
+.flow-wire { fill: none; stroke: var(--wire); stroke-width: 2.4; }
+.flow-dot { fill: none; stroke: var(--a); stroke-width: 1.6; stroke-dasharray: 3 4; }
+.life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.msg { fill: none; stroke: var(--fg); stroke-width: 1.6; }
+.msg-late { fill: none; stroke: var(--warn); stroke-width: 1.8; stroke-dasharray: 8 5; }
+.head-box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+.note-info { fill: var(--wire-bg); stroke: var(--line); }
+.note-bad { fill: var(--bad-bg); stroke: var(--bad); }
+.note-ok { fill: var(--ok-bg); stroke: var(--ok); }
+.run-ok { fill: var(--a); }
+.run-bad { fill: var(--bad); }
+.cyc-d { fill: var(--d-bg); stroke: var(--d); stroke-width: 1.5; }
+.cyc-a { fill: var(--a-bg); stroke: var(--a); stroke-width: 1.5; }
+.ah-fg { fill: var(--fg); }
+.ah-wire { fill: var(--wire); }
+.ah-a { fill: var(--a); }
+.ah-warn { fill: var(--warn); }
+</style>
+<rect class="bg" x="0" y="0" width="840" height="470" rx="10"/>
+<defs>
+<marker id="ah-fg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-fg"/></marker>
+<marker id="ah-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-warn"/></marker>
+</defs>
+<line x1="205" y1="56" x2="205" y2="460" class="life"/>
+<rect x="105" y="12" width="200" height="40" rx="8" class="head-box"/>
+<text x="205" y="38" class="t-node" text-anchor="middle">D</text>
+<line x1="475" y1="56" x2="475" y2="460" class="life"/>
+<rect x="375" y="12" width="200" height="40" rx="8" class="head-box"/>
+<text x="475" y="38" class="t-node" text-anchor="middle">A: channel 1</text>
+<line x1="730" y1="56" x2="730" y2="460" class="life"/>
+<rect x="630" y="12" width="200" height="40" rx="8" class="head-box"/>
+<text x="730" y="38" class="t-node" text-anchor="middle">A: channel 2</text>
+<line x1="205" y1="85" x2="468" y2="340" class="msg-late" marker-end="url(#ah-warn)"/>
+<text x="330" y="135" class="t-var" text-anchor="middle">c1 in transit</text>
+<rect x="4" y="110" width="192" height="50" rx="6" class="note-info"/>
+<text x="100" y="131" class="t-lbl" text-anchor="middle">stream 1 breaks;</text>
+<text x="100" y="150" class="t-lbl" text-anchor="middle">c1 fails: ErrStreamDown</text>
+<line x1="205" y1="200" x2="723" y2="200" class="msg" marker-end="url(#ah-fg)"/>
+<text x="610" y="192" class="t-var" text-anchor="middle">c2 on stream 2</text>
+<rect x="460" y="215" width="200" height="50" rx="6" class="note-info"/>
+<text x="560" y="236" class="t-lbl" text-anchor="middle">channel 1 is idle,</text>
+<text x="560" y="255" class="t-lbl" text-anchor="middle">so the gate is open</text>
+<rect x="723" y="276" width="14" height="28" rx="3" class="run-ok"/>
+<text x="714" y="295" class="t-node" text-anchor="end">runs c2</text>
+<rect x="468" y="386" width="14" height="28" rx="3" class="run-bad"/>
+<text x="491" y="405" class="t-node t-bad" text-anchor="start">runs c1, after c2</text>
+</svg>
