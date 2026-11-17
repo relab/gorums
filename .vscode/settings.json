@@ -26,6 +26,7 @@
         "compare-branches.sh",
         "report.md",
         "**/*.pb.go",
+        "**/go/pkg/mod/**",
         "benchkit/cmd/sweep/typst/*.typ"
     ],
     "editor.formatOnPaste": true,
@@ -35,6 +36,7 @@
         "source.fixAll": "explicit"
     },
     "files.exclude": {
+        "**/go/pkg/mod": true,
         "**/.git": true,
         "**/.jj": true,
         "**/.DS_Store": true

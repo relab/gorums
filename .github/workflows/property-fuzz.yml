@@ -1,0 +1,41 @@
+name: Property and Fuzz Tests
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 3 * * 1'
+permissions:
+  contents: read
+concurrency:
+  group: property-fuzz-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  generated-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: "go.mod"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      - uses: extractions/setup-just@v3
+      - name: Extended properties
+        run: |
+          set -o pipefail
+          just propertytest 1000 2>&1 | tee property-tests.log
+      - name: Bounded fuzz campaigns
+        if: ${{ !cancelled() }}
+        run: |
+          set -o pipefail
+          just fuzztest 60 2>&1 | tee fuzz-tests.log
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: property-fuzz-failures
+          path: |
+            **/testdata/rapid/**
+            **/testdata/fuzz/**
+            property-tests.log
+            fuzz-tests.log
+          if-no-files-found: warn

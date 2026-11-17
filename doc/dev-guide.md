@@ -179,6 +179,49 @@ Or directly:
 go test -tags=integration ./...
 ```
 
+### Property Tests and Fuzzing
+
+Runtime property tests use `pgregory.net/rapid` with standard test assertions.
+They compare bounded inputs and operation sequences with independent models.
+The default `go test` run executes 100 cases per property and the native fuzz seed corpora.
+
+Run more cases with fresh inputs:
+
+```sh
+just propertytest 1000
+```
+
+Rapid prints a seed and writes a minimized failure under the package's `testdata/rapid` directory.
+Reproduce a failure with the printed `-rapid.seed` or `-rapid.failfile` command, and keep useful minimized cases as regressions.
+Use `-count=1` for extended runs so Go's test cache does not reuse an earlier successful run.
+The `*rapid.T` context and cleanups belong to the generated case, including shrink attempts.
+It is not interchangeable with the `testing.TB` accepted by `gorumstest`; the current properties use in-process data structures without server setup.
+
+Run each native fuzz target for 30 seconds with two workers:
+
+```sh
+just fuzztest 30
+```
+
+Run a single target for a longer campaign:
+
+```sh
+go test ./internal/impl -run='^$' -fuzz='^FuzzMarshaling$' -fuzztime=5m -parallel=2
+```
+
+The targets cover method/payload decoding, message metadata, peer identities, node-ID metadata, tree option boundaries, and quorum terminal properties through `rapid.MakeFuzz`.
+Native fuzz failures are saved under the package's `testdata/fuzz` directory and run during ordinary tests.
+Keep the registry and each fuzz invocation isolated: inputs must not register global protobuf descriptors or depend on earlier cases.
+
+Queue blocking tests use `testing/synctest`.
+Dispatcher, Correctable, and configuration watcher properties use `rapid.SyncTest` to give each generated case its own bubble while preserving Rapid's failure shrinking.
+Explicit gates and fake time control event order; these tests complement race detection rather than enumerating goroutine schedules.
+The models distinguish successful-response counts from distinct-node counts, lazy pending-call sweeping from immediate cancellation, and handler release from handler return.
+
+PR CI runs the runtime race tests.
+The Property and Fuzz Tests workflow runs weekly and on manual dispatch; it preserves failure corpora and logs as artifacts.
+Session/reconnect models, stream replacement tests, generated-descriptor fuzzing, benchkit properties, and TCP fault injection remain separate work.
+
 ### Generator Tests
 
 The tests in `internal/testprotos` run `protoc-gen-go` and `protoc-gen-gorums` in process, through the `internal/gentest` harness.
