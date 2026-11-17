@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 290" width="840" height="290" role="img" aria-label="Six-way wait cycle between D and A">
+<style>
+:root {
+  --bg: #ffffff; --card: #ffffff; --fg: #1d1d1f; --muted: #60646c; --line: #c9cbd1;
+  --d: #2c63c9; --d-bg: #e8effb; --a: #127a5c; --a-bg: #e4f3ee;
+  --wire: #7d828b; --wire-bg: #f1f2f4; --bad: #c42b2b; --bad-bg: #fcebea;
+  --ok: #2a7a32; --ok-bg: #e7f4e8; --warn: #9a6400;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117; --card: #161b22; --fg: #e6edf3; --muted: #9aa4af; --line: #3d444d;
+    --d: #7ea8f2; --d-bg: #1a2638; --a: #5fcba6; --a-bg: #14291f;
+    --wire: #9aa0a8; --wire-bg: #1f242b; --bad: #f07a72; --bad-bg: #3a1f1e;
+    --ok: #79c47f; --ok-bg: #1d3220; --warn: #e2b04f;
+  }
+}
+.bg { fill: var(--bg); }
+text { fill: var(--fg); font-family: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+.t-title { font-size: 17px; font-weight: 700; }
+.t-sub { font-size: 13px; fill: var(--muted); }
+.t-node { font-size: 15px; font-weight: 600; }
+.t-var { font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--muted); }
+.t-lbl { font-size: 13px; fill: var(--muted); }
+.t-bad { fill: var(--bad); font-weight: 600; }
+.seq .t-lbl, .seq .t-var { font-size: 14.5px; }
+.seq .t-node { font-size: 16px; }
+.panel-d { fill: var(--d-bg); stroke: var(--d); stroke-width: 1.5; }
+.panel-a { fill: var(--a-bg); stroke: var(--a); stroke-width: 1.5; }
+.node { fill: var(--card); stroke-width: 1.5; }
+.node-d { stroke: var(--d); }
+.node-a { stroke: var(--a); }
+.node-side { fill: none; stroke-dasharray: 5 4; }
+.wirebox { fill: var(--wire-bg); stroke: var(--wire); stroke-dasharray: 6 5; }
+.flow { fill: none; stroke: var(--fg); stroke-width: 1.6; }
+.flow-wire { fill: none; stroke: var(--wire); stroke-width: 2.4; }
+.flow-dot { fill: none; stroke: var(--a); stroke-width: 1.6; stroke-dasharray: 3 4; }
+.life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.msg { fill: none; stroke: var(--fg); stroke-width: 1.6; }
+.msg-late { fill: none; stroke: var(--warn); stroke-width: 1.8; stroke-dasharray: 8 5; }
+.head-box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+.note-info { fill: var(--wire-bg); stroke: var(--line); }
+.note-bad { fill: var(--bad-bg); stroke: var(--bad); }
+.note-ok { fill: var(--ok-bg); stroke: var(--ok); }
+.run-ok { fill: var(--a); }
+.run-bad { fill: var(--bad); }
+.cyc-d { fill: var(--d-bg); stroke: var(--d); stroke-width: 1.5; }
+.cyc-a { fill: var(--a-bg); stroke: var(--a); stroke-width: 1.5; }
+.ah-fg { fill: var(--fg); }
+.ah-wire { fill: var(--wire); }
+.ah-a { fill: var(--a); }
+.ah-warn { fill: var(--warn); }
+</style>
+<rect class="bg" x="0" y="0" width="840" height="290" rx="10"/>
+<defs>
+    <marker id="ah-fg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-fg"/></marker>
+  </defs>
+  <rect x="20"  y="30"  width="220" height="64" rx="10" class="cyc-d"/>
+  <text x="130" y="57" text-anchor="middle" class="t-node">D handler</text>
+  <text x="130" y="80" text-anchor="middle" class="t-var">waits: dq full</text>
+
+  <rect x="310" y="30"  width="220" height="64" rx="10" class="cyc-d"/>
+  <text x="420" y="57" text-anchor="middle" class="t-node">D sendLoop</text>
+  <text x="420" y="80" text-anchor="middle" class="t-var">waits: c2s full</text>
+
+  <rect x="600" y="30"  width="220" height="64" rx="10" class="cyc-a"/>
+  <text x="710" y="57" text-anchor="middle" class="t-node">A receive</text>
+  <text x="710" y="80" text-anchor="middle" class="t-var">waits: adisp full</text>
+
+  <rect x="600" y="196" width="220" height="64" rx="10" class="cyc-a"/>
+  <text x="710" y="223" text-anchor="middle" class="t-node">A handler</text>
+  <text x="710" y="246" text-anchor="middle" class="t-var">waits: aq full</text>
+
+  <rect x="310" y="196" width="220" height="64" rx="10" class="cyc-a"/>
+  <text x="420" y="223" text-anchor="middle" class="t-node">A sendLoop</text>
+  <text x="420" y="246" text-anchor="middle" class="t-var">waits: s2c full</text>
+
+  <rect x="20"  y="196" width="220" height="64" rx="10" class="cyc-d"/>
+  <text x="130" y="223" text-anchor="middle" class="t-node">D receive</text>
+  <text x="130" y="246" text-anchor="middle" class="t-var">waits: ddisp full</text>
+
+  <line x1="240" y1="62"  x2="308" y2="62"  class="flow" marker-end="url(#ah-fg)"/>
+  <line x1="530" y1="62"  x2="598" y2="62"  class="flow" marker-end="url(#ah-fg)"/>
+  <line x1="710" y1="94"  x2="710" y2="194" class="flow" marker-end="url(#ah-fg)"/>
+  <line x1="600" y1="228" x2="532" y2="228" class="flow" marker-end="url(#ah-fg)"/>
+  <line x1="310" y1="228" x2="242" y2="228" class="flow" marker-end="url(#ah-fg)"/>
+  <line x1="130" y1="196" x2="130" y2="96"  class="flow" marker-end="url(#ah-fg)"/>
+  <text x="420" y="152" text-anchor="middle" class="t-lbl">each one waits for the next one</text>
+</svg>

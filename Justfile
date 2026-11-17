@@ -258,3 +258,20 @@ goplscheck:
         echo "gopls diagnostics found; apply the suggested quick fixes and rerun just goplscheck."
         exit 1
     fi
+
+# --- Formal specs ------------------------------------------------------------
+
+# List the TLA+ configurations, with their run time, expected result, and description.
+[group('spec')]
+spec-list:
+    spec/tlc.sh list
+
+# Check the short TLA+ configurations against their expected results; -all adds the long ones.
+[group('spec')]
+spec-check *flags:
+    spec/tlc.sh check {{ flags }}
+
+# Check one TLA+ configuration and print its result, with any error trace one line per step: just tlc Current.
+[group('spec')]
+tlc config *flags:
+    spec/tlc.sh run {{ config }} {{ flags }}

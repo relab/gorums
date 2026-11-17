@@ -38,6 +38,9 @@ cmd/protoc-gen-gorums/gengorums/template_static.go.bak
 go.work.sum
 branch-compare-*
 tmp/*
+
+# TLC output and state files of the formal specs
+spec/*/out/
 out/*
 .claude/settings.local.json
 .claude/agent-memory/

@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 620" width="840" height="620" role="img" aria-label="Stream layer structure: D&#x27;s outbound channel and A&#x27;s inbound channel, joined by stream s">
+<style>
+:root {
+  --bg: #ffffff; --card: #ffffff; --fg: #1d1d1f; --muted: #60646c; --line: #c9cbd1;
+  --d: #2c63c9; --d-bg: #e8effb; --a: #127a5c; --a-bg: #e4f3ee;
+  --wire: #7d828b; --wire-bg: #f1f2f4; --bad: #c42b2b; --bad-bg: #fcebea;
+  --ok: #2a7a32; --ok-bg: #e7f4e8; --warn: #9a6400;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117; --card: #161b22; --fg: #e6edf3; --muted: #9aa4af; --line: #3d444d;
+    --d: #7ea8f2; --d-bg: #1a2638; --a: #5fcba6; --a-bg: #14291f;
+    --wire: #9aa0a8; --wire-bg: #1f242b; --bad: #f07a72; --bad-bg: #3a1f1e;
+    --ok: #79c47f; --ok-bg: #1d3220; --warn: #e2b04f;
+  }
+}
+.bg { fill: var(--bg); }
+text { fill: var(--fg); font-family: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+.t-title { font-size: 17px; font-weight: 700; }
+.t-sub { font-size: 13px; fill: var(--muted); }
+.t-node { font-size: 15px; font-weight: 600; }
+.t-var { font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--muted); }
+.t-lbl { font-size: 13px; fill: var(--muted); }
+.t-bad { fill: var(--bad); font-weight: 600; }
+.seq .t-lbl, .seq .t-var { font-size: 14.5px; }
+.seq .t-node { font-size: 16px; }
+.panel-d { fill: var(--d-bg); stroke: var(--d); stroke-width: 1.5; }
+.panel-a { fill: var(--a-bg); stroke: var(--a); stroke-width: 1.5; }
+.node { fill: var(--card); stroke-width: 1.5; }
+.node-d { stroke: var(--d); }
+.node-a { stroke: var(--a); }
+.node-side { fill: none; stroke-dasharray: 5 4; }
+.wirebox { fill: var(--wire-bg); stroke: var(--wire); stroke-dasharray: 6 5; }
+.flow { fill: none; stroke: var(--fg); stroke-width: 1.6; }
+.flow-wire { fill: none; stroke: var(--wire); stroke-width: 2.4; }
+.flow-dot { fill: none; stroke: var(--a); stroke-width: 1.6; stroke-dasharray: 3 4; }
+.life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.msg { fill: none; stroke: var(--fg); stroke-width: 1.6; }
+.msg-late { fill: none; stroke: var(--warn); stroke-width: 1.8; stroke-dasharray: 8 5; }
+.head-box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+.note-info { fill: var(--wire-bg); stroke: var(--line); }
+.note-bad { fill: var(--bad-bg); stroke: var(--bad); }
+.note-ok { fill: var(--ok-bg); stroke: var(--ok); }
+.run-ok { fill: var(--a); }
+.run-bad { fill: var(--bad); }
+.cyc-d { fill: var(--d-bg); stroke: var(--d); stroke-width: 1.5; }
+.cyc-a { fill: var(--a-bg); stroke: var(--a); stroke-width: 1.5; }
+.ah-fg { fill: var(--fg); }
+.ah-wire { fill: var(--wire); }
+.ah-a { fill: var(--a); }
+.ah-warn { fill: var(--warn); }
+</style>
+<rect class="bg" x="0" y="0" width="840" height="620" rx="10"/>
+<defs>
+    <marker id="ah-fg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-fg"/></marker>
+    <marker id="ah-wire" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-wire"/></marker>
+    <marker id="ah-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-a"/></marker>
+  </defs>
+
+  <!-- D panel -->
+  <rect x="10" y="10" width="290" height="600" rx="14" class="panel-d"/>
+  <text x="155" y="40" text-anchor="middle" class="t-title">D · dialer</text>
+  <text x="155" y="60" text-anchor="middle" class="t-sub">OutboundChannel</text>
+
+  <!-- A panel -->
+  <rect x="540" y="10" width="290" height="600" rx="14" class="panel-a"/>
+  <text x="685" y="40" text-anchor="middle" class="t-title">A · acceptor</text>
+  <text x="685" y="60" text-anchor="middle" class="t-sub">one InboundChannel per stream</text>
+
+  <!-- wire -->
+  <rect x="318" y="165" width="204" height="340" rx="12" class="wirebox"/>
+  <text x="420" y="318" text-anchor="middle" class="t-title">stream s</text>
+  <text x="420" y="342" text-anchor="middle" class="t-sub">frames in flight</text>
+  <text x="420" y="360" text-anchor="middle" class="t-sub">(WireCap per direction)</text>
+  <text x="420" y="384" text-anchor="middle" class="t-sub">a break loses them</text>
+
+  <!-- D nodes -->
+  <rect x="70" y="85" width="200" height="50" rx="8" class="node node-d"/>
+  <text x="170" y="106" text-anchor="middle" class="t-node">send queue</text>
+  <text x="170" y="125" text-anchor="middle" class="t-var">dq</text>
+
+  <rect x="70" y="175" width="200" height="50" rx="8" class="node node-d"/>
+  <text x="170" y="196" text-anchor="middle" class="t-node">sendLoop</text>
+  <text x="170" y="215" text-anchor="middle" class="t-var">dhand</text>
+
+  <rect x="70" y="355" width="200" height="50" rx="8" class="node node-d"/>
+  <text x="170" y="376" text-anchor="middle" class="t-node">handler</text>
+  <text x="170" y="395" text-anchor="middle" class="t-var">drun</text>
+
+  <rect x="70" y="445" width="200" height="50" rx="8" class="node node-d"/>
+  <text x="170" y="466" text-anchor="middle" class="t-node">dispatcher</text>
+  <text x="170" y="485" text-anchor="middle" class="t-var">ddisp</text>
+
+  <rect x="70" y="535" width="200" height="50" rx="8" class="node node-d node-side"/>
+  <text x="170" y="556" text-anchor="middle" class="t-node">pending calls</text>
+  <text x="170" y="575" text-anchor="middle" class="t-var">dpend[s]</text>
+
+  <!-- D arrows -->
+  <line x1="170" y1="135" x2="170" y2="173" class="flow" marker-end="url(#ah-fg)"/>
+  <line x1="170" y1="445" x2="170" y2="407" class="flow" marker-end="url(#ah-fg)"/>
+  <path d="M70,380 H40 V110 H68" class="flow" marker-end="url(#ah-fg)"/>
+  <text transform="translate(30 245) rotate(-90)" text-anchor="middle" class="t-lbl">reply (tryPush)</text>
+
+  <!-- A nodes -->
+  <rect x="570" y="85" width="200" height="50" rx="8" class="node node-a"/>
+  <text x="670" y="106" text-anchor="middle" class="t-node">slot</text>
+  <text x="670" y="125" text-anchor="middle" class="t-var">node's channelRef</text>
+
+  <rect x="570" y="175" width="200" height="50" rx="8" class="node node-a"/>
+  <text x="670" y="196" text-anchor="middle" class="t-node">dispatcher</text>
+  <text x="670" y="215" text-anchor="middle" class="t-var">adisp[s]</text>
+
+  <rect x="570" y="265" width="200" height="50" rx="8" class="node node-a"/>
+  <text x="670" y="286" text-anchor="middle" class="t-node">handler</text>
+  <text x="670" y="305" text-anchor="middle" class="t-var">arun[s]</text>
+
+  <rect x="570" y="355" width="200" height="50" rx="8" class="node node-a"/>
+  <text x="670" y="376" text-anchor="middle" class="t-node">send queue</text>
+  <text x="670" y="395" text-anchor="middle" class="t-var">aq[s]</text>
+
+  <rect x="570" y="445" width="200" height="50" rx="8" class="node node-a"/>
+  <text x="670" y="466" text-anchor="middle" class="t-node">sendLoop</text>
+  <text x="670" y="485" text-anchor="middle" class="t-var">ahand[s]</text>
+
+  <rect x="570" y="535" width="200" height="50" rx="8" class="node node-a node-side"/>
+  <text x="670" y="556" text-anchor="middle" class="t-node">pending calls</text>
+  <text x="670" y="575" text-anchor="middle" class="t-var">apend[s]</text>
+
+  <!-- A arrows -->
+  <line x1="670" y1="225" x2="670" y2="263" class="flow" marker-end="url(#ah-fg)"/>
+  <line x1="670" y1="315" x2="670" y2="353" class="flow" marker-end="url(#ah-fg)"/>
+  <text x="680" y="339" class="t-lbl">reply (tryPush)</text>
+  <line x1="670" y1="405" x2="670" y2="443" class="flow" marker-end="url(#ah-fg)"/>
+  <path d="M770,110 H800 V380 H772" class="flow-dot" marker-end="url(#ah-a)"/>
+  <text transform="translate(814 245) rotate(90)" text-anchor="middle" class="t-lbl">A's calls (IssueB)</text>
+
+  <!-- wire arrows -->
+  <line x1="270" y1="200" x2="568" y2="200" class="flow-wire" marker-end="url(#ah-wire)"/>
+  <text x="420" y="190" text-anchor="middle" class="t-var">c2s[s]</text>
+  <line x1="570" y1="470" x2="272" y2="470" class="flow-wire" marker-end="url(#ah-wire)"/>
+  <text x="420" y="490" text-anchor="middle" class="t-var">s2c[s]</text>
+</svg>
