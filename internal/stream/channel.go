@@ -10,12 +10,12 @@ import (
 // Channel carries requests to one node. It is implemented by
 // [OutboundChannel], [InboundChannel], and [LocalChannel].
 type Channel interface {
-	// Enqueue returns the admission error without waiting for queue space.
-	// A full queue returns [ErrSendQueueFull]; a closed stream channel
-	// returns [ErrNodeClosed]. Only accepted requests report subsequent
-	// outcomes on req's response channel.
-	// Enqueue panics if req is both Oneway and Streaming.
-	Enqueue(req NodeRequest) error
+	// Enqueue admits the request to the channel's send queue. If the channel
+	// cannot admit it, Enqueue returns an error at once: [ErrSendQueueFull] if
+	// the send queue is full, or [ErrNodeClosed] if the channel is closed. An
+	// admitted request reports its replies and errors on the request's response
+	// channel. Enqueue panics if the request is both Oneway and Streaming.
+	Enqueue(NodeRequest) error
 	// StreamUp reports whether the channel can currently carry requests.
 	StreamUp() bool
 	// LastErr returns [ErrSendStalled] while a send has been blocked for

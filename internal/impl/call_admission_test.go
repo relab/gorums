@@ -155,9 +155,9 @@ func newLocalNode(t *testing.T, id ID) (*Node, *seqNoRecorder) {
 }
 
 // TestCallAdmissionContextEndsAfterDispatch verifies which requests a context
-// that ends after dispatch withdraws from the send queue. Send reports only
-// admission, so its context bounds only admission. Async reports the stream
-// writes, so its context also bounds the wait for transmission.
+// that ends after dispatch withdraws from the send queue. Send retains accepted
+// requests when the context ends. Async reports the stream writes, so its
+// context also bounds the wait for transmission.
 func TestCallAdmissionContextEndsAfterDispatch(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -5,12 +5,11 @@ import (
 	"sync/atomic"
 )
 
-// sendQueue is a bounded FIFO of requests awaiting a stream send.
-// Closing fails queued requests with [ErrNodeClosed] and rejects later admissions.
+// sendQueue is a bounded FIFO queue of requests awaiting a stream send.
 type sendQueue struct {
 	id   ID
 	ch   chan NodeRequest
-	done <-chan struct{} // ends waits for queue space
+	done <-chan struct{} // releases pushes that wait for queue space
 
 	mu     sync.RWMutex // held for reading by push, for writing by close
 	closed bool
@@ -18,14 +17,15 @@ type sendQueue struct {
 	dropped atomic.Int64
 }
 
-// newSendQueue returns a queue with the given capacity. Closing done ends
-// waits for queue space; [sendQueue.close] waits for those to end.
+// newSendQueue returns a queue with the given capacity. A [sendQueue.push] that
+// waits for queue space returns when done closes. [sendQueue.close] waits for
+// such calls to return, so close done before closing the queue.
 func newSendQueue(id ID, capacity uint, done <-chan struct{}) *sendQueue {
 	return &sendQueue{id: id, ch: make(chan NodeRequest, capacity), done: done}
 }
 
-// tryPush admits req immediately or returns an error. Rejection is reported
-// only to the caller; the request has not entered the asynchronous send path.
+// tryPush admits req immediately or returns an error: [ErrSendQueueFull] if the
+// queue is full, or [ErrNodeClosed] if it is closed.
 func (q *sendQueue) tryPush(req NodeRequest) error {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
@@ -40,8 +40,9 @@ func (q *sendQueue) tryPush(req NodeRequest) error {
 	}
 }
 
-// push waits for queue space until the request or queue lifetime ends.
-// It is used for replies on ordinary client streams.
+// push admits req once the queue has space. It returns the request's context
+// error if that context ends first, or [ErrNodeClosed] if the queue is closed
+// or its done channel closes first.
 func (q *sendQueue) push(req NodeRequest) error {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
@@ -58,8 +59,8 @@ func (q *sendQueue) push(req NodeRequest) error {
 	}
 }
 
-// close closes the queue and fails the requests left in it with [ErrNodeClosed].
-// It is idempotent.
+// close closes the queue and reports [ErrNodeClosed] for each request still
+// queued. It is idempotent.
 func (q *sendQueue) close() {
 	q.mu.Lock()
 	q.closed = true

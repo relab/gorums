@@ -27,11 +27,13 @@ func NewLocalChannel(id ID, handler RequestHandler, recvBufferSize uint, logger 
 	return c
 }
 
-// Enqueue queues req for the handler and returns the admission error. A
-// one-way request is confirmed once queued. Admission never waits for space:
-// a full queue returns [ErrSendQueueFull]. Without a handler, Enqueue returns
-// an error with the code [codes.Unimplemented]. A rejected request reports
-// nothing on its response channel.
+// Enqueue admits the request to the handler's request queue. If the channel
+// cannot admit it, Enqueue returns an error at once: the context error if the
+// request's context has ended, an error with the code [codes.Unimplemented] if
+// no handler is registered, or [ErrSendQueueFull] if the request queue is full.
+// An admitted request reports the handler's replies on the request's response
+// channel; a one-way request instead reports its send confirmation.
+// Enqueue panics if the request is both Oneway and Streaming.
 func (c *LocalChannel) Enqueue(req NodeRequest) error {
 	if req.Oneway && req.Streaming {
 		panic("gorums: Oneway and Streaming are mutually exclusive")

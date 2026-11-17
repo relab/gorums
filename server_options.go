@@ -29,23 +29,23 @@ type ServerOption func(*serverOptions)
 
 // WithBufferSizes configures the send and receive buffer sizes for the server.
 // The receiveSize is the number of requests received on each inbound stream
-// that can wait for the running handler; receiving from the stream waits while
-// that many are queued. Replies on that stream wait as well, so a handler that
-// waits for a reply from the sending peer before [ServerContext.Release] waits
-// until its context ends if the peer fills the queue first. Dispatching the
-// call before Release and waiting after it avoids this. A receiveSize of 0
-// selects [DefaultRecvBufferSize].
+// that can wait for the running handler. When that many are waiting, the
+// stream's receive loop blocks, and with it the replies to the server's own
+// calls that arrive on the same stream. A handler that waits for a reply from
+// the sending peer before [ServerContext.Release] therefore blocks until its
+// context ends if the peer fills the queue first. Dispatching the call before
+// Release and waiting after it avoids this. A receiveSize of 0 selects
+// [DefaultRecvBufferSize].
 //
 // The sendSize is the capacity of each per-node send queue of the server.
-// These queues carry the server's requests to its peers and its replies to
-// callers. When a queue is full, an application request fails with
-// [ErrSendQueueFull] without waiting for space. A reply to a
+// A queue carries the server's requests to a peer and its replies to a caller.
+// A request that finds the queue full returns [ErrSendQueueFull]. A reply to a
 // peer from [WithPeers], or to a client in [Server.ConnectedClients], is
-// dropped and counted by [Node.DroppedReplies]: the server also sends
-// requests to these nodes, and a waiting reply could stop both nodes. A
-// reply to any other client waits for space. A sendSize of 0 selects
-// [DefaultSendBufferSize]. Larger values may increase throughput at the
-// cost of higher latency.
+// dropped and counted by [Node.DroppedReplies], because the server also sends
+// requests to these nodes, and a reply that waited could stall both nodes.
+// A reply to any other client waits for queue space. A sendSize of 0 selects
+// [DefaultSendBufferSize]. Larger values may increase throughput at the cost
+// of higher latency.
 func WithBufferSizes(receiveSize, sendSize uint) ServerOption {
 	return func(o *serverOptions) {
 		o.recvBufferSize = receiveSize
