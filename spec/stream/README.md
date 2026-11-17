@@ -4,11 +4,10 @@ This model covers the Gorums stream layer for one peer pair under stream dedupli
 TLC checks it for small bounds.
 
 * The current code passes every invariant, the deadlock check, and the liveness property `BorrowerRecovers`.
-* The model finds the three past stream-layer bugs when a switch puts each one back.
-* The current code breaks two documented contracts.
-  A handler can run a call twice.
-  Calls from one sender can run out of FIFO order across a reconnect.
-* A proposed design fixes both: a lost stream fails its pending calls, and a newer stream supersedes the older one at the server.
+* The model finds the four past stream-layer bugs when a switch puts each one back.
+* The current code runs each call at most once.
+  It breaks one documented contract: calls from one sender can run out of FIFO order across a reconnect.
+* A proposed design fixes this: a newer stream supersedes the older one at the server.
   The code does not implement it yet.
 * A simpler gate, "wait until older channels are idle", fails when a break leaves frames in transit.
 
@@ -32,7 +31,7 @@ Callers can give up, as when a context deadline expires.
 
 | Model                                    | Code                                                                    |
 | ---------------------------------------- | ----------------------------------------------------------------------- |
-| `OpenD`, `TakeD`, `SendD`, `EndD`        | `OutboundChannel.run`, `session.sendLoop`, `session.end`, `retryOrFail` |
+| `OpenD`, `TakeD`, `SendD`, `EndD`        | `OutboundChannel.run`, `session.sendLoop`, `session.end`, `failPending` |
 | `RecvD`, `RecvS`                         | `session.handle`                                                        |
 | `HandleD`, `ReplyD`, `HandleS`, `ReplyS` | `dispatcher`, `endpoint.reply`                                          |
 | `AcceptS`, `ServerEndS`, `live`, `slot`  | `InboundManager.registerPeer`, `Node.attachStream`, `liveChannels`      |
@@ -50,7 +49,7 @@ All switches off models the current code.
 | `LazyReconnect`          | bug     | D reopens a lost stream only when it has a request.                                     |
 | `AttachClosesPrior`      | bug     | Attaching a stream closes the prior channel.                                            |
 | `BlockingReplies`        | bug     | A handler's reply waits for send queue space.                                           |
-| `NoRequeue`              | design  | A lost stream fails its pending calls with `ErrStreamDown`.                             |
+| `Requeue`                | bug     | A lost stream requeues its pending calls at the tail of the send queue.                 |
 | `FIFOGate = "idle"`      | design  | A starts a handler on stream `s` only while each older channel is detached or idle.     |
 | `FIFOGate = "supersede"` | design  | A refuses a stream older than one it has seen. A newer stream closes the older channel. |
 | `LateFrames`             | network | A break loses only a suffix of the frames in flight. The receiver still gets the rest.  |
@@ -86,17 +85,31 @@ The times below are from one laptop and vary with the machine.
 
 `Current.cfg`: all invariants, deadlock, and `BorrowerRecovers`.
 2 calls from D, 1 from A, capacity 1, 2 faults; callers may cancel.
-Passes: 5.5 M distinct states, 8 min.
+Passes: 882,739 distinct states, 51 s.
 
 ```bash
 just tlc Current
 ```
 
 `CurrentLate.cfg`: as `Current.cfg`, with `LateFrames`.
-Passes: 15.1 M distinct states, 27 min.
+Passes: 1.4 M distinct states, 78 s.
 
 ```bash
 just tlc CurrentLate
+```
+
+`ContractAtMostOnce.cfg`: `AtMostOnceExecution` with `LateFrames`, 2 calls, 2 faults.
+Passes: 13,002 distinct states, 1 s.
+
+```bash
+just tlc ContractAtMostOnce
+```
+
+`ContractFIFO.cfg`: `PerSenderFIFO`, 2 calls, queue capacity 2, 1 fault.
+Fails, 1 s.
+
+```bash
+just tlc ContractFIFO
 ```
 
 ### Past Bugs
@@ -117,45 +130,29 @@ just tlc BugAttachClosesPrior
 
 `BugBlockingReplies.cfg`: deadlock with `BlockingReplies`.
 5 calls in each direction, no faults, call symmetry.
-Deadlocks, 8 min.
+Deadlocks, 13 min.
 
 ```bash
 just tlc BugBlockingReplies
 ```
 
-### Contracts on the Current Code
-
-`ContractAtMostOnce.cfg`: `AtMostOnceExecution`, 1 call, 1 fault.
+`BugRequeue.cfg`: `AtMostOnceExecution` with `Requeue`, 1 call, 1 fault.
 Fails, 1 s.
 
 ```bash
-just tlc ContractAtMostOnce
+just tlc BugRequeue
 ```
 
-`ContractFIFO.cfg`: `PerSenderFIFO`, 2 calls, queue capacity 2, 1 fault.
+`BugRequeueFIFO.cfg`: `PerSenderFIFO` with `Requeue`, supersede, and `LateFrames`.
 Fails, 1 s.
 
 ```bash
-just tlc ContractFIFO
+just tlc BugRequeueFIFO
 ```
 
 ### Proposed Design
 
-`FixAtMostOnce.cfg`: `AtMostOnceExecution` with `NoRequeue` and `LateFrames`, 2 calls, 2 faults.
-Passes: 13,002 distinct states, 1 s.
-
-```bash
-just tlc FixAtMostOnce
-```
-
-`FixFIFONoGate.cfg`: `PerSenderFIFO` with `NoRequeue` alone.
-Fails, 1 s.
-
-```bash
-just tlc FixFIFONoGate
-```
-
-`FixFIFOIdle.cfg`: `PerSenderFIFO` with `NoRequeue` and the idle gate; a break loses all frames in flight.
+`FixFIFOIdle.cfg`: `PerSenderFIFO` with the idle gate; a break loses all frames in flight.
 Passes: 1,274 distinct states, 1 s.
 
 ```bash
@@ -169,28 +166,28 @@ Fails, 1 s.
 just tlc FixFIFOIdleLate
 ```
 
-`FixFIFOSupersedeLate.cfg`: `PerSenderFIFO` with `NoRequeue`, supersede, and `LateFrames`, 3 calls, 2 faults.
+`FixFIFOSupersedeLate.cfg`: `PerSenderFIFO` with supersede and `LateFrames`, 3 calls, 2 faults.
 Passes: 107,910 distinct states, 2 s.
 
 ```bash
 just tlc FixFIFOSupersedeLate
 ```
 
-`FixOneAtATime.cfg`: `OneAtATime` with `NoRequeue`, supersede, and `LateFrames`.
+`FixOneAtATime.cfg`: `OneAtATime` with supersede and `LateFrames`.
 Fails, 1 s.
 
 ```bash
 just tlc FixOneAtATime
 ```
 
-`Proposed.cfg`: everything in `Current.cfg`, plus both contracts, with `NoRequeue`, supersede, and `LateFrames`.
+`Proposed.cfg`: everything in `Current.cfg`, plus both contracts, with supersede and `LateFrames`.
 Passes: 658,162 distinct states, 45 s.
 
 ```bash
 just tlc Proposed
 ```
 
-## The Model Finds the Three Past Bugs
+## The Model Finds the Four Past Bugs
 
 Each bug switch puts back the core of a past bug, in terms of today's code.
 TLC finds each one, so the model is detailed enough to catch them.
@@ -217,50 +214,36 @@ D's goroutines are blue and A's are green.
 With capacity 1, the cycle needs 5 calls in each direction.
 Today's code drops a reply when the queue is full (`DroppedReplies`), so the cycle cannot form.
 
-The fourth past bug, the per-send cancel watcher, is not a switch.
-Today's code has no per-send watcher.
-Its effect was a stream that was never reopened, which the lazy-reconnect switch covers.
-
-## Contract Findings on the Current Code
-
-These are not code bugs.
-They are gaps between what the code does and what the documentation says.
-
-### Calls Run at Least Once, Not Exactly Once
+**Requeue** (calls ran twice, fixed for issue 468).
+When a stream broke, D sent each pending call again on the next stream.
+If A had already run the handler and only the reply was lost, A ran it a second time:
 
 ![c1 runs twice: once on stream 1 and again on stream 2](figures/at-least-once.svg)
 
-This is the trace of `ContractAtMostOnce.cfg`; a lost reply has the same effect.
-The `OutboundChannel` doc comment says that pending calls are sent again.
-The user guide does not say this, so it does not tell users that handlers must tolerate duplicates.
+This is the trace of `BugRequeue.cfg`; a lost reply has the same effect.
+The requeued call also went behind newer calls, which broke FIFO order (`BugRequeueFIFO.cfg`).
+Today's code fails each pending call with `ErrStreamDown`, so it runs each call at most once.
+The caller of such a call cannot tell whether A ran it.
 
-### FIFO Order per Sender Does Not Hold Across a Reconnect
+The per-send cancel watcher bug is not a switch.
+Today's code has no per-send watcher.
+Its effect was a stream that was never reopened, which the lazy-reconnect switch covers.
+
+## FIFO Order per Sender Does Not Hold Across a Reconnect
 
 The user guide says that messages from the same sender run in FIFO order at all servers.
 That is true per stream.
-It is not true per sender across a stream break.
-There are two independent causes:
-
-* `retryOrFail` appends a requeued call to the tail of the send queue, behind newer calls.
-  So D sends `c2` before `c1` on stream 2.
-* A gives each inbound stream its own dispatcher.
-  After a break, A can still run requests that arrived on stream 1 while it already runs requests from stream 2.
+It is not true per sender across a stream break, because A gives each inbound stream its own dispatcher.
+After a break, A can still run requests that arrived on stream 1 while it already runs requests from stream 2:
 
 ![c2 runs before c1, because each channel has its own dispatcher](figures/dispatcher-race.svg)
 
-This is the trace of `FixFIFONoGate.cfg`: the second cause alone, with requeue off.
+This is the trace of `ContractFIFO.cfg`.
 `c1` waits in channel 1's dispatcher while `c2` runs on channel 2.
 
 ## The Proposed Design
 
-**At-most-once.**
-With `NoRequeue`, a lost stream fails its pending calls with `ErrStreamDown`, and `AtMostOnceExecution` holds.
-The caller of a lost call gets `ErrStreamDown`, but A may have run the handler, as in both traces above.
-So the user guide must say: a call that fails with `ErrStreamDown` may have run.
-
-**FIFO needs both changes.**
-`NoRequeue` alone fails `PerSenderFIFO`, because the dispatchers race as in the figure above.
-A gate at A is needed as well.
+FIFO order needs a gate at A.
 
 **The idle gate is not enough.**
 The idle gate lets A start a handler on stream 2 only while channel 1 is detached or has no queued or running request.
@@ -293,13 +276,13 @@ If FIFO must also mean "one at a time", the new channel's dispatcher must wait f
 
 * The bounds are small: few calls, capacity 1, and at most 2 faults.
   TLC proves the properties only for these bounds.
-* `EndD` requeues pending calls in one fixed order; the code uses map order.
+* With `Requeue`, `EndD` requeues pending calls in one fixed order; the code used map order.
 * The model is written from the code by hand.
   Nothing checks yet that the code behaves as the model says.
 
 ## Next Steps
 
-1. Decide on the proposed design, then implement it: `NoRequeue` first, then supersede with a stream number in the stream metadata.
+1. Implement supersede, with a stream number in the stream metadata.
 2. Add refusals with backoff, and GOAWAY with `Drain`.
    These are the stream-layer paths with the most recent changes.
 3. Add trace validation: log the model's actions from `gorumstest` runs, and check each log against the spec with TLC.

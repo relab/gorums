@@ -35,7 +35,7 @@ Check every short configuration against its expected result:
 just spec-check
 ```
 
-Add the long configurations, which take up to half an hour:
+Add the long configurations, which take several minutes:
 
 ```bash
 just spec-check -all
