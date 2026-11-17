@@ -529,13 +529,14 @@ A unicast's `CallContext` holds a one-node `Config`.
 A one-way `CallContext` gets a response channel only when `Async` dispatches the call; it carries the local send confirmations of the accepted requests.
 The fan-out of a `CallContext` attempts every destination and returns the admission failures; a transport reports a rejection only to its caller.
 `Send` returns the admission failures at once.
-`Async` keeps them in the `OnewayAsync` handle, and `Wait` adds the stream-write outcomes.
+`Async` keeps them in the `OnewayAsync` handle, and `Wait` adds the stream-write errors.
 A two-way call forwards them to its response channel.
-`Send` queues its requests with a context that cannot be canceled, so an accepted request stays queued when the caller's context ends.
+`Send` checks the caller's context only before dispatch.
+It queues its requests with a context that cannot be canceled, so an accepted request stays queued when the caller's context ends.
 `RemoteCall` builds no `CallContext`; it enqueues one request on the node's transport and waits for the response.
 A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`), as well as the `Correctable` future.
 `Call.Async` sends the requests at once and returns the dispatched `Responses`, so any terminal method collects the replies later.
-A one-way call (`Multicast`, `Unicast`) returns a `OnewayCall`, whose `Send` returns queue-admission errors and whose `Async` returns a `OnewayAsync` that collects admission failures and stream-write outcomes through `Wait`.
+A one-way call (`Multicast`, `Unicast`) returns a `OnewayCall`, whose `Send` returns queue-admission errors and whose `Async` returns a `OnewayAsync` that collects admission failures and stream-write errors through `Wait`.
 A `ClientInterceptor` wraps the response iterator and may register per-node request transformations before the call is dispatched.
 `CallContext` reaches each node's send path through `conn.NodeTransport`.
 

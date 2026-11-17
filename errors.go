@@ -44,11 +44,10 @@ var ErrNoNode = impl.ErrNoNode
 // from [ErrNoNode].
 var ErrEmptyConfig = impl.ErrEmptyConfig
 
-// ErrSendQueueFull is returned when a request finds the node's send queue
-// full; see [WithDialBufferSizes]. Admission never waits for queue space.
-// It is a gRPC
-// status error with the Unavailable code; test for it with [errors.Is]. The
-// Unavailable code alone does not tell it apart from other node errors.
+// ErrSendQueueFull is the error of a request that a node cannot admit because
+// its send queue is full; see [WithDialBufferSizes]. It is a gRPC status error
+// with the Unavailable code; test for it with [errors.Is]. The Unavailable
+// code alone does not tell it apart from other node errors.
 var ErrSendQueueFull = stream.ErrSendQueueFull
 
 // ErrSendStalled is reported by [Node.LastErr] while a send to the node has

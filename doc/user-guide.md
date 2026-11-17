@@ -245,7 +245,7 @@ A one-way call has two completion stages:
 | --- | --- |
 | `client.WriteMulticast(ctx, req).Send()` | Queue-admission errors, without waiting for stream writes |
 | `h := client.WriteMulticast(ctx, req).Async()` | Dispatch immediately and retain a completion handle |
-| `h.Wait()` | Admission failures and stream-write outcomes, bounded by the context |
+| `h.Wait()` | Admission and stream-write errors, bounded by the context |
 
 For a quorum call, `Async` returns a `*gorums.Responses`, which has all the terminal methods.
 For a one-way call, it returns a `*gorums.OnewayAsync`.
@@ -788,8 +788,6 @@ responses := client.ReadQC(ctx, ReadRequest_builder{Key: "x"}.Build()).Async()
 reply, err := responses.Majority()
 ```
 
-`Async` starts no goroutine.
-The terminal method collects the replies on the goroutine that calls it.
 Every terminal method works after `Async`, including `Aggregate`, `Reduce`, and `Matching`.
 A call that you dispatch with `Async` accepts no interceptors: register them with `Intercept` before you call `Async`.
 `Async` panics if the call was already dispatched.
@@ -881,8 +879,7 @@ cfg, closeFn, err := gorums.NewConfig(nodes,
 The count also includes an error reply to a two-way call that ended before its reply arrived.
 A count of zero does not show that the server received a message or ran its handler; one-way calls have no acknowledgements.
 
-The context of a one-way call bounds what its method reports.
-For `Send`, the context bounds admission only.
+`Send` checks the context only before dispatch.
 If the context has already ended, `Send` returns its error and sends nothing.
 A call without a target fails with `ErrNoNode` or `ErrEmptyConfig` even then, as for every call type.
 A request that `Send` accepted stays queued when the context ends later, so a deferred `cancel()` is safe:
@@ -902,7 +899,7 @@ A self-call that `Async` dispatched passes this context to its handler, so the c
 `Wait` can block on a stalled destination until the context ends.
 Do not call it while holding a lock needed for protocol progress.
 When the context ends first, `Wait` on a unicast returns the context error.
-`Wait` on a multicast returns a `QuorumCallError` that holds the failures known so far, and the context error for each node whose stream write has no outcome.
+`Wait` on a multicast returns a `QuorumCallError` that holds the errors known so far, and the context error for each node that has not yet written the request.
 So `errors.Is(err, context.DeadlineExceeded)` is true after a timeout, and `NodeErrors` shows which nodes rejected the request and which nodes stalled:
 
 ```go
@@ -928,8 +925,6 @@ for _, h := range handles {
     }
 }
 ```
-
-`Async` starts no goroutine; `Wait` collects the send confirmations on the caller's goroutine.
 
 A server handler that multicasts calls `Async` before `ServerContext.Release()` and `Wait` after it.
 The sends then keep the order of the requests.
@@ -1784,7 +1779,7 @@ When a quorum call fails, you can create a new configuration that excludes the f
 The `WithoutErrors` method allows you to filter nodes based on the errors they returned.
 It excludes only nodes that have an error in the `QuorumCallError`.
 A node that had not replied when the call ended has no error there, so `WithoutErrors` keeps it.
-A one-way call differs: `Wait` records the context error for a node whose stream write has no outcome, so `WithoutErrors` excludes that node.
+A one-way call differs: `Wait` records the context error for a node that has not yet written the request, so `WithoutErrors` excludes that node.
 
 ```go
 import (

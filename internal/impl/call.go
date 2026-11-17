@@ -80,11 +80,10 @@ func (c *Call[Req, Resp]) Intercept(ics ...ClientInterceptor[Req, Resp]) *Call[R
 //	_, errA := a.Majority()
 //	_, errB := b.Majority()
 //
-// Any terminal method collects the replies later, on the caller's goroutine;
-// Async starts no goroutine. A call buffers one reply per node, and a
-// streaming call buffers ten. A streaming call whose nodes send more replies
-// holds up the node's receive path until the caller reads them or the context
-// ends, so read the replies of such a call soon, or use
+// Any terminal method collects the replies later. A call buffers one reply per
+// node, and a streaming call buffers ten. A streaming call whose nodes send
+// more replies holds up the node's receive path until the caller reads them or
+// the context ends, so read the replies of such a call soon, or use
 // [Responses.Correctable].
 //
 // Async dispatches the call. Calling Async or [Call.Intercept] after the call
@@ -113,24 +112,24 @@ func (c *OnewayCall[Req]) Intercept(ics ...ClientInterceptor[Req, *emptypb.Empty
 	return c
 }
 
-// Send attempts to queue the request for every destination and returns the
-// admission errors, without waiting for queue space or stream writes.
-// A full queue rejects that destination with [stream.ErrSendQueueFull]; multicast
-// continues to the remaining nodes and returns per-node failures in a
-// [conn.QuorumCallError] with cause [ErrSendFailure]. Unicast returns its single error.
-// Intentionally skipped multicast destinations do not count as failures.
+// Send queues the request on each destination node's send queue and returns
+// any admission errors. A node that rejects the request does not affect the
+// other destinations: they may still receive the request. Success means every
+// destination node queued the request; it does not confirm transmission or
+// remote processing.
 //
-// Success means local queue acceptance. Later transport failures are available
-// through [Node.LastErr]. To await stream-write outcomes, use [OnewayCall.Async]
-// followed by [OnewayAsync.Wait]. Neither operation confirms remote processing. A local
-// self-call completes at admission to its handler queue.
+// Send returns:
+//   - nil, if every destination queued the request;
+//   - the context's error, if the context had already ended; nothing is sent;
+//   - [ErrNoNode] or [ErrEmptyConfig], if the call has no target;
+//   - for unicast, the node's error, such as [stream.ErrSendQueueFull] or
+//     [stream.ErrNodeClosed];
+//   - for multicast, a [conn.QuorumCallError] with cause [ErrSendFailure] that
+//     holds one error per failing node.
 //
-// The context bounds admission only. If the context has already ended, Send
-// returns its error and sends nothing; a call without a target returns
-// [ErrNoNode] or [ErrEmptyConfig] instead. An accepted request stays queued when
-// the context ends later, so the caller may cancel the context as soon as
-// Send returns. To let the context withdraw requests that still wait in the
-// queue, use [OnewayCall.Async].
+// The context is only checked before dispatch. Accepted requests stay queued
+// when the context ends, so the caller may cancel it as soon as Send returns.
+// Later transport failures are available through [Node.LastErr].
 //
 // Send dispatches the call; calling Send or Async again panics.
 func (c *OnewayCall[Req]) Send() error {
@@ -140,23 +139,22 @@ func (c *OnewayCall[Req]) Send() error {
 	return c.result(c.ctx.admit(context.WithoutCancel(c.ctx.Context)))
 }
 
-// Async attempts nonblocking admission to every destination and returns a
-// handle for admission failures and stream-write outcomes, so a
-// single goroutine can keep several one-way calls in flight:
+// Async queues the request on each destination node's send queue and returns
+// a handle without waiting for the stream writes. Because it does not block,
+// one goroutine can start several one-way calls and then wait for them:
 //
 //	h := client.WriteMulticast(ctx, msg).Async()
 //	// ... dispatch more calls ...
 //	err := h.Wait()
 //
-// Async starts no goroutine; [OnewayAsync.Wait] collects the send confirmations
-// on the caller's goroutine. Dropping the handle without calling Wait is safe,
-// but the send errors are then lost.
+// [OnewayAsync.Wait] returns the admission errors and the errors from writing
+// the queued requests to the stream, in the same form as [OnewayCall.Send].
+// The handle may be dropped without calling Wait, but the errors are then lost.
 //
-// The context bounds the call until its stream writes complete. If the
-// context has already ended, the call sends nothing and Wait returns the
-// context error; a call without a target returns [ErrNoNode] or
-// [ErrEmptyConfig] instead. A request that still waits in the queue when the
-// context ends is discarded.
+// The context bounds the call until every stream write completes. If the
+// context has already ended, nothing is sent and Wait returns the context
+// error; a call without a target returns [ErrNoNode] or [ErrEmptyConfig]
+// instead. A request still in the send queue when the context ends is discarded.
 //
 // Async dispatches the call; calling Send or Async on the same handle after
 // dispatch panics.
@@ -261,17 +259,27 @@ type OnewayAsync struct {
 	err     error
 }
 
-// Wait collects admission failures and stream-write outcomes until all are
-// known or the call context ends. It may be called more than once and returns
-// the same result each time. It does not confirm remote processing; local
-// self-calls complete at handler-queue admission. Do not wait while holding a
-// lock needed for protocol progress. In a server handler, dispatch before
-// ServerContext.Release and wait afterward to preserve relay order.
+// Wait blocks until each destination node has written its queued request to the
+// stream or failed, or until the call's context ends. Success does not confirm
+// remote processing.
 //
-// If the context ends first, a unicast returns the context error. A multicast
-// returns a [conn.QuorumCallError] that holds the failures known so far and
-// the context error for each node whose stream write has no outcome; see
-// [conn.QuorumCallError.NodeErrors].
+// Wait returns:
+//   - nil, if every destination wrote the request;
+//   - for unicast, the node's admission or write error;
+//   - for multicast, a [conn.QuorumCallError] with cause [ErrSendFailure] that
+//     holds one error per failing node.
+//
+// If the context ends first, a unicast returns the context error, and a
+// multicast adds the context error for each node that has not yet written the
+// request.
+//
+// A stalled destination can block Wait until the context ends, so do not call
+// Wait while holding a lock that protocol progress needs. In a server handler,
+// call Async before ServerContext.Release and Wait after it, so that the
+// sends keep the request order and the next request does not wait for them.
+//
+// Wait may be called more than once, also concurrently, and returns the same
+// result each time.
 func (a *OnewayAsync) Wait() error {
 	a.once.Do(func() { a.err = a.collect() })
 	return a.err

@@ -143,10 +143,11 @@ func (c *CallContext[Req, Resp]) Size() int {
 	return c.config.Size()
 }
 
-// send dispatches the call and delivers the admission failures on the
-// response channel. Accepted requests report their later outcomes through the
-// transport. If the response channel is full, as it can be with the replies of
-// a streaming call, send waits for space until the context ends.
+// send dispatches the call and delivers admission errors on the response
+// channel. For each accepted request, the node's transport delivers the
+// replies, or the stream error that ends the request, on the same channel.
+// If the response channel is full, as it can be with the replies of a
+// streaming call, send waits for space until the context ends.
 func (c *CallContext[Req, Resp]) send() {
 	for _, r := range c.admit(c.Context) {
 		select {
@@ -162,9 +163,9 @@ func (c *CallContext[Req, Resp]) send() {
 	}
 }
 
-// admit attempts to queue the request for every destination and returns the
-// admission failures; it never waits for queue space. Accepted requests carry
-// ctx, which bounds the time they may wait for transmission.
+// admit builds and queues the request for every destination without waiting
+// for queue space, and returns the marshaling and admission errors. Accepted
+// requests carry ctx, which bounds the time they may wait for transmission.
 func (c *CallContext[Req, Resp]) admit(ctx context.Context) (failed []NodeResponse[*stream.Message]) {
 	message := c.messages()
 	// The fan-out starts at a random node and wraps around, so no node is
@@ -216,7 +217,7 @@ func (c *CallContext[Req, Resp]) messages() func(*Node) (*stream.Message, error)
 }
 
 // transformAndMarshal applies per-node transformations and returns the message
-// or the admission error. An invalid transformed message skips the node.
+// or a marshaling error. An invalid transformed message returns [ErrSkipNode].
 func (c *CallContext[Req, Resp]) transformAndMarshal(n *Node) (*stream.Message, error) {
 	transformedRequest := c.request
 	for _, transform := range c.reqTransforms {

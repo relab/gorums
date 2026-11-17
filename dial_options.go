@@ -77,8 +77,8 @@ const DefaultRecvBufferSize = conn.DefaultRecvBufferSize
 // [DefaultRecvBufferSize].
 //
 // The sendSize is the capacity of the per-node send queue. When the queue is
-// full, application requests fail with [ErrSendQueueFull] without waiting for
-// space. A sendSize of 0 selects [DefaultSendBufferSize].
+// full, application requests fail with [ErrSendQueueFull]. A sendSize of 0
+// selects [DefaultSendBufferSize].
 func WithDialBufferSizes(recvSize, sendSize uint) DialOption {
 	return func(o *conn.DialOptions) {
 		if sendSize == 0 {

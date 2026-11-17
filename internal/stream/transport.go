@@ -94,9 +94,8 @@ func (t *Transport) StoreChannel(ch Channel) {
 	t.channel.store(ch)
 }
 
-// Enqueue queues req on the current channel and returns the admission error;
-// see [Channel.Enqueue]. Without a channel, or on a nil transport, it returns
-// [ErrStreamDown]. A rejected request reports nothing on its response channel.
+// Enqueue admits the request to the current channel, as [Channel.Enqueue]
+// does. It returns [ErrStreamDown] if the transport has no channel or is nil.
 func (t *Transport) Enqueue(req NodeRequest) error {
 	ch := t.LoadChannel()
 	if ch == nil {
