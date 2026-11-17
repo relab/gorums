@@ -239,7 +239,7 @@ The one-way `WriteMulticast` method returns a `*gorums.OnewayCall[*WriteRequest]
 
 A quorum call waits for replies when a terminal method is called.
 Its `Async` method dispatches immediately and returns responses to collect later.
-A one-way call has two completion stages:
+A one-way call can return after queue admission or wait for the stream writes to finish:
 
 | Operation | Result |
 | --- | --- |
@@ -473,8 +473,9 @@ A mutex gives mutual exclusion, but not arrival order, so it cannot restore an o
 A handler that does not call `Release` releases when it returns; the whole handler is then ordered, and the next request waits until the handler returns.
 It is safe to call `Release` more than once.
 
-A nested call follows the same rule: dispatching a call is ordered work, and waiting for its replies is not.
-To keep a nested call in FIFO order, dispatch it before `Release` and wait for it after `Release`:
+A nested call follows the same rule: dispatching a call is ordered work, and waiting belongs in the concurrent part.
+To continue after queue admission, call `Send` before `Release` or before returning from the handler.
+To wait for a relay's local stream writes to finish, dispatch it with `Async` before `Release` and call `Wait` afterward:
 
 ```go
 func (s *storageServer) WriteMulticast(ctx gorums.ServerContext, req *pb.WriteRequest) {
@@ -488,7 +489,7 @@ func (s *storageServer) WriteMulticast(ctx gorums.ServerContext, req *pb.WriteRe
 }
 ```
 
-`OnewayCall.Async` and `Call.Async` (see [Async and Correctable Variants](#async-and-correctable-variants)) send the requests before they return.
+`OnewayCall.Send`, `OnewayCall.Async`, and `Call.Async` (see [Async and Correctable Variants](#async-and-correctable-variants)) attempt queue admission before they return.
 So when a handler dispatches its nested call before `Release`, the nested calls leave in the order in which the requests reached the handler.
 A call dispatched after `Release` may overtake the same call from the handler of the next request.
 That is correct only when the nested calls of different requests may run in any order, as for the nested reads in [Nested Quorum Calls with ServerContext.PeerConfig](#nested-quorum-calls-with-servercontextpeerconfig).
@@ -864,6 +865,24 @@ For a self-call, completion means admission to the local handler queue.
 `Send` and `Wait` cannot report errors from remote handler execution, because a one-way call has no application reply.
 If the caller drops the `*OnewayAsync` handle without calling `Wait`, the sends still complete, but their errors are lost.
 
+Choose how to send the request:
+
+| Application need | Operation |
+| --- | --- |
+| Continue after queue admission | `Send()` |
+| Wait for stream writes | `Async()`, then `Wait()` |
+| Cancel queued requests | `Async()` |
+
+`Send` fits protocol event loops, ordered one-way relays, and periodic state dissemination.
+For example, a consensus core can record rejected destinations and release its state lock while Gorums transmits the accepted requests.
+The application uses later protocol replies, timeouts, or periodic updates to recover missed messages.
+
+Use `Async` followed by `Wait` when the next operation depends on finishing local stream writes, or to pace the number of outstanding writes.
+`Async` also lets context cancellation withdraw queued requests, whether the caller keeps or discards the handle.
+
+Gorums serializes requests and calls application-supplied `MapRequest` functions on the caller's goroutine.
+When sending while holding a protocol lock, large messages and slow `MapRequest` functions extend the time that the application holds the lock.
+
 The server still replies with an error if it cannot run the handler: it has no handler for the method, or it cannot decode the request.
 For a one-way call, this reply arrives after `Send` or `Wait` returned, so it does not change their result.
 Instead, `Node.UnmatchedErrors` counts these replies for each node.
@@ -926,9 +945,8 @@ for _, h := range handles {
 }
 ```
 
-A server handler that multicasts calls `Async` before `ServerContext.Release()` and `Wait` after it.
-The sends then keep the order of the requests.
-The next request also does not wait for the sends.
+To preserve relay order, a server handler must call `Send` or `Async` before `ServerContext.Release()`.
+To wait for local stream writes to finish, it uses `Async` and calls `Wait` after `Release`, allowing the next request to start while it waits.
 For details, see [Request Ordering and ServerContext.Release](#request-ordering-and-servercontextrelease).
 
 Summary:
@@ -2306,102 +2324,6 @@ The limitations above can be mitigated with a few straightforward patterns:
   Passing a full-size sorted configuration to a quorum call provides no speedup
   because every node in the configuration is contacted regardless of order.
 
-## Interactive REPL
-
-The storage example (`examples/storage`) includes an interactive Read-Eval-Print Loop (REPL) that lets you send RPCs and quorum calls against live storage servers.
-
-### Running the Storage Example
-
-Start the storage example without arguments to launch four local servers and the REPL automatically:
-
-```shell
-cd examples
-go run ./storage
-```
-
-To connect to remote servers instead of starting local ones, pass their addresses separated by commas:
-
-```shell
-go run ./storage -addrs localhost:8080,localhost:8081,localhost:8082
-```
-
-To enable server-side interceptors, pass a comma-separated list of interceptor names:
-
-```shell
-go run ./storage --interceptors logging,nofoo
-```
-
-Available interceptors: `logging`, `nofoo`, `metadata`, `delayed`.
-
-### REPL Commands
-
-Once the REPL starts, the following commands are available:
-
-| Command                            | Description                                        |
-| ---------------------------------- | -------------------------------------------------- |
-| `help`                             | Print the help message                             |
-| `nodes`                            | List available nodes and their addresses           |
-| `exit`                             | Exit the REPL                                      |
-| `rpc <node> read <key>`            | Read from a single node via ordered RPC            |
-| `rpc <node> write <key> <value>`   | Write to a single node via ordered RPC             |
-| `ucast <node> <key> <value>`       | One-way unicast write to a single node             |
-| `mcast <key> <value>`              | One-way multicast write to all nodes               |
-| `qc read <key>`                    | Read quorum call on all nodes                      |
-| `qc write <key> <value>`           | Write quorum call on all nodes                     |
-| `qc cread <key>`                   | Correctable read quorum call (streams updates)     |
-| `qc nread <key>`                   | Nested read quorum call (server fans out to peers) |
-| `qc nwrite <key> <value>`          | Nested write quorum call via multicast             |
-| `cfg <nodes> read <key>`           | Read quorum call on a node sub-configuration       |
-| `cfg <nodes> write <key> <value>`  | Write quorum call on a node sub-configuration      |
-| `cfg <nodes> cread <key>`          | Correctable read on a sub-configuration            |
-| `cfg <nodes> nread <key>`          | Nested read on a sub-configuration                 |
-| `cfg <nodes> nwrite <key> <value>` | Nested write via multicast on a sub-configuration  |
-
-The `<node>` argument is a zero-based index into the node list shown by `nodes`.
-The `<nodes>` argument for `cfg` is a range (`1:3` selects nodes 1 and 2) or a comma-separated list (`0,2` selects nodes 0 and 2).
-Values containing spaces must be quoted: `qc write greeting 'hello world'`.
-
-### REPL Example Session
-
-```text
-> nodes
-Nodes:
-0: 127.0.0.1:54321
-1: 127.0.0.1:54322
-2: 127.0.0.1:54323
-3: 127.0.0.1:54324
-
-> qc write greeting hello
-Write OK
-
-> qc read greeting
-greeting = hello
-
-> rpc 0 read greeting
-greeting = hello
-
-> ucast 1 greeting world
-Unicast OK
-
-> mcast greeting gorums
-Multicast OK
-
-> cfg 0,1 read greeting
-greeting = gorums
-
-> qc cread greeting
-greeting = gorums (level 1)
-greeting = gorums (level 2)
-Correctable read finished
-
-> qc nread greeting
-greeting = gorums
-
-> exit
-```
-
-The `nread` and `nwrite` commands trigger server-side nested quorum calls and nested multicasts, which are described in the following sections.
-
 ## Nested Quorum Calls with ServerContext.PeerConfig
 
 A server handler (the server method itself) can act as a client and issue its own quorum calls to other nodes.
@@ -2544,10 +2466,6 @@ servers, stop, err := gorums.NewLocalServers(4, gorums.WithLocalDialOptions(
     gorums.WithGRPCDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 ))
 ```
-
-> **Note:** The `nread` and `nwrite` commands in the storage REPL example use `ctx.PeerConfig()` (the static server-to-server direction) rather than `ctx.ConnectedClients()`.
-> Reverse direction calls require every participant to act as both a Gorums server *and* to expose its own server method handlers so that peers can call back to it.
-> The REPL client in the storage example does not implement any server method handlers, so calling back to it via `ConnectedClients()` is not supported in that example.
 
 ### Setting Up the Client
 

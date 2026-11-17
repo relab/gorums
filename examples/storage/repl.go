@@ -31,6 +31,7 @@ rpc   [node index] [operation]	 Executes an RPC on the given node.
 qc    [operation]             	 Executes a quorum call on all nodes.
 mcast [key] [value]              Executes a multicast write call on all nodes.
 ucast [node index] [key] [value] Executes a unicast write call on one node.
+tick  [count]                    Sends a counter update each second; Ctrl-C stops it.
 cfg   [config] [operation]   	 Executes a quorum call on a configuration.
 
 The following operations are supported:
@@ -142,6 +143,8 @@ func runRepl(defaultCfg pb.Config) error {
 			for i, n := range r.cfg.Nodes() {
 				fmt.Printf("%d: %s\n", i, n.Address())
 			}
+		case "tick":
+			r.tick(args[1:])
 		default:
 			fmt.Printf("Unknown command '%s'. Type 'help' to see available commands.\n", args[0])
 		}
