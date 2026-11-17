@@ -53,7 +53,10 @@ Instead, state in the PR description which flag the next release needs:
 
 Follow TDD: write a failing test, watch it fail, make it pass, refactor.
 All tests pass before work is complete; fix failing tests rather than deleting or skipping them.
-Use only Go's `testing` package.
+Use Go's `testing` package and standard assertions.
+Use `pgregory.net/rapid` for property-based tests and `testing.F` for fuzzing.
+Keep generated cases bounded, use independent models, and clean up each case before the next one.
+Use `testing/synctest` for controlled concurrency and fake time where appropriate.
 The default mode uses in-memory bufconn; `-tags=integration` uses real TCP.
 
 - Use table-driven tests for repeated logic and subtests for related cases.
