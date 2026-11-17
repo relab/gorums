@@ -40,8 +40,8 @@ CONSTANTS
     LazyReconnect,      \* D reopens a lost stream only when it has a request
     AttachClosesPrior,  \* attach closes the prior channel; detach clears the slot only if it holds its own channel
     BlockingReplies,    \* a handler's reply waits for send queue space
+    Requeue,            \* a lost stream requeues its pending calls at the tail of the send queue
     \* Design switches. All off models the current code.
-    NoRequeue,          \* a lost stream fails its pending calls; it does not requeue them
     FIFOGate,           \* "none", "idle", or "supersede"; see AcceptS and HandleS
     \* Network switch.
     LateFrames          \* a break loses only a suffix of the frames in flight
@@ -232,17 +232,17 @@ ReplyD ==
     /\ drun' = <<>>
     /\ UNCHANGED <<dhand, dlive, dstarted, ddisp, dpend, cst, wvars, avars, cvars>>
 
-\* The session ends after its stream broke: session.end and retryOrFail.
-\* Current code: pending calls go back to the tail of the send queue while
-\* it has space; the rest fail with ErrSendQueueFull.
-\* NoRequeue: every pending call fails with ErrStreamDown.
+\* The session ends after its stream broke: session.end and failPending.
+\* Current code: every pending call fails with ErrStreamDown.
+\* Bug variant: pending calls go back to the tail of the send queue while it
+\* has space; the rest fail with ErrSendQueueFull.
 \* A call in hand is pending, so its send fails and it is handled as above.
 \* Any other item in hand goes to the next stream. Frames that D has not
 \* yet received on s are lost.
 EndD(s) ==
     /\ cst[s] = "open" /\ broken[s]
     /\ LET ps     == SetToSeq(dpend[s])
-           n      == IF NoRequeue THEN 0 ELSE Min(Len(ps), QCap - Len(dq))
+           n      == IF Requeue THEN Min(Len(ps), QCap - Len(dq)) ELSE 0
            failed == {ps[i] : i \in (n + 1)..Len(ps)}
        IN /\ dq' = dq \o [i \in 1..n |-> Item("call", ps[i])]
           /\ dst' = Mark(dst, failed, "err")
@@ -521,8 +521,7 @@ OlderStreamsEnded ==
 \* After the last fault, A's shared node gets a working stream to D and keeps it.
 BorrowerRecovers == <>[](slot # 0 /\ ~broken[slot])
 
-\* Contract: A's handler runs each call at most once. Fails on the current
-\* code; NoRequeue makes it hold.
+\* Contract: A's handler runs each call at most once.
 AtMostOnceExecution == \A c \in DCalls : handled[c] <= 1
 
 \* Contract: A's handlers run D's calls one at a time.
