@@ -175,6 +175,25 @@ stresstest:
     # The -stress flag exists only in internal/tests/ordering.
     go test -count=1 ./internal/tests/ordering -stress
 
+# Run the generated runtime properties with fresh inputs.
+[group('test')]
+propertytest checks="1000":
+    go test -count=1 -run='Properties|Synctest' . ./internal/impl ./internal/stream ./internal/conn -rapid.checks={{ checks }}
+
+# Fuzz each target for seconds, with two workers per campaign.
+[group('test')]
+fuzztest seconds="30": \
+    (_fuzz "." "FuzzTreeOptions" seconds) \
+    (_fuzz "./internal/impl" "FuzzMarshaling" seconds) \
+    (_fuzz "./internal/impl" "FuzzTerminals" seconds) \
+    (_fuzz "./internal/stream" "FuzzMessageMetadata" seconds) \
+    (_fuzz "./internal/conn" "FuzzPeerIdentity" seconds) \
+    (_fuzz "./internal/conn" "FuzzNodeIDMetadata" seconds)
+
+[private]
+_fuzz package target seconds:
+    go test {{quote(package)}} -run='^$' -fuzz={{quote("^" + target + "$")}} -fuzztime={{quote(seconds + "s")}} -parallel=2
+
 # Check that every benchmark runs; show its output only on failure.
 [group('test')]
 benchtest:

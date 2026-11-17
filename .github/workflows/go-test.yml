@@ -33,3 +33,17 @@ jobs:
 
       - name: Run Tests
         run: just test
+
+  runtime-race:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: "go.mod"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      # Run one package at a time to reduce contention during cluster startup under -race.
+      - name: Runtime race tests
+        run: go test -race -count=1 -p=1 -cpu=1,2,4 . ./internal/impl ./internal/stream ./internal/conn

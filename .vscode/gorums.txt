@@ -81,6 +81,8 @@ footguns
 forcetypeassert
 Frausing's
 fset
+fuzztest
+fuzztime
 GCFLAGS
 gengo
 gengorums
@@ -188,6 +190,7 @@ Paxos
 PBFT
 pcts
 Pedersen
+pgregory
 pgrep
 pipefail
 pkgs
@@ -202,6 +205,7 @@ Println
 probs
 PROCNET
 PROCS
+propertytest
 proto
 protobuf
 protoc
