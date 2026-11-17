@@ -913,8 +913,9 @@ func TestChannelReconnectAfterServerDrop(t *testing.T) {
 // the first message, then the test fires multiple concurrent requests without
 // waiting for the channel to detect the disconnect.
 //
-// Requests that race with the broken stream's teardown must be sent again on
-// the new stream rather than fail.
+// A request sent on a broken stream fails with ErrStreamDown. A request that
+// was not sent goes to a new stream. Every request completes, and at least one
+// completes on a new stream.
 func TestChannelConcurrentStreamReconnect(t *testing.T) {
 	tc := setupChannel(t, breakStreamServer)
 	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
@@ -942,19 +943,42 @@ func TestChannelConcurrentStreamReconnect(t *testing.T) {
 	}
 	wg.Wait()
 
+	succeeded := 0
 	for i, err := range errs {
-		if err != nil {
-			t.Errorf("request %d: unexpected error after reconnect: %v", i+2, err)
+		switch {
+		case err == nil:
+			succeeded++
+		case !errors.Is(err, ErrStreamDown):
+			t.Errorf("request %d: error = %v, want nil or %v", i+2, err, ErrStreamDown)
 		}
+	}
+	if succeeded == 0 {
+		t.Error("no request completed on a new stream")
 	}
 }
 
-// TestChannelRequestsSurviveStreamChurn verifies that two-way requests issued
-// while the current stream is repeatedly torn down never fail: a request
-// pending on an ended stream, or taken from the queue as the stream ends, is
-// sent again on the next stream.
-func TestChannelRequestsSurviveStreamChurn(t *testing.T) {
-	tc := setupChannel(t, echoServer)
+// TestChannelRequestsRunAtMostOnceUnderStreamChurn verifies that two-way
+// requests issued while the current stream is repeatedly torn down each reach
+// the server's handler at most once. A request pending on an ended stream
+// fails with ErrStreamDown; every other request completes.
+func TestChannelRequestsRunAtMostOnceUnderStreamChurn(t *testing.T) {
+	var mu sync.Mutex
+	runs := make(map[uint64]int) // msgID -> times the server handled it
+	tc := setupChannel(t, func(stream Gorums_NodeStreamServer) error {
+		acceptStream(stream)
+		for {
+			in, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			runs[in.GetMessageSeqNo()]++
+			mu.Unlock()
+			if err := stream.Send(in); err != nil {
+				return err
+			}
+		}
+	})
 	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
 		t.Fatal("channel should be connected")
 	}
@@ -962,7 +986,7 @@ func TestChannelRequestsSurviveStreamChurn(t *testing.T) {
 	churnDone := make(chan struct{})
 	go func() {
 		defer close(churnDone)
-		for range 2000 {
+		for start := time.Now(); time.Since(start) < 100*time.Millisecond; {
 			tc.endSessions()
 		}
 	}()
@@ -972,10 +996,11 @@ func TestChannelRequestsSurviveStreamChurn(t *testing.T) {
 	errs := make([]error, concurrency)
 	for i := range concurrency {
 		wg.Go(func() {
-			// Issue requests until the churn ends, recording the first failure.
+			// Issue requests until the churn ends, recording the first
+			// error other than ErrStreamDown.
 			for msgID := uint64(1); ; msgID++ {
 				resp := sendRequest(t, tc.OutboundChannel, NodeRequest{}, uint64(i+1)*100000+msgID)
-				if resp.Err != nil {
+				if resp.Err != nil && !errors.Is(resp.Err, ErrStreamDown) {
 					errs[i] = resp.Err
 					return
 				}
@@ -991,7 +1016,14 @@ func TestChannelRequestsSurviveStreamChurn(t *testing.T) {
 
 	for i, err := range errs {
 		if err != nil {
-			t.Errorf("requester %d: unexpected error during stream churn: %v", i, err)
+			t.Errorf("requester %d: error = %v, want nil or %v", i, err, ErrStreamDown)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	for msgID, n := range runs {
+		if n > 1 {
+			t.Errorf("server handled request %d %d times, want at most once", msgID, n)
 		}
 	}
 }
@@ -1542,34 +1574,42 @@ func TestChannelRefusalRacesSends(t *testing.T) {
 	}
 }
 
-// TestChannelLostStreamBeforeFrameRetries verifies that a call pending on a
+// TestChannelLostStreamFailsPendingCall verifies that a call pending on a
 // stream that ends with a status other than a refusal, before the stream
-// delivered a frame, is sent again on a new stream.
-func TestChannelLostStreamBeforeFrameRetries(t *testing.T) {
+// delivered a frame, fails with ErrStreamDown and is not sent again, and that
+// the next call opens a new stream.
+func TestChannelLostStreamFailsPendingCall(t *testing.T) {
 	for _, code := range []codes.Code{codes.Unavailable, codes.Unknown, codes.Internal} {
 		t.Run(code.String(), func(t *testing.T) {
-			var streams atomic.Int32
+			var streams, received atomic.Int32
 			serverFn := func(stream Gorums_NodeStreamServer) error {
 				if streams.Add(1) == 1 {
 					if _, err := stream.Recv(); err != nil {
 						return err
 					}
+					received.Add(1)
 					return status.Error(code, "stream lost by test server")
 				}
 				return echoServer(stream)
 			}
 			tc := setupChannel(t, serverFn)
-			if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{}, 1); resp.Err != nil {
-				t.Fatalf("call failed with %v, want it resent and answered", resp.Err)
+			if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{}, 1); !errors.Is(resp.Err, ErrStreamDown) {
+				t.Fatalf("call on the lost stream: err = %v, want %v", resp.Err, ErrStreamDown)
+			}
+			if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{}, 2); resp.Err != nil {
+				t.Fatalf("call on a new stream failed with %v", resp.Err)
+			}
+			if got := received.Load(); got != 1 {
+				t.Errorf("the lost stream received %d calls, want 1", got)
 			}
 		})
 	}
 }
 
-// TestChannelRefusalAfterFrameRetries verifies that a stream that delivered a
+// TestChannelRefusalAfterFrameIsLost verifies that a stream that delivered a
 // frame and then ends with a refusal code counts as lost, not refused: its
-// pending call is sent again on a new stream.
-func TestChannelRefusalAfterFrameRetries(t *testing.T) {
+// pending call fails with ErrStreamDown, and the next call opens a new stream.
+func TestChannelRefusalAfterFrameIsLost(t *testing.T) {
 	var streams atomic.Int32
 	serverFn := func(stream Gorums_NodeStreamServer) error {
 		if streams.Add(1) > 1 {
@@ -1591,8 +1631,11 @@ func TestChannelRefusalAfterFrameRetries(t *testing.T) {
 	if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{}, 1); resp.Err != nil {
 		t.Fatalf("first call failed with %v", resp.Err)
 	}
-	if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{}, 2); resp.Err != nil {
-		t.Fatalf("call pending on the ended stream failed with %v, want it resent and answered", resp.Err)
+	if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{}, 2); !errors.Is(resp.Err, ErrStreamDown) {
+		t.Fatalf("call pending on the ended stream: err = %v, want %v", resp.Err, ErrStreamDown)
+	}
+	if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{}, 3); resp.Err != nil {
+		t.Fatalf("call on a new stream failed with %v", resp.Err)
 	}
 }
 
@@ -1861,9 +1904,9 @@ func TestChannelDeadlock(t *testing.T) {
 	}
 }
 
-// TestChannelSessionEndWithFullQueue verifies that ending a session whose
-// pending calls exceed the send queue's free space neither blocks nor strands
-// a call: each is either queued again or fails with ErrSendQueueFull.
+// TestChannelSessionEndWithFullQueue verifies that ending a session with more
+// pending calls than the send queue holds neither blocks nor queues a call:
+// each fails with ErrStreamDown.
 func TestChannelSessionEndWithFullQueue(t *testing.T) {
 	const sendBufSize = 2
 	stream := mock.NewGatedBidiStream[*Message]()
@@ -1890,12 +1933,12 @@ func TestChannelSessionEndWithFullQueue(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("ending the session blocked on a full send queue")
 	}
-	if got := len(e.queue.ch); got != sendBufSize {
-		t.Errorf("requeued calls = %d, want %d", got, sendBufSize)
+	if got := len(e.queue.ch); got != 0 {
+		t.Errorf("requeued calls = %d, want 0", got)
 	}
-	for range numPending - sendBufSize {
-		if got := <-responseChan; !errors.Is(got.Err, ErrSendQueueFull) {
-			t.Errorf("overflow call error = %v, want ErrSendQueueFull", got.Err)
+	for range numPending {
+		if err := responseErr(t, responseChan, "pending call"); !errors.Is(err, ErrStreamDown) {
+			t.Errorf("pending call error = %v, want ErrStreamDown", err)
 		}
 	}
 }

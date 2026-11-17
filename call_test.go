@@ -360,8 +360,7 @@ func TestRemoteCallTimedOut(t *testing.T) {
 
 // TestRemoteCallOversizedRequest verifies that a request larger than the
 // client's send limit or the server's receive limit fails at once with
-// ResourceExhausted instead of being sent again until its context ends, and
-// that the node still serves the next call. A one-way request fails only
+// ResourceExhausted, and that the node still serves the next call. A one-way request fails only
 // against the client's limit, since its send completes before the server
 // rejects it.
 func TestRemoteCallOversizedRequest(t *testing.T) {

@@ -55,17 +55,16 @@ type OutboundOptions struct {
 // the gorums-accepted response header, or, if a stream interceptor on the
 // server has already sent the response headers, with an empty first frame.
 //
-// Calls still awaiting responses when the stream fails are sent again on the
-// new stream. Calls that do not fit in the send queue fail with
-// [ErrSendQueueFull]. Streaming calls fail with [ErrStreamDown] instead. They
-// are not sent again, since they may already have received responses.
+// The channel sends each call at most once. Calls still awaiting responses
+// when the stream fails fail with [ErrStreamDown], since the server may have
+// handled them. A request taken from the send queue but not yet sent goes
+// first on the new stream.
 //
 // If the stream ends with codes.ResourceExhausted, the calls still awaiting
-// responses fail with that status and are not sent again. gRPC ends a stream
-// this way when a request exceeds the client's send limit or the server's
-// receive limit, and sending the request again would end the next stream the
-// same way. The other calls on the stream fail too, since the client cannot
-// tell which request was too large.
+// responses fail with that status. gRPC ends a stream this way when a request
+// exceeds the client's send limit or the server's receive limit. The other
+// calls on the stream fail too, since the client cannot tell which request was
+// too large.
 //
 // A server that shuts down gracefully first tells the client to stop using
 // the connection (a GOAWAY). The channel then sends new calls on a new
@@ -74,8 +73,8 @@ type OutboundOptions struct {
 //
 // A stream the server refuses ends with codes.Unauthenticated,
 // codes.PermissionDenied, codes.InvalidArgument, or codes.Unimplemented
-// before the server accepts it. Calls on it fail with that status and are not
-// sent again. The channel then backs off before opening a new stream, and
+// before the server accepts it. Calls on it fail with that status. The
+// channel then backs off before opening a new stream, and
 // requests fail with the refusal in the meantime. A stream that cannot be
 // opened because of one of these codes is treated the same way, for example
 // when the connection's credentials refuse the server.
@@ -169,7 +168,7 @@ func (c *OutboundChannel) run() {
 }
 
 // streamFailed handles a stream that could not be opened, or that the server
-// refused, with err. It fails req, which is not sent again.
+// refused, with err. It fails req.
 func (c *OutboundChannel) streamFailed(b *backoff, req *NodeRequest, err error) {
 	if c.ctx.Err() != nil {
 		err = ErrNodeClosed

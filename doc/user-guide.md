@@ -1877,7 +1877,9 @@ sequenceDiagram
 So a refused peer's `ConnectedPeers` view never includes the refusing server, and `WithPeerChange` reports no up/down pair for it.
 With `WithStreamDedup`, `WaitForAll` waits until the server accepts; without it, `WaitForAll` does not wait.
 
-A stream that ends with any other status (except `codes.ResourceExhausted`; see [Oversized Requests](#oversized-requests)), or that ends after the server accepted it, is lost, not refused: the node resends its two-way calls on a new stream.
+A stream that ends with any other status (except `codes.ResourceExhausted`; see [Oversized Requests](#oversized-requests)), or that ends after the server accepted it, is lost, not refused: its two-way calls fail with `ErrStreamDown`, and a later call opens a new stream.
+The node sends each call at most once.
+The server may have handled a call that fails with `ErrStreamDown`, so a caller that retries the call must tolerate it running twice.
 
 ## Oversized Requests
 
@@ -1886,7 +1888,7 @@ A client rejects a request larger than its `grpc.MaxCallSendMsgSize`, which is u
 A server rejects a request larger than its `grpc.MaxRecvMsgSize`, which is 4 MiB by default.
 In both cases, gRPC ends the whole stream with `codes.ResourceExhausted`.
 
-A new stream would end the same way, so the node does not resend the calls on that stream:
+The calls on that stream fail as follows:
 
 * The oversized call fails with `codes.ResourceExhausted`.
 * Other two-way and streaming calls still waiting on that stream also fail with `codes.ResourceExhausted`, since the node cannot tell which request was too large.

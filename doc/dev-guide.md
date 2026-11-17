@@ -343,7 +343,7 @@ A `Transport` is everything a call needs to reach one node.
 It holds a `channelRef`, an atomically replaceable reference to the node's current `Channel`.
 There are three channel kinds:
 
-* `OutboundChannel` runs over streams this node dials; it opens a new `session` for each stream and requeues pending calls when a stream is lost, as far as the send queue has space.
+* `OutboundChannel` runs over streams this node dials; it opens a new `session` for each stream and fails the stream's pending calls with `ErrStreamDown` when the stream is lost.
   A stream that the server refuses is not lost: it ends with a refusal code (`Unauthenticated`, `PermissionDenied`, `InvalidArgument`, or `Unimplemented`) before the server accepted it.
   Its pending two-way and streaming calls fail with the refusal, as does a one-way call whose send fails on it.
   The channel then backs off before it opens the next stream, failing requests at once with the refusal until then.
@@ -805,10 +805,10 @@ The dialer's own calls on that stream keep their client-initiated IDs, so the ca
 These IDs encode as ten-byte protobuf varints because the high bit is set; the small wire-cost increase is intentional and avoids a second stream.
 
 Each `session` owns the `pendingCalls` of its stream, so ending a session affects only the calls sent on that stream.
-When an outbound session ends, it requeues its pending two-way calls on the channel's send queue for the next session.
-A call fails instead if the server refused the stream, if the stream ended with `ResourceExhausted`, if the send queue is full, or if the channel is closed.
-A pending streaming call is not requeued; it fails with `ErrStreamDown`, or with `ErrNodeClosed` if the channel is closed.
-An inbound session has no next session, so its pending calls fail with `ErrStreamDown` when it ends.
+When a session ends, its pending calls fail, since the server may have handled them; a channel sends each call at most once.
+On an outbound session, a call fails with the refusal if the server refused the stream, with `ResourceExhausted` if the stream ended with it, and with `ErrNodeClosed` if the channel is closed.
+Every other pending call fails with `ErrStreamDown`, as do the pending calls of an inbound session.
+A request that the send loop took from the queue but did not send goes first on the channel's next session.
 These include the calls of a shared node that borrows the inbound stream.
 Closing a channel ends its sessions and fails the requests in its send queue.
 

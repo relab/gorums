@@ -17,10 +17,12 @@ var ErrSendFailure = impl.ErrSendFailure
 // ErrTypeMismatch is returned when a response cannot be cast to the expected type.
 var ErrTypeMismatch = impl.ErrTypeMismatch
 
-// ErrStreamDown is returned for a call that cannot be delivered or retried
-// because the target node's stream is unavailable, such as a call over a
-// shared [WithStreamDedup] stream that is not connected (see
-// [Server.WaitForAll]). It is a gRPC status error with the Unavailable code;
+// ErrStreamDown is returned for a call whose target node's stream is
+// unavailable, such as a call over a shared [WithStreamDedup] stream that is
+// not connected (see [Server.WaitForAll]), or whose stream broke before the
+// call's response arrived. The server may have handled a call that fails with
+// ErrStreamDown, so a caller that retries the call must tolerate it running
+// twice. It is a gRPC status error with the Unavailable code;
 // test for it with [errors.Is], also inside a [QuorumCallError]. The
 // Unavailable code alone does not tell it apart from other node errors.
 var ErrStreamDown = stream.ErrStreamDown
