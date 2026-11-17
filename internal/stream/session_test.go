@@ -19,12 +19,12 @@ import (
 )
 
 // newTestSession returns a session over a mock stream; it is not started.
-func newTestSession(t *testing.T, sendBufferSize uint, handler RequestHandler, serverRequests, requeue bool) *session {
+func newTestSession(t *testing.T, sendBufferSize uint, handler RequestHandler, serverRequests, outbound bool) *session {
 	t.Helper()
 	e := newEndpoint(t.Context(), 1, sendBufferSize, testRecvBufferSize, handler, newLatency())
 	t.Cleanup(e.cancel)
 	ctx, cancel := context.WithCancel(e.ctx)
-	return newSession(ctx, cancel, &e, mock.NewBidiStream[*Message](), serverRequests, requeue)
+	return newSession(ctx, cancel, &e, mock.NewBidiStream[*Message](), serverRequests, outbound)
 }
 
 // TestSessionHandleDeliversResponse verifies that a response is delivered to
@@ -71,25 +71,25 @@ func TestSessionHandleDoesNotBlockOnCanceledRequest(t *testing.T) {
 	}
 }
 
-// TestSessionEndRetriesPendingCalls verifies what happens to each pending call
-// when a session ends.
-func TestSessionEndRetriesPendingCalls(t *testing.T) {
+// TestSessionEndFailsPendingCalls verifies that each call pending when a
+// session ends fails, and that none is queued to be sent again.
+func TestSessionEndFailsPendingCalls(t *testing.T) {
 	tests := []struct {
 		name         string
-		requeue      bool
+		outbound     bool
 		streaming    bool
 		closeChannel bool
-		wantRequeued bool
 		wantErr      error
 	}{
-		{name: "Requeued", requeue: true, wantRequeued: true},
-		{name: "StreamingFails", requeue: true, streaming: true, wantErr: ErrStreamDown},
-		{name: "ClosedChannelFails", requeue: true, streaming: true, closeChannel: true, wantErr: ErrNodeClosed},
-		{name: "NoRequeueFails", requeue: false, wantErr: ErrStreamDown},
+		{name: "TwoWay", outbound: true, wantErr: ErrStreamDown},
+		{name: "Streaming", outbound: true, streaming: true, wantErr: ErrStreamDown},
+		{name: "ClosedChannel", outbound: true, closeChannel: true, wantErr: ErrNodeClosed},
+		{name: "ClosedChannelStreaming", outbound: true, streaming: true, closeChannel: true, wantErr: ErrNodeClosed},
+		{name: "Inbound", outbound: false, wantErr: ErrStreamDown},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := newTestSession(t, 1, nil, true, tt.requeue)
+			s := newTestSession(t, 1, nil, true, tt.outbound)
 			responseChan := make(chan response, 1)
 			s.pending.add(1, NodeRequest{Ctx: t.Context(), Msg: &Message{}, Streaming: tt.streaming, ResponseChan: responseChan})
 			if tt.closeChannel {
@@ -99,18 +99,11 @@ func TestSessionEndRetriesPendingCalls(t *testing.T) {
 			if !s.ended() {
 				t.Error("session not ended")
 			}
-			if got := len(s.queue.ch) == 1; got != tt.wantRequeued {
-				t.Errorf("requeued = %t, want %t", got, tt.wantRequeued)
+			if got := len(s.queue.ch); got != 0 {
+				t.Errorf("requeued %d calls, want 0", got)
 			}
-			if tt.wantErr != nil {
-				select {
-				case got := <-responseChan:
-					if !errors.Is(got.Err, tt.wantErr) {
-						t.Errorf("error = %v, want %v", got.Err, tt.wantErr)
-					}
-				default:
-					t.Errorf("no response, want %v", tt.wantErr)
-				}
+			if err := responseErr(t, responseChan, "pending call"); !errors.Is(err, tt.wantErr) {
+				t.Errorf("error = %v, want %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -568,15 +561,15 @@ func (s *scriptedStream) frame(msg *Message) { s.recv <- scriptedRecv{msg: msg} 
 func (s *scriptedStream) end(err error) { s.recv <- scriptedRecv{err: err} }
 
 // newScriptedSession returns an outbound session, or an inbound one if
-// requeue is false, over a stream whose Send returns sendErr; it is not
+// outbound is false, over a stream whose Send returns sendErr; it is not
 // started.
-func newScriptedSession(t *testing.T, sendErr error, requeue bool) (*session, *scriptedStream) {
+func newScriptedSession(t *testing.T, sendErr error, outbound bool) (*session, *scriptedStream) {
 	t.Helper()
 	e := newEndpoint(t.Context(), 1, 4, testRecvBufferSize, nil, nil)
 	t.Cleanup(e.cancel)
 	ctx, cancel := context.WithCancel(e.ctx)
 	stream := &scriptedStream{sendErr: sendErr, recv: make(chan scriptedRecv, 4)}
-	return newSession(ctx, cancel, &e, stream, true, requeue), stream
+	return newSession(ctx, cancel, &e, stream, true, outbound), stream
 }
 
 // responseErr returns the error of the response on ch, or fails the test if
@@ -595,7 +588,7 @@ func responseErr(t *testing.T, ch <-chan response, what string) error {
 // TestSessionRefusalFailsPendingCalls verifies that an outbound session whose
 // stream ends with a refusal code before it delivered a frame, or with
 // ResourceExhausted at any time, fails its pending calls with that status, and
-// that every other end retries them.
+// that every other end fails them with ErrStreamDown.
 func TestSessionRefusalFailsPendingCalls(t *testing.T) {
 	refusal := func(code codes.Code) error { return status.Error(code, "refused by test") }
 	tests := []struct {
@@ -603,7 +596,7 @@ func TestSessionRefusalFailsPendingCalls(t *testing.T) {
 		err        error
 		afterFrame bool
 		inbound    bool
-		wantCode   codes.Code // the code both calls fail with; OK if retried
+		wantCode   codes.Code // the code both calls fail with; OK for ErrStreamDown
 	}{
 		{name: "Unauthenticated", err: refusal(codes.Unauthenticated), wantCode: codes.Unauthenticated},
 		{name: "PermissionDenied", err: refusal(codes.PermissionDenied), wantCode: codes.PermissionDenied},
@@ -634,29 +627,18 @@ func TestSessionRefusalFailsPendingCalls(t *testing.T) {
 			}
 
 			calls := map[string]chan response{"two-way call": twoWay, "streaming call": streaming}
-			switch {
-			case tt.wantCode != codes.OK:
-				for what, ch := range calls {
-					if got := status.Code(responseErr(t, ch, what)); got != tt.wantCode {
+			for what, ch := range calls {
+				err := responseErr(t, ch, what)
+				if tt.wantCode != codes.OK {
+					if got := status.Code(err); got != tt.wantCode {
 						t.Errorf("%s failed with code %v, want %v", what, got, tt.wantCode)
 					}
+				} else if !errors.Is(err, ErrStreamDown) {
+					t.Errorf("%s failed with %v, want %v", what, err, ErrStreamDown)
 				}
-				if got := len(s.queue.ch); got != 0 {
-					t.Errorf("requeued %d calls, want 0", got)
-				}
-			case tt.inbound:
-				for what, ch := range calls {
-					if err := responseErr(t, ch, what); !errors.Is(err, ErrStreamDown) {
-						t.Errorf("%s failed with %v, want %v", what, err, ErrStreamDown)
-					}
-				}
-			default:
-				if got := len(s.queue.ch); got != 1 {
-					t.Errorf("requeued %d calls, want the two-way call", got)
-				}
-				if err := responseErr(t, streaming, "streaming call"); !errors.Is(err, ErrStreamDown) {
-					t.Errorf("streaming call failed with %v, want %v", err, ErrStreamDown)
-				}
+			}
+			if got := len(s.queue.ch); got != 0 {
+				t.Errorf("requeued %d calls, want 0", got)
 			}
 		})
 	}
@@ -689,14 +671,14 @@ func TestSessionSendResourceExhaustedFailsPendingCalls(t *testing.T) {
 // TestSessionFailedSendLeavesCallsToReceive verifies that a send that fails
 // with io.EOF before the stream delivered a frame leaves the pending call to
 // the receive loop, which learns the stream's status: a refusal fails the
-// call, a buffered response completes it, and any other end retries it.
+// call with the refusal, a buffered response completes it, and any other end
+// fails it with ErrStreamDown.
 func TestSessionFailedSendLeavesCallsToReceive(t *testing.T) {
 	tests := []struct {
-		name          string
-		recv          func(*scriptedStream)
-		wantCode      codes.Code // the code the call fails with; OK if it does not fail
-		wantDelivered bool       // the call completes with its buffered response
-		wantRequeued  bool
+		name     string
+		recv     func(*scriptedStream)
+		wantCode codes.Code // the code the call fails with; OK if it completes
+		wantErr  error      // the error the call fails with, if wantCode is Unavailable
 	}{
 		{
 			name:     "Refused",
@@ -704,9 +686,10 @@ func TestSessionFailedSendLeavesCallsToReceive(t *testing.T) {
 			wantCode: codes.Unauthenticated,
 		},
 		{
-			name:         "Lost",
-			recv:         func(st *scriptedStream) { st.end(status.Error(codes.Unavailable, "lost")) },
-			wantRequeued: true,
+			name:     "Lost",
+			recv:     func(st *scriptedStream) { st.end(status.Error(codes.Unavailable, "lost")) },
+			wantCode: codes.Unavailable,
+			wantErr:  ErrStreamDown,
 		},
 		{
 			name: "BufferedResponse",
@@ -714,7 +697,6 @@ func TestSessionFailedSendLeavesCallsToReceive(t *testing.T) {
 				st.frame(Message_builder{MessageSeqNo: 1}.Build()) // the call's response
 				st.end(status.Error(codes.Unauthenticated, "refused after a frame"))
 			},
-			wantDelivered: true,
 		},
 		{
 			name: "FrameAfterFailedSend",
@@ -722,7 +704,8 @@ func TestSessionFailedSendLeavesCallsToReceive(t *testing.T) {
 				st.frame(Message_builder{MessageSeqNo: 999}.Build()) // an unknown response
 				st.end(status.Error(codes.Unauthenticated, "refused after a frame"))
 			},
-			wantRequeued: true,
+			wantCode: codes.Unavailable,
+			wantErr:  ErrStreamDown,
 		},
 	}
 	for _, tt := range tests {
@@ -742,22 +725,19 @@ func TestSessionFailedSendLeavesCallsToReceive(t *testing.T) {
 
 			tt.recv(stream)
 			_ = s.receive()
-			if got := len(s.queue.ch) == 1; got != tt.wantRequeued {
-				t.Errorf("requeued = %t, want %t", got, tt.wantRequeued)
+			if got := len(s.queue.ch); got != 0 {
+				t.Errorf("requeued %d calls, want 0", got)
 			}
+			err := responseErr(t, responseChan, "call")
 			switch {
-			case tt.wantCode != codes.OK:
-				if got := status.Code(responseErr(t, responseChan, "call")); got != tt.wantCode {
-					t.Errorf("call failed with code %v, want %v", got, tt.wantCode)
-				}
-			case tt.wantDelivered:
-				if err := responseErr(t, responseChan, "call"); err != nil {
+			case tt.wantCode == codes.OK:
+				if err != nil {
 					t.Errorf("call failed with %v, want its buffered response", err)
 				}
-			default:
-				if got := len(responseChan); got != 0 {
-					t.Errorf("call got %d responses, want it retried", got)
-				}
+			case status.Code(err) != tt.wantCode:
+				t.Errorf("call failed with code %v, want %v", status.Code(err), tt.wantCode)
+			case tt.wantErr != nil && !errors.Is(err, tt.wantErr):
+				t.Errorf("call failed with %v, want %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -767,16 +747,16 @@ func TestSessionFailedSendLeavesCallsToReceive(t *testing.T) {
 // that fails with io.EOF after the stream delivered a frame leaves the pending
 // calls to the receive loop, which learns the stream's status. A stream that
 // ends with ResourceExhausted fails the calls with that status; any other end
-// retries the two-way call and records the status in LastErr.
+// fails them with ErrStreamDown and records the status in LastErr.
 func TestSessionFailedSendAfterFrameLeavesCallsToReceive(t *testing.T) {
+	resourceExhausted := status.Error(codes.ResourceExhausted, "grpc: received message larger than max")
 	tests := []struct {
-		name         string
-		end          error
-		wantCode     codes.Code // the code both calls fail with; OK if retried
-		wantRequeued bool
+		name    string
+		end     error
+		wantErr error // the error both calls fail with
 	}{
-		{name: "ResourceExhausted", end: status.Error(codes.ResourceExhausted, "grpc: received message larger than max"), wantCode: codes.ResourceExhausted},
-		{name: "Lost", end: status.Error(codes.Unavailable, "lost"), wantRequeued: true},
+		{name: "ResourceExhausted", end: resourceExhausted, wantErr: resourceExhausted},
+		{name: "Lost", end: status.Error(codes.Unavailable, "lost"), wantErr: ErrStreamDown},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -802,14 +782,12 @@ func TestSessionFailedSendAfterFrameLeavesCallsToReceive(t *testing.T) {
 				if err := <-received; !errors.Is(err, tt.end) {
 					t.Fatalf("receive() = %v, want %v", err, tt.end)
 				}
-				if got := len(s.queue.ch) == 1; got != tt.wantRequeued {
-					t.Errorf("requeued = %t, want %t", got, tt.wantRequeued)
+				if got := len(s.queue.ch); got != 0 {
+					t.Errorf("requeued %d calls, want 0", got)
 				}
-				if tt.wantCode != codes.OK {
-					for what, ch := range map[string]chan response{"two-way call": twoWay, "streaming call": streaming} {
-						if got := status.Code(responseErr(t, ch, what)); got != tt.wantCode {
-							t.Errorf("%s failed with code %v, want %v", what, got, tt.wantCode)
-						}
+				for what, ch := range map[string]chan response{"two-way call": twoWay, "streaming call": streaming} {
+					if err := responseErr(t, ch, what); !errors.Is(err, tt.wantErr) {
+						t.Errorf("%s failed with %v, want %v", what, err, tt.wantErr)
 					}
 				}
 				if err := s.LastErr(); !errors.Is(err, tt.end) {

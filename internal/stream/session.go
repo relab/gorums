@@ -31,9 +31,8 @@ type session struct {
 	// serverRequests reports whether the peer's requests carry
 	// server-initiated IDs, as they do on a stream this side dialed.
 	serverRequests bool
-	// requeue is set on an outbound session. Calls still pending when the
-	// session ends are then queued again for the channel's next session.
-	requeue bool
+	// outbound is set on a session over a stream that this side dialed.
+	outbound bool
 
 	pending pendingCalls
 
@@ -68,14 +67,14 @@ const (
 
 // newSession returns a session of e over stream that ends when ctx ends or cancel
 // is called.
-func newSession(ctx context.Context, cancel context.CancelFunc, e *endpoint, stream BidiStream, serverRequests, requeue bool) *session {
+func newSession(ctx context.Context, cancel context.CancelFunc, e *endpoint, stream BidiStream, serverRequests, outbound bool) *session {
 	return &session{
 		endpoint:       e,
 		stream:         stream,
 		done:           ctx.Done(),
 		cancel:         cancel,
 		serverRequests: serverRequests,
-		requeue:        requeue,
+		outbound:       outbound,
 		drain:          make(chan struct{}),
 		flush:          make(chan struct{}),
 		verdict:        make(chan struct{}),
@@ -177,10 +176,9 @@ func (s *session) healthy() bool {
 // sendFailed ends the session after a send failed with err. If the session
 // is outbound and receiving has ended or err is io.EOF, the receive loop
 // disposes of pending calls, and sendFailed returns true. Otherwise, pending
-// calls fail or are retried as in [session.fail], and sendFailed returns
-// false.
+// calls fail as in [session.fail], and sendFailed returns false.
 func (s *session) sendFailed(err error) bool {
-	if s.requeue {
+	if s.outbound {
 		for {
 			state := s.handoff.Load()
 			if state == streamClosed {
@@ -240,15 +238,14 @@ func (s *session) accept() {
 	}
 }
 
-// receiveFailed ends the session after a receive failed with err. If the
-// session is outbound and err is due to a refused stream or resource
-// exhaustion, pending calls fail with err. If the session is draining and the
-// server ended the stream, pending calls fail with [ErrStreamDown]. Otherwise,
-// they are retried.
+// receiveFailed ends the session after a receive failed with err, and fails
+// its pending calls as in [session.failPending]. It records err as the
+// channel's health, except when the session is draining and the server ended
+// the stream after it handled every request sent on it.
 func (s *session) receiveFailed(err error) {
 	prev := s.handoff.Swap(streamClosed)
 	if prev != streamAccepted {
-		if s.requeue && isRefusal(err) {
+		if s.outbound && isRefusal(err) {
 			s.refusal = err
 		}
 		close(s.verdict)
@@ -262,11 +259,8 @@ func (s *session) receiveFailed(err error) {
 	}
 	if s.draining.Load() && errors.Is(err, io.EOF) {
 		// The server ended the stream after it handled every request sent
-		// on it. A call still pending lost its reply; it is not sent again.
-		s.cancel()
-		for _, req := range s.pending.drain() {
-			req.sendErrorResponse(s.id, ErrStreamDown)
-		}
+		// on it. A call still pending lost its reply.
+		s.end(err)
 		return
 	}
 	s.fail(err)
@@ -308,9 +302,7 @@ func (s *session) handle(msg *Message) {
 }
 
 // fail ends the session. It records err as the channel's health unless the
-// session has already ended. If the session is outbound and err is due to
-// resource exhaustion, pending calls fail with err. Otherwise, they are
-// retried.
+// session has already ended. Pending calls fail as in [session.failPending].
 func (s *session) fail(err error) {
 	if !s.ended() {
 		s.recordHealth(err)
@@ -318,12 +310,12 @@ func (s *session) fail(err error) {
 	s.end(err)
 }
 
-// end ends the session after err, which may be nil, and retries or fails its
-// pending calls; see [session.retryOrFail]. It is idempotent.
+// end ends the session after err, which may be nil, and fails its pending
+// calls; see [session.failPending]. It is idempotent.
 func (s *session) end(err error) {
 	s.cancel()
 	for _, req := range s.pending.drain() {
-		s.retryOrFail(req, err)
+		s.failPending(req, err)
 	}
 }
 
@@ -361,25 +353,19 @@ func (s *session) outcome() (accepted bool, refusal error) {
 	return s.accepted.Load(), refusal
 }
 
-// retryOrFail queues a call that was pending when the session ended after err, to
-// be sent on the channel's next session. If the server refused the stream,
-// the call fails with the refusal. If the session is outbound and err
-// is due to resource exhaustion, the call fails with err. Otherwise, retryOrFail
-// fails a streaming call with [ErrStreamDown], and any call with
-// [ErrSendQueueFull] if the send queue is full or [ErrNodeClosed] if the
-// channel is closed. An inbound session has no next session, so retryOrFail fails
-// every call with [ErrStreamDown].
-func (s *session) retryOrFail(req NodeRequest, err error) {
+// failPending fails a call that was pending when the session ended after err.
+// If the server refused the stream, the call fails with the refusal. On an
+// outbound session, the call fails with err if err is due to resource
+// exhaustion, and with [ErrNodeClosed] if the channel is closed. Otherwise,
+// the call fails with [ErrStreamDown]. The server may have handled it, so
+// each call is sent at most once.
+func (s *session) failPending(req NodeRequest, err error) {
 	switch refusal := s.refused(); {
 	case refusal != nil:
 		req.sendErrorResponse(s.id, refusal)
-	case s.requeue && isResourceExhausted(err):
+	case s.outbound && isResourceExhausted(err):
 		req.sendErrorResponse(s.id, err)
-	case s.requeue && !req.Streaming:
-		if err := s.queue.tryPush(req); err != nil {
-			req.sendErrorResponse(s.id, err)
-		}
-	case s.requeue && s.ctx.Err() != nil:
+	case s.outbound && s.ctx.Err() != nil:
 		req.sendErrorResponse(s.id, ErrNodeClosed)
 	default:
 		req.sendErrorResponse(s.id, ErrStreamDown)
