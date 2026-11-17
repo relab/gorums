@@ -81,6 +81,12 @@ The default mode uses in-memory bufconn; `-tags=integration` uses real TCP.
 - Every exported identifier has a succinct doc comment; every package has one (typically `doc.go`).
 - Comments state the current contract and constraints, positively.
   History, algorithm steps, and rejected designs belong in tests, commit messages, or `.scratch/`.
+- State what the code does, never what it avoids or does not do.
+  Write "returns an error at once", not "does not wait".
+- Say each fact once; do not restate what another sentence already implies.
+- A doc comment on an interface method states the contract that every implementation meets.
+  A doc comment on an implementation adds the specifics of that implementation.
+- Name the cause of each error beside the error, and write "error", not "failure" or "outcome".
 - Link other declarations with `[Identifier]`, `[Type.Method]`, or `[pkg.Identifier]`.
 - Go source never references repository Markdown paths; state the constraint inline.
 - Update `doc/` whenever public APIs or behavior change.
