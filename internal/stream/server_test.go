@@ -3,6 +3,8 @@ package stream
 import (
 	"context"
 	"errors"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -351,5 +353,284 @@ func TestServerNodeStreamFailsCallsToClosedDialer(t *testing.T) {
 	case <-stopped:
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("GracefulStop did not return")
+	}
+}
+
+// senderStream is a stream that a sender opened to srv, served by
+// [Server.NodeStream] on a fake stream.
+type senderStream struct {
+	fs     *fakeNodeStream
+	result chan error // NodeStream's error
+}
+
+// openSenderStream serves a stream with the sender metadata id, as
+// "<token>.<n>", and draining, which may be empty.
+func openSenderStream(t *testing.T, srv *Server, id, draining string) *senderStream {
+	t.Helper()
+	md := metadata.Pairs(streamKey, id)
+	if draining != "" {
+		md.Append(drainingKey, draining)
+	}
+	ctx, cancel := context.WithCancel(metadata.NewIncomingContext(t.Context(), md))
+	ss := &senderStream{
+		fs:     &fakeNodeStream{BidiStream: mock.NewBidiStream[*Message](), ctx: ctx},
+		result: make(chan error, 1),
+	}
+	go func() { ss.result <- srv.NodeStream(ss.fs) }()
+	t.Cleanup(func() {
+		ss.fs.Close()
+		cancel()
+	})
+	return ss
+}
+
+// deliver delivers a request with message ID id on ss.
+func (ss *senderStream) deliver(t *testing.T, id uint64) {
+	t.Helper()
+	if err := ss.fs.Deliver(Message_builder{MessageSeqNo: id, Method: mock.TestMethod}.Build()); err != nil {
+		t.Fatalf("Deliver(%d): %v", id, err)
+	}
+}
+
+// waitResult returns the error that ss's NodeStream returned.
+func (ss *senderStream) waitResult(t *testing.T) error {
+	t.Helper()
+	select {
+	case err := <-ss.result:
+		return err
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("NodeStream did not return")
+		return nil
+	}
+}
+
+// orderHandler records the requests it starts and holds each one whose
+// message ID has a gate until the gate closes. A handler whose gate is in
+// releases instead releases at once and holds until the gate closes.
+type orderHandler struct {
+	started  chan uint64
+	gates    map[uint64]chan struct{}
+	releases map[uint64]bool
+}
+
+func newOrderHandler() *orderHandler {
+	return &orderHandler{started: make(chan uint64, 16), gates: make(map[uint64]chan struct{}), releases: make(map[uint64]bool)}
+}
+
+// hold makes request id wait for its gate; release makes it release first.
+func (h *orderHandler) hold(id uint64, release bool) chan struct{} {
+	h.gates[id] = make(chan struct{})
+	h.releases[id] = release
+	return h.gates[id]
+}
+
+func (h *orderHandler) HandleRequest(_ context.Context, _ ID, msg *Message, release func(), _ func(*Message)) {
+	id := msg.GetMessageSeqNo()
+	h.started <- id
+	if gate, ok := h.gates[id]; ok {
+		if h.releases[id] {
+			release()
+		}
+		<-gate
+	}
+}
+
+// expectStart fails t unless request want starts next.
+func (h *orderHandler) expectStart(t *testing.T, want uint64) {
+	t.Helper()
+	select {
+	case got := <-h.started:
+		if got != want {
+			t.Fatalf("request %d started, want %d", got, want)
+		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("request %d did not start", want)
+	}
+}
+
+// expectNoStart fails t if a request starts within a short time.
+func (h *orderHandler) expectNoStart(t *testing.T) {
+	t.Helper()
+	select {
+	case got := <-h.started:
+		t.Fatalf("request %d started, want none", got)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+// TestServerNodeStreamRefusesStaleStream verifies that the server refuses a
+// stream whose number is not above the sender's latest stream, with
+// codes.Aborted and before any of its requests run. Another sender's streams
+// are independent.
+func TestServerNodeStreamRefusesStaleStream(t *testing.T) {
+	h := newOrderHandler()
+	acceptor := &handlerAcceptor{handler: h}
+	srv := NewServer(nil, acceptor)
+
+	openSenderStream(t, srv, "tok.2", "").deliver(t, 1)
+	h.expectStart(t, 1)
+	for _, id := range []string{"tok.1", "tok.2"} {
+		if err := openSenderStream(t, srv, id, "").waitResult(t); status.Code(err) != codes.Aborted {
+			t.Errorf("stream %s: NodeStream() = %v, want code %v", id, err, codes.Aborted)
+		}
+	}
+	openSenderStream(t, srv, "other.1", "").deliver(t, 2)
+	h.expectStart(t, 2)
+}
+
+// TestServerNodeStreamSupersedes verifies that a newer stream closes the
+// sender's older channel, which drops the requests queued there, and that the
+// newer stream's first request starts only after the older channel's running
+// request returns or releases.
+func TestServerNodeStreamSupersedes(t *testing.T) {
+	t.Run("Return", func(t *testing.T) {
+		h := newOrderHandler()
+		gate := h.hold(1, false)
+		srv := NewServer(nil, &handlerAcceptor{handler: h})
+
+		s1 := openSenderStream(t, srv, "tok.1", "")
+		s1.deliver(t, 1)
+		h.expectStart(t, 1)
+		s1.deliver(t, 2) // queued behind request 1
+
+		openSenderStream(t, srv, "tok.2", "").deliver(t, 3)
+		h.expectNoStart(t)
+		close(gate)
+		h.expectStart(t, 3)
+		h.expectNoStart(t) // request 2 was dropped
+	})
+	t.Run("Release", func(t *testing.T) {
+		h := newOrderHandler()
+		gate := h.hold(1, true)
+		t.Cleanup(func() { close(gate) })
+		srv := NewServer(nil, &handlerAcceptor{handler: h})
+
+		openSenderStream(t, srv, "tok.1", "").deliver(t, 1)
+		h.expectStart(t, 1)
+		openSenderStream(t, srv, "tok.2", "").deliver(t, 3)
+		h.expectStart(t, 3) // request 1 released, though it still runs
+	})
+}
+
+// TestServerNodeStreamKeepsDrainingStream verifies that a newer stream keeps
+// an older stream that it lists as draining: the older stream runs all its
+// requests, and the newer stream's requests start only after the older stream
+// has ended and its last request has returned.
+func TestServerNodeStreamKeepsDrainingStream(t *testing.T) {
+	h := newOrderHandler()
+	gate := h.hold(1, false)
+	srv := NewServer(nil, &handlerAcceptor{handler: h})
+
+	s1 := openSenderStream(t, srv, "tok.1", "")
+	s1.deliver(t, 1)
+	h.expectStart(t, 1)
+	s1.deliver(t, 2)
+
+	s2 := openSenderStream(t, srv, "tok.2", "1")
+	s2.deliver(t, 3)
+	close(gate)
+	h.expectStart(t, 2)
+	h.expectNoStart(t) // stream 1 has not ended
+
+	s1.fs.Close() // the sender half-closes the draining stream
+	h.expectStart(t, 3)
+	if err := s1.waitResult(t); err != nil {
+		t.Errorf("draining stream: NodeStream() = %v, want nil", err)
+	}
+}
+
+// TestServerNodeStreamSenderGrace verifies that the server keeps a sender's
+// record for its grace period after the sender's last stream ended, so a late
+// stale stream is still refused, and forgets it afterwards.
+func TestServerNodeStreamSenderGrace(t *testing.T) {
+	srv := NewServer(nil, &handlerAcceptor{handler: newOrderHandler()})
+	srv.grace = 100 * time.Millisecond
+
+	s2 := openSenderStream(t, srv, "tok.2", "")
+	s2.fs.Close()
+	if err := s2.waitResult(t); err != nil {
+		t.Fatalf("NodeStream() = %v, want nil", err)
+	}
+	if err := openSenderStream(t, srv, "tok.1", "").waitResult(t); status.Code(err) != codes.Aborted {
+		t.Fatalf("stale stream within the grace period: NodeStream() = %v, want code %v", err, codes.Aborted)
+	}
+	if !waitUntil(defaultTestTimeout, func() bool {
+		srv.mu.Lock()
+		defer srv.mu.Unlock()
+		return len(srv.senders) == 0
+	}) {
+		t.Fatal("the server kept the sender's record after the grace period")
+	}
+}
+
+// TestServerRunsRequestsInOrderUnderStreamChurn verifies that the server runs
+// one channel's requests in the order the channel sent them, while the
+// channel's streams break and reopen. A request may be lost with its stream,
+// but no request runs after a later one.
+func TestServerRunsRequestsInOrderUnderStreamChurn(t *testing.T) {
+	var mu sync.Mutex
+	var ran []uint64  // request IDs, in the order they started
+	var from []string // the stream of each request in ran
+	acceptor := &handlerAcceptor{handler: requestHandlerFunc(func(ctx context.Context, msg *Message, _ func(), _ func(*Message)) {
+		md, _ := metadata.FromIncomingContext(ctx)
+		mu.Lock()
+		ran = append(ran, msg.GetMessageSeqNo())
+		from = append(from, strings.Join(md.Get(streamKey), ","))
+		mu.Unlock()
+		time.Sleep(50 * time.Microsecond)
+	})}
+	tc := setupChannel(t, NewServer(nil, acceptor).NodeStream)
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
+		t.Fatal("channel never connected")
+	}
+
+	churnDone := make(chan struct{})
+	go func() {
+		defer close(churnDone)
+		for start := time.Now(); time.Since(start) < 200*time.Millisecond; {
+			time.Sleep(time.Millisecond)
+			tc.endSessions()
+		}
+	}()
+	var last uint64
+	for id := uint64(1); ; id++ {
+		select {
+		case <-churnDone:
+		default:
+			_ = tc.Enqueue(NodeRequest{
+				Ctx:    t.Context(),
+				Oneway: true,
+				Msg:    Message_builder{MessageSeqNo: id, Method: mock.TestMethod}.Build(),
+			})
+			continue
+		}
+		last = id
+		break
+	}
+
+	// After the churn, a final request runs once the server has run every
+	// earlier request that it will run.
+	final := NodeRequest{
+		Ctx:    t.Context(),
+		Oneway: true,
+		Msg:    Message_builder{MessageSeqNo: last, Method: mock.TestMethod}.Build(),
+	}
+	if !waitUntil(defaultTestTimeout, func() bool { return tc.Enqueue(final) == nil }) {
+		t.Fatal("the send queue did not admit the final request")
+	}
+	if !waitUntil(defaultTestTimeout, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(ran) > 0 && ran[len(ran)-1] == last
+	}) {
+		t.Fatal("the final request did not run")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	for i := 1; i < len(ran); i++ {
+		if ran[i] <= ran[i-1] {
+			t.Fatalf("request %d (stream %s) ran after request %d (stream %s)", ran[i], from[i], ran[i-1], from[i-1])
+		}
 	}
 }

@@ -2,15 +2,19 @@ package stream
 
 import (
 	"context"
+	"crypto/rand"
 	"log"
 	"maps"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/metadata"
 )
 
 // eagerReconnectBaseDelay and eagerReconnectMaxDelay bound the delay between
@@ -55,6 +59,11 @@ type OutboundOptions struct {
 // the gorums-accepted response header, or, if a stream interceptor on the
 // server has already sent the response headers, with an empty first frame.
 //
+// Each stream carries the channel's random token and the stream's number, and
+// lists the draining streams that the server has accepted. A [Server] uses
+// them to run the channel's requests in the order the channel sent them, also
+// across streams; see [Server.NodeStream].
+//
 // The channel sends each call at most once. Calls still awaiting responses
 // when the stream fails fail with [ErrStreamDown], since the server may have
 // handled them. A request taken from the send queue but not yet sent goes
@@ -86,6 +95,8 @@ type OutboundChannel struct {
 	eagerReconnect bool
 	onStreamChange func()
 	streamUp       atomic.Bool
+	token          string // identifies the channel's streams at the server
+	streams        uint64 // streams opened so far; used only by run
 
 	mu       sync.Mutex
 	sessions map[*session]struct{} // sessions still receiving; after a GOAWAY, also the old one until its stream ends
@@ -105,6 +116,7 @@ func NewOutboundChannel(ctx context.Context, id ID, conn *grpc.ClientConn, opts 
 		conn:           conn,
 		eagerReconnect: opts.EagerReconnect,
 		onStreamChange: opts.OnStreamChange,
+		token:          rand.Text(),
 		sessions:       make(map[*session]struct{}),
 	}
 	c.unmatchedErrors.logger = opts.Logger
@@ -294,13 +306,15 @@ func (c *OutboundChannel) open(suspect bool) (*session, error) {
 	if c.stopping.Load() {
 		return nil, ErrNodeClosed
 	}
-	ctx, cancel := context.WithCancel(c.ctx)
+	c.streams++
+	ctx, cancel := context.WithCancel(metadata.AppendToOutgoingContext(c.ctx, c.streamMetadata()...))
 	st, err := NewGorumsClient(c.conn).NodeStream(ctx)
 	if err != nil {
 		cancel()
 		return nil, err
 	}
 	s := newSession(ctx, cancel, &c.endpoint, st, true, true)
+	s.seq = c.streams
 	s.suspect = suspect
 	s.onAccept = func() { c.setStreamUp(s, true) }
 	c.mu.Lock()
@@ -328,6 +342,32 @@ func (c *OutboundChannel) open(suspect bool) (*session, error) {
 		c.watchGoAway(ctx, s)
 	})
 	return s, nil
+}
+
+// streamMetadata returns the metadata key-value pairs of the next stream: the
+// channel's token and the stream's number, and the numbers of the draining
+// streams that the server has accepted. The server keeps those streams and
+// lets them finish first. A draining stream that the server has not yet
+// accepted is not listed, since its start may never reach the server.
+func (c *OutboundChannel) streamMetadata() []string {
+	kv := []string{streamKey, c.token + "." + strconv.FormatUint(c.streams, 10)}
+	c.mu.Lock()
+	var draining []uint64
+	for s := range c.sessions {
+		if s.draining.Load() && s.accepted.Load() {
+			draining = append(draining, s.seq)
+		}
+	}
+	c.mu.Unlock()
+	if len(draining) == 0 {
+		return kv
+	}
+	slices.Sort(draining)
+	nums := make([]string, len(draining))
+	for i, n := range draining {
+		nums[i] = strconv.FormatUint(n, 10)
+	}
+	return append(kv, drainingKey, strings.Join(nums, ","))
 }
 
 // watchGoAway drains s once the connection leaves Ready, which is how the

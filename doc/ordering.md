@@ -36,6 +36,9 @@ When Gorums receives a message on this channel, it gets tagged with the same mes
 The use of a function to return messages from the RPC handler makes the handlers more flexible than handlers that simply return a result:
 
 * RPC handler functions are executed synchronously by the receiving goroutine, ensuring in-order processing of requests.
+* The order holds across a node's streams to a server.
+  Each stream carries its node's random token and the stream's number.
+  A newer stream supersedes the older ones: the server drops their requests that have not started, except on streams that are draining after a GOAWAY, and starts the newer stream's requests once the older streams' handlers have returned or released.
 * Concurrent processing of requests is still possible since the RPC handler can start a goroutine.
 
 ### RPC API Differences from gRPC

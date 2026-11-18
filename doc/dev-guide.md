@@ -368,6 +368,21 @@ A handler that returns without calling `Release` hands its goroutine to the next
 On the server side, `Server.NodeStream` asks a `PeerAcceptor` for the `InboundChannel` of each accepted stream.
 The stream layer does not check identities; the connection layer below does.
 
+Each inbound stream has its own dispatcher, so the server orders the streams of one `OutboundChannel` itself.
+Each stream carries `gorums-stream: <token>.<n>`: the channel's random token and the stream's number.
+After a GOAWAY, it also carries `gorums-draining`, the numbers of the channel's draining streams whose acceptance has arrived.
+`Server` keeps a `sender` record per token:
+
+* A stream whose number is not above the sender's latest is refused with `codes.Aborted` before any handler runs.
+* A newer stream closes the sender's older channels, except the listed draining ones, so they start no more requests.
+* The newer channel's dispatcher holds its requests until each older dispatcher has retired: it has stopped or is sealed, and its last handler has returned or released.
+* The record's lock is held while the acceptor accepts a stream, so a stream is registered before the sender can learn of its acceptance and list it.
+* The record outlives the sender's last stream by a grace period (one minute), so a very late stale stream is still refused.
+
+A draining stream that the sender has not seen accepted is not listed, since its start may never reach the server; the server closes it like a lost stream.
+The TLA+ model in `spec/stream` checks this design (`just tlc CurrentDrain`, `just tlc CurrentLostStart`).
+Streams without `gorums-stream` are served without these checks.
+
 ```mermaid
 classDiagram
     direction LR

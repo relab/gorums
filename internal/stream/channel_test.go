@@ -2699,3 +2699,91 @@ func TestChannelDrainKeepsHandlerContext(t *testing.T) {
 		t.Fatal("Drain did not return after the handler returned")
 	}
 }
+
+// TestChannelStreamMetadata verifies that each stream carries the channel's
+// sender token and the stream's number, and lists the draining streams that
+// the server has accepted. A lost stream is not listed.
+func TestChannelStreamMetadata(t *testing.T) {
+	type streamMetadata struct{ id, draining string }
+	seen := make(chan streamMetadata, 4)
+	hold := make(chan struct{})
+	tc := setupChannel(t, func(stream Gorums_NodeStreamServer) error {
+		md, _ := metadata.FromIncomingContext(stream.Context())
+		seen <- streamMetadata{id: strings.Join(md.Get(streamKey), ","), draining: strings.Join(md.Get(drainingKey), ",")}
+		acceptStream(stream)
+		for {
+			in, err := stream.Recv()
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if in.GetMessageSeqNo() == 1 {
+				<-hold
+			}
+			if err := stream.Send(in); err != nil {
+				return err
+			}
+		}
+	})
+	next := func() streamMetadata {
+		t.Helper()
+		select {
+		case md := <-seen:
+			return md
+		case <-time.After(defaultTestTimeout):
+			t.Fatal("the server saw no new stream")
+			return streamMetadata{}
+		}
+	}
+	first := next()
+	token, n, ok := strings.Cut(first.id, ".")
+	if !ok || token == "" || n != "1" || first.draining != "" {
+		t.Fatalf("first stream: %s = %q, %s = %q; want <token>.1 and none", streamKey, first.id, drainingKey, first.draining)
+	}
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
+		t.Fatal("channel never connected")
+	}
+
+	// Call 1 stays pending on stream 1, which then drains, as after a GOAWAY.
+	r1 := make(chan response, 1)
+	go func() {
+		resp, _ := trySendRequest(tc.OutboundChannel, NodeRequest{}, 1)
+		r1 <- resp
+	}()
+	if !waitUntil(defaultTestTimeout, func() bool { return tc.pendingExists(1) }) {
+		t.Fatal("call 1 never became pending")
+	}
+	tc.mu.Lock()
+	tc.live.startDrain()
+	tc.mu.Unlock()
+
+	// Call 2 opens stream 2, which lists stream 1.
+	if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{}, 2); resp.Err != nil {
+		t.Fatalf("call 2: %v", resp.Err)
+	}
+	if got, want := next(), (streamMetadata{id: token + ".2", draining: "1"}); got != want {
+		t.Errorf("second stream = %+v, want %+v", got, want)
+	}
+	close(hold)
+	if resp := <-r1; resp.Err != nil {
+		t.Fatalf("call 1 on the draining stream: %v", resp.Err)
+	}
+	if !waitUntil(defaultTestTimeout, func() bool {
+		tc.mu.Lock()
+		defer tc.mu.Unlock()
+		return len(tc.sessions) == 1
+	}) {
+		t.Fatal("the drained stream did not end")
+	}
+
+	// Stream 2 is lost; stream 3 does not list it.
+	tc.endSessions()
+	if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{}, 3); resp.Err != nil {
+		t.Fatalf("call 3: %v", resp.Err)
+	}
+	if got, want := next(), (streamMetadata{id: token + ".3"}); got != want {
+		t.Errorf("third stream = %+v, want %+v", got, want)
+	}
+}

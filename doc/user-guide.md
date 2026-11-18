@@ -396,6 +396,7 @@ There are some important things to note about implementing the server interfaces
 
 * The handlers run in the order messages are received.
 * Messages from the same sender are executed in FIFO order at all servers, up to the point where the handler calls `ServerContext.Release`.
+  The order holds across the sender's streams to a server: a message that is lost with its stream does not run, and no message runs before an earlier one.
   See the auxiliary documentation for more information about [message ordering](./ordering.md) in Gorums.
 * Messages from different senders may be received in a different order at the different servers.
   To guarantee messages from different senders are executed in-order at the different servers, you must use a total ordering protocol.
@@ -471,6 +472,7 @@ Code before `Release` runs in per-sender FIFO order.
 Code after `Release` runs concurrently with the handlers of later requests from the same stream, so it must protect shared state, for example with a mutex.
 A mutex gives mutual exclusion, but not arrival order, so it cannot restore an order that `Release` gave up.
 A handler that does not call `Release` releases when it returns; the whole handler is then ordered, and the next request waits until the handler returns.
+This also holds when the sender reconnects: the requests on the new stream wait until the old stream's handler returns or calls `Release`.
 It is safe to call `Release` more than once.
 
 A nested call follows the same rule: dispatching a call is ordered work, and waiting belongs in the concurrent part.
@@ -1880,6 +1882,13 @@ With `WithStreamDedup`, `WaitForAll` waits until the server accepts; without it,
 A stream that ends with any other status (except `codes.ResourceExhausted`; see [Oversized Requests](#oversized-requests)), or that ends after the server accepted it, is lost, not refused: its two-way calls fail with `ErrStreamDown`, and a later call opens a new stream.
 The node sends each call at most once.
 The server may have handled a call that fails with `ErrStreamDown`, so a caller that retries the call must tolerate that the request reaches the server's handler twice.
+
+When the new stream reaches the server, the server closes the lost stream if it has not yet noticed the loss.
+It drops the lost stream's requests that have not started, and it starts the new stream's requests only after the lost stream's running handler returns or calls `Release`.
+A stream whose start reaches the server after a newer stream of the same node is refused with `codes.Aborted`; the node has already given it up.
+After a GOAWAY, the node lists in the new stream the draining streams that the server has accepted.
+The server lets those streams run all their requests before the new stream's requests start.
+A draining stream that the server had not yet accepted is closed like a lost stream, and its two-way calls fail with `ErrStreamDown`.
 
 ## Oversized Requests
 

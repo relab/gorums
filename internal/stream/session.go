@@ -33,6 +33,8 @@ type session struct {
 	serverRequests bool
 	// outbound is set for a stream that this side dialed.
 	outbound bool
+	// seq is the stream's number among the outbound channel's streams.
+	seq uint64
 
 	pending pendingCalls
 
