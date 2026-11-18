@@ -3,20 +3,21 @@
 This model covers the Gorums stream layer for one peer pair under stream deduplication.
 TLC checks it for small bounds.
 
-* The current code passes every invariant, the deadlock check, and the liveness property `BorrowerRecovers`.
-* The model finds the four past stream-layer bugs when a switch puts each one back.
-* The current code runs each call at most once.
-  It breaks one documented contract: calls from one sender can run out of FIFO order across a reconnect.
-* A proposed design, named supersede, fixes this: a newer stream from a sender replaces that sender's older stream at the server.
-  The code does not implement it yet.
-* A simpler gate, "wait until older channels are idle", fails when a break leaves frames in transit.
+* The current code passes every invariant, the deadlock check, the liveness property `BorrowerRecovers`, and three contracts: each call runs at most once, one sender's calls run in FIFO order across reconnects, and one at a time.
+* Its one known limit: after a GOAWAY that arrives within one round trip of opening a stream, that stream's calls fail.
+* The model finds the five past stream-layer bugs when a switch puts each one back.
+  One of them is the FIFO race across reconnects that issue 468 fixed.
+* Two simpler designs fail: a gate that waits until older channels are idle loses FIFO order when a break leaves frames in transit.
+  Plain supersede, where a newer stream from a sender replaces that sender's older stream at the server, loses calls after a GOAWAY.
 
 ## What the Model Covers
 
 D is the lower-ID peer and the only dialer.
 A is the higher-ID peer.
 A's outbound node for D is born shared, so A's calls to D use D's stream.
-D opens one stream at a time.
+D sends on one live stream at a time.
+After a GOAWAY, D drains the old stream: it sends nothing more on it and half-closes it, but keeps receiving its replies.
+New calls go on a new stream.
 A gives each accepted stream its own inbound channel.
 
 ![D's outbound channel and A's inbound channel, joined by stream s](figures/structure.svg)
@@ -35,43 +36,53 @@ Callers can give up, as when a context deadline expires.
 | `RecvD`, `RecvS`                         | `session.handle`                                                        |
 | `HandleD`, `ReplyD`, `HandleS`, `ReplyS` | `dispatcher`, `endpoint.reply`                                          |
 | `AcceptS`, `ServerEndS`, `live`, `slot`  | `InboundManager.registerPeer`, `Node.attachStream`, `liveChannels`      |
+| `GoAwayD`, `DrainEndD`                   | `OutboundChannel.watchGoAway`, `session.startDrain`, `receiveFailed`    |
+| `SealS`, `FinishS`                       | `InboundChannel.Serve` after the dialer half-closed the stream          |
 | `IssueB`                                 | `Transport.Enqueue` on the shared transport                             |
+| `Stale`, `Kept`, `SupersedeGate`         | `Server.NodeStream`, `sender`, `dispatcher.hold`, `waitRetired`         |
+| `dmeta`, `dacc`                          | `OutboundChannel.streamMetadata`, the `gorums-accepted` header          |
 
-Not modeled yet: refusals and their backoff, GOAWAY and `Drain`, streaming and one-way calls, `ResourceExhausted`, `LocalChannel`, and application `Close`.
+Not modeled yet: refusals and their backoff, streaming and one-way calls, `ResourceExhausted`, `LocalChannel`, and application `Close`.
+`MaxGoAways` bounds the GOAWAYs, as `MaxFaults` bounds the breaks.
 
 ### Switches
 
 Each configuration sets every switch.
-All switches off models the current code.
+The bug switches off and `FIFOGate = "drain"` model the current code.
 
-| Switch                   | Kind    | Effect                                                                                  |
-| ------------------------ | ------- | --------------------------------------------------------------------------------------- |
-| `LazyReconnect`          | bug     | D reopens a lost stream only when it has a request.                                     |
-| `AttachClosesPrior`      | bug     | Attaching a stream closes the prior channel.                                            |
-| `BlockingReplies`        | bug     | A handler's reply waits for send queue space.                                           |
-| `Requeue`                | bug     | A lost stream requeues its pending calls at the tail of the send queue.                 |
-| `FIFOGate = "idle"`      | design  | A starts a handler on stream `s` only while each older channel is detached or idle.     |
-| `FIFOGate = "supersede"` | design  | A refuses a stream older than one it has seen. A newer stream closes the older channel. |
-| `LateFrames`             | network | A break loses only a suffix of the frames in flight. The receiver still gets the rest.  |
+| Switch                   | Kind    | Effect                                                                                                                                                    |
+| ------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LazyReconnect`          | bug     | D reopens a lost stream only when it has a request.                                                                                                       |
+| `AttachClosesPrior`      | bug     | Attaching a stream closes the prior channel.                                                                                                              |
+| `BlockingReplies`        | bug     | A handler's reply waits for send queue space.                                                                                                             |
+| `Requeue`                | bug     | A lost stream requeues its pending calls at the tail of the send queue.                                                                                   |
+| `FIFOGate = "none"`      | design  | No gate, as before issue 468. Each inbound stream has its own dispatcher.                                                                                 |
+| `FIFOGate = "idle"`      | design  | A starts a handler on stream `s` only while each older channel is detached or idle.                                                                       |
+| `FIFOGate = "supersede"` | design  | A refuses a stream older than one it has seen. A newer stream closes the older channels, and its handlers wait for their running handlers.                |
+| `FIFOGate = "drain"`     | current | As supersede, but D lists its accepted draining streams in a new stream's metadata. A keeps those, and the new stream's handlers wait until each one has finished. |
+| `LateFrames`             | network | A break loses only a suffix of the frames in flight. The receiver still gets the rest.                                                                    |
+| `LostStarts`             | network | The start of a broken stream may never reach A.                                                                                                           |
 
 To supersede a stream means that a newer stream from D replaces it at A.
 A closes the channel of the older stream, and refuses the older stream if its start arrives late.
-Both gates need D's stream number at A, for example in the stream metadata.
+Every gate needs D's stream number at A; the code sends it in the stream metadata.
 `LateFrames` models data that is still in transit or in buffers when the sender gives up, as after a keepalive timeout.
 
 ## Properties
 
-| Property              | Kind      | Meaning                                                                                       |
-| --------------------- | --------- | --------------------------------------------------------------------------------------------- |
-| `AtMostOnceDelivery`  | invariant | The runtime delivers at most one response to each call.                                       |
-| `NoDuplicateCall`     | invariant | A call is in at most one send queue or pending table.                                         |
-| `SlotTracksLive`      | invariant | While A serves a stream that is not broken, the shared node's slot holds an attached channel. |
-| `OlderStreamsEnded`   | invariant | D opens a stream only after every older stream ended.                                         |
-| deadlock              | TLC check | Work never stops while handlers still have requests.                                          |
-| `BorrowerRecovers`    | liveness  | After the last fault, A's shared node gets a working stream to D and keeps it.                |
-| `AtMostOnceExecution` | contract  | A's handler runs each of D's calls at most once.                                              |
-| `PerSenderFIFO`       | contract  | A starts D's calls in the order that D admitted them.                                         |
-| `OneAtATime`          | contract  | A's handlers run D's calls one at a time.                                                     |
+| Property              | Kind      | Meaning                                                                                                         |
+| --------------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
+| `AtMostOnceDelivery`  | invariant | The runtime delivers at most one response to each call.                                                         |
+| `NoDuplicateCall`     | invariant | A call is in at most one send queue or pending table.                                                           |
+| `SlotTracksLive`      | invariant | While A serves a stream that D still sends on and that is not broken, the shared node's slot holds an attached channel. |
+| `OlderStreamsEnded`   | invariant | D opens a stream only after every older stream ended or started draining.                                       |
+| `DrainSafe`           | invariant | Without a break, a call fails with `ErrStreamDown` only if A dropped its reply because A's send queue was full. |
+| `ListedDrainSafe`     | invariant | As `DrainSafe`, but a call may also fail if it was pending on a draining stream that D did not list.             |
+| deadlock              | TLC check | Work never stops while handlers still have requests.                                                            |
+| `BorrowerRecovers`    | liveness  | After the last fault, A's shared node gets a working stream to D and keeps it.                                  |
+| `AtMostOnceExecution` | contract  | A's handler runs each of D's calls at most once.                                                                |
+| `PerSenderFIFO`       | contract  | A starts D's calls in the order that D admitted them.                                                           |
+| `OneAtATime`          | contract  | A's handlers run D's calls one at a time.                                                                       |
 
 `PerSenderFIFO` checks the user guide's statement "Messages from the same sender are executed in FIFO order".
 It needs the history variables in `StreamFIFO.tla`.
@@ -85,33 +96,47 @@ The times below are from one laptop and vary with the machine.
 
 ### Current Code
 
-`Current.cfg`: all invariants, deadlock, and `BorrowerRecovers`.
+`Current.cfg`: all invariants, both contracts, `OneAtATime`, deadlock, and `BorrowerRecovers`.
 2 calls from D, 1 from A, capacity 1, 2 faults; callers may cancel.
-Passes: 882,739 distinct states, 51 s.
+Passes: 1,709,865 distinct states, 133 s.
 
 ```bash
 just tlc Current
 ```
 
 `CurrentLate.cfg`: as `Current.cfg`, with `LateFrames`.
-Passes: 1.4 M distinct states, 78 s.
+Passes: 2,253,948 distinct states, 203 s.
 
 ```bash
 just tlc CurrentLate
 ```
 
+`CurrentDrain.cfg`: as `Current.cfg`, with `ListedDrainSafe`, one GOAWAY, one break, and `LateFrames`, without cancel.
+Passes: 2,352,176 distinct states, 203 s.
+
+```bash
+just tlc CurrentDrain
+```
+
+`CurrentLostStart.cfg`: as `CurrentDrain.cfg`, with `LostStarts` and without A's calls or `LateFrames`.
+Passes: 156,196 distinct states, 11 s.
+
+```bash
+just tlc CurrentLostStart
+```
+
 `ContractAtMostOnce.cfg`: `AtMostOnceExecution` with `LateFrames`, 2 calls, 2 faults.
-Passes: 13,002 distinct states, 1 s.
+Passes: 30,040 distinct states, 2 s.
 
 ```bash
 just tlc ContractAtMostOnce
 ```
 
-`ContractFIFO.cfg`: `PerSenderFIFO`, 2 calls, queue capacity 2, 1 fault.
+`LimitUnaccepted.cfg`: `DrainSafe` with one GOAWAY; the known limit.
 Fails, 1 s.
 
 ```bash
-just tlc ContractFIFO
+just tlc LimitUnaccepted
 ```
 
 ### Past Bugs
@@ -123,7 +148,7 @@ Fails, 1 s.
 just tlc BugLazyReconnect
 ```
 
-`BugAttachClosesPrior.cfg`: `SlotTracksLive` with `AttachClosesPrior`.
+`BugAttachClosesPrior.cfg`: `SlotTracksLive` with `AttachClosesPrior`, without a gate.
 Fails, 1 s.
 
 ```bash
@@ -132,7 +157,7 @@ just tlc BugAttachClosesPrior
 
 `BugBlockingReplies.cfg`: deadlock with `BlockingReplies`.
 5 calls in each direction, no faults, call symmetry.
-Deadlocks, 13 min.
+Deadlocks, 7 min.
 
 ```bash
 just tlc BugBlockingReplies
@@ -145,51 +170,65 @@ Fails, 1 s.
 just tlc BugRequeue
 ```
 
-`BugRequeueFIFO.cfg`: `PerSenderFIFO` with `Requeue`, supersede, and `LateFrames`.
+`BugRequeueFIFO.cfg`: `PerSenderFIFO` with `Requeue` and `LateFrames`.
 Fails, 1 s.
 
 ```bash
 just tlc BugRequeueFIFO
 ```
 
-### Proposed Design
+`BugNoGateFIFO.cfg`: `PerSenderFIFO` without a gate, 2 calls, queue capacity 2, 1 fault.
+Fails, 1 s.
 
-`FixFIFOIdle.cfg`: `PerSenderFIFO` with the idle gate; a break loses all frames in flight.
+```bash
+just tlc BugNoGateFIFO
+```
+
+`BugNoGateDrainSlot.cfg`: `SlotTracksLive` without a gate, with one GOAWAY.
+Fails, 1 s.
+
+```bash
+just tlc BugNoGateDrainSlot
+```
+
+### Rejected Designs
+
+`AltIdle.cfg`: `PerSenderFIFO` with the idle gate; a break loses all frames in flight.
 Passes: 1,274 distinct states, 1 s.
 
 ```bash
-just tlc FixFIFOIdle
+just tlc AltIdle
 ```
 
-`FixFIFOIdleLate.cfg`: as `FixFIFOIdle.cfg`, with `LateFrames`.
+`AltIdleLate.cfg`: as `AltIdle.cfg`, with `LateFrames`.
 Fails, 1 s.
 
 ```bash
-just tlc FixFIFOIdleLate
+just tlc AltIdleLate
 ```
 
-`FixFIFOSupersedeLate.cfg`: `PerSenderFIFO` with supersede and `LateFrames`, 3 calls, 2 faults.
-Passes: 107,910 distinct states, 2 s.
+`AltSupersedeLate.cfg`: `PerSenderFIFO` with plain supersede and `LateFrames`, 3 calls, 2 faults.
+Passes: 126,638 distinct states, 6 s.
 
 ```bash
-just tlc FixFIFOSupersedeLate
+just tlc AltSupersedeLate
 ```
 
-`FixOneAtATime.cfg`: `OneAtATime` with supersede and `LateFrames`.
+`AltSupersedeOneAtATime.cfg`: `OneAtATime` with plain supersede and `LateFrames`.
+Passes: 1,311 distinct states, 1 s.
+
+```bash
+just tlc AltSupersedeOneAtATime
+```
+
+`AltSupersedeDrain.cfg`: `DrainSafe` with plain supersede and one GOAWAY.
 Fails, 1 s.
 
 ```bash
-just tlc FixOneAtATime
+just tlc AltSupersedeDrain
 ```
 
-`Proposed.cfg`: everything in `Current.cfg`, plus both contracts, with supersede and `LateFrames`.
-Passes: 658,162 distinct states, 45 s.
-
-```bash
-just tlc Proposed
-```
-
-## The Model Finds the Four Past Bugs
+## The Model Finds the Past Bugs
 
 Each bug switch puts back the core of a past bug, in terms of today's code.
 TLC finds each one, so the model is detailed enough to catch them.
@@ -200,6 +239,7 @@ D waits for a request before it reopens, so A's shared node has no stream, forev
 Today's code reconnects eagerly for every symmetric outbound channel.
 
 **Attach closes prior** (duplicate inbound stream drops peer, 2026-07).
+This check runs without a gate, since the current gate refuses the late stream that triggers the bug.
 D's stream 1 breaks, and D opens stream 2.
 A attaches stream 2 first, then the late start of stream 1.
 Attaching stream 1 closes the channel of stream 2, which is healthy.
@@ -231,26 +271,25 @@ The per-send cancel watcher bug is not a switch.
 Today's code has no per-send watcher.
 Its effect was a stream that was never reopened, which the lazy-reconnect switch covers.
 
-## FIFO Order per Sender Does Not Hold Across a Reconnect
-
+**No FIFO gate** (calls ran out of order across a reconnect, fixed for issue 468).
 The user guide says that messages from the same sender run in FIFO order at all servers.
-That is true per stream.
-It is not true per sender across a stream break, because A gives each inbound stream its own dispatcher.
-After a break, A can still run requests that arrived on stream 1 while it already runs requests from stream 2:
+That held per stream, but not per sender across a stream break, because A gives each inbound stream its own dispatcher.
+After a break, A could still run requests that arrived on stream 1 while it already ran requests from stream 2:
 
 ![c2 runs before c1, because each channel has its own dispatcher](figures/dispatcher-race.svg)
 
-This is the trace of `ContractFIFO.cfg`.
+This is the trace of `BugNoGateFIFO.cfg`.
 `c1` waits in channel 1's dispatcher while `c2` runs on channel 2.
+Without a gate, a draining stream that A attaches late also becomes the shared node's slot, so A's calls to D fail until it detaches (`BugNoGateDrainSlot.cfg`).
 
-## The Proposed Design
+## How the Current Code Keeps FIFO Order
 
 FIFO order needs a gate at A.
 
 **The idle gate is not enough.**
 The idle gate lets A start a handler on stream 2 only while channel 1 is detached or has no queued or running request.
-This fixes the race above, and `FixFIFOIdle.cfg` passes.
-It fails when a break leaves a frame in transit (`FixFIFOIdleLate.cfg`):
+This fixes the race above, and `AltIdle.cfg` passes.
+It fails when a break leaves a frame in transit (`AltIdleLate.cfg`):
 
 ![A late c1 runs after c2, although the idle gate is on](figures/late-frame-idle-gate.svg)
 
@@ -262,7 +301,7 @@ A gate that waits for stream 1 to end is correct, but it stalls stream 2 until A
 With supersede, A refuses a stream older than one it has seen.
 When a newer stream attaches, A closes the older channel and drops its queued and late requests.
 D has already failed those calls with `ErrStreamDown`, so at-most-once permits the drop.
-`FixFIFOSupersedeLate.cfg` and `Proposed.cfg` pass.
+`AltSupersedeLate.cfg` passes.
 
 ![Supersede closes channel 1, so the late c1 is dropped](figures/late-frame-supersede.svg)
 
@@ -271,8 +310,35 @@ The bug ordered streams by attach order, so a late start of an old stream closed
 Supersede orders streams by D's stream number, and it refuses the late old stream.
 
 Supersede closes the older channel, but a handler that already runs on it continues.
-So the handlers of `c1` and `c2` can overlap, although `c1` starts first; `FixOneAtATime.cfg` shows this.
-If FIFO must also mean "one at a time", the new channel's dispatcher must wait for that handler to return.
+So the new channel's handlers wait until that handler returns or releases, and `OneAtATime` holds (`AltSupersedeOneAtATime.cfg`).
+
+## GOAWAY Draining
+
+After a GOAWAY, D keeps the old stream for the replies of the calls it already sent there, and sends new calls on a new stream.
+A stream that drains this way has no late frames: D half-closed it, so every frame on it precedes its end.
+
+**Plain supersede loses calls.**
+A treats the old stream like a lost one: it closes it, or refuses it if its start arrives after the new stream's.
+The calls that D sent on it then fail with `ErrStreamDown`, although nothing broke (`AltSupersedeDrain.cfg`).
+
+**The drain gate holds; the code implements it.**
+A sends an acceptance on each stream after it attaches the channel, as the `gorums-accepted` header does.
+D lists in the new stream's metadata the draining streams whose acceptance it has received.
+A keeps those streams, closes only the others, and starts the new stream's handlers only after each kept stream has run all its requests.
+A kept stream that A attaches late takes the slot only if the slot has no attached channel.
+`CurrentDrain.cfg` passes every property, including `ListedDrainSafe`, `PerSenderFIFO`, `OneAtATime`, and `BorrowerRecovers`.
+
+**Why D lists only accepted streams.**
+A draining stream can also break; a connection that breaks leaves Ready, which D handles as a GOAWAY.
+The start of such a stream may never reach A.
+If D listed it, A could not tell a late start from a lost one, and the new stream's handlers would wait forever.
+A listed stream is one that A has attached, so A always sees it finish.
+`CurrentLostStart.cfg` passes with `LostStarts`.
+
+**The cost.**
+If a GOAWAY arrives before the acceptance, D does not list the stream, and A closes it.
+The calls that D sent on it fail with `ErrStreamDown`, although nothing broke (`LimitUnaccepted.cfg`).
+This window is one round trip after D opens a stream.
 
 ## Limits
 
@@ -284,10 +350,8 @@ If FIFO must also mean "one at a time", the new channel's dispatcher must wait f
 
 ## Next Steps
 
-1. Implement supersede, with a stream number in the stream metadata.
-2. Add refusals with backoff, and GOAWAY with `Drain`.
-   These are the stream-layer paths with the most recent changes.
-3. Add trace validation: log the model's actions from `gorumstest` runs, and check each log against the spec with TLC.
+1. Add refusals with backoff, and the application's `Drain`.
+2. Add trace validation: log the model's actions from `gorumstest` runs, and check each log against the spec with TLC.
 
 ## Files
 
