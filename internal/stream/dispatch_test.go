@@ -153,3 +153,138 @@ func TestDispatcherBounded(t *testing.T) {
 		t.Fatal("push did not end when the dispatcher stopped")
 	}
 }
+
+// TestDispatcherHold verifies that a held dispatcher queues handlers until
+// its gate closes and then runs them in push order, and that a dispatcher
+// that stops while held discards them.
+func TestDispatcherHold(t *testing.T) {
+	t.Run("GateOpens", func(t *testing.T) {
+		d := newDispatcher(nil, testRecvBufferSize)
+		gate := make(chan struct{})
+		d.hold(gate)
+		ran := make(chan int, 2)
+		for i := range 2 {
+			if !d.push(t.Context(), func(func()) { ran <- i }) {
+				t.Fatalf("push %d failed", i)
+			}
+		}
+		select {
+		case i := <-ran:
+			t.Fatalf("handler %d ran before the gate opened", i)
+		case <-time.After(20 * time.Millisecond):
+		}
+		close(gate)
+		for want := range 2 {
+			select {
+			case got := <-ran:
+				if got != want {
+					t.Fatalf("handler %d ran, want %d", got, want)
+				}
+			case <-time.After(defaultTestTimeout):
+				t.Fatalf("handler %d did not run after the gate opened", want)
+			}
+		}
+		if !d.wait(nil) {
+			t.Fatal("wait() = false, want true")
+		}
+	})
+	for _, sealed := range []bool{false, true} {
+		name := map[bool]string{false: "StoppedDiscards", true: "StoppedSealedRuns"}[sealed]
+		t.Run(name, func(t *testing.T) {
+			done := make(chan struct{})
+			d := newDispatcher(done, testRecvBufferSize)
+			gate := make(chan struct{})
+			d.hold(gate)
+			ran := make(chan struct{}, 1)
+			if !d.push(t.Context(), func(func()) { ran <- struct{}{} }) {
+				t.Fatal("push failed")
+			}
+			if sealed {
+				d.seal()
+			}
+			close(done)
+			select {
+			case <-ran:
+				t.Fatal("a held handler ran before the gate opened")
+			case <-time.After(20 * time.Millisecond):
+			}
+			close(gate)
+			if !d.wait(nil) {
+				t.Fatal("wait() = false, want true")
+			}
+			select {
+			case <-ran:
+				if !sealed {
+					t.Fatal("a stopped dispatcher ran a held handler")
+				}
+			default:
+				if sealed {
+					t.Fatal("a sealed dispatcher discarded a held handler")
+				}
+			}
+		})
+	}
+}
+
+// TestDispatcherWaitRetired verifies that waitRetired returns once the
+// dispatcher will start no more handlers: it has stopped or is sealed, and no
+// handler holds the order, because the running one returned or released.
+func TestDispatcherWaitRetired(t *testing.T) {
+	tests := []struct {
+		name string
+		end  func(d *dispatcher, done chan struct{}) // makes the dispatcher stop starting handlers
+		exit func(release func(), block chan struct{})
+	}{
+		{name: "StopThenReturn", end: func(_ *dispatcher, done chan struct{}) { close(done) }, exit: func(_ func(), block chan struct{}) { close(block) }},
+		{name: "StopThenRelease", end: func(_ *dispatcher, done chan struct{}) { close(done) }, exit: func(release func(), _ chan struct{}) { release() }},
+		{name: "SealThenReturn", end: func(d *dispatcher, _ chan struct{}) { d.seal() }, exit: func(_ func(), block chan struct{}) { close(block) }},
+		{name: "SealThenRelease", end: func(d *dispatcher, _ chan struct{}) { d.seal() }, exit: func(release func(), _ chan struct{}) { release() }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			done := make(chan struct{})
+			d := newDispatcher(done, testRecvBufferSize)
+			block := make(chan struct{})
+			t.Cleanup(func() {
+				select {
+				case <-block:
+				default:
+					close(block)
+				}
+			})
+			releaseCh := make(chan func(), 1)
+			d.push(t.Context(), func(release func()) {
+				releaseCh <- release
+				<-block
+			})
+			release := <-releaseCh
+
+			retired := make(chan struct{})
+			go func() { d.waitRetired(); close(retired) }()
+			tt.end(d, done)
+			select {
+			case <-retired:
+				t.Fatal("waitRetired returned while a handler held the order")
+			case <-time.After(20 * time.Millisecond):
+			}
+			tt.exit(release, block)
+			select {
+			case <-retired:
+			case <-time.After(defaultTestTimeout):
+				t.Fatal("waitRetired did not return after the handler gave up the order")
+			}
+		})
+	}
+	t.Run("SealedRunsQueue", func(t *testing.T) {
+		d := newDispatcher(nil, testRecvBufferSize)
+		block := make(chan struct{})
+		var ran sync.WaitGroup
+		ran.Add(2)
+		d.push(t.Context(), func(func()) { <-block; ran.Done() })
+		d.push(t.Context(), func(func()) { ran.Done() })
+		d.seal()
+		close(block)
+		d.waitRetired()
+		ran.Wait() // both handlers started before waitRetired returned
+	})
+}

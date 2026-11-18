@@ -20,6 +20,7 @@ type dispatcher struct {
 	sealed  bool          // no more handlers are pushed; queued handlers run even after done closes
 	active  int           // queued and running handlers
 	idle    chan struct{} // closed when active drops to zero; nil until wait needs it
+	changed chan struct{} // closed when running becomes false or on seal; nil until waitRetired needs it
 }
 
 // newDispatcher returns a dispatcher that queues up to size handlers; size
@@ -110,6 +111,7 @@ func (d *dispatcher) take() func(release func()) {
 	}
 	if len(d.queue) == 0 {
 		d.running = false
+		d.notifyLocked()
 		d.mu.Unlock()
 		return nil
 	}
@@ -126,7 +128,54 @@ func (d *dispatcher) take() func(release func()) {
 func (d *dispatcher) seal() {
 	d.mu.Lock()
 	d.sealed = true
+	d.notifyLocked()
 	d.mu.Unlock()
+}
+
+// hold makes the dispatcher queue handlers until gate closes, and then start
+// them in push order. If the dispatcher has stopped by then, it discards them,
+// unless it is sealed. Call hold before the first push.
+func (d *dispatcher) hold(gate <-chan struct{}) {
+	d.mu.Lock()
+	d.running = true
+	d.mu.Unlock()
+	go func() {
+		<-gate
+		d.next()
+	}()
+}
+
+// waitRetired waits until the dispatcher will start no more handlers: it has
+// stopped or is sealed, and no handler holds the order. A sealed dispatcher
+// has then started its queued handlers, and the latest one has returned or
+// released.
+func (d *dispatcher) waitRetired() {
+	done := d.done
+	for {
+		d.mu.Lock()
+		if !d.running && (d.sealed || d.stopped()) {
+			d.mu.Unlock()
+			return
+		}
+		if d.changed == nil {
+			d.changed = make(chan struct{})
+		}
+		changed := d.changed
+		d.mu.Unlock()
+		select {
+		case <-changed:
+		case <-done:
+			done = nil // stopped; wait for the running handler
+		}
+	}
+}
+
+// notifyLocked wakes the goroutines in waitRetired. The caller must hold mu.
+func (d *dispatcher) notifyLocked() {
+	if d.changed != nil {
+		close(d.changed)
+		d.changed = nil
+	}
 }
 
 // wait waits until no handler is queued or running, or until stop is closed,
