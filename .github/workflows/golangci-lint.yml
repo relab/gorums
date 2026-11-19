@@ -25,7 +25,7 @@ jobs:
           cache: true
           cache-dependency-path: "**/go.sum"
       - uses: ./.github/actions/setup-protoc
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
 
       - name: Build and check generated files
         run: |

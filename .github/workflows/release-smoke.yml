@@ -45,7 +45,7 @@ jobs:
           cache: true
           cache-dependency-path: "**/go.sum"
       - uses: ./.github/actions/setup-protoc
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       # Same golangci-lint version as golangci-lint.yml, so just lint agrees.
       - uses: golangci/golangci-lint-action@v9
         with:
@@ -81,7 +81,7 @@ jobs:
           cache: true
           cache-dependency-path: "**/go.sum"
       - uses: ./.github/actions/setup-protoc
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       # Typst builds report.pdf; without it the smoke test still passes.
       - uses: typst-community/setup-typst@v5
 

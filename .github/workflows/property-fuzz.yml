@@ -19,7 +19,7 @@ jobs:
           go-version-file: "go.mod"
           cache: true
           cache-dependency-path: "**/go.sum"
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - name: Extended properties
         run: |
           set -o pipefail
