@@ -28,96 +28,81 @@ func makeTreeConfig(n int) Config {
 func TestNewTree_Errors(t *testing.T) {
 	cfg := makeTreeConfig(7)
 	tests := []struct {
-		name    string
-		cfg     Config
-		opts    TreeOptions
-		wantErr string
+		name            string
+		cfg             Config
+		branchingFactor int
+		wantErr         string
 	}{
-		{
-			name:    "BranchingFactorZero",
-			cfg:     cfg,
-			opts:    TreeOptions{BranchingFactor: 0, Depth: 2},
-			wantErr: "BranchingFactor must be >= 2",
-		},
-		{
-			name:    "BranchingFactorOne",
-			cfg:     cfg,
-			opts:    TreeOptions{BranchingFactor: 1, Depth: 2},
-			wantErr: "BranchingFactor must be >= 2",
-		},
-		{
-			name:    "DepthZero",
-			cfg:     cfg,
-			opts:    TreeOptions{BranchingFactor: 2, Depth: 0},
-			wantErr: "Depth must be >= 1",
-		},
-		{
-			name:    "EmptyConfig",
-			cfg:     Config{},
-			opts:    TreeOptions{BranchingFactor: 2, Depth: 1},
-			wantErr: "empty configuration",
-		},
-		{
-			name:    "NilConfig",
-			cfg:     nil,
-			opts:    TreeOptions{BranchingFactor: 2, Depth: 1},
-			wantErr: "empty configuration",
-		},
-		{
-			name:    "ExcessNodes",
-			cfg:     makeTreeConfig(15), // capacity for bf=3, depth=2 is 13
-			opts:    TreeOptions{BranchingFactor: 3, Depth: 2},
-			wantErr: "exceeds tree capacity",
-		},
-		{
-			name:    "OverflowCapacity",
-			cfg:     makeTreeConfig(1),
-			opts:    TreeOptions{BranchingFactor: 2, Depth: 63},
-			wantErr: "exceeds representable range",
-		},
+		{name: "BranchingFactorZero", cfg: cfg, branchingFactor: 0, wantErr: "branching factor must be >= 1"},
+		{name: "BranchingFactorNegative", cfg: cfg, branchingFactor: -1, wantErr: "branching factor must be >= 1"},
+		{name: "EmptyConfig", cfg: Config{}, branchingFactor: 2, wantErr: "empty configuration"},
+		{name: "NilConfig", cfg: nil, branchingFactor: 2, wantErr: "empty configuration"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewTree(tt.cfg, tt.opts)
+			_, err := NewTree(tt.cfg, tt.branchingFactor)
 			if err == nil {
 				t.Fatal("expected error, got nil")
 			}
-			if tt.wantErr != "" && !strings.Contains(err.Error(), tt.wantErr) {
+			if !strings.Contains(err.Error(), tt.wantErr) {
 				t.Errorf("error %q does not contain %q", err.Error(), tt.wantErr)
 			}
 		})
 	}
 }
 
-// TestTreeLevelStart verifies the level-start index arithmetic.
-func TestTreeLevelStart(t *testing.T) {
+// TestNewTreeDepth verifies that a tree has the smallest depth that holds
+// all the nodes of the configuration.
+func TestNewTreeDepth(t *testing.T) {
 	tests := []struct {
-		bf    int
-		level int
-		want  int
+		n, branchingFactor, height int
 	}{
-		// bf=2: 0, 1, 3, 7, 15
-		{bf: 2, level: 0, want: 0},
-		{bf: 2, level: 1, want: 1},
-		{bf: 2, level: 2, want: 3},
-		{bf: 2, level: 3, want: 7},
-		{bf: 2, level: 4, want: 15},
-		// bf=3: 0, 1, 4, 13
-		{bf: 3, level: 0, want: 0},
-		{bf: 3, level: 1, want: 1},
-		{bf: 3, level: 2, want: 4},
-		{bf: 3, level: 3, want: 13},
-		// bf=4: 0, 1, 5, 21
-		{bf: 4, level: 0, want: 0},
-		{bf: 4, level: 1, want: 1},
-		{bf: 4, level: 2, want: 5},
-		{bf: 4, level: 3, want: 21},
+		{n: 1, branchingFactor: 1, height: 0},
+		{n: 1, branchingFactor: 5, height: 0},
+		{n: 2, branchingFactor: 2, height: 1},
+		{n: 3, branchingFactor: 2, height: 1},
+		{n: 4, branchingFactor: 2, height: 2},
+		{n: 7, branchingFactor: 2, height: 2},
+		{n: 8, branchingFactor: 2, height: 3},
+		{n: 13, branchingFactor: 3, height: 2},
+		{n: 14, branchingFactor: 3, height: 3},
+		{n: 5, branchingFactor: 1, height: 4},
+		{n: 5, branchingFactor: math.MaxInt, height: 1},
 	}
 	for _, tt := range tests {
-		got := treeLevelStart(tt.level, tt.bf)
-		if got != tt.want {
-			t.Errorf("treeLevelStart(%d, bf=%d) = %d, want %d", tt.level, tt.bf, got, tt.want)
+		tree := mustNewTree(t, tt.n, tt.branchingFactor)
+		if got := tree.Height(1); got != tt.height {
+			t.Errorf("n=%d, b=%d: Height(root) = %d, want %d", tt.n, tt.branchingFactor, got, tt.height)
 		}
+		if got := tree.BranchingFactor(); got != tt.branchingFactor {
+			t.Errorf("n=%d, b=%d: BranchingFactor() = %d", tt.n, tt.branchingFactor, got)
+		}
+	}
+}
+
+// TestTreeChain verifies that a branching factor of 1 builds a chain in the
+// order of the configuration.
+//
+//	1 - 2 - 3 - 4
+func TestTreeChain(t *testing.T) {
+	tree := mustNewTree(t, 4, 1)
+	for id := ID(1); id <= 4; id++ {
+		if got := tree.Level(id); got != int(id)-1 {
+			t.Errorf("Level(%d) = %d, want %d", id, got, id-1)
+		}
+		var wantChildren []ID
+		if id < 4 {
+			wantChildren = []ID{id + 1}
+		}
+		if got := tree.ChildrenOf(id).NodeIDs(); !slices.Equal(got, wantChildren) {
+			t.Errorf("ChildrenOf(%d) = %v, want %v", id, got, wantChildren)
+		}
+	}
+	if p := tree.ParentOf(4); p == nil || p.ID() != 3 {
+		t.Errorf("ParentOf(4) = %v, want node 3", p)
+	}
+	if got := tree.Subtree(2).NodeIDs(); !slices.Equal(got, []ID{2, 3, 4}) {
+		t.Errorf("Subtree(2) = %v, want [2 3 4]", got)
 	}
 }
 
@@ -132,7 +117,7 @@ func TestTreeLevelStart(t *testing.T) {
 func TestTreeArithmeticOverflow(t *testing.T) {
 	tree := &TreeConfig{
 		nodes:      makeTreeConfig(3),
-		opts:       TreeOptions{BranchingFactor: math.MaxInt, Depth: 1},
+		arity:      math.MaxInt,
 		levels:     []int{0, 1, 1},
 		positionOf: map[ID]int{1: 0, 2: 1, 3: 2},
 	}
@@ -158,7 +143,7 @@ func TestTreeArithmeticOverflow(t *testing.T) {
 
 // TestTreeParentOf verifies ParentOf on a perfect bf=3 depth=2 tree.
 func TestTreeParentOf(t *testing.T) {
-	tree := mustNewTree(t, 13, TreeOptions{BranchingFactor: 3, Depth: 2})
+	tree := mustNewTree(t, 13, 3)
 	tests := []struct {
 		id         ID
 		wantParent ID // ignored when wantNil is true
@@ -197,7 +182,7 @@ func TestTreeParentOf(t *testing.T) {
 
 // TestTreeChildrenOf verifies ChildrenOf on a perfect bf=3 depth=2 tree.
 func TestTreeChildrenOf(t *testing.T) {
-	tree := mustNewTree(t, 13, TreeOptions{BranchingFactor: 3, Depth: 2})
+	tree := mustNewTree(t, 13, 3)
 	tests := []struct {
 		id      ID
 		wantIDs []ID
@@ -227,7 +212,7 @@ func TestTreeChildrenOf(t *testing.T) {
 
 // TestTreeSubtree verifies Subtree on a perfect bf=3 depth=2 tree.
 func TestTreeSubtree(t *testing.T) {
-	tree := mustNewTree(t, 13, TreeOptions{BranchingFactor: 3, Depth: 2})
+	tree := mustNewTree(t, 13, 3)
 	tests := []struct {
 		id      ID
 		wantIDs []ID
@@ -264,7 +249,7 @@ func TestTreeSubtree(t *testing.T) {
 //	 /|\   /|\
 //	5 6 7 8 9 10
 func TestTreePartialLastLevel(t *testing.T) {
-	tree := mustNewTree(t, 10, TreeOptions{BranchingFactor: 3, Depth: 2})
+	tree := mustNewTree(t, 10, 3)
 
 	// Node 2 (level 1, idx 0): children at positions 4,5,6 — all present.
 	if got := tree.ChildrenOf(2); !slices.Equal(got.NodeIDs(), []ID{5, 6, 7}) {
@@ -298,22 +283,10 @@ func TestTreePartialLastLevel(t *testing.T) {
 //	 /|\   /|\    / |
 //	5 6 7 8 9 10 11 12
 func TestTreePartialLastLevel_OneChild(t *testing.T) {
-	tree := mustNewTree(t, 12, TreeOptions{BranchingFactor: 3, Depth: 2})
+	tree := mustNewTree(t, 12, 3)
 	// Node 4 (level 1, idx 2): children at 11, 12 — position 12 (slot for ID 13) absent.
 	if got := tree.ChildrenOf(4); !slices.Equal(got.NodeIDs(), []ID{11, 12}) {
 		t.Errorf("ChildrenOf(4) = %v, want [11 12]", got.NodeIDs())
-	}
-}
-
-// TestTreeExcessNodes verifies that a configuration larger than the tree
-// capacity is rejected (bf=3, depth=2, capacity=13; give 15 nodes).
-func TestTreeExcessNodes(t *testing.T) {
-	_, err := NewTree(makeTreeConfig(15), TreeOptions{BranchingFactor: 3, Depth: 2})
-	if err == nil {
-		t.Fatal("expected error for configuration exceeding tree capacity, got nil")
-	}
-	if !strings.Contains(err.Error(), "exceeds tree capacity") {
-		t.Errorf("unexpected error message: %v", err)
 	}
 }
 
@@ -327,7 +300,7 @@ func TestTreeExcessNodes(t *testing.T) {
 //	 / \   / \   / \   / \
 //	8   9 10 11 12 13 14 15
 func TestTreeBF2Depth3(t *testing.T) {
-	tree := mustNewTree(t, 15, TreeOptions{BranchingFactor: 2, Depth: 3})
+	tree := mustNewTree(t, 15, 2)
 
 	parentTests := []struct {
 		id     ID
@@ -367,9 +340,9 @@ func TestTreeBF2Depth3(t *testing.T) {
 }
 
 // mustNewTree creates a TreeConfig for testing, failing the test on error.
-func mustNewTree(t *testing.T, n int, opts TreeOptions) *TreeConfig {
+func mustNewTree(t *testing.T, n, branchingFactor int) *TreeConfig {
 	t.Helper()
-	tree, err := NewTree(makeTreeConfig(n), opts)
+	tree, err := NewTree(makeTreeConfig(n), branchingFactor)
 	if err != nil {
 		t.Fatalf("NewTree: %v", err)
 	}
@@ -390,7 +363,7 @@ func TestTreeOrderDefinesPositions(t *testing.T) {
 	for _, id := range []ID{5, 3, 7, 1, 6, 2, 4} {
 		cfg = append(cfg, makeTreeNode(id))
 	}
-	tree, err := NewTree(cfg, TreeOptions{BranchingFactor: 2, Depth: 2})
+	tree, err := NewTree(cfg, 2)
 	if err != nil {
 		t.Fatalf("NewTree: %v", err)
 	}
@@ -413,7 +386,7 @@ func TestTreeOrderDefinesPositions(t *testing.T) {
 		t.Errorf("Subtree(7) = %v, want [7 2 4]", got)
 	}
 	// Sorting the configuration by ID before building changes the shape.
-	sorted, err := NewTree(cfg.Sort(ByID), TreeOptions{BranchingFactor: 2, Depth: 2})
+	sorted, err := NewTree(cfg.Sort(ByID), 2)
 	if err != nil {
 		t.Fatalf("NewTree: %v", err)
 	}
@@ -431,7 +404,7 @@ func TestTreeOrderDefinesPositions(t *testing.T) {
 //	 /|\ /|\ |
 //	5 6 7 8 9 10 11
 func TestTreeLevelHeightIsLeaf(t *testing.T) {
-	tree := mustNewTree(t, 11, TreeOptions{BranchingFactor: 3, Depth: 2})
+	tree := mustNewTree(t, 11, 3)
 	tests := []struct {
 		id     ID
 		level  int
@@ -456,14 +429,13 @@ func TestTreeLevelHeightIsLeaf(t *testing.T) {
 			t.Errorf("IsLeaf(%d) = %t, want %t", tt.id, got, tt.isLeaf)
 		}
 	}
-	// A tree that does not fill its deepest level has a smaller height at
-	// nodes without descendants there.
-	shallow := mustNewTree(t, 4, TreeOptions{BranchingFactor: 3, Depth: 3})
-	if got := shallow.Height(1); got != 1 {
-		t.Errorf("Height(1) of a 4-node tree = %d, want 1", got)
+	// A node above the last level without children of its own is a leaf.
+	partial := mustNewTree(t, 10, 3)
+	if got := partial.Height(4); got != 0 {
+		t.Errorf("Height(4) of a 10-node tree = %d, want 0", got)
 	}
-	if !shallow.IsLeaf(2) {
-		t.Error("IsLeaf(2) = false, want true")
+	if !partial.IsLeaf(4) {
+		t.Error("IsLeaf(4) = false, want true")
 	}
 }
 
@@ -500,8 +472,8 @@ func TestNewStar(t *testing.T) {
 // configuration cannot overwrite the tree's nodes.
 func TestTreeIsImmutable(t *testing.T) {
 	cfg := makeTreeConfig(7)
-	tree := mustNewTree(t, 7, TreeOptions{BranchingFactor: 2, Depth: 2})
-	tree2, err := NewTree(cfg, TreeOptions{BranchingFactor: 2, Depth: 2})
+	tree := mustNewTree(t, 7, 2)
+	tree2, err := NewTree(cfg, 2)
 	if err != nil {
 		t.Fatalf("NewTree: %v", err)
 	}
@@ -520,7 +492,7 @@ func TestTreeIsImmutable(t *testing.T) {
 // rejected, since a node would then have two positions.
 func TestTreeDuplicateNode(t *testing.T) {
 	cfg := Config{makeTreeNode(1), makeTreeNode(2), makeTreeNode(1)}
-	_, err := NewTree(cfg, TreeOptions{BranchingFactor: 2, Depth: 2})
+	_, err := NewTree(cfg, 2)
 	if err == nil || !strings.Contains(err.Error(), "more than once") {
 		t.Errorf("NewTree error = %v, want duplicate-node error", err)
 	}
@@ -537,7 +509,7 @@ func TestTreeSubtreeAllocation(t *testing.T) {
 	if got := cap(star.Subtree(2)); got != 1 {
 		t.Errorf("cap(Subtree(leaf)) = %d, want 1", got)
 	}
-	tree := mustNewTree(t, 13, TreeOptions{BranchingFactor: 3, Depth: 2})
+	tree := mustNewTree(t, 13, 3)
 	for _, id := range []ID{1, 2, 3, 4, 5, 13} {
 		if sub := tree.Subtree(id); cap(sub) != len(sub) {
 			t.Errorf("Subtree(%d): cap = %d, len = %d, want equal", id, cap(sub), len(sub))
@@ -546,10 +518,10 @@ func TestTreeSubtreeAllocation(t *testing.T) {
 }
 
 // BenchmarkTreePositions measures the position lookups that a relay makes
-// once per message, on a 100-node tree.
+// once per message, on a 100-node binary tree and a 100-node chain.
 func BenchmarkTreePositions(b *testing.B) {
-	for _, bf := range []int{2, 10} {
-		tree, err := NewTree(makeTreeConfig(100), TreeOptions{BranchingFactor: bf, Depth: 6})
+	for _, bf := range []int{2, 1} {
+		tree, err := NewTree(makeTreeConfig(100), bf)
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -183,7 +183,7 @@ propertytest checks="1000":
 # Fuzz each target for seconds, with two workers per campaign.
 [group('test')]
 fuzztest seconds="30": \
-    (_fuzz "." "FuzzTreeOptions" seconds) \
+    (_fuzz "." "FuzzNewTree" seconds) \
     (_fuzz "./internal/impl" "FuzzMarshaling" seconds) \
     (_fuzz "./internal/impl" "FuzzTerminals" seconds) \
     (_fuzz "./internal/stream" "FuzzMessageMetadata" seconds) \

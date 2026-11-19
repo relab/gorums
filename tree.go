@@ -2,28 +2,20 @@ package gorums
 
 import (
 	"fmt"
-	"math"
-	"math/bits"
 	"slices"
 )
 
-// TreeOptions configures the shape of a [TreeConfig].
-type TreeOptions struct {
-	BranchingFactor int // maximum number of children per node; must be >= 2
-	Depth           int // maximum number of edges from the root to a leaf; must be >= 1
-}
-
 // TreeConfig is a tree topology over the nodes of a [Config]: a complete
-// b-ary tree in breadth-first order. The first node of the configuration is
-// the root, the next BranchingFactor nodes are its children, the next
-// BranchingFactor^2 nodes are the grandchildren, and so on. If the
-// configuration has fewer nodes than a full tree of the given shape, the last
-// level is partially filled from the left.
+// b-ary tree in breadth-first order, where b is the branching factor. In a
+// complete tree, every level is full except possibly the last, which is
+// filled from the left. The first node of the configuration is the root, the
+// next b nodes are its children, the next b^2 nodes are the grandchildren,
+// and so on. The tree has the smallest depth that holds all the nodes.
+// A branching factor of 1 gives a chain.
 //
 // The order of the configuration alone defines the positions in the tree.
-// Node IDs have no influence. To control which node is the root, and which
-// nodes share a parent, order the configuration first, for example with
-// [Config.Sort], and then call [NewTree].
+// Processes that relay over the same tree must build it from configurations
+// in the same order.
 //
 // A TreeConfig is an immutable value; it is safe for concurrent use.
 // To change the tree, for example to use a new tree in each view of a
@@ -45,39 +37,29 @@ type TreeOptions struct {
 // its local work.
 type TreeConfig struct {
 	// nodes lists the tree in breadth-first order, and the position of a
-	// node is its index in nodes; nodes[0] is the root. With branching
-	// factor b, the children of position p are the positions p*b+1 through
-	// p*b+b that are in nodes, and the parent of position p > 0 is (p-1)/b.
-	nodes      Config
-	opts       TreeOptions
+	// node is its index in nodes; nodes[0] is the root. With arity a, the
+	// children of position p are the positions p*a+1 through p*a+a that are
+	// in nodes, and the parent of position p > 0 is (p-1)/a.
+	nodes Config
+	// branchingFactor is the branching factor given to NewTree.
+	branchingFactor int
+	// arity is min(branchingFactor, max(len(nodes)-1, 1)), the smallest
+	// branching factor that gives the same tree.
+	arity      int
 	levels     []int      // levels[pos] is the level of the node at position pos
 	positionOf map[ID]int // node ID → index in nodes
 }
 
-// NewTree returns a [TreeConfig] over cfg using the given options.
-// The nodes are placed in the tree in the order of cfg.
-// It returns an error if cfg is empty, the options are invalid, or cfg has
-// more nodes than the tree can hold, which is (b^(depth+1) − 1) / (b − 1)
-// for branching factor b. If cfg has fewer nodes, the last level is partial.
-//
-// The tree keeps its own copy of the node list, so later changes to cfg
-// do not affect it.
-func NewTree(cfg Config, opts TreeOptions) (*TreeConfig, error) {
-	if opts.BranchingFactor < 2 {
-		return nil, fmt.Errorf("gorums: TreeOptions.BranchingFactor must be >= 2, got %d", opts.BranchingFactor)
-	}
-	if opts.Depth < 1 {
-		return nil, fmt.Errorf("gorums: TreeOptions.Depth must be >= 1, got %d", opts.Depth)
+// NewTree returns a [TreeConfig] over cfg with the given branching factor,
+// the maximum number of children per node. The nodes are placed in the tree
+// in the order of cfg, and the tree has the smallest depth that holds them.
+// It returns an error if cfg is empty or if branchingFactor is less than 1.
+func NewTree(cfg Config, branchingFactor int) (*TreeConfig, error) {
+	if branchingFactor < 1 {
+		return nil, fmt.Errorf("gorums: branching factor must be >= 1, got %d", branchingFactor)
 	}
 	if len(cfg) == 0 {
 		return nil, fmt.Errorf("gorums: cannot build a tree from an empty configuration")
-	}
-	capacity := treeLevelStart(opts.Depth+1, opts.BranchingFactor)
-	if capacity < 0 {
-		return nil, fmt.Errorf("gorums: tree shape (BranchingFactor=%d, Depth=%d) exceeds representable range", opts.BranchingFactor, opts.Depth)
-	}
-	if len(cfg) > capacity {
-		return nil, fmt.Errorf("gorums: configuration has %d nodes, exceeds tree capacity of %d", len(cfg), capacity)
 	}
 	nodes := slices.Clone(cfg)
 	positionOf := make(map[ID]int, len(nodes))
@@ -87,56 +69,40 @@ func NewTree(cfg Config, opts TreeOptions) (*TreeConfig, error) {
 		}
 		positionOf[n.ID()] = i
 	}
+	// A tree with b >= len(nodes)-1 is a star for every such b, so the
+	// arithmetic uses the smallest of them.
+	arity := min(branchingFactor, max(len(nodes)-1, 1))
 	levels := make([]int, len(nodes))
 	for pos := 1; pos < len(nodes); pos++ {
-		levels[pos] = levels[(pos-1)/opts.BranchingFactor] + 1
+		levels[pos] = levels[(pos-1)/arity] + 1
 	}
-	return &TreeConfig{nodes: nodes, opts: opts, levels: levels, positionOf: positionOf}, nil
+	return &TreeConfig{nodes: nodes, branchingFactor: branchingFactor, arity: arity, levels: levels, positionOf: positionOf}, nil
 }
 
 // NewStar returns a [TreeConfig] in which the first node of cfg is the root
-// and every other node is a child of the root. It is a tree of depth 1 whose
-// branching factor is the number of other nodes, and it is useful as a
-// fallback when a deeper tree cannot be used.
+// and every other node is a child of the root. It is the tree that [NewTree]
+// returns with a branching factor of max(len(cfg)-1, 1), and it is useful as
+// a fallback when a deeper tree cannot be used.
 // It returns an error if cfg is empty.
 func NewStar(cfg Config) (*TreeConfig, error) {
-	return NewTree(cfg, TreeOptions{BranchingFactor: max(len(cfg)-1, 2), Depth: 1})
+	return NewTree(cfg, max(len(cfg)-1, 1))
 }
 
-// treeLevelStart returns the index of the first node at level k in a tree with
-// the given branching factor (bf > 1), i.e., the total number of nodes in
-// levels 0 through k−1, computed as the sum bf^0 + bf^1 + … + bf^(k−1).
-// Returns -1 if the result would overflow int.
-func treeLevelStart(k, bf int) int {
-	sum, pow := uint(0), uint(1)
-	for i := range k {
-		var carry uint
-		sum, carry = bits.Add(sum, pow, 0)
-		// ensure sum still fits in an int value before the final int(sum) conversion
-		if carry != 0 || sum > uint(math.MaxInt) {
-			return -1
-		}
-		if i+1 < k {
-			hi, lo := bits.Mul(pow, uint(bf))
-			if hi != 0 {
-				return -1
-			}
-			pow = lo
-		}
-	}
-	return int(sum)
+// BranchingFactor returns the branching factor that the tree was built with.
+func (t *TreeConfig) BranchingFactor() int {
+	return t.branchingFactor
 }
 
 // firstChild returns the position of the first child of position pos, or
 // len(t.nodes) if the position has no children. It compares pos with
-// (len(t.nodes)-2)/b, the last position with a child, before it multiplies,
-// so the result always fits in an int.
+// (len(t.nodes)-2)/arity, the last position with a child, before it
+// multiplies, so the result always fits in an int.
 func (t *TreeConfig) firstChild(pos int) int {
 	n := len(t.nodes)
-	if n < 2 || pos > (n-2)/t.opts.BranchingFactor {
+	if n < 2 || pos > (n-2)/t.arity {
 		return n
 	}
-	return pos*t.opts.BranchingFactor + 1
+	return pos*t.arity + 1
 }
 
 // ParentOf returns the parent of the node with the given ID, or nil if the
@@ -146,7 +112,7 @@ func (t *TreeConfig) ParentOf(id ID) *Node {
 	if !found || pos == 0 {
 		return nil
 	}
-	return t.nodes[(pos-1)/t.opts.BranchingFactor]
+	return t.nodes[(pos-1)/t.arity]
 }
 
 // ChildrenOf returns the direct children of the node with the given ID as a
@@ -160,7 +126,7 @@ func (t *TreeConfig) ChildrenOf(id ID) Config {
 	if first >= len(t.nodes) {
 		return nil
 	}
-	last := first + min(t.opts.BranchingFactor, len(t.nodes)-first)
+	last := first + min(t.arity, len(t.nodes)-first)
 	return t.nodes[first:last:last]
 }
 
