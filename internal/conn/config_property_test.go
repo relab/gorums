@@ -128,6 +128,8 @@ func TestConfigProperties(t *testing.T) {
 	})
 }
 
+// TestConfigWatchProperties checks change notifications with a consumer that
+// reads after each tick.
 func TestConfigWatchProperties(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		choices := rapid.SliceOfN(rapid.IntRange(0, 3), 1, 20).Draw(t, "views")
