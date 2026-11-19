@@ -44,8 +44,13 @@ type TreeOptions struct {
 // process at the root itself sends to [TreeConfig.ChildrenOf] its own ID after
 // its local work.
 type TreeConfig struct {
-	nodes      Config // breadth-first order; nodes[0] is the root
+	// nodes lists the tree in breadth-first order, and the position of a
+	// node is its index in nodes; nodes[0] is the root. With branching
+	// factor b, the children of position p are the positions p*b+1 through
+	// p*b+b that are in nodes, and the parent of position p > 0 is (p-1)/b.
+	nodes      Config
 	opts       TreeOptions
+	levels     []int      // levels[pos] is the level of the node at position pos
 	positionOf map[ID]int // node ID → index in nodes
 }
 
@@ -82,7 +87,11 @@ func NewTree(cfg Config, opts TreeOptions) (*TreeConfig, error) {
 		}
 		positionOf[n.ID()] = i
 	}
-	return &TreeConfig{nodes: nodes, opts: opts, positionOf: positionOf}, nil
+	levels := make([]int, len(nodes))
+	for pos := 1; pos < len(nodes); pos++ {
+		levels[pos] = levels[(pos-1)/opts.BranchingFactor] + 1
+	}
+	return &TreeConfig{nodes: nodes, opts: opts, levels: levels, positionOf: positionOf}, nil
 }
 
 // NewStar returns a [TreeConfig] in which the first node of cfg is the root
@@ -97,8 +106,7 @@ func NewStar(cfg Config) (*TreeConfig, error) {
 // treeLevelStart returns the index of the first node at level k in a tree with
 // the given branching factor (bf > 1), i.e., the total number of nodes in
 // levels 0 through k−1, computed as the sum bf^0 + bf^1 + … + bf^(k−1).
-// Returns -1 if the result would overflow int; callers at validation boundaries
-// must check for -1 before using the result.
+// Returns -1 if the result would overflow int.
 func treeLevelStart(k, bf int) int {
 	sum, pow := uint(0), uint(1)
 	for i := range k {
@@ -119,43 +127,26 @@ func treeLevelStart(k, bf int) int {
 	return int(sum)
 }
 
-// treePow returns base^exp for non-negative exp.
-func treePow(base, exp int) int {
-	result := 1
-	for range exp {
-		result *= base
+// firstChild returns the position of the first child of position pos, or
+// len(t.nodes) if the position has no children. It compares pos with
+// (len(t.nodes)-2)/b, the last position with a child, before it multiplies,
+// so the result always fits in an int.
+func (t *TreeConfig) firstChild(pos int) int {
+	n := len(t.nodes)
+	if n < 2 || pos > (n-2)/t.opts.BranchingFactor {
+		return n
 	}
-	return result
-}
-
-// posLevel returns the depth and within-level index of the node at position pos.
-// Returns -1, -1 if pos is out of range.
-func (t *TreeConfig) posLevel(pos int) (depth, indexInLevel int) {
-	if pos < 0 || pos >= len(t.nodes) {
-		return -1, -1
-	}
-	bf := t.opts.BranchingFactor
-	for d := range t.opts.Depth + 1 {
-		if pos < treeLevelStart(d+1, bf) {
-			return d, pos - treeLevelStart(d, bf)
-		}
-	}
-	return -1, -1
+	return pos*t.opts.BranchingFactor + 1
 }
 
 // ParentOf returns the parent of the node with the given ID, or nil if the
 // node is the root or not in the tree.
 func (t *TreeConfig) ParentOf(id ID) *Node {
 	pos, found := t.positionOf[id]
-	if !found {
+	if !found || pos == 0 {
 		return nil
 	}
-	d, idx := t.posLevel(pos)
-	if d <= 0 {
-		return nil
-	}
-	parentPos := treeLevelStart(d-1, t.opts.BranchingFactor) + idx/t.opts.BranchingFactor
-	return t.nodes[parentPos]
+	return t.nodes[(pos-1)/t.opts.BranchingFactor]
 }
 
 // ChildrenOf returns the direct children of the node with the given ID as a
@@ -165,17 +156,12 @@ func (t *TreeConfig) ChildrenOf(id ID) Config {
 	if !found {
 		return nil
 	}
-	d, idx := t.posLevel(pos)
-	if d < 0 || d >= t.opts.Depth {
+	first := t.firstChild(pos)
+	if first >= len(t.nodes) {
 		return nil
 	}
-	bf := t.opts.BranchingFactor
-	firstChild := treeLevelStart(d+1, bf) + idx*bf
-	if firstChild >= len(t.nodes) {
-		return nil
-	}
-	lastChild := min(firstChild+bf, len(t.nodes))
-	return t.nodes[firstChild:lastChild:lastChild]
+	last := first + min(t.opts.BranchingFactor, len(t.nodes)-first)
+	return t.nodes[first:last:last]
 }
 
 // Subtree returns a Config containing the given node and all its
@@ -186,25 +172,19 @@ func (t *TreeConfig) Subtree(id ID) Config {
 	if !found {
 		return nil
 	}
-	d, idx := t.posLevel(pos)
-	if d < 0 {
-		return nil
-	}
-	bf := t.opts.BranchingFactor
-	// Find the descendant ranges first, so that the result is allocated at
-	// its exact size and a leaf does not reserve the rest of the tree.
+	// The descendants on each level are a contiguous range of positions.
+	// Find the ranges first, so that the result is allocated at its exact
+	// size and a leaf does not reserve the rest of the tree.
 	type span struct{ start, end int }
 	var spans []span
 	size := 1
-	for lvl := d + 1; lvl <= t.opts.Depth; lvl++ {
-		width := treePow(bf, lvl-d)
-		start := treeLevelStart(lvl, bf) + idx*width
-		if start >= len(t.nodes) {
+	for lo, hi := pos, pos+1; ; {
+		lo, hi = t.firstChild(lo), min(t.firstChild(hi), len(t.nodes))
+		if lo >= len(t.nodes) {
 			break
 		}
-		end := min(start+width, len(t.nodes))
-		spans = append(spans, span{start, end})
-		size += end - start
+		spans = append(spans, span{lo, hi})
+		size += hi - lo
 	}
 	result := make(Config, 0, size)
 	result = append(result, t.nodes[pos])
@@ -233,8 +213,7 @@ func (t *TreeConfig) Level(id ID) int {
 	if !found {
 		return -1
 	}
-	d, _ := t.posLevel(pos)
-	return d
+	return t.levels[pos]
 }
 
 // Height returns the number of edges on the longest path from the node with
@@ -246,17 +225,11 @@ func (t *TreeConfig) Height(id ID) int {
 		return -1
 	}
 	// The leftmost descendant is always on the deepest level of the subtree.
-	bf := t.opts.BranchingFactor
 	h := 0
-	for {
-		d, idx := t.posLevel(pos)
-		first := treeLevelStart(d+1, bf) + idx*bf
-		if d >= t.opts.Depth || first >= len(t.nodes) {
-			return h
-		}
-		pos = first
+	for first := t.firstChild(pos); first < len(t.nodes); first = t.firstChild(first) {
 		h++
 	}
+	return h
 }
 
 // IsLeaf reports whether the node with the given ID is in the tree and has

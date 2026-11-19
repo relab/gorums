@@ -1,6 +1,8 @@
 package gorums
 
 import (
+	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -116,6 +118,41 @@ func TestTreeLevelStart(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("treeLevelStart(%d, bf=%d) = %d, want %d", tt.level, tt.bf, got, tt.want)
 		}
+	}
+}
+
+// TestTreeArithmeticOverflow verifies the position methods on a tree whose
+// child positions overflow int, as they can for a large tree on a 32-bit
+// platform. The tree is built by hand, since a configuration large enough to
+// overflow on a 64-bit platform does not fit in memory.
+//
+//	  1
+//	 / \
+//	2   3
+func TestTreeArithmeticOverflow(t *testing.T) {
+	tree := &TreeConfig{
+		nodes:      makeTreeConfig(3),
+		opts:       TreeOptions{BranchingFactor: math.MaxInt, Depth: 1},
+		levels:     []int{0, 1, 1},
+		positionOf: map[ID]int{1: 0, 2: 1, 3: 2},
+	}
+	if got := tree.Level(3); got != 1 {
+		t.Errorf("Level(3) = %d, want 1", got)
+	}
+	if p := tree.ParentOf(3); p == nil || p.ID() != 1 {
+		t.Errorf("ParentOf(3) = %v, want node 1", p)
+	}
+	if got := tree.ChildrenOf(1).NodeIDs(); !slices.Equal(got, []ID{2, 3}) {
+		t.Errorf("ChildrenOf(1) = %v, want [2 3]", got)
+	}
+	if got := tree.ChildrenOf(3); got != nil {
+		t.Errorf("ChildrenOf(3) = %v, want nil", got.NodeIDs())
+	}
+	if got := tree.Subtree(1).NodeIDs(); !slices.Equal(got, []ID{1, 2, 3}) {
+		t.Errorf("Subtree(1) = %v, want [1 2 3]", got)
+	}
+	if got := tree.Height(1); got != 1 {
+		t.Errorf("Height(1) = %d, want 1", got)
 	}
 }
 
@@ -505,5 +542,25 @@ func TestTreeSubtreeAllocation(t *testing.T) {
 		if sub := tree.Subtree(id); cap(sub) != len(sub) {
 			t.Errorf("Subtree(%d): cap = %d, len = %d, want equal", id, cap(sub), len(sub))
 		}
+	}
+}
+
+// BenchmarkTreePositions measures the position lookups that a relay makes
+// once per message, on a 100-node tree.
+func BenchmarkTreePositions(b *testing.B) {
+	for _, bf := range []int{2, 10} {
+		tree, err := NewTree(makeTreeConfig(100), TreeOptions{BranchingFactor: bf, Depth: 6})
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.Run(fmt.Sprintf("b=%d", bf), func(b *testing.B) {
+			for b.Loop() {
+				for id := ID(1); id <= 100; id++ {
+					_ = tree.ParentOf(id)
+					_ = tree.ChildrenOf(id)
+					_ = tree.Level(id)
+				}
+			}
+		})
 	}
 }
