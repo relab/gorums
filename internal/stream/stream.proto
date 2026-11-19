@@ -27,5 +27,6 @@ message Message {
 // MetadataEntry is a key-value pair for Metadata entries.
 message MetadataEntry {
   string key   = 1;
-  string value = 2;
+  // gRPC metadata values for -bin keys carry arbitrary bytes in Go strings.
+  string value = 2 [features.utf8_validation = NONE];
 }

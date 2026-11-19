@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -83,6 +85,33 @@ func TestMetadata(t *testing.T) {
 				t.Fatalf("IDFromMD() = %d, want %d", got, want)
 			}
 		})
+	}
+}
+
+func TestMetadataBinaryPerMessage(t *testing.T) {
+	const key = "trace-bin"
+	want := []string{"\xff\xfe", "\x00\x80\x01"}
+	node := gorumstest.Node(t, func(int) gorumstest.ServerIface {
+		check := func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) error {
+			got := metadata.ValueFromIncomingContext(ctx, key)
+			if !slices.Equal(got, want) {
+				return status.Errorf(codes.InvalidArgument, "%s = %q, want %q", key, got, want)
+			}
+			return next(ctx, in, send)
+		}
+		srv := gorums.NewServer(gorums.WithServerInterceptors(check))
+		RegisterMetadataTestServer(srv, &testSrv{})
+		return srv
+	})
+
+	ctx := gorumstest.Context(t, 5*time.Second)
+	ctx = metadata.AppendToOutgoingContext(ctx, "id", "1", key, want[0], key, want[1])
+	resp, err := NewMetadataTestNodeClient(node).IDFromMD(ctx, &emptypb.Empty{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := resp.GetID(); got != 1 {
+		t.Fatalf("IDFromMD() = %d, want 1", got)
 	}
 }
 
