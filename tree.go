@@ -117,6 +117,8 @@ func (t *TreeConfig) ParentOf(id ID) *Node {
 
 // ChildrenOf returns the direct children of the node with the given ID as a
 // Config. Returns nil for leaves and for IDs not in the tree.
+// The returned configuration is a view of the tree's node list and must not
+// be modified; appending to it is safe.
 func (t *TreeConfig) ChildrenOf(id ID) Config {
 	pos, found := t.positionOf[id]
 	if !found {
