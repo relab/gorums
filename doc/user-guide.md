@@ -2619,6 +2619,7 @@ Do not order the nodes by a measure local to one process, such as `Config.Sort(g
 Each process measures its own latencies, so the processes would build different trees.
 
 A `TreeConfig` is an immutable value and is safe for concurrent use.
+The configurations that `Config` and `ChildrenOf` return are views of the tree's node list; do not modify their elements.
 To change the tree, build a new one; the old and the new tree can be in use at the same time.
 This is how a protocol can use a new tree for each view, or fall back to a star after a timeout.
 
