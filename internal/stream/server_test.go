@@ -3,6 +3,8 @@ package stream
 import (
 	"context"
 	"errors"
+	"slices"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -351,5 +353,191 @@ func TestServerNodeStreamFailsCallsToClosedDialer(t *testing.T) {
 	case <-stopped:
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("GracefulStop did not return")
+	}
+}
+
+// streamNumberKey is the context key of the stream number that a
+// [numberedAcceptor] stores.
+type streamNumberKey struct{}
+
+// numberedAcceptor is a [handlerAcceptor] that numbers the streams it
+// accepts, from 1 in accept order. The handlers of a stream's requests find
+// the number in their context.
+type numberedAcceptor struct {
+	handlerAcceptor
+	streams atomic.Uint64
+}
+
+func (a *numberedAcceptor) AcceptPeer(ctx context.Context, stream InboundStream) (*InboundChannel, func(), error) {
+	return a.handlerAcceptor.AcceptPeer(context.WithValue(ctx, streamNumberKey{}, a.streams.Add(1)), stream)
+}
+
+// handlerStart is the start of a request's handler: the number of the stream
+// that carried the request, and the request's message ID.
+type handlerStart struct {
+	stream, id uint64
+}
+
+// newHandlerStart returns the start of the handler of msg, whose context is
+// ctx, under a [numberedAcceptor].
+func newHandlerStart(ctx context.Context, msg *Message) handlerStart {
+	stream, _ := ctx.Value(streamNumberKey{}).(uint64)
+	return handlerStart{stream: stream, id: msg.GetMessageSeqNo()}
+}
+
+// TestServerNodeStreamOrderingBoundary verifies that a new stream is an
+// ordering boundary. The server starts the requests of one stream one at a
+// time, in arrival order. It starts a request from a replacement stream while
+// a handler of the older stream still runs, and it starts the older stream's
+// queued request after that.
+func TestServerNodeStreamOrderingBoundary(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	started := make(chan handlerStart, 3)
+	finish := map[uint64]chan struct{}{1: make(chan struct{}), 2: make(chan struct{}), 3: make(chan struct{})}
+	acceptor := &numberedAcceptor{}
+	acceptor.handler = requestHandlerFunc(func(ctx context.Context, msg *Message, _ func(), _ func(*Message)) {
+		started <- newHandlerStart(ctx, msg)
+		<-finish[msg.GetMessageSeqNo()]
+	})
+	srv := NewServer(nil, acceptor)
+
+	expectStart := func(want handlerStart) {
+		t.Helper()
+		select {
+		case got := <-started:
+			if got != want {
+				t.Fatalf("started request %d of stream %d, want request %d of stream %d", got.id, got.stream, want.id, want.stream)
+			}
+		case <-time.After(defaultTestTimeout):
+			t.Fatalf("request %d of stream %d did not start", want.id, want.stream)
+		}
+	}
+	serve := func() (*fakeNodeStream, <-chan error) {
+		fs := newFakeNodeStream(ctx)
+		t.Cleanup(fs.Close)
+		done := make(chan error, 1)
+		go func() { done <- srv.NodeStream(fs) }()
+		return fs, done
+	}
+	deliver := func(fs *fakeNodeStream, id uint64) {
+		t.Helper()
+		if err := fs.Deliver(Message_builder{MessageSeqNo: id, Method: mock.TestMethod}.Build()); err != nil {
+			t.Fatalf("Deliver(%d) error: %v", id, err)
+		}
+	}
+
+	// The older stream runs request 1 and queues request 2 behind it.
+	older, olderDone := serve()
+	deliver(older, 1)
+	deliver(older, 2)
+	expectStart(handlerStart{stream: 1, id: 1})
+
+	// Request 3 of the replacement stream starts while request 1 still runs,
+	// and before request 2, which the sender sent earlier.
+	replacement, replacementDone := serve()
+	deliver(replacement, 3)
+	expectStart(handlerStart{stream: 2, id: 3})
+	select {
+	case got := <-started:
+		t.Fatalf("started request %d of stream %d while request 1 of that stream still runs", got.id, got.stream)
+	default:
+	}
+
+	// Request 2 starts once request 1 returns, after request 3 has started.
+	close(finish[1])
+	expectStart(handlerStart{stream: 1, id: 2})
+
+	close(finish[2])
+	close(finish[3])
+	older.Close()
+	replacement.Close()
+	for _, done := range []<-chan error{olderDone, replacementDone} {
+		select {
+		case <-done:
+		case <-time.After(defaultTestTimeout):
+			t.Fatal("NodeStream did not return after its stream closed")
+		}
+	}
+}
+
+// TestServerNodeStreamPerStreamOrderUnderChurn verifies that the server starts
+// the requests of each stream in the order the channel sent them, while the
+// channel's streams break and reopen. Every request is a two-way call, so the
+// calls pending on a lost stream fail; none of them runs on a later stream.
+func TestServerNodeStreamPerStreamOrderUnderChurn(t *testing.T) {
+	var mu sync.Mutex
+	var starts []handlerStart // in start order
+	acceptor := &numberedAcceptor{}
+	acceptor.handler = requestHandlerFunc(func(ctx context.Context, msg *Message, _ func(), send func(*Message)) {
+		mu.Lock()
+		starts = append(starts, newHandlerStart(ctx, msg))
+		mu.Unlock()
+		send(Message_builder{MessageSeqNo: msg.GetMessageSeqNo(), Method: mock.TestMethod}.Build())
+	})
+	tc := setupChannel(t, NewServer(nil, acceptor).NodeStream)
+	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
+		t.Fatal("channel never connected")
+	}
+
+	churnDone := make(chan struct{})
+	go func() {
+		defer close(churnDone)
+		for start := time.Now(); time.Since(start) < 200*time.Millisecond; {
+			time.Sleep(time.Millisecond)
+			tc.endSessions()
+		}
+	}()
+	// One goroutine sends, so the message IDs are in send order. A request
+	// that the full send queue rejects is skipped.
+	request := func(id uint64) NodeRequest {
+		return NodeRequest{
+			Ctx:          t.Context(),
+			Msg:          Message_builder{MessageSeqNo: id, Method: mock.TestMethod}.Build(),
+			ResponseChan: make(chan response, 1),
+		}
+	}
+	last := uint64(1)
+	for ; ; last++ {
+		select {
+		case <-churnDone:
+		default:
+			_ = tc.Enqueue(request(last))
+			continue
+		}
+		break
+	}
+
+	// The churn is over, so a final request runs after every earlier request
+	// that the server runs on the final request's stream.
+	final := request(last)
+	if !waitUntil(defaultTestTimeout, func() bool { return tc.Enqueue(final) == nil }) {
+		t.Fatal("the send queue did not admit the final request")
+	}
+	if !waitUntil(defaultTestTimeout, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.ContainsFunc(starts, func(s handlerStart) bool { return s.id == last })
+	}) {
+		t.Fatal("the final request did not run")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	latest := make(map[uint64]uint64) // stream -> the ID of its latest started request
+	ran := make(map[uint64]bool)
+	for _, s := range starts {
+		if ran[s.id] {
+			t.Errorf("request %d ran more than once", s.id)
+		}
+		ran[s.id] = true
+		if prev, ok := latest[s.stream]; ok && s.id < prev {
+			t.Errorf("stream %d: request %d started after request %d", s.stream, s.id, prev)
+		}
+		latest[s.stream] = s.id
+	}
+	if len(latest) < 2 {
+		t.Errorf("requests ran on %d stream, want several streams", len(latest))
 	}
 }

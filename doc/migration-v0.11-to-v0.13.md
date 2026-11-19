@@ -159,7 +159,7 @@ Every server must agree on the ID for each peer, and `myID` must identify this s
 The server owns these peer connections and closes them when it stops.
 
 For a nested call, build a client from the handler's peer configuration.
-Dispatch before `Release` to preserve per-sender FIFO order, and wait after it so later requests can start:
+Dispatch before `Release` to preserve FIFO order, and wait after it so later requests can start:
 
 ```go
 func (s *storageServer) ReadQC(ctx gorums.ServerContext, req *pb.ReadRequest) (*pb.ReadResponse, error) {

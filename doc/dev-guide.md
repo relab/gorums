@@ -368,6 +368,11 @@ A handler that returns without calling `Release` hands its goroutine to the next
 On the server side, `Server.NodeStream` asks a `PeerAcceptor` for the `InboundChannel` of each accepted stream.
 The stream layer does not check identities; the connection layer below does.
 
+Each inbound stream has its own dispatcher, so the order contract is FIFO within one stream.
+A new stream is an ordering boundary: the dispatchers of a sender's older and newer streams run independently, so their handlers may overlap, and a request from the older stream may start after a request from the newer one.
+An outbound channel sends each call at most once, so no call crosses the boundary twice.
+The TLA+ model in `spec/stream` checks the contract (`just tlc ContractFIFO`) and shows the boundary (`just tlc LimitCrossStreamFIFO`, `just tlc LimitCrossStreamOverlap`).
+
 ```mermaid
 classDiagram
     direction LR
