@@ -5,11 +5,8 @@ TLC checks it for small bounds.
 
 * The current code passes every invariant, the deadlock check, and the liveness property `BorrowerRecovers`.
 * The model finds the four past stream-layer bugs when a switch puts each one back.
-* The current code runs each call at most once.
-  It breaks one documented contract: calls from one sender can run out of FIFO order across a reconnect.
-* A proposed design, named supersede, fixes this: a newer stream from a sender replaces that sender's older stream at the server.
-  The code does not implement it yet.
-* A simpler gate, "wait until older channels are idle", fails when a break leaves frames in transit.
+* The current code runs each call at most once, and it starts the calls of each stream in FIFO order.
+* A new stream is an ordering boundary: a call from an older stream can overlap with, or start after, a call from its replacement.
 
 ## What the Model Covers
 
@@ -50,31 +47,28 @@ All switches off models the current code.
 | `AttachClosesPrior`      | bug     | Attaching a stream closes the prior channel.                                            |
 | `BlockingReplies`        | bug     | A handler's reply waits for send queue space.                                           |
 | `Requeue`                | bug     | A lost stream requeues its pending calls at the tail of the send queue.                 |
-| `FIFOGate = "idle"`      | design  | A starts a handler on stream `s` only while each older channel is detached or idle.     |
-| `FIFOGate = "supersede"` | design  | A refuses a stream older than one it has seen. A newer stream closes the older channel. |
 | `LateFrames`             | network | A break loses only a suffix of the frames in flight. The receiver still gets the rest.  |
 
-To supersede a stream means that a newer stream from D replaces it at A.
-A closes the channel of the older stream, and refuses the older stream if its start arrives late.
-Both gates need D's stream number at A, for example in the stream metadata.
 `LateFrames` models data that is still in transit or in buffers when the sender gives up, as after a keepalive timeout.
 
 ## Properties
 
-| Property              | Kind      | Meaning                                                                                       |
-| --------------------- | --------- | --------------------------------------------------------------------------------------------- |
-| `AtMostOnceDelivery`  | invariant | The runtime delivers at most one response to each call.                                       |
-| `NoDuplicateCall`     | invariant | A call is in at most one send queue or pending table.                                         |
-| `SlotTracksLive`      | invariant | While A serves a stream that is not broken, the shared node's slot holds an attached channel. |
-| `OlderStreamsEnded`   | invariant | D opens a stream only after every older stream ended.                                         |
-| deadlock              | TLC check | Work never stops while handlers still have requests.                                          |
-| `BorrowerRecovers`    | liveness  | After the last fault, A's shared node gets a working stream to D and keeps it.                |
-| `AtMostOnceExecution` | contract  | A's handler runs each of D's calls at most once.                                              |
-| `PerSenderFIFO`       | contract  | A starts D's calls in the order that D admitted them.                                         |
-| `OneAtATime`          | contract  | A's handlers run D's calls one at a time.                                                     |
+| Property               | Kind      | Meaning                                                                                       |
+| ---------------------- | --------- | --------------------------------------------------------------------------------------------- |
+| `AtMostOnceDelivery`   | invariant | The runtime delivers at most one response to each call.                                       |
+| `NoDuplicateCall`      | invariant | A call is in at most one send queue or pending table.                                         |
+| `SlotTracksLive`       | invariant | While A serves a stream that is not broken, the shared node's slot holds an attached channel. |
+| `OlderStreamsEnded`    | invariant | D opens a stream only after every older stream ended.                                         |
+| deadlock               | TLC check | Work never stops while handlers still have requests.                                          |
+| `BorrowerRecovers`     | liveness  | After the last fault, A's shared node gets a working stream to D and keeps it.                |
+| `AtMostOnceExecution`  | contract  | A's handler runs each of D's calls at most once.                                              |
+| `PerStreamFIFO`        | contract  | A starts the calls of one stream in the order that D admitted them.                           |
+| `CrossStreamFIFO`      | limit     | A starts all of D's calls in the order that D admitted them.                                  |
+| `NoCrossStreamOverlap` | limit     | A's handlers run D's calls one at a time across streams.                                      |
 
-`PerSenderFIFO` checks the user guide's statement "Messages from the same sender are executed in FIFO order".
-It needs the history variables in `StreamFIFO.tla`.
+`PerStreamFIFO` checks the user guide's statement "Requests carried by one stream start in the order that the sender sent them".
+A limit is a property that the contract excludes; its configuration gives a trace that breaks it.
+The FIFO properties need the history variables in `StreamFIFO.tla`.
 
 ## Running the Checks
 
@@ -107,11 +101,27 @@ Passes: 13,002 distinct states, 1 s.
 just tlc ContractAtMostOnce
 ```
 
-`ContractFIFO.cfg`: `PerSenderFIFO`, 2 calls, queue capacity 2, 1 fault.
-Fails, 1 s.
+`ContractFIFO.cfg`: `PerStreamFIFO` with `LateFrames`, 3 calls, queue capacity 2, 2 faults.
+Passes: 343,444 distinct states, 4 s.
 
 ```bash
 just tlc ContractFIFO
+```
+
+### Ordering Boundary
+
+`LimitCrossStreamFIFO.cfg`: `CrossStreamFIFO`, 2 calls, queue capacity 2, 1 fault.
+Fails, 1 s.
+
+```bash
+just tlc LimitCrossStreamFIFO
+```
+
+`LimitCrossStreamOverlap.cfg`: `NoCrossStreamOverlap`, with the same bounds.
+Fails, 1 s.
+
+```bash
+just tlc LimitCrossStreamOverlap
 ```
 
 ### Past Bugs
@@ -145,48 +155,11 @@ Fails, 1 s.
 just tlc BugRequeue
 ```
 
-`BugRequeueFIFO.cfg`: `PerSenderFIFO` with `Requeue`, supersede, and `LateFrames`.
+`BugRequeueFIFO.cfg`: `PerStreamFIFO` with `Requeue`, 2 calls, 1 fault.
 Fails, 1 s.
 
 ```bash
 just tlc BugRequeueFIFO
-```
-
-### Proposed Design
-
-`FixFIFOIdle.cfg`: `PerSenderFIFO` with the idle gate; a break loses all frames in flight.
-Passes: 1,274 distinct states, 1 s.
-
-```bash
-just tlc FixFIFOIdle
-```
-
-`FixFIFOIdleLate.cfg`: as `FixFIFOIdle.cfg`, with `LateFrames`.
-Fails, 1 s.
-
-```bash
-just tlc FixFIFOIdleLate
-```
-
-`FixFIFOSupersedeLate.cfg`: `PerSenderFIFO` with supersede and `LateFrames`, 3 calls, 2 faults.
-Passes: 107,910 distinct states, 2 s.
-
-```bash
-just tlc FixFIFOSupersedeLate
-```
-
-`FixOneAtATime.cfg`: `OneAtATime` with supersede and `LateFrames`.
-Fails, 1 s.
-
-```bash
-just tlc FixOneAtATime
-```
-
-`Proposed.cfg`: everything in `Current.cfg`, plus both contracts, with supersede and `LateFrames`.
-Passes: 658,162 distinct states, 45 s.
-
-```bash
-just tlc Proposed
 ```
 
 ## The Model Finds the Four Past Bugs
@@ -223,7 +196,7 @@ If A had already run the handler and only the reply was lost, A ran it a second 
 ![c1 runs twice: once on stream 1 and again on stream 2](figures/at-least-once.svg)
 
 This is the trace of `BugRequeue.cfg`; a lost reply has the same effect.
-The requeued call also went behind newer calls, which broke FIFO order (`BugRequeueFIFO.cfg`).
+The requeued call also went behind newer calls on the next stream, which broke FIFO order within that stream (`BugRequeueFIFO.cfg`).
 Today's code fails each pending call with `ErrStreamDown`, so it runs each call at most once.
 The caller of such a call cannot tell whether A ran it.
 
@@ -231,48 +204,22 @@ The per-send cancel watcher bug is not a switch.
 Today's code has no per-send watcher.
 Its effect was a stream that was never reopened, which the lazy-reconnect switch covers.
 
-## FIFO Order per Sender Does Not Hold Across a Reconnect
+## A New Stream Is an Ordering Boundary
 
-The user guide says that messages from the same sender run in FIFO order at all servers.
-That is true per stream.
-It is not true per sender across a stream break, because A gives each inbound stream its own dispatcher.
-After a break, A can still run requests that arrived on stream 1 while it already runs requests from stream 2:
+A starts the calls of one stream in the order that D admitted them (`ContractFIFO.cfg`).
+This order does not extend across D's streams, because A gives each inbound stream its own dispatcher.
+After a break, A can start a call that arrived on stream 1 after it has started a later call from stream 2:
 
 ![c2 runs before c1, because each channel has its own dispatcher](figures/dispatcher-race.svg)
 
-This is the trace of `ContractFIFO.cfg`.
+This is the trace of `LimitCrossStreamFIFO.cfg`.
 `c1` waits in channel 1's dispatcher while `c2` runs on channel 2.
+D has already failed `c1` with `ErrStreamDown`, so D's caller knows that `c1` may still run.
 
-## The Proposed Design
+The handlers of the two streams can also overlap: `c1` still runs on channel 1 when `c2` starts on channel 2 (`LimitCrossStreamOverlap.cfg`).
+With `LateFrames`, a call can even arrive on stream 1 after A has started calls from stream 2.
 
-FIFO order needs a gate at A.
-
-**The idle gate is not enough.**
-The idle gate lets A start a handler on stream 2 only while channel 1 is detached or has no queued or running request.
-This fixes the race above, and `FixFIFOIdle.cfg` passes.
-It fails when a break leaves a frame in transit (`FixFIFOIdleLate.cfg`):
-
-![A late c1 runs after c2, although the idle gate is on](figures/late-frame-idle-gate.svg)
-
-The slanted arrow is a frame in transit.
-A cannot know if more data will come on stream 1 until stream 1 ends at A.
-A gate that waits for stream 1 to end is correct, but it stalls stream 2 until A detects the break, which can take a keepalive timeout.
-
-**Supersede holds.**
-With supersede, A refuses a stream older than one it has seen.
-When a newer stream attaches, A closes the older channel and drops its queued and late requests.
-D has already failed those calls with `ErrStreamDown`, so at-most-once permits the drop.
-`FixFIFOSupersedeLate.cfg` and `Proposed.cfg` pass.
-
-![Supersede closes channel 1, so the late c1 is dropped](figures/late-frame-supersede.svg)
-
-Supersede is not the old `AttachClosesPrior` bug.
-The bug ordered streams by attach order, so a late start of an old stream closed the new one.
-Supersede orders streams by D's stream number, and it refuses the late old stream.
-
-Supersede closes the older channel, but a handler that already runs on it continues.
-So the handlers of `c1` and `c2` can overlap, although `c1` starts first; `FixOneAtATime.cfg` shows this.
-If FIFO must also mean "one at a time", the new channel's dispatcher must wait for that handler to return.
+An application that needs an order across streams must carry its own sequence numbers or epochs in its requests.
 
 ## Limits
 
@@ -284,9 +231,9 @@ If FIFO must also mean "one at a time", the new channel's dispatcher must wait f
 
 ## Next Steps
 
-1. Implement supersede, with a stream number in the stream metadata.
-2. Add refusals with backoff, and GOAWAY with `Drain`.
+1. Add refusals with backoff, and GOAWAY with `Drain`.
    These are the stream-layer paths with the most recent changes.
+2. Add one-way calls, which have no pending entry and no `ErrStreamDown`.
 3. Add trace validation: log the model's actions from `gorumstest` runs, and check each log against the spec with TLC.
 
 ## Files
@@ -294,6 +241,6 @@ If FIFO must also mean "one at a time", the new channel's dispatcher must wait f
 | File             | Contents                                               |
 | ---------------- | ------------------------------------------------------ |
 | `Stream.tla`     | The model.                                             |
-| `StreamFIFO.tla` | The model with history variables, for `PerSenderFIFO`. |
+| `StreamFIFO.tla` | The model with history variables, for the FIFO checks. |
 | `*.cfg`          | TLC configurations, one per check above.               |
 | `figures/`       | The figures in this README.                            |

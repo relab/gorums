@@ -1,36 +1,44 @@
 ----------------------------- MODULE StreamFIFO -----------------------------
 (***************************************************************************)
-(* Stream with two history variables, to check the user guide's            *)
-(* contract that messages from one sender run in FIFO order at a server.   *)
+(* Stream with two history variables, to check the order in which A starts *)
+(* D's calls. The contract is FIFO order within each stream. A new stream  *)
+(* is an ordering boundary: A may start a call from an older stream after  *)
+(* a later call from its replacement.                                      *)
 (* SpecF has no fairness; SpecFL adds it, for liveness checks.             *)
 (***************************************************************************)
 EXTENDS Stream
 
 VARIABLES
     iorder,  \* D's calls in the order that Enqueue admitted them
-    elog     \* D's calls in the order that A's handler ran them
+    elog     \* <<s, c>> for each handler start at A, in start order: call c from stream s
 
 Admitted == {c \in DCalls : dst[c] = "idle" /\ dst'[c] = "active"}
-Ran      == {c \in DCalls : handled'[c] > handled[c]}
+Started  == {<<s, c>> \in Streams \X DCalls : arun[s] = <<>> /\ arun'[s] = <<c>>}
 
 InitF == Init /\ iorder = <<>> /\ elog = <<>>
 
 NextF ==
     /\ Next
     /\ iorder' = iorder \o SetToSeq(Admitted)
-    /\ elog' = elog \o SetToSeq(Ran)
+    /\ elog' = elog \o SetToSeq(Started)
 
 SpecF == InitF /\ [][NextF]_<<vars, iorder, elog>>
 
 SpecFL == SpecF /\ Fairness
 
-Range(s) == {s[i] : i \in DOMAIN s}
+\* The position of call c in D's admission order. D admits a call once.
+Pos(c) == CHOOSE i \in DOMAIN iorder : iorder[i] = c
 
-First(s, x) == CHOOSE i \in DOMAIN s : s[i] = x /\ \A j \in 1..(i - 1) : s[j] # x
+\* Contract: A starts the calls of one stream in the order that D admitted
+\* them.
+PerStreamFIFO ==
+    \A i, j \in DOMAIN elog :
+        i < j /\ elog[i][1] = elog[j][1] => Pos(elog[i][2]) <= Pos(elog[j][2])
 
-\* A first runs D's calls in the order that D admitted them.
-PerSenderFIFO ==
-    \A x, y \in Range(elog) :
-        First(iorder, x) < First(iorder, y) => First(elog, x) < First(elog, y)
+\* Not a contract: A starts all of D's calls in the order that D admitted
+\* them. A call that waits or arrives late on an older stream can start after
+\* a later call from the replacement stream.
+CrossStreamFIFO ==
+    \A i, j \in DOMAIN elog : i < j => Pos(elog[i][2]) <= Pos(elog[j][2])
 
 =============================================================================

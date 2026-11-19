@@ -41,13 +41,10 @@ CONSTANTS
     AttachClosesPrior,  \* attach closes the prior channel; detach clears the slot only if it holds its own channel
     BlockingReplies,    \* a handler's reply waits for send queue space
     Requeue,            \* a lost stream requeues its pending calls at the tail of the send queue
-    \* Design switches. All off models the current code.
-    FIFOGate,           \* "none", "idle", or "supersede" (a newer stream replaces the older one at A); see AcceptS and HandleS
     \* Network switch.
     LateFrames          \* a break loses only a suffix of the frames in flight
 
 ASSUME QCap >= 1 /\ WireCap >= 1 /\ RecvBuf >= 1 /\ MaxFaults \in Nat
-ASSUME FIFOGate \in {"none", "idle", "supersede"}
 ASSUME DCalls \cap BCalls = {}
 
 \* Every stream ends only when it breaks, so D opens at most MaxFaults+1.
@@ -294,28 +291,19 @@ CloseA(p) ==
 \* The server runs NodeStream for stream s and attaches a channel. The start
 \* of a stream may reach the server after the stream broke, so A can attach
 \* streams out of D's order.
-\* FIFOGate = "supersede": D numbers its streams, and A knows the numbers.
-\* A refuses a stream older than one it has seen. D has already ended such a
-\* stream (OlderStreamsEnded), so the refusal needs no step at D. Attaching
-\* a newer stream closes the older channel, so A starts no more requests
-\* from it.
+\* Current code: the prior channels stay attached, each with its own
+\* dispatcher.
+\* Bug variant: attaching closes the channel in the slot.
 AcceptS(s) ==
     /\ sst[s] = "none" /\ cst[s] # "none"
-    /\ IF FIFOGate = "supersede" /\ \E t \in Streams : t > s /\ sst[t] # "none"
-         THEN /\ sst' = [sst EXCEPT ![s] = "detached"]
-              /\ c2s' = [c2s EXCEPT ![s] = <<>>]
-              /\ UNCHANGED <<aq, ahand, adisp, arun, apend, live, slot, bst, bdel>>
-         ELSE /\ IF (AttachClosesPrior \/ FIFOGate = "supersede") /\ slot # 0
-                   THEN /\ sst' = [sst EXCEPT ![s] = "attached", ![slot] = "closed"]
-                        /\ CloseA(slot)
-                   ELSE /\ sst' = [sst EXCEPT ![s] = "attached"]
-                        /\ UNCHANGED <<aq, ahand, adisp, arun, apend, bst, bdel>>
-              /\ live' = CASE AttachClosesPrior        -> live
-                           [] FIFOGate = "supersede" -> <<s>>
-                           [] OTHER                  -> Append(live, s)
-              /\ slot' = s
-              /\ UNCHANGED c2s
-    /\ UNCHANGED <<dvars, s2c, broken, faults, dst, ddel, handled>>
+    /\ IF AttachClosesPrior /\ slot # 0
+         THEN /\ sst' = [sst EXCEPT ![s] = "attached", ![slot] = "closed"]
+              /\ CloseA(slot)
+         ELSE /\ sst' = [sst EXCEPT ![s] = "attached"]
+              /\ UNCHANGED <<aq, ahand, adisp, arun, apend, bst, bdel>>
+    /\ live' = IF AttachClosesPrior THEN live ELSE Append(live, s)
+    /\ slot' = s
+    /\ UNCHANGED <<dvars, wvars, dst, ddel, handled>>
 
 \* Serve returns after the stream broke, and the cleanup detaches the channel.
 \* Current code: the slot falls back to the latest remaining live channel.
@@ -357,17 +345,10 @@ RecvS(s) ==
     /\ UNCHANGED <<dvars, s2c, broken, faults, sst, aq, ahand, arun, live, slot>>
     /\ UNCHANGED <<dst, ddel, handled>>
 
-\* FIFOGate = "idle": D numbers its streams, and A knows the numbers. A starts
-\* a handler on s only while each older channel that A knows is detached, or
-\* has no queued or running request.
-IdleGate(s) ==
-    \A t \in Streams : t < s =>
-        \/ sst[t] \in {"none", "detached"}
-        \/ adisp[t] = <<>> /\ arun[t] = <<>>
-
+\* The dispatcher of stream s starts the next handler. It runs one handler at
+\* a time, and it does not wait for the dispatchers of A's other streams.
 HandleS(s) ==
     /\ sst[s] = "attached" /\ arun[s] = <<>> /\ adisp[s] # <<>>
-    /\ FIFOGate = "idle" => IdleGate(s)
     /\ arun' = [arun EXCEPT ![s] = <<Head(adisp[s])>>]
     /\ adisp' = [adisp EXCEPT ![s] = Tail(@)]
     /\ handled' = Count(handled, {Head(adisp[s])})
@@ -524,8 +505,10 @@ BorrowerRecovers == <>[](slot # 0 /\ ~broken[slot])
 \* Contract: A's handler runs each call at most once.
 AtMostOnceExecution == \A c \in DCalls : handled[c] <= 1
 
-\* Contract: A's handlers run D's calls one at a time.
-OneAtATime == Cardinality({s \in Streams : arun[s] # <<>>}) <= 1
+\* Not a contract: A's handlers run D's calls one at a time across streams.
+\* Each stream has its own dispatcher, so a handler of a lost stream can
+\* overlap with a handler of its replacement.
+NoCrossStreamOverlap == Cardinality({s \in Streams : arun[s] # <<>>}) <= 1
 
 \* Call symmetry for safety checks without faults. SetToSeq in EndD breaks
 \* symmetry, so do not use it when MaxFaults > 0, nor with liveness.
