@@ -178,7 +178,7 @@ stresstest:
 # Run the generated runtime properties with fresh inputs.
 [group('test')]
 propertytest checks="1000":
-    go test -count=1 -run='Properties|Synctest' . ./internal/impl ./internal/stream ./internal/conn -rapid.checks={{ checks }}
+    go test -count=1 -run='Properties$' . ./internal/impl ./internal/stream ./internal/conn -rapid.checks={{ checks }}
 
 # Fuzz each target for seconds, with two workers per campaign.
 [group('test')]

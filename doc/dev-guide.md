@@ -191,6 +191,9 @@ Run more cases with fresh inputs:
 just propertytest 1000
 ```
 
+Name Rapid tests with the suffix `Properties` so `just propertytest` runs them.
+Add any new package that contains property tests to the package list in that recipe.
+
 Rapid prints a seed and writes a minimized failure under the package's `testdata/rapid` directory.
 Reproduce a failure with the printed `-rapid.seed` or `-rapid.failfile` command, and keep useful minimized cases as regressions.
 Use `-count=1` for extended runs so Go's test cache does not reuse an earlier successful run.
@@ -202,6 +205,8 @@ Run each native fuzz target for 30 seconds with two workers:
 ```sh
 just fuzztest 30
 ```
+
+Add new fuzz targets to the `fuzztest` recipe so the scheduled workflow runs them.
 
 Run a single target for a longer campaign:
 
