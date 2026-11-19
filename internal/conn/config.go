@@ -218,9 +218,8 @@ func (c Config) Sort(cmp func(*Node, *Node) int) Config {
 //	    return c.WithoutErrors(lastErr).Sort(gorums.ByLatency)[:quorumSize]
 //	})
 //
-// The returned channel has a buffer of 1. If the consumer is slow and has not
-// yet read the previous update, the goroutine skips the emission and waits for
-// the next tick to re-evaluate.
+// The returned channel holds one update. If it is full, Watch derives a fresh
+// view on the next tick and compares it with the last view sent.
 //
 // The goroutine exits and the channel is closed when ctx is cancelled.
 func (c Config) Watch(ctx context.Context, interval time.Duration, derive func(Config) Config) <-chan Config {
@@ -233,8 +232,8 @@ func (c Config) Watch(ctx context.Context, interval time.Duration, derive func(C
 	ch := make(chan Config, 1)
 	go func() {
 		defer close(ch)
-		current := derive(c)
-		ch <- current
+		lastSent := derive(c)
+		ch <- lastSent
 
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -242,11 +241,11 @@ func (c Config) Watch(ctx context.Context, interval time.Duration, derive func(C
 			select {
 			case <-ticker.C:
 				fresh := derive(c)
-				if !fresh.Equal(current) {
-					current = fresh
+				if !fresh.Equal(lastSent) {
 					select {
-					case ch <- current:
-					default: // consumer hasn't read yet; next tick will re-evaluate
+					case ch <- fresh:
+						lastSent = fresh
+					default: // try the latest view on the next tick
 					}
 				}
 			case <-ctx.Done():
