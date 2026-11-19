@@ -2237,6 +2237,8 @@ for cfg := range updates {
 sub-configuration only when the result changes. The initial snapshot is sent
 immediately, so callers always receive a valid configuration without waiting
 for the first tick.
+When the update channel is full, `Watch` may skip intermediate views.
+After the consumer reads the queued view, the next tick sends the latest view if it differs from the last view sent.
 
 ### Combining Watch with Error Filtering
 

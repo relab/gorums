@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/relab/gorums/internal/stream"
@@ -102,6 +104,47 @@ func TestConfigWatch(t *testing.T) {
 			}
 		case <-time.After(time.Second):
 			t.Error("channel should be closed promptly after ctx cancel")
+		}
+	})
+}
+
+func TestConfigWatchSlowConsumer(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cfg := Config{NewNodeForTest(1, nil), NewNodeForTest(2, nil)}
+		var size atomic.Int32
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		const interval = time.Second
+		updates := cfg.Watch(ctx, interval, func(c Config) Config { return c[:size.Load()] })
+		synctest.Wait()
+
+		// Keep the initial view queued while the derived subset changes twice.
+		for n := range cfg {
+			size.Store(int32(n + 1))
+			time.Sleep(interval)
+			synctest.Wait()
+		}
+		if initial := <-updates; len(initial) != 0 {
+			t.Fatalf("initial view = %v, want empty", initial.NodeIDs())
+		}
+
+		// The now-stable view must arrive on the next tick, then stay quiet.
+		time.Sleep(interval)
+		synctest.Wait()
+		select {
+		case latest := <-updates:
+			if !latest.Equal(cfg) {
+				t.Fatalf("latest view = %v, want %v", latest.NodeIDs(), cfg.NodeIDs())
+			}
+		default:
+			t.Fatal("watch dropped the latest view while the buffer was full")
+		}
+		time.Sleep(interval)
+		synctest.Wait()
+		select {
+		case duplicate := <-updates:
+			t.Fatalf("unexpected repeated view %v", duplicate.NodeIDs())
+		default:
 		}
 	})
 }
