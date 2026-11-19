@@ -1594,6 +1594,9 @@ if err != nil {
 defer closeFn()
 ```
 
+For per-call metadata, attach values to the call's context with `metadata.AppendToOutgoingContext`.
+Keys ending in `-bin` carry arbitrary bytes in Go strings, which the handler receives through `metadata.FromIncomingContext`.
+
 ### WithPeerChange
 
 `WithPeerChange` registers a `func(gorums.Config)` callback for a server configured with `WithPeers`.
