@@ -41,6 +41,11 @@ type InboundStream interface {
 // InboundChannel is a [Channel] over one stream accepted by this node's
 // server. It cannot re-establish its stream: once the stream ends, pending
 // calls fail with [ErrStreamDown] and later requests with [ErrNodeClosed].
+//
+// The channel starts the handlers of the stream's requests one at a time, in
+// arrival order. The channels of a dialer's other streams run their handlers
+// independently, so a handler of this channel may overlap with, or start
+// after, a handler of the channel that replaced it.
 type InboundChannel struct {
 	endpoint
 	session   *session

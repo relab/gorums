@@ -395,7 +395,8 @@ func (srv *storageSrv) ReadCorrectable(_ gorums.ServerContext, req *ReadRequest,
 There are some important things to note about implementing the server interfaces:
 
 * The handlers run in the order messages are received.
-* Messages from the same sender are executed in FIFO order at all servers, up to the point where the handler calls `ServerContext.Release`.
+* Requests carried by one stream start in the order that the sender sent them, up to the point where the handler calls `ServerContext.Release`.
+  A sender uses one stream to each server until Gorums replaces that stream; see [Ordering Across Streams](#ordering-across-streams).
   See the auxiliary documentation for more information about [message ordering](./ordering.md) in Gorums.
 * Messages from different senders may be received in a different order at the different servers.
   To guarantee messages from different senders are executed in-order at the different servers, you must use a total ordering protocol.
@@ -467,7 +468,7 @@ handler(req):
     return reply
 ```
 
-Code before `Release` runs in per-sender FIFO order.
+Code before `Release` runs in FIFO order for the requests of one stream.
 Code after `Release` runs concurrently with the handlers of later requests from the same stream, so it must protect shared state, for example with a mutex.
 A mutex gives mutual exclusion, but not arrival order, so it cannot restore an order that `Release` gave up.
 A handler that does not call `Release` releases when it returns; the whole handler is then ordered, and the next request waits until the handler returns.
@@ -495,6 +496,56 @@ A call dispatched after `Release` may overtake the same call from the handler of
 That is correct only when the nested calls of different requests may run in any order, as for the nested reads in [Nested Quorum Calls with ServerContext.PeerConfig](#nested-quorum-calls-with-servercontextpeerconfig).
 A handler that waits for a reply before `Release` keeps the next request waiting.
 If the sender fills the stream's dispatch queue in the meantime, the wait lasts until the context ends; see [Send Queue Capacity and Backpressure](#send-queue-capacity-and-backpressure).
+
+### Ordering Across Streams
+
+A node sends its requests to a server on one stream.
+Gorums replaces the stream when it is lost, and when the server asks the node to stop using the connection (a GOAWAY).
+A new stream is an ordering boundary:
+
+* Requests carried by one stream start in the order that the sender sent them, up to `Release`.
+* A request from an older stream may overlap with, or start after, a request from the stream that replaced it.
+* Gorums sends each call at most once: a call sent on the older stream is not sent again on the new stream.
+* A call that fails with `ErrStreamDown` may already have run.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    C->>S: m1 on stream 1
+    Note over C,S: stream 1 is lost
+    Note over C: m1 fails with ErrStreamDown
+    C->>S: m2 on stream 2
+    Note over S: m2 starts
+    Note over S: m1 may start after m2, or overlap with it
+```
+
+The sender learns the following about a call when its stream is lost:
+
+| Call state when the stream is lost              | Result of the call                        | Handler                        |
+| ----------------------------------------------- | ----------------------------------------- | ------------------------------ |
+| Two-way or streaming call, sent, awaiting reply | Fails with `ErrStreamDown`                | May have run, or may still run |
+| Any call that is still in the send queue        | No error; the call goes on the new stream | Runs on the new stream         |
+| One-way call, already written to the stream     | No error; `Wait` has returned nil         | May run, or may be lost        |
+| One-way call whose write fails                  | Fails with the write error                | Does not run                   |
+
+Two more errors report a two-way call that may have run: `codes.ResourceExhausted` (see [Oversized Requests](#oversized-requests)), and `ErrNodeClosed` for a call that awaited its reply when its configuration was closed.
+A stream that the server refuses runs no handler; see [Refused Streams](#refused-streams).
+
+After a GOAWAY, no call fails.
+The calls already sent on the older stream complete there, and later calls use the new stream.
+If the same server process serves both streams, for example because it limits the age of its connections with gRPC's `keepalive.ServerParameters.MaxConnectionAge`, requests from the two streams may overlap or change order without any error.
+
+Gorums reports no event when it replaces a stream, and it gives a handler no identity for the stream that carried its request.
+The server learns of a lost stream at its own time, which can be later than the sender.
+It then ends the contexts of that stream's handlers and discards the stream's requests that have not started.
+
+An application that needs an order across streams must carry that order in its requests:
+
+* Add a sequence number to each request, and let the handler reject a request whose number is below the highest number that it has run for that sender.
+* Identify the sender in the request, unless the sender is a peer configured with `WithPeers`.
+  `ServerContext.SenderID` is stable across streams only for such a peer; see [Finding the Sender of a Request](#finding-the-sender-of-a-request).
+* A sender that needs to know whether a request ran must use a two-way call and treat `ErrStreamDown` as "unknown".
 
 ## Using the StorageClient
 
@@ -1880,6 +1931,7 @@ With `WithStreamDedup`, `WaitForAll` waits until the server accepts; without it,
 A stream that ends with any other status (except `codes.ResourceExhausted`; see [Oversized Requests](#oversized-requests)), or that ends after the server accepted it, is lost, not refused: its two-way calls fail with `ErrStreamDown`, and a later call opens a new stream.
 The node sends each call at most once.
 The server may have handled a call that fails with `ErrStreamDown`, so a caller that retries the call must tolerate that the request reaches the server's handler twice.
+The new stream is an ordering boundary; see [Ordering Across Streams](#ordering-across-streams).
 
 ## Oversized Requests
 

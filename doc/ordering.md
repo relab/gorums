@@ -38,6 +38,15 @@ The use of a function to return messages from the RPC handler makes the handlers
 * RPC handler functions are executed synchronously by the receiving goroutine, ensuring in-order processing of requests.
 * Concurrent processing of requests is still possible since the RPC handler can start a goroutine.
 
+### Stream Replacement
+
+The order holds for the requests that one stream carries.
+A node replaces its stream to a server when the stream is lost, and when the server sends a GOAWAY.
+Each stream has its own receiving goroutine and handler queue at the server, so a new stream is an ordering boundary: a request from an older stream may overlap with, or start after, a request from the stream that replaced it.
+This matches gRPC, which orders the messages of one streaming RPC and gives no order across RPCs.
+A node sends each call at most once, so a call sent on the older stream does not run again on the new stream.
+See [Ordering Across Streams](./user-guide.md#ordering-across-streams) for what the sender learns and how an application orders requests across streams.
+
 ### RPC API Differences from gRPC
 
 ```go
@@ -89,7 +98,7 @@ func (s *testSrv) AsyncHandler(ctx gorums.ServerContext, req *Request) (resp *Re
 
 ## How to Preserve Message Ordering
 
-While Gorums preserve message ordering end-to-end, this guarantee only holds as long as the order is preserved at both endpoints.
+While Gorums preserve message ordering end-to-end on one stream, this guarantee only holds as long as the order is preserved at both endpoints.
 Hence, to preserve message ordering, the following rules must be adhered to:
 
 * (Client-side) Quorum calls cannot be started in separate goroutines, as the scheduling of goroutines is non-deterministic.

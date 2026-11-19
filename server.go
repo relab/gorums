@@ -448,12 +448,14 @@ func (ctx *ServerContext) SenderID() ID {
 }
 
 // Release ends the ordered part of the handler and lets the next request on
-// this handler's stream start. Code before Release runs in per-sender FIFO
-// order: the requests of one stream pass it one at a time, in arrival order.
-// Code after Release runs concurrently with the handlers of later requests, so
-// it must protect shared state, for example with a mutex. A mutex gives mutual
-// exclusion but not arrival order. A handler that does not call Release
-// releases when it returns.
+// this handler's stream start. Code before Release runs in FIFO order for the
+// requests of one stream: they pass it one at a time, in the order that the
+// sender sent them. A new stream of the same sender is an ordering boundary:
+// a request from the older stream may overlap with, or start after, a request
+// from the stream that replaced it. Code after Release runs concurrently with
+// the handlers of later requests, so it must protect shared state, for example
+// with a mutex. A mutex gives mutual exclusion but not arrival order. A handler
+// that does not call Release releases when it returns.
 //
 // To keep a nested call in FIFO order, dispatch it before Release and wait for
 // it after Release, for example with [OnewayCall.Async] or [Call.Async];
