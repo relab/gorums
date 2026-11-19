@@ -210,6 +210,33 @@ func TestTreeChildrenOf(t *testing.T) {
 	}
 }
 
+// TestTreePathTo verifies PathTo on a perfect bf=3 depth=2 tree.
+func TestTreePathTo(t *testing.T) {
+	tree := mustNewTree(t, 13, 3)
+	tests := []struct {
+		id      ID
+		wantIDs []ID
+	}{
+		{id: 1, wantIDs: []ID{}}, // root: empty, not nil
+		{id: 2, wantIDs: []ID{1}},
+		{id: 4, wantIDs: []ID{1}},
+		{id: 5, wantIDs: []ID{1, 2}},
+		{id: 10, wantIDs: []ID{1, 3}},
+		{id: 13, wantIDs: []ID{1, 4}},
+		{id: 14, wantIDs: nil}, // not in tree
+	}
+	for _, tt := range tests {
+		got := tree.PathTo(tt.id)
+		if (got == nil) != (tt.wantIDs == nil) || !slices.Equal(got.NodeIDs(), tt.wantIDs) {
+			t.Errorf("PathTo(%d) = %v (nil=%t), want %v (nil=%t)", tt.id, got.NodeIDs(), got == nil, tt.wantIDs, tt.wantIDs == nil)
+		}
+	}
+	chain := mustNewTree(t, 5, 1)
+	if got := chain.PathTo(5).NodeIDs(); !slices.Equal(got, []ID{1, 2, 3, 4}) {
+		t.Errorf("chain PathTo(5) = %v, want [1 2 3 4]", got)
+	}
+}
+
 // TestTreeSubtree verifies Subtree on a perfect bf=3 depth=2 tree.
 func TestTreeSubtree(t *testing.T) {
 	tree := mustNewTree(t, 13, 3)

@@ -115,6 +115,23 @@ func (t *TreeConfig) ParentOf(id ID) *Node {
 	return t.nodes[(pos-1)/t.arity]
 }
 
+// PathTo returns the ancestors of the node with the given ID, root first,
+// without the node itself. These are the nodes that a message relayed down
+// the tree passes through on its way from the root to the node. It returns
+// an empty Config for the root and nil for an ID not in the tree.
+func (t *TreeConfig) PathTo(id ID) Config {
+	pos, found := t.positionOf[id]
+	if !found {
+		return nil
+	}
+	path := make(Config, t.levels[pos])
+	for i := len(path) - 1; i >= 0; i-- {
+		pos = (pos - 1) / t.arity
+		path[i] = t.nodes[pos]
+	}
+	return path
+}
+
 // ChildrenOf returns the direct children of the node with the given ID as a
 // Config. Returns nil for leaves and for IDs not in the tree.
 // The returned configuration is a view of the tree's node list and must not
