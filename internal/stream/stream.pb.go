@@ -211,7 +211,8 @@ func (x *MetadataEntry) SetValue(v string) {
 type MetadataEntry_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	Key   string
+	Key string
+	// gRPC metadata values for -bin keys carry arbitrary bytes in Go strings.
 	Value string
 }
 
@@ -234,10 +235,10 @@ const file_internal_stream_stream_proto_rawDesc = "" +
 	"\x06method\x18\x02 \x01(\tR\x06method\x12*\n" +
 	"\x06status\x18\x03 \x01(\v2\x12.google.rpc.StatusR\x06status\x12+\n" +
 	"\x05entry\x18\x04 \x03(\v2\x15.stream.MetadataEntryR\x05entry\x12\x18\n" +
-	"\apayload\x18\x05 \x01(\fR\apayload\"7\n" +
+	"\apayload\x18\x05 \x01(\fR\apayload\">\n" +
 	"\rMetadataEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value2<\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1b\n" +
+	"\x05value\x18\x02 \x01(\tB\x05\xaa\x01\x02 \x03R\x05value2<\n" +
 	"\x06Gorums\x122\n" +
 	"\n" +
 	"NodeStream\x12\x0f.stream.Message\x1a\x0f.stream.Message(\x010\x01B.Z'github.com/relab/gorums/internal/stream\x92\x03\x02\b\x02b\beditionsp\xe8\a"
