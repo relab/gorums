@@ -635,24 +635,25 @@ func TestServerMeasuredVerify(t *testing.T) {
 	}
 }
 
-// TestServerMeasuredWindowExcludesClockSync verifies that the server-measured
-// throughput window (Control.Start to Control.Stop) brackets only the send
-// window, not the two clock-offset estimation phases that run around it. Each
-// phase is 50 sequential ClockSync round trips, so on a real network the
-// window would otherwise report a TotalTime and Throughput skewed by
-// clock-sync time; a bufconn round trip is normally too fast for that skew to
-// show up in a wall-clock assertion, so a per-round delay on ClockSync alone
-// (via a server interceptor) stands in for that network cost and makes the
-// leak deterministically detectable.
+// TestServerMeasuredWindowExcludesClockSync checks that the offset
+// estimates bracket the server's Start-to-Stop measurement window.
 func TestServerMeasuredWindowExcludesClockSync(t *testing.T) {
-	const clockSyncDelay = 2 * time.Millisecond
-	delayClockSync := func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) error {
-		if in.GetMethod() == "benchkit.Control.ClockSync" {
-			time.Sleep(clockSyncDelay)
+	var mu sync.Mutex
+	var phases []string
+	recordPhase := func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) error {
+		switch method := in.GetMethod(); method {
+		case "benchkit.Control.ClockSync", "benchkit.Control.Start", "benchkit.Control.Stop":
+			// Each phase calls every server. Record its method once per
+			// consecutive group, regardless of which server handles it first.
+			mu.Lock()
+			if len(phases) == 0 || phases[len(phases)-1] != method {
+				phases = append(phases, method)
+			}
+			mu.Unlock()
 		}
 		return next(ctx, in, send)
 	}
-	target := symmetricServers(t, 3, gorums.WithServerInterceptors(delayClockSync))
+	target := symmetricServers(t, 3, gorums.WithServerInterceptors(recordPhase))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -669,19 +670,23 @@ func TestServerMeasuredWindowExcludesClockSync(t *testing.T) {
 	}
 
 	run := benchkit.ServerMeasured(target.servers[0].PeerConfig(), setup)
-	const duration = 20 * time.Millisecond
-	result, err := run(benchkit.Options{Workers: 1, Duration: duration, Interval: 5 * time.Millisecond})
+	result, err := run(benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond, Interval: 5 * time.Millisecond})
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	// Each of the two clock-sync phases pays clockSyncRounds (50) sequential
-	// ClockSync round trips, so if either phase leaked into the window,
-	// TotalTime would grow by tens of clockSyncDelay on top of duration. A
-	// window correctly bounded to the send phase stays within a few
-	// durations' worth of slack for scheduling and the Stop RPC.
-	if got, want := time.Duration(result.GetTotalTime()), duration+20*clockSyncDelay; got > want {
-		t.Errorf("TotalTime = %v, want <= %v (clock-sync phases leaking into the measurement window?)", got, want)
+	want := []string{
+		"benchkit.Control.ClockSync",
+		"benchkit.Control.Start",
+		"benchkit.Control.Stop",
+		"benchkit.Control.ClockSync",
 	}
+	mu.Lock()
+	got := slices.Clone(phases)
+	mu.Unlock()
+	if !slices.Equal(got, want) {
+		t.Errorf("control phases = %v, want %v", got, want)
+	}
+
 	var eventDuration time.Duration
 	for _, event := range result.GetEvents() {
 		if throughput := event.GetThroughput(); throughput != nil {
@@ -690,8 +695,5 @@ func TestServerMeasuredWindowExcludesClockSync(t *testing.T) {
 	}
 	if eventDuration == 0 {
 		t.Fatal("throughput event duration = 0, want a measured interval")
-	}
-	if want := duration + 20*clockSyncDelay; eventDuration > want {
-		t.Errorf("throughput event duration = %v, want <= %v (clock-sync phases leaking into the event stream?)", eventDuration, want)
 	}
 }
