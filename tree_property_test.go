@@ -12,7 +12,7 @@ import (
 func TestTreeProperties(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		ids := rapid.SliceOfNDistinct(rapid.Uint32Range(1, 10000), 1, 100, rapid.ID).Draw(t, "ids")
-		bf := rapid.IntRange(2, 12).Draw(t, "branchingFactor")
+		bf := rapid.IntRange(1, 12).Draw(t, "branchingFactor")
 		cfg := make(Config, len(ids))
 		for i, id := range ids {
 			cfg[i] = makeTreeNode(id)
@@ -34,10 +34,12 @@ func TestTreeProperties(t *testing.T) {
 				next++
 			}
 		}
-		depth := max(1, levels[len(ids)-1]) + rapid.IntRange(0, 2).Draw(t, "extraDepth")
-		tree, err := NewTree(cfg, TreeOptions{BranchingFactor: bf, Depth: depth})
+		tree, err := NewTree(cfg, bf)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if tree.BranchingFactor() != bf {
+			t.Fatalf("BranchingFactor() = %d, want %d", tree.BranchingFactor(), bf)
 		}
 		for i, id := range ids {
 			var parent *Node
@@ -86,35 +88,37 @@ func TestTreeProperties(t *testing.T) {
 	})
 }
 
-func FuzzTreeOptions(f *testing.F) {
-	for _, shape := range [][3]int{{2, 1, 3}, {2, 2, 7}, {2, 2, 8}, {1, 1, 1}, {2, 0, 1}, {2, math.MaxInt, 1}, {math.MaxInt, 1, 1}, {2, 63, 1}, {-1, -1, 0}} {
-		f.Add(shape[0], shape[1], uint8(shape[2]))
+func FuzzNewTree(f *testing.F) {
+	for _, shape := range [][2]int{{2, 3}, {2, 7}, {2, 8}, {1, 1}, {1, 255}, {0, 1}, {math.MaxInt, 3}, {math.MinInt, 1}, {-1, 0}} {
+		f.Add(shape[0], uint8(shape[1]))
 	}
-	f.Fuzz(func(t *testing.T, bf, depth int, count uint8) {
+	f.Fuzz(func(t *testing.T, bf int, count uint8) {
 		n := int(count)
 		cfg := makeTreeConfig(n)
-		tree, err := NewTree(cfg, TreeOptions{BranchingFactor: bf, Depth: depth})
-		valid := bf >= 2 && depth >= 1 && n > 0
-		// At b >= 2, depth >= 64 always overflows a Go int. Bound the oracle's
-		// exponent independently of the implementation to handle hostile inputs.
-		if valid {
-			if depth >= 64 {
-				valid = false
-			} else {
-				capacity := new(big.Int)
-				power := big.NewInt(1)
-				for i := 0; i <= depth; i++ {
-					capacity.Add(capacity, power)
-					power.Mul(power, big.NewInt(int64(bf)))
-				}
-				valid = capacity.Cmp(big.NewInt(int64(math.MaxInt))) <= 0 && capacity.Cmp(big.NewInt(int64(n))) >= 0
-			}
+		tree, err := NewTree(cfg, bf)
+		if valid := bf >= 1 && n > 0; (err == nil) != valid {
+			t.Fatalf("NewTree(b=%d,n=%d) = %v, valid=%v", bf, n, err, valid)
 		}
-		if (err == nil) != valid {
-			t.Fatalf("NewTree(b=%d,d=%d,n=%d) = %v, valid=%v", bf, depth, n, err, valid)
+		if err != nil {
+			return
 		}
-		if err == nil && (tree.Root() != cfg[0] || !slices.Equal(tree.Subtree(cfg[0].ID()), cfg)) {
+		// The oracle finds the smallest depth whose capacity
+		// (b^(depth+1) − 1) / (b − 1) holds n nodes, in exact arithmetic.
+		depth := 0
+		capacity, power := big.NewInt(1), big.NewInt(1)
+		for capacity.Cmp(big.NewInt(int64(n))) < 0 {
+			power.Mul(power, big.NewInt(int64(bf)))
+			capacity.Add(capacity, power)
+			depth++
+		}
+		if tree.Root() != cfg[0] || !slices.Equal(tree.Subtree(cfg[0].ID()), cfg) {
 			t.Fatal("root subtree differs from configuration")
+		}
+		if got := tree.Height(cfg[0].ID()); got != depth {
+			t.Fatalf("NewTree(b=%d,n=%d): Height(root) = %d, want %d", bf, n, got, depth)
+		}
+		if got := tree.Level(cfg[n-1].ID()); got != depth {
+			t.Fatalf("NewTree(b=%d,n=%d): Level(last) = %d, want %d", bf, n, got, depth)
 		}
 	})
 }

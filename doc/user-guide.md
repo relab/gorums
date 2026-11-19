@@ -2578,7 +2578,7 @@ A `TreeConfig` gives the nodes of a `Config` the positions of a tree, so that a 
 It is a topology only: it tells you the parent, children, and subtree of each node, and you decide how to use them.
 
 ```go
-tree, err := gorums.NewTree(cfg, gorums.TreeOptions{BranchingFactor: 2, Depth: 2})
+tree, err := gorums.NewTree(cfg, 2) // branching factor 2
 if err != nil {
     return err
 }
@@ -2589,24 +2589,34 @@ tree.Subtree(id)        // Config of the node and all its descendants
 tree.Level(id)          // edges from the root; the root is at level 0
 tree.Height(id)         // edges to the deepest leaf below; a leaf has height 0
 tree.IsLeaf(id)
+tree.BranchingFactor()  // the branching factor given to NewTree
 ```
 
 `NewStar(cfg)` builds the tree in which every node other than the root is a child of the root, which is useful as a fallback when a deeper tree cannot be used.
 
 ### Shape and positions
 
-The tree is a complete b-ary tree in breadth-first order.
-The first node of `cfg` is the root, the next `BranchingFactor` nodes are its children, the next `BranchingFactor`² nodes are the grandchildren, and so on.
-If `cfg` has fewer nodes than a full tree of the given shape, the last level is filled from the left, so a node near the end may have fewer children than the branching factor.
-`NewTree` returns an error if `cfg` has more nodes than the tree can hold, which is (b^(depth+1) − 1) / (b − 1) for branching factor b.
+The tree is a complete b-ary tree in breadth-first order: every level is full except possibly the last, which is filled from the left.
+For branching factor b, the first node of `cfg` is the root, the next b nodes are its children, the next b² nodes are the grandchildren, and so on.
+The tree has the smallest depth that holds all the nodes of `cfg`.
+Since the last level may be partial, a node near the end may have fewer children than the branching factor.
+A branching factor of 1 gives a chain, and a branching factor of at least `len(cfg)-1` gives a star.
+`tree.Height(tree.Root().ID())` returns the depth of the tree.
+A larger branching factor gives a shallower tree.
 
 The order of `cfg` alone defines the positions; node IDs do not.
-To choose the root, or which nodes share a parent, order the configuration first, for example with `Config.Sort`, and then build the tree.
 Every process that builds a tree for the same system must use the same order, or the processes will disagree about who the parents are.
+A configuration lists its nodes in node-ID order, so a tree built directly from it has the node with the lowest ID as its root.
+To choose another root, reorder the configuration in the same way on every process.
+For example, to give each view a new root, rotate the configuration by the view number:
 
 ```go
-tree, err := gorums.NewTree(cfg.Sort(gorums.ByLatency), gorums.TreeOptions{BranchingFactor: 3, Depth: 3})
+r := view % len(cfg)
+tree, err := gorums.NewTree(slices.Concat(cfg[r:], cfg[:r]), 3)
 ```
+
+Do not order the nodes by a measure local to one process, such as `Config.Sort(gorums.ByLatency)`.
+Each process measures its own latencies, so the processes would build different trees.
 
 A `TreeConfig` is an immutable value and is safe for concurrent use.
 To change the tree, build a new one; the old and the new tree can be in use at the same time.

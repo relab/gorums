@@ -33,7 +33,7 @@ import (
 // setupTreeServers starts n connected peer servers and returns them together
 // with one tree per server, each built over that server's own peer
 // configuration, which is in node-ID order.
-func setupTreeServers(t *testing.T, n int, dedup bool, opts gorums.TreeOptions) ([]*gorums.Server, []*gorums.TreeConfig) {
+func setupTreeServers(t *testing.T, n int, dedup bool, branchingFactor int) ([]*gorums.Server, []*gorums.TreeConfig) {
 	t.Helper()
 	var srvOpts []gorumstest.Option
 	if dedup {
@@ -43,7 +43,7 @@ func setupTreeServers(t *testing.T, n int, dedup bool, opts gorums.TreeOptions) 
 	gorumstest.WaitForPeers(t, servers)
 	trees := make([]*gorums.TreeConfig, n)
 	for i, srv := range servers {
-		tree, err := gorums.NewTree(srv.PeerConfig(), opts)
+		tree, err := gorums.NewTree(srv.PeerConfig(), branchingFactor)
 		if err != nil {
 			t.Fatalf("server %d: NewTree: %v", i+1, err)
 		}
@@ -60,7 +60,7 @@ func TestTreeMulticast(t *testing.T) {
 	for _, dedup := range []bool{false, true} {
 		t.Run(fmt.Sprintf("Dedup=%t", dedup), func(t *testing.T) {
 			const n = 7
-			servers, trees := setupTreeServers(t, n, dedup, gorums.TreeOptions{BranchingFactor: 2, Depth: 2})
+			servers, trees := setupTreeServers(t, n, dedup, 2)
 
 			var mu sync.Mutex
 			received := make(map[gorums.ID]int)
@@ -123,7 +123,7 @@ func TestTreeMulticastRelayOrder(t *testing.T) {
 		for _, dedup := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/Dedup=%t", tt.name, dedup), func(t *testing.T) {
 				const n = 7
-				servers, trees := setupTreeServers(t, n, dedup, gorums.TreeOptions{BranchingFactor: 2, Depth: 2})
+				servers, trees := setupTreeServers(t, n, dedup, 2)
 
 				var mu sync.Mutex
 				leafOrder := make(map[gorums.ID][]string)
@@ -195,7 +195,7 @@ func TestTreeQuorumCall(t *testing.T) {
 	for _, dedup := range []bool{false, true} {
 		t.Run(fmt.Sprintf("Dedup=%t", dedup), func(t *testing.T) {
 			const n = 7
-			servers, trees := setupTreeServers(t, n, dedup, gorums.TreeOptions{BranchingFactor: 2, Depth: 2})
+			servers, trees := setupTreeServers(t, n, dedup, 2)
 
 			// aggregate returns the sum of the node's own value and the
 			// totals of its children.
@@ -251,7 +251,7 @@ func TestTreeQuorumCall(t *testing.T) {
 // result covers all seven nodes, and the root's work is not skipped.
 func TestTreeExternalCaller(t *testing.T) {
 	const n = 7
-	servers, trees := setupTreeServers(t, n, false, gorums.TreeOptions{BranchingFactor: 2, Depth: 2})
+	servers, trees := setupTreeServers(t, n, false, 2)
 
 	for i, srv := range servers {
 		tree := trees[i]
