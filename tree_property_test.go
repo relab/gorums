@@ -56,6 +56,13 @@ func TestTreeProperties(t *testing.T) {
 			if !slices.Equal(tree.ChildrenOf(id).NodeIDs(), wantChildren) {
 				t.Fatalf("children mismatch for %d", id)
 			}
+			var wantPath []ID
+			for p := parents[i]; p >= 0; p = parents[p] {
+				wantPath = append([]ID{ids[p]}, wantPath...)
+			}
+			if path := tree.PathTo(id); path == nil || !slices.Equal(path.NodeIDs(), wantPath) {
+				t.Fatalf("path mismatch for %d: got %v, want %v", id, path.NodeIDs(), wantPath)
+			}
 			queue := []int{i}
 			var subtree []ID
 			height := 0
@@ -70,7 +77,7 @@ func TestTreeProperties(t *testing.T) {
 				t.Fatalf("subtree/height/leaf mismatch for %d", id)
 			}
 		}
-		if tree.ParentOf(0) != nil || len(tree.ChildrenOf(0)) != 0 || len(tree.Subtree(0)) != 0 || tree.Level(0) != -1 || tree.Height(0) != -1 || tree.IsLeaf(0) {
+		if tree.ParentOf(0) != nil || tree.PathTo(0) != nil || len(tree.ChildrenOf(0)) != 0 || len(tree.Subtree(0)) != 0 || tree.Level(0) != -1 || tree.Height(0) != -1 || tree.IsLeaf(0) {
 			t.Fatal("unknown node has a tree position")
 		}
 		star, err := NewStar(cfg)

@@ -2585,6 +2585,7 @@ if err != nil {
 tree.Root()             // the first node of cfg
 tree.ChildrenOf(id)     // Config of the direct children; nil for a leaf
 tree.ParentOf(id)       // *Node; nil for the root
+tree.PathTo(id)         // Config of the ancestors, root first; empty for the root
 tree.Subtree(id)        // Config of the node and all its descendants
 tree.Level(id)          // edges from the root; the root is at level 0
 tree.Height(id)         // edges to the deepest leaf below; a leaf has height 0
