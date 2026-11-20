@@ -19,8 +19,8 @@ import (
 //
 // A TreeConfig is an immutable value; it is safe for concurrent use.
 // To change the tree, for example to use a new tree in each view of a
-// protocol, build a new TreeConfig. Old and new trees can be used at the same
-// time, since they only share the underlying nodes.
+// protocol, build a new TreeConfig or rotate it with [TreeConfig.Rotate].
+// Old and new trees can be used at the same time.
 //
 // A TreeConfig describes topology only. It does not reduce the number of
 // connections: every node of the configuration is connected as soon as the
@@ -40,14 +40,21 @@ type TreeConfig struct {
 	// node is its index in nodes; nodes[0] is the root. With arity a, the
 	// children of position p are the positions p*a+1 through p*a+a that are
 	// in nodes, and the parent of position p > 0 is (p-1)/a.
+	// nodes is the window ring[offset:offset+len(nodes)].
 	nodes Config
+	// ring holds the node order given to NewTree twice in a row, so that
+	// every rotation of it, and every range of positions in a rotation, is
+	// a contiguous subslice. All rotations of a tree share ring.
+	ring Config
+	// offset is the rotation of nodes in ring, in the range [0, len(nodes)).
+	offset int
 	// branchingFactor is the branching factor given to NewTree.
 	branchingFactor int
 	// arity is min(branchingFactor, max(len(nodes)-1, 1)), the smallest
 	// branching factor that gives the same tree.
 	arity      int
 	levels     []int      // levels[pos] is the level of the node at position pos
-	positionOf map[ID]int // node ID → index in nodes
+	positionOf map[ID]int // node ID → index in ring[:len(nodes)]
 }
 
 // NewTree returns a [TreeConfig] over cfg with the given branching factor,
@@ -61,7 +68,8 @@ func NewTree(cfg Config, branchingFactor int) (*TreeConfig, error) {
 	if len(cfg) == 0 {
 		return nil, fmt.Errorf("gorums: cannot build a tree from an empty configuration")
 	}
-	nodes := slices.Clone(cfg)
+	ring := slices.Concat(cfg, cfg)
+	nodes := ring[:len(cfg):len(cfg)]
 	positionOf := make(map[ID]int, len(nodes))
 	for i, n := range nodes {
 		if _, dup := positionOf[n.ID()]; dup {
@@ -76,7 +84,7 @@ func NewTree(cfg Config, branchingFactor int) (*TreeConfig, error) {
 	for pos := 1; pos < len(nodes); pos++ {
 		levels[pos] = levels[(pos-1)/arity] + 1
 	}
-	return &TreeConfig{nodes: nodes, branchingFactor: branchingFactor, arity: arity, levels: levels, positionOf: positionOf}, nil
+	return &TreeConfig{nodes: nodes, ring: ring, branchingFactor: branchingFactor, arity: arity, levels: levels, positionOf: positionOf}, nil
 }
 
 // NewStar returns a [TreeConfig] in which the first node of cfg is the root
@@ -86,6 +94,37 @@ func NewTree(cfg Config, branchingFactor int) (*TreeConfig, error) {
 // It returns an error if cfg is empty.
 func NewStar(cfg Config) (*TreeConfig, error) {
 	return NewTree(cfg, max(len(cfg)-1, 1))
+}
+
+// Rotate returns the tree over the same nodes with the same branching factor,
+// but with the node order rotated left by r positions: the node at index r of
+// [TreeConfig.Config] is the root of the returned tree. r is taken modulo the
+// number of nodes, so a negative r rotates right. The result is equal to the
+// tree that [NewTree] builds from the rotated configuration.
+//
+// The returned tree shares the node order, positions, and levels of t, so a
+// rotation costs constant memory and time. A protocol that uses many
+// rotations of one tree, for example a new root in each view, builds the
+// tree once and rotates it.
+func (t *TreeConfig) Rotate(r int) *TreeConfig {
+	n := len(t.nodes)
+	rotated := *t
+	rotated.offset = (t.offset + r%n + n) % n
+	rotated.nodes = t.ring[rotated.offset : rotated.offset+n : rotated.offset+n]
+	return &rotated
+}
+
+// position returns the position of the node with the given ID in the tree,
+// and whether the node is in the tree.
+func (t *TreeConfig) position(id ID) (int, bool) {
+	pos, found := t.positionOf[id]
+	if !found {
+		return 0, false
+	}
+	if pos -= t.offset; pos < 0 {
+		pos += len(t.nodes)
+	}
+	return pos, true
 }
 
 // BranchingFactor returns the branching factor that the tree was built with.
@@ -108,7 +147,7 @@ func (t *TreeConfig) firstChild(pos int) int {
 // ParentOf returns the parent of the node with the given ID, or nil if the
 // node is the root or not in the tree.
 func (t *TreeConfig) ParentOf(id ID) *Node {
-	pos, found := t.positionOf[id]
+	pos, found := t.position(id)
 	if !found || pos == 0 {
 		return nil
 	}
@@ -120,7 +159,7 @@ func (t *TreeConfig) ParentOf(id ID) *Node {
 // the tree passes through on its way from the root to the node. It returns
 // an empty Config for the root and nil for an ID not in the tree.
 func (t *TreeConfig) PathTo(id ID) Config {
-	pos, found := t.positionOf[id]
+	pos, found := t.position(id)
 	if !found {
 		return nil
 	}
@@ -137,7 +176,7 @@ func (t *TreeConfig) PathTo(id ID) Config {
 // The returned configuration is a view of the tree's node list and must not
 // be modified; appending to it is safe.
 func (t *TreeConfig) ChildrenOf(id ID) Config {
-	pos, found := t.positionOf[id]
+	pos, found := t.position(id)
 	if !found {
 		return nil
 	}
@@ -153,7 +192,7 @@ func (t *TreeConfig) ChildrenOf(id ID) Config {
 // descendants in breadth-first order. Returns nil if the node is not in
 // the tree.
 func (t *TreeConfig) Subtree(id ID) Config {
-	pos, found := t.positionOf[id]
+	pos, found := t.position(id)
 	if !found {
 		return nil
 	}
@@ -194,7 +233,7 @@ func (t *TreeConfig) Root() *Node {
 // the root, so the root is at level 0. It returns -1 if the node is not in
 // the tree.
 func (t *TreeConfig) Level(id ID) int {
-	pos, found := t.positionOf[id]
+	pos, found := t.position(id)
 	if !found {
 		return -1
 	}
@@ -205,7 +244,7 @@ func (t *TreeConfig) Level(id ID) int {
 // the given ID down to a leaf, so a leaf has height 0 and the root has the
 // height of the tree. It returns -1 if the node is not in the tree.
 func (t *TreeConfig) Height(id ID) int {
-	pos, found := t.positionOf[id]
+	pos, found := t.position(id)
 	if !found {
 		return -1
 	}
@@ -220,6 +259,6 @@ func (t *TreeConfig) Height(id ID) int {
 // IsLeaf reports whether the node with the given ID is in the tree and has
 // no children.
 func (t *TreeConfig) IsLeaf(id ID) bool {
-	_, found := t.positionOf[id]
+	_, found := t.position(id)
 	return found && len(t.ChildrenOf(id)) == 0
 }

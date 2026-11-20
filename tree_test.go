@@ -544,6 +544,118 @@ func TestTreeSubtreeAllocation(t *testing.T) {
 	}
 }
 
+// TestTreeRotate verifies the positions in rotations of a 7-node tree with
+// branching factor 3, including child ranges that wrap around the end of the
+// configuration.
+func TestTreeRotate(t *testing.T) {
+	tree := mustNewTree(t, 7, 3)
+	tests := []struct {
+		r            int
+		wantConfig   []ID
+		wantChildren map[ID][]ID
+	}{
+		{r: 0, wantConfig: []ID{1, 2, 3, 4, 5, 6, 7}, wantChildren: map[ID][]ID{1: {2, 3, 4}, 2: {5, 6, 7}, 3: nil}},
+		{r: 2, wantConfig: []ID{3, 4, 5, 6, 7, 1, 2}, wantChildren: map[ID][]ID{3: {4, 5, 6}, 4: {7, 1, 2}, 1: nil}},
+		{r: 6, wantConfig: []ID{7, 1, 2, 3, 4, 5, 6}, wantChildren: map[ID][]ID{7: {1, 2, 3}, 1: {4, 5, 6}, 6: nil}},
+		{r: 7, wantConfig: []ID{1, 2, 3, 4, 5, 6, 7}, wantChildren: map[ID][]ID{1: {2, 3, 4}}},
+		{r: -1, wantConfig: []ID{7, 1, 2, 3, 4, 5, 6}, wantChildren: map[ID][]ID{7: {1, 2, 3}, 1: {4, 5, 6}}},
+		{r: 16, wantConfig: []ID{3, 4, 5, 6, 7, 1, 2}, wantChildren: map[ID][]ID{4: {7, 1, 2}}},
+		{r: math.MinInt, wantConfig: rotateIDs([]ID{1, 2, 3, 4, 5, 6, 7}, math.MinInt), wantChildren: nil},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("r=%d", tt.r), func(t *testing.T) {
+			rotated := tree.Rotate(tt.r)
+			if got := rotated.Config().NodeIDs(); !slices.Equal(got, tt.wantConfig) {
+				t.Errorf("Config() = %v, want %v", got, tt.wantConfig)
+			}
+			if got := rotated.Root().ID(); got != tt.wantConfig[0] {
+				t.Errorf("Root() = %d, want %d", got, tt.wantConfig[0])
+			}
+			if got := rotated.BranchingFactor(); got != 3 {
+				t.Errorf("BranchingFactor() = %d, want 3", got)
+			}
+			for id, want := range tt.wantChildren {
+				if got := rotated.ChildrenOf(id).NodeIDs(); !slices.Equal(got, want) {
+					t.Errorf("ChildrenOf(%d) = %v, want %v", id, got, want)
+				}
+			}
+			if got := rotated.ParentOf(tt.wantConfig[0]); got != nil {
+				t.Errorf("ParentOf(root) = %v, want nil", got)
+			}
+		})
+	}
+	if got := tree.Config().NodeIDs(); !slices.Equal(got, []ID{1, 2, 3, 4, 5, 6, 7}) {
+		t.Errorf("Config() of the original tree = %v after rotations, want [1..7]", got)
+	}
+}
+
+// rotateIDs returns ids rotated left by r positions, with r taken modulo
+// len(ids).
+func rotateIDs(ids []ID, r int) []ID {
+	r = (r%len(ids) + len(ids)) % len(ids)
+	return slices.Concat(ids[r:], ids[:r])
+}
+
+// TestTreeRotateIsImmutable verifies that appending to the configurations
+// that a rotated tree returns cannot overwrite the nodes of any rotation.
+func TestTreeRotateIsImmutable(t *testing.T) {
+	tree := mustNewTree(t, 7, 3)
+	rotated := tree.Rotate(2)
+	_ = append(rotated.ChildrenOf(4), makeTreeNode(200))
+	_ = append(rotated.Config(), makeTreeNode(201))
+	_ = append(tree.Config(), makeTreeNode(202))
+	for r := range 7 {
+		want := rotateIDs([]ID{1, 2, 3, 4, 5, 6, 7}, r)
+		if got := tree.Rotate(r).Config().NodeIDs(); !slices.Equal(got, want) {
+			t.Errorf("Rotate(%d).Config() = %v after appends, want %v", r, got, want)
+		}
+	}
+}
+
+// TestTreeRotateAllocation verifies that a rotation shares the node order of
+// the tree, and that child lookups in a rotation that wrap around the end of
+// the configuration return views without allocation.
+func TestTreeRotateAllocation(t *testing.T) {
+	tree := mustNewTree(t, 7, 3)
+	if allocs := testing.AllocsPerRun(100, func() { _ = tree.Rotate(5) }); allocs > 1 {
+		t.Errorf("Rotate allocations = %v, want at most 1", allocs)
+	}
+	rotated := tree.Rotate(2)
+	if allocs := testing.AllocsPerRun(100, func() { _ = rotated.ChildrenOf(4) }); allocs != 0 {
+		t.Errorf("ChildrenOf allocations = %v, want 0", allocs)
+	}
+}
+
+// BenchmarkTreeRotations compares two ways to hold every rotation of a tree:
+// one NewTree call per rotation, and one tree with a Rotate call per rotation.
+func BenchmarkTreeRotations(b *testing.B) {
+	for _, n := range []int{64, 256, 1024} {
+		cfg := makeTreeConfig(n)
+		b.Run(fmt.Sprintf("NewTree/n=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				for r := range n {
+					if _, err := NewTree(slices.Concat(cfg[r:], cfg[:r]), 3); err != nil {
+						b.Fatal(err)
+					}
+				}
+			}
+		})
+		b.Run(fmt.Sprintf("Rotate/n=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				tree, err := NewTree(cfg, 3)
+				if err != nil {
+					b.Fatal(err)
+				}
+				for r := range n {
+					_ = tree.Rotate(r)
+				}
+			}
+		})
+	}
+}
+
 // BenchmarkTreePositions measures the position lookups that a relay makes
 // once per message, on a 100-node binary tree and a 100-node chain.
 func BenchmarkTreePositions(b *testing.B) {
