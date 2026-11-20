@@ -275,3 +275,8 @@ spec-check *flags:
 [group('spec')]
 tlc config *flags:
     spec/tlc.sh run {{ config }} {{ flags }}
+
+# Summarize saved TLC output for one configuration, with any error trace one line per step.
+[group('spec')]
+tlc-summary config:
+    spec/tlc.sh summary {{ quote(config) }}

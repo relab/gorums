@@ -10,7 +10,7 @@ Each subfolder holds one model, its TLC configurations, and a README that explai
 ## Tools
 
 The TLA+ models need Java and `tla2tools.jar`.
-`spec/tlc.sh` takes the jar from `$TLA2TOOLS`, or else from the [TLA+ VS Code extension](https://marketplace.visualstudio.com/items?itemName=tlaplus.vscode-ide).
+The `just` recipes below invoke `spec/tlc.sh`, which takes the jar from `$TLA2TOOLS`, or else from the [TLA+ VS Code extension](https://marketplace.visualstudio.com/items?itemName=tlaplus.vscode-ide).
 The jar is also on the [TLA+ releases page](https://github.com/tlaplus/tlaplus/releases).
 
 ## Running the Checks
@@ -41,13 +41,16 @@ Add the long configurations, which take up to half an hour:
 just spec-check -all
 ```
 
-Without `just`, run `spec/tlc.sh list`, `spec/tlc.sh run Current`, and `spec/tlc.sh check`.
 TLC writes its output to `out/` next to each configuration; git ignores it.
-To summarize saved output again, run `spec/tlc.sh summary Current`.
+To summarize saved output again:
+
+```bash
+just tlc-summary Current
+```
 
 ## Configuration Headers
 
-Each `.cfg` file starts with three comment lines that `spec/tlc.sh` reads:
+Each `.cfg` file starts with three comment lines that the recipes read:
 
 ```text
 \* Module: Stream
@@ -59,6 +62,6 @@ Each `.cfg` file starts with three comment lines that `spec/tlc.sh` reads:
 * `Expect`: `pass`, `deadlock`, or `violates P`, where `P` is an invariant or a temporal property.
 * `Run`: `short` for under a minute, or `long`.
 
-The first other comment line is the description that `just spec-list` shows.
+The comments are the descriptions that `just spec-list` show.
 
 A new model goes in its own subfolder, with these headers in each configuration and a README that explains the model.
