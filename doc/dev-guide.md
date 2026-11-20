@@ -440,7 +440,7 @@ So a send that fails with `io.EOF` before the server accepted the stream only ca
 The session's `handoff` state ensures that exactly one goroutine disposes of them.
 The session's `verdict` channel closes when the server accepts the stream or receiving ends; the run loop waits for it after a session ends, and then reads whether the server refused the stream.
 A one-way send that fails this way also waits for the verdict, so that it fails with the refusal too.
-If the acceptance header or a frame arrives after the failed send, the stream was accepted: receiving delivers the frames that the stream buffered, and retries the calls still pending when `Recv` fails.
+If the acceptance header or a frame arrives after the failed send, the stream was accepted: receiving delivers the frames that the stream buffered, and fails the calls still pending when `Recv` fails.
 
 ```mermaid
 stateDiagram-v2
@@ -808,8 +808,14 @@ These IDs encode as ten-byte protobuf varints because the high bit is set; the s
 
 Each `session` owns the `pendingCalls` of its stream, so ending a session affects only the calls sent on that stream.
 When a session ends, its pending calls fail, since the server may have handled them; a channel sends each call at most once.
-On an outbound session, a call fails with the refusal if the server refused the stream, with `ResourceExhausted` if the stream ended with it, and with `ErrNodeClosed` if the channel is closed.
-Every other pending call fails with `ErrStreamDown`, as do the pending calls of an inbound session.
+The pending calls of an inbound session fail with `ErrStreamDown`.
+The pending calls of an outbound session fail with the first error in this list that applies:
+
+1. The server refused the stream: the calls fail with the status that the server ended the stream with.
+2. The stream ended due to resource exhaustion: the calls fail with the stream's `ResourceExhausted` status.
+3. The channel is closed: the calls fail with `ErrNodeClosed`.
+4. Otherwise, the calls fail with `ErrStreamDown`.
+
 A request that the send loop took from the queue but did not send goes first on the channel's next session.
 These include the calls of a shared node that borrows the inbound stream.
 Closing a channel ends its sessions and fails the requests in its send queue.
