@@ -21,10 +21,11 @@ var ErrTypeMismatch = impl.ErrTypeMismatch
 // unavailable, such as a call over a shared [WithStreamDedup] stream that is
 // not connected (see [Server.WaitForAll]), or whose stream broke before the
 // call's response arrived. The server may have handled a call that fails with
-// ErrStreamDown, so a caller that retries the call must tolerate it running
-// twice. It is a gRPC status error with the Unavailable code;
-// test for it with [errors.Is], also inside a [QuorumCallError]. The
-// Unavailable code alone does not tell it apart from other node errors.
+// ErrStreamDown, so a caller that retries the call must tolerate that the
+// request reaches the server's handler twice. It is a gRPC status error with
+// the Unavailable code; test for it with [errors.Is], also inside a
+// [QuorumCallError]. The Unavailable code alone does not tell it apart from
+// other node errors.
 var ErrStreamDown = stream.ErrStreamDown
 
 // ErrNodeClosed is returned for a call enqueued after its node was closed. It

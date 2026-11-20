@@ -1879,7 +1879,7 @@ With `WithStreamDedup`, `WaitForAll` waits until the server accepts; without it,
 
 A stream that ends with any other status (except `codes.ResourceExhausted`; see [Oversized Requests](#oversized-requests)), or that ends after the server accepted it, is lost, not refused: its two-way calls fail with `ErrStreamDown`, and a later call opens a new stream.
 The node sends each call at most once.
-The server may have handled a call that fails with `ErrStreamDown`, so a caller that retries the call must tolerate it running twice.
+The server may have handled a call that fails with `ErrStreamDown`, so a caller that retries the call must tolerate that the request reaches the server's handler twice.
 
 ## Oversized Requests
 
