@@ -31,7 +31,7 @@ type session struct {
 	// serverRequests reports whether the peer's requests carry
 	// server-initiated IDs, as they do on a stream this side dialed.
 	serverRequests bool
-	// outbound is set on a session over a stream that this side dialed.
+	// outbound is set for a stream that this side dialed.
 	outbound bool
 
 	pending pendingCalls
@@ -176,7 +176,7 @@ func (s *session) healthy() bool {
 // sendFailed ends the session after a send failed with err. If the session
 // is outbound and receiving has ended or err is io.EOF, the receive loop
 // disposes of pending calls, and sendFailed returns true. Otherwise, pending
-// calls fail as in [session.fail], and sendFailed returns false.
+// calls fail as in [session.failPending], and sendFailed returns false.
 func (s *session) sendFailed(err error) bool {
 	if s.outbound {
 		for {
@@ -259,7 +259,7 @@ func (s *session) receiveFailed(err error) {
 	}
 	if s.draining.Load() && errors.Is(err, io.EOF) {
 		// The server ended the stream after it handled every request sent
-		// on it. A call still pending lost its reply.
+		// on the stream. A pending call lost its reply.
 		s.end(err)
 		return
 	}
@@ -311,7 +311,7 @@ func (s *session) fail(err error) {
 }
 
 // end ends the session after err, which may be nil, and fails its pending
-// calls; see [session.failPending]. It is idempotent.
+// calls as in [session.failPending]. It is idempotent.
 func (s *session) end(err error) {
 	s.cancel()
 	for _, req := range s.pending.drain() {
