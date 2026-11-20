@@ -7,7 +7,7 @@ TLC checks it for small bounds.
 * The model finds the four past stream-layer bugs when a switch puts each one back.
 * The current code runs each call at most once.
   It breaks one documented contract: calls from one sender can run out of FIFO order across a reconnect.
-* A proposed design fixes this: a newer stream supersedes the older one at the server.
+* A proposed design, named supersede, fixes this: a newer stream from a sender replaces that sender's older stream at the server.
   The code does not implement it yet.
 * A simpler gate, "wait until older channels are idle", fails when a break leaves frames in transit.
 
@@ -54,6 +54,8 @@ All switches off models the current code.
 | `FIFOGate = "supersede"` | design  | A refuses a stream older than one it has seen. A newer stream closes the older channel. |
 | `LateFrames`             | network | A break loses only a suffix of the frames in flight. The receiver still gets the rest.  |
 
+To supersede a stream means that a newer stream from D replaces it at A.
+A closes the channel of the older stream, and refuses the older stream if its start arrives late.
 Both gates need D's stream number at A, for example in the stream metadata.
 `LateFrames` models data that is still in transit or in buffers when the sender gives up, as after a keepalive timeout.
 
