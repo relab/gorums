@@ -455,7 +455,9 @@ stateDiagram-v2
     note right of Closed
         From Fresh or SendFailed with a refusal code:
         fail the pending calls with the refusal.
-        Otherwise: retry them.
+        On ResourceExhausted: fail them with that status.
+        If the channel is closed: fail them with ErrNodeClosed.
+        Otherwise: fail them with ErrStreamDown.
     end note
 ```
 
