@@ -42,7 +42,7 @@ CONSTANTS
     BlockingReplies,    \* a handler's reply waits for send queue space
     Requeue,            \* a lost stream requeues its pending calls at the tail of the send queue
     \* Design switches. All off models the current code.
-    FIFOGate,           \* "none", "idle", or "supersede"; see AcceptS and HandleS
+    FIFOGate,           \* "none", "idle", or "supersede" (a newer stream replaces the older one at A); see AcceptS and HandleS
     \* Network switch.
     LateFrames          \* a break loses only a suffix of the frames in flight
 
