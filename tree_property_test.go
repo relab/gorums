@@ -95,6 +95,63 @@ func TestTreeProperties(t *testing.T) {
 	})
 }
 
+// TestTreeRotateProperties verifies that a rotation of a tree is the tree that
+// NewTree builds over the rotated configuration, and that rotations compose.
+func TestTreeRotateProperties(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		ids := rapid.SliceOfNDistinct(rapid.Uint32Range(1, 10000), 1, 100, rapid.ID).Draw(t, "ids")
+		bf := rapid.IntRange(1, 12).Draw(t, "branchingFactor")
+		r := rapid.OneOf(rapid.IntRange(-300, 300), rapid.Just(math.MinInt), rapid.Just(math.MaxInt)).Draw(t, "r")
+		s := rapid.IntRange(-300, 300).Draw(t, "s")
+		cfg := make(Config, len(ids))
+		for i, id := range ids {
+			cfg[i] = makeTreeNode(id)
+		}
+		tree, err := NewTree(cfg, bf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		n := len(cfg)
+		rn := (r%n + n) % n
+		want, err := NewTree(slices.Concat(cfg[rn:], cfg[:rn]), bf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rotated := tree.Rotate(r)
+		checkSameTree(t, rotated, want, ids)
+		// Rotations compose: rotating by r and then by s rotates by r+s.
+		rsn := ((rn+s)%n + n) % n
+		wantComposed, err := NewTree(slices.Concat(cfg[rsn:], cfg[:rsn]), bf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkSameTree(t, rotated.Rotate(s), wantComposed, ids)
+	})
+}
+
+// checkSameTree fails t unless got and want give the same results for every
+// method, for every ID in ids and for an ID not in the trees.
+func checkSameTree(t *rapid.T, got, want *TreeConfig, ids []ID) {
+	if got.BranchingFactor() != want.BranchingFactor() || got.Root() != want.Root() || !slices.Equal(got.Config(), want.Config()) {
+		t.Fatalf("Config() = %v, want %v", got.Config().NodeIDs(), want.Config().NodeIDs())
+	}
+	for _, id := range append(slices.Clone(ids), 0) {
+		switch {
+		case got.ParentOf(id) != want.ParentOf(id):
+			t.Fatalf("ParentOf(%d) = %v, want %v", id, got.ParentOf(id), want.ParentOf(id))
+		case !slices.Equal(got.ChildrenOf(id), want.ChildrenOf(id)):
+			t.Fatalf("ChildrenOf(%d) = %v, want %v", id, got.ChildrenOf(id).NodeIDs(), want.ChildrenOf(id).NodeIDs())
+		case !slices.Equal(got.PathTo(id), want.PathTo(id)) || (got.PathTo(id) == nil) != (want.PathTo(id) == nil):
+			t.Fatalf("PathTo(%d) = %v, want %v", id, got.PathTo(id).NodeIDs(), want.PathTo(id).NodeIDs())
+		case !slices.Equal(got.Subtree(id), want.Subtree(id)):
+			t.Fatalf("Subtree(%d) = %v, want %v", id, got.Subtree(id).NodeIDs(), want.Subtree(id).NodeIDs())
+		case got.Level(id) != want.Level(id) || got.Height(id) != want.Height(id) || got.IsLeaf(id) != want.IsLeaf(id):
+			t.Fatalf("Level/Height/IsLeaf(%d) = %d/%d/%v, want %d/%d/%v", id,
+				got.Level(id), got.Height(id), got.IsLeaf(id), want.Level(id), want.Height(id), want.IsLeaf(id))
+		}
+	}
+}
+
 func FuzzNewTree(f *testing.F) {
 	for _, shape := range [][2]int{{2, 3}, {2, 7}, {2, 8}, {1, 1}, {1, 255}, {0, 1}, {math.MaxInt, 3}, {math.MinInt, 1}, {-1, 0}} {
 		f.Add(shape[0], uint8(shape[1]))
