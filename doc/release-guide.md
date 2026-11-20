@@ -108,7 +108,28 @@ Install it again after the program changes.
 
 5. Wait for CI to pass on the pull request.
 
-6. Publish the release.
+6. Approve and wait for the smoke checks.
+
+   The push of the release branch starts the `release-smoke` workflow.
+   It runs four jobs:
+
+   - `guard` checks that the branch is `release/<version>` for the version in `version.go`;
+   - `local-checks` runs `just integrationtest`, `just stresstest`, `just lint`, `just modernize` (which must change nothing), and `just goplscheck`;
+   - `docker-smoke` runs `just smoke-docker`, a multi-host sweep on Docker containers;
+   - `cluster-smoke` runs the same smoke sweep on the bbchain cluster, and checks it with `sweep -verify`.
+
+   `cluster-smoke` waits for your approval of the `cluster` environment.
+   Approve it in the Actions tab of the run (Review deployments).
+   While it waits, a run for a newer push to the same branch waits too, so approve or reject it before you push again.
+   It needs the cluster access described in [Cluster Access](#cluster-access).
+
+   Each smoke job writes a verdict to its job summary.
+   The verdict lists each failed criterion, with the error of a failed run and the degraded nodes of a degraded run.
+   Each smoke job also uploads an artifact with its verdict and its full run directory, including `agg.csv`, the logs, and the raw results.
+
+   `publish` refuses to merge until all three of `local-checks`, `docker-smoke`, and `cluster-smoke` have succeeded on the pull request.
+
+7. Publish the release.
 
    ```shell
    gorums-release publish
@@ -138,6 +159,12 @@ These flags belong to one command:
 
 ## If Something Goes Wrong
 
+- If a smoke job fails, read its verdict in the job summary.
+  Fix the cause on the release branch and push; the workflow runs again.
+  To run a job again without a change, use "Re-run failed jobs" in the Actions tab.
+- If the cluster is down and the release cannot wait, merge the release pull request by hand in GitHub.
+  `publish` then publishes the merged pull request and prints a warning that names each smoke check that did not pass.
+  Use this only for an outage, and run the cluster smoke check again once the cluster is back.
 - If `prepare` fails, fix the cause and undo its changes before you run it again.
   Run `git restore .` for the changed files.
   Run `git clean -nd` to list the new files that code generation added, and `git clean -fd` to delete them.
@@ -148,3 +175,91 @@ These flags belong to one command:
   Never move or delete a tag that the Go module proxy has served.
 - If the proxy check times out, the release is still complete.
   Check later with `go list -m github.com/relab/gorums@vX.Y.Z` and `go list -m github.com/relab/gorums/benchkit@vX.Y.Z`.
+
+## Cluster Access
+
+The `cluster-smoke` job of the `release-smoke` workflow runs a smoke sweep on the bbchain cluster from a GitHub-hosted runner.
+It reaches the cluster over SSH through the UiS jump host, as the dedicated account `gorums`:
+
+```text
+GitHub runner ──ssh, ProxyJump only──► ssh4.ux.uis.no ──► driver (bb1) ──ssh──► pool hosts (bbN)
+                                       shared jump host;     runs sweep -driven;  run the benchmark
+                                       nothing runs here     holds /tmp/sweep-gorums
+```
+
+`ssh4.ux.uis.no` serves all UiS users, so it only forwards connections.
+No sweep, binary, or file is ever placed there.
+
+The runner's SSH config, the pinned host keys, the driver, and the pool are in `.github/actions/cluster-ssh/`.
+To change the driver or the pool, edit those files in a pull request.
+The pool needs at least 9 hosts, because the smoke sweep runs `-test 9`, and every host in it must be reachable.
+
+### Set Up Access
+
+Do this once.
+The account `gorums` must have one home directory on `ssh4.ux.uis.no` and another, shared one on the cluster hosts.
+
+1. Create a key pair for the workflow, without a passphrase.
+   Put the year in its comment, so that its age shows in `authorized_keys`:
+
+   ```shell
+   ssh-keygen -t ed25519 -C gorums-release-smoke-2026 -N '' -f gorums-release-smoke
+   ```
+
+2. Install the public key for the account `gorums`, with one line on the jump host and one on the cluster.
+
+   In `~/.ssh/authorized_keys` on `ssh4.ux.uis.no`:
+
+   ```text
+   command="/bin/false",restrict,port-forwarding,permitopen="bb1.ux.uis.no:22" <contents of gorums-release-smoke.pub>
+   ```
+
+   In `~/.ssh/authorized_keys` on the cluster hosts:
+
+   ```text
+   from="152.94.1.60,152.94.162.0/26",restrict,port-forwarding,agent-forwarding,pty <contents of gorums-release-smoke.pub>
+   ```
+
+   - On the jump host, the key can only forward SSH to the driver.
+     Any command runs `/bin/false` instead; `ProxyJump` still works.
+     The `permitopen` host must match the driver's `HostName` in `.github/actions/cluster-ssh/ssh_config`.
+   - On the cluster, the key works only from the jump host (`152.94.1.60`) and the cluster network.
+     Use addresses, not names.
+
+3. In the repository settings, create the environment `cluster`:
+   - deployment branches: only the pattern `release/v*`;
+   - required reviewer: the maintainer;
+   - the secret `CLUSTER_SSH_KEY`: the private key `gorums-release-smoke` from step 1.
+
+   Then delete the private key file.
+
+4. In the repository settings under Actions, require approval for workflows from all outside collaborators.
+
+5. Check the access with the `cluster-check` workflow.
+   Push any commit to a branch named `release/v0-probe`, approve the `cluster` environment in the Actions tab, and wait for the job:
+
+   ```shell
+   git push origin HEAD:refs/heads/release/v0-probe
+   ```
+
+   The job first checks that the jump host runs no command for the account: `ssh jump true` must exit with the status of `/bin/false`.
+   It then runs `sweep -check -strict` from the driver.
+   It passes when every host is reachable, no benchmark port is busy, and no benchmark process is left over.
+   Then delete the branch:
+
+   ```shell
+   git push origin --delete release/v0-probe
+   ```
+
+The key reaches only jobs that name the `cluster` environment, run from a `release/v*` branch, and are approved.
+Only people with write access can push such a branch, and a pull request from a fork runs without the secret.
+
+### Rotate the Key
+
+Rotate the key once a year.
+Rotate it at once if it may have leaked, or if someone with admin access to the repository leaves.
+
+1. Create a new key pair as in step 1, with the current year in its comment.
+2. Add the new public key next to the old one, as in step 2.
+3. Replace the secret `CLUSTER_SSH_KEY`, and run the `cluster-check` workflow as in step 5.
+4. Remove the old key's lines from `authorized_keys` on the jump host and on the cluster.

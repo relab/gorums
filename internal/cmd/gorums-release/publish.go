@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -27,6 +28,7 @@ type prInfo struct {
 	Number      int    `json:"number"`
 	URL         string `json:"url"`
 	State       string `json:"state"`
+	HeadRefOID  string `json:"headRefOid"` // the head commit that StatusCheckRollup describes
 	MergeCommit struct {
 		OID string `json:"oid"`
 	} `json:"mergeCommit"`
@@ -36,12 +38,50 @@ type prInfo struct {
 // checkRun is one entry of a pull request's status check rollup: either a
 // check run or a commit status.
 type checkRun struct {
-	Typename   string `json:"__typename"`
-	Name       string `json:"name"`
-	Status     string `json:"status"`
-	Conclusion string `json:"conclusion"`
-	Context    string `json:"context"`
-	State      string `json:"state"`
+	Typename     string `json:"__typename"`
+	Name         string `json:"name"`
+	WorkflowName string `json:"workflowName"`
+	Status       string `json:"status"`
+	Conclusion   string `json:"conclusion"`
+	Context      string `json:"context"`
+	State        string `json:"state"`
+}
+
+// requiredCheck names a check run that must succeed on the release pull request
+// before publish merges it: a job of a GitHub Actions workflow.
+type requiredCheck struct {
+	workflow string
+	job      string
+}
+
+// String returns the check as GitHub shows it, e.g. "release-smoke / cluster-smoke".
+func (c requiredCheck) String() string {
+	return c.workflow + " / " + c.job
+}
+
+// requiredSmokeChecks are the release smoke jobs that run on a push to the
+// release branch; see the Smoke Checks step of the release guide.
+var requiredSmokeChecks = []requiredCheck{
+	{workflow: "release-smoke", job: "local-checks"},
+	{workflow: "release-smoke", job: "docker-smoke"},
+	{workflow: "release-smoke", job: "cluster-smoke"},
+}
+
+// missingRequired returns the required checks that are absent from rollup or
+// did not succeed. Unlike the other CI checks, a skipped or neutral required
+// check counts as missing.
+func missingRequired(rollup []checkRun, required []requiredCheck) []string {
+	var missing []string
+	for _, req := range required {
+		ok := slices.ContainsFunc(rollup, func(c checkRun) bool {
+			return c.Typename != "StatusContext" && c.WorkflowName == req.workflow && c.Name == req.job &&
+				c.Status == "COMPLETED" && c.Conclusion == "SUCCESS"
+		})
+		if !ok {
+			missing = append(missing, req.String())
+		}
+	}
+	return missing
 }
 
 // publish merges the release PR if needed, then tags the merge commit, creates
@@ -88,7 +128,7 @@ func (t *tool) publish(o publishOptions) error {
 
 // lookupPR reads the release pull request for a branch.
 func (t *tool) lookupPR(branch string) (prInfo, error) {
-	out, err := t.query("gh", "pr", "view", branch, "--json", "number,url,state,mergeCommit,statusCheckRollup")
+	out, err := t.query("gh", "pr", "view", branch, "--json", "number,url,state,headRefOid,mergeCommit,statusCheckRollup")
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "no pull requests found") {
 			return prInfo{}, fmt.Errorf("no pull request found for %s: run %s pr first", branch, progName)
@@ -112,6 +152,11 @@ func (t *tool) mergeRelease(branch string, yes bool) (string, error) {
 	switch pr.State {
 	case "MERGED":
 		t.logf("Pull request %s is already merged.", pr.URL)
+		// A pull request merged by hand, for example during a cluster outage,
+		// bypasses the smoke checks; say so, but publish.
+		if missing := missingRequired(pr.StatusCheckRollup, requiredSmokeChecks); len(missing) > 0 {
+			t.logf("warning: required smoke checks missing or not successful for %s: %s", pr.URL, strings.Join(missing, ", "))
+		}
 	case "OPEN":
 		if len(pr.StatusCheckRollup) == 0 {
 			return "", fmt.Errorf("no CI checks reported for %s", pr.URL)
@@ -123,10 +168,18 @@ func (t *tool) mergeRelease(branch string, yes bool) (string, error) {
 		if len(pending) > 0 {
 			return "", fmt.Errorf("CI checks still running for %s: %s", pr.URL, strings.Join(pending, ", "))
 		}
+		if missing := missingRequired(pr.StatusCheckRollup, requiredSmokeChecks); len(missing) > 0 {
+			return "", fmt.Errorf("required smoke checks missing or not successful for %s: %s", pr.URL, strings.Join(missing, ", "))
+		}
+		if pr.HeadRefOID == "" {
+			return "", fmt.Errorf("pull request %s reports no head commit", pr.URL)
+		}
 		if err := t.confirm(fmt.Sprintf("Squash-merge %s?", pr.URL), yes); err != nil {
 			return "", err
 		}
-		if err := t.exec("gh", "pr", "merge", branch, "--squash", "--delete-branch"); err != nil {
+		// Merge only the head commit whose checks passed above; gh refuses the
+		// merge if a newer commit was pushed in the meantime.
+		if err := t.exec("gh", "pr", "merge", branch, "--squash", "--delete-branch", "--match-head-commit", pr.HeadRefOID); err != nil {
 			return "", err
 		}
 		if t.dryRun {
