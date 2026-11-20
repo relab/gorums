@@ -2645,6 +2645,7 @@ tree.Level(id)          // edges from the root; the root is at level 0
 tree.Height(id)         // edges to the deepest leaf below; a leaf has height 0
 tree.IsLeaf(id)
 tree.BranchingFactor()  // the branching factor given to NewTree
+tree.Rotate(r)          // *TreeConfig over the node order rotated left by r
 ```
 
 `NewStar(cfg)` builds the tree in which every node other than the root is a child of the root, which is useful as a fallback when a deeper tree cannot be used.
@@ -2663,19 +2664,25 @@ The order of `cfg` alone defines the positions; node IDs do not.
 Every process that builds a tree for the same system must use the same order, or the processes will disagree about who the parents are.
 A configuration lists its nodes in node-ID order, so a tree built directly from it has the node with the lowest ID as its root.
 To choose another root, reorder the configuration in the same way on every process.
-For example, to give each view a new root, rotate the configuration by the view number:
+For example, to give each view a new root, rotate the tree by the view number:
 
 ```go
-r := view % len(cfg)
-tree, err := gorums.NewTree(slices.Concat(cfg[r:], cfg[:r]), 3)
+tree, err := gorums.NewTree(cfg, 3) // once
+viewTree := tree.Rotate(view)       // a new root in each view
 ```
+
+`tree.Rotate(r)` returns the tree with the breadth-first order of `tree` rotated by r positions.
+A positive r rotates left, so the node r positions after the root becomes the root.
+A negative r rotates right.
+Rotations compose: `tree.Rotate(a).Rotate(b)` equals `tree.Rotate(a + b)`.
+A rotation costs constant memory and time, while n separate `NewTree` calls for the n rotations of an n-node tree take O(n²) memory.
 
 Do not order the nodes by a measure local to one process, such as `Config.Sort(gorums.ByLatency)`.
 Each process measures its own latencies, so the processes would build different trees.
 
 A `TreeConfig` is an immutable value and is safe for concurrent use.
 The configurations that `Config` and `ChildrenOf` return are views of the tree's node list; do not modify their elements.
-To change the tree, build a new one; the old and the new tree can be in use at the same time.
+To change the tree, build a new one or rotate it; the old and the new tree can be in use at the same time.
 This is how a protocol can use a new tree for each view, or fall back to a star after a timeout.
 
 ### The root

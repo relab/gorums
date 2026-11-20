@@ -302,6 +302,7 @@ unparseable
 unreachability
 unregistrations
 Unreportable
+unrotated
 unstarted
 untrackable
 URISAN
