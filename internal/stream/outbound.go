@@ -60,24 +60,26 @@ type OutboundOptions struct {
 // handled them. A request taken from the send queue but not yet sent goes
 // first on the new stream.
 //
-// If the stream ends with codes.ResourceExhausted, the calls still awaiting
-// responses fail with that status. gRPC ends a stream this way when a request
-// exceeds the client's send limit or the server's receive limit. The other
-// calls on the stream fail too, since the client cannot tell which request was
-// too large.
+// If the stream ends due to resource exhaustion, the calls still awaiting
+// responses fail with the codes.ResourceExhausted status code. gRPC ends a
+// stream this way when a request exceeds the client's send limit or the
+// server's receive limit. The other calls on the stream fail too, since the
+// client cannot tell which request was too large.
 //
 // A server that shuts down gracefully first tells the client to stop using
 // the connection (a GOAWAY). The channel then sends new calls on a new
 // stream. Calls already sent on the old stream complete there, and the old
 // stream ends once it has no calls left.
 //
-// A stream the server refuses ends with codes.Unauthenticated,
-// codes.PermissionDenied, codes.InvalidArgument, or codes.Unimplemented
-// before the server accepts it. Calls on it fail with that status. The
-// channel then backs off before opening a new stream, and
-// requests fail with the refusal in the meantime. A stream that cannot be
-// opened because of one of these codes is treated the same way, for example
-// when the connection's credentials refuse the server.
+// A server refuses a stream by ending the stream before accepting it, with
+// the status code codes.Unauthenticated, codes.PermissionDenied,
+// codes.InvalidArgument, or codes.Unimplemented. The calls still awaiting
+// responses on the refused stream fail with the server's status. The channel
+// then waits for a backoff delay before it opens a new stream, and each
+// request that arrives during the delay fails at once with the same status.
+// An attempt to open a stream can also return an error with one of these
+// codes, for example when the connection's credentials refuse the server.
+// The channel handles such an error as a refused stream.
 type OutboundChannel struct {
 	endpoint
 	conn           *grpc.ClientConn
@@ -167,8 +169,11 @@ func (c *OutboundChannel) run() {
 	}
 }
 
-// streamFailed handles a stream that could not be opened, or that the server
-// refused, with err. It fails req.
+// streamFailed handles err, which is either the error from opening a stream
+// or the status of a stream that the server refused. It records err as the
+// channel's health, starts the backoff for err, and fails req with err. On a
+// closed channel, it only fails req, with [ErrNodeClosed]. It ignores a nil
+// req.
 func (c *OutboundChannel) streamFailed(b *backoff, req *NodeRequest, err error) {
 	if c.ctx.Err() != nil {
 		err = ErrNodeClosed
