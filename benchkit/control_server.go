@@ -16,7 +16,6 @@ import (
 type Control struct {
 	stats *Stats
 	ops   atomic.Uint64
-	id    uint32 // this node's gorums node ID
 
 	// Done tracking (see [Control.ArmDone]): doneSeen[id] marks that sender
 	// id has signaled, doneLeft counts remaining distinct signals, and
@@ -33,18 +32,10 @@ func NewControl() *Control {
 	return &Control{stats: new(Stats)}
 }
 
-// SetID records this node's gorums node ID. Workload senders tag messages with
-// this ID so the receiving server can attribute samples per sender. Call it
-// from the server registration closure, once the node ID is known.
-func (c *Control) SetID(id uint32) { c.id = id }
-
 // Stats returns the Stats instance backing this control server. The protocol's
 // workload handlers record server-measured latencies here so the Stop reply and
 // the handlers observe the same samples.
 func (c *Control) Stats() *Stats { return c.stats }
-
-// ID returns this node's gorums node ID.
-func (c *Control) ID() uint32 { return c.id }
 
 // ArmDone configures advisory Done tracking for `total` distinct peer
 // signals (sender IDs 1..total) and returns the channel that closes once
