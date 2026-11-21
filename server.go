@@ -60,14 +60,10 @@ func (s *Server) NodeID() ID {
 }
 
 // ConnectedPeers returns the subset of [Server.PeerConfig] whose peers are
-// currently connected. It always includes the local node, and it equals
-// [Server.PeerConfig] when all peers are connected. A returned configuration
-// remains valid across connectivity changes.
-//
-// A peer is connected while the stream that this server uses to call it is
-// open and accepted. Without [WithStreamDedup], this server opens that stream,
-// and the peer accepts it. With it, the server with the lower ID opens the
-// stream, and the other server accepts it.
+// currently connected. A peer is connected while this server has an open
+// stream on which it can call that peer. The configuration always includes the
+// local node, and it equals [Server.PeerConfig] when all peers are connected.
+// A returned configuration remains valid across connectivity changes.
 func (s *Server) ConnectedPeers() Config {
 	return s.im.ConnectedPeers()
 }
@@ -484,9 +480,9 @@ func (ctx *ServerContext) PeerConfig() Config {
 }
 
 // ConnectedClients returns a [Config] of the clients currently connected to
-// this server that can receive back-channel calls. It is the same
-// configuration as [Server.ConnectedClients]. An empty (non-nil)
-// configuration is returned when no clients are connected.
+// this server that can receive back-channel calls. An empty (non-nil)
+// configuration is returned when no clients are connected. A returned
+// configuration remains valid across connectivity changes.
 func (ctx *ServerContext) ConnectedClients() Config {
 	if ctx.srv == nil {
 		return nil
