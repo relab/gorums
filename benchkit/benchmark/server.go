@@ -46,7 +46,6 @@ func (srv *workloadServer) Multicast(ctx gorums.ServerContext, msg *TimedMsg) {
 func attachBenchServer(srv *gorums.Server) *benchkit.Control {
 	ctrl := benchkit.NewControl()
 	w := &workloadServer{ctrl: ctrl}
-	ctrl.SetID(srv.NodeID())
 	benchkit.RegisterControlServer(srv, ctrl)
 	RegisterBenchmarkServer(srv, w)
 	return ctrl
