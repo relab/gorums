@@ -206,7 +206,7 @@ func TestRunSymmetricQuorumCallDefaultsToMajority(t *testing.T) {
 	}
 
 	opts := benchkit.Options{Duration: 100 * time.Millisecond, Rate: 100, Workers: 1}
-	result, err := runSymmetricQuorumCall(targets[0], opts)
+	result, err := runSymmetricQuorumCall(t.Context(), targets[0], opts)
 	if err != nil {
 		t.Fatalf("runSymmetricQuorumCall: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestRunSymmetricQuorumCallStragglerEndsCleanly(t *testing.T) {
 	const duration = 2 * time.Second
 	opts := benchkit.Options{Duration: duration, Rate: 50, Workers: 1}
 	start := time.Now()
-	result, err := runSymmetricQuorumCall(target, opts)
+	result, err := runSymmetricQuorumCall(t.Context(), target, opts)
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("runSymmetricQuorumCall = %v, want nil error (straggler run-over should be a clean stop)", err)
@@ -299,7 +299,7 @@ func TestRunSymmetricQuorumCallHonorsCallTimeout(t *testing.T) {
 		CallTimeout: 20 * time.Millisecond,
 	}
 	start := time.Now()
-	result, err := runSymmetricQuorumCall(target, opts)
+	result, err := runSymmetricQuorumCall(t.Context(), target, opts)
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("runSymmetricQuorumCall: %v", err)
@@ -322,7 +322,7 @@ func TestRunSymmetricMulticastDrainsServerMessages(t *testing.T) {
 		t.Fatalf("awaitReady: %v", err)
 	}
 
-	result, err := runSymmetricMulticast(target, benchkit.Options{
+	result, err := runSymmetricMulticast(t.Context(), target, benchkit.Options{
 		Workers:  1,
 		Duration: 20 * time.Millisecond,
 	})
@@ -349,7 +349,7 @@ func TestRunSymmetricMulticastHDR(t *testing.T) {
 		t.Fatalf("awaitReady: %v", err)
 	}
 
-	result, err := runSymmetricMulticast(target, benchkit.Options{
+	result, err := runSymmetricMulticast(t.Context(), target, benchkit.Options{
 		Workers:   1,
 		Duration:  20 * time.Millisecond,
 		StatsMode: benchkit.StatsMode_HDR,
@@ -383,7 +383,7 @@ func TestSymmetricMulticastLatencySeries(t *testing.T) {
 			if err := awaitReady(ctx, target); err != nil {
 				t.Fatal(err)
 			}
-			r, err := runSymmetricMulticast(target, benchkit.Options{
+			r, err := runSymmetricMulticast(t.Context(), target, benchkit.Options{
 				Workers: 1, Duration: 20 * time.Millisecond,
 				Interval: 5 * time.Millisecond, StatsMode: mode,
 			})

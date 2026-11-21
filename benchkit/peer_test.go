@@ -456,7 +456,7 @@ func pingWorkload(sends int) Workload {
 				received[id].Add(1)
 				return nil
 			})
-			ping := func(Options) (*Result, error) {
+			ping := func(context.Context, Options) (*Result, error) {
 				cfg := p.Server().PeerConfig()
 				for range sends {
 					if err := mockcall.Multicast(context.Background(), cfg, "ping").Async().Wait(); err != nil {
@@ -588,9 +588,9 @@ func TestPeerRunCanceledSkipsFinal(t *testing.T) {
 			return benches, err
 		}
 		run := benches[0].Run
-		benches[0].Run = func(opts Options) (*Result, error) {
+		benches[0].Run = func(ctx context.Context, opts Options) (*Result, error) {
 			defer cancel()
-			return run(opts)
+			return run(ctx, opts)
 		}
 		return benches, nil
 	}
@@ -620,5 +620,38 @@ func TestPeerRunLocalRejectsPeerCount(t *testing.T) {
 				t.Errorf("RunLocal(%d) error = %q, want it to contain %q", n, err, want)
 			}
 		})
+	}
+}
+
+// TestPeerRunLocalCancelsRunningBenchmarks verifies that a benchmark error on
+// one peer ends the running benchmarks of the other peers at once, because
+// [RunLocal] cancels their context and [Peer.Run] passes it to each benchmark.
+func TestPeerRunLocalCancelsRunningBenchmarks(t *testing.T) {
+	captureDiag(t)
+	errBench := errors.New("benchmark error")
+	w := Workload{Setup: func(p *Peer) ([]Bench, error) {
+		run := func(ctx context.Context, opts Options) (*Result, error) {
+			if p.Server().NodeID() == 2 {
+				return nil, errBench
+			}
+			benchCtx, cancel := BenchContext(ctx, opts)
+			defer cancel()
+			<-benchCtx.Done()
+			return &Result{}, nil
+		}
+		return []Bench{{Name: "Wait", Run: run}}, nil
+	}}
+	opts := pingOpts
+	opts.Duration = time.Minute
+	start := time.Now()
+	_, err := RunLocal(gorumstest.Context(t, 2*time.Minute), 3, regexp.MustCompile("Wait"), w, opts, localOpts(t, nil)...)
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Errorf("RunLocal took %v, want the benchmark error to end the run at once", elapsed)
+	}
+	if !errors.Is(err, errBench) {
+		t.Fatalf("RunLocal error = %v, want it to wrap %v", err, errBench)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("RunLocal error = %v, want the other peers to return %v", err, context.Canceled)
 	}
 }

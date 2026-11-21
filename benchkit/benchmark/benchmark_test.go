@@ -150,7 +150,7 @@ func TestAsyncQCBoundsInFlight(t *testing.T) {
 		peak        int
 	)
 	opts := benchkit.Options{Workers: 2, MaxAsync: maxAsync, Duration: 2 * time.Second, QuorumSize: 2}
-	res, err := runAsyncQCBenchmark(opts, target.peers[0].Server().PeerConfig(),
+	res, err := runAsyncQCBenchmark(t.Context(), opts, target.peers[0].Server().PeerConfig(),
 		func(ctx context.Context, client BenchmarkClient, in *Echo, quorumSize int) func() error {
 			wait := asyncThreshold(ctx, client, in, quorumSize)
 			mu.Lock()
@@ -240,7 +240,7 @@ func TestAsyncQCComplete(t *testing.T) {
 // touched.
 func TestRunAsyncQCBenchmarkRejectsRateRamp(t *testing.T) {
 	opts := benchkit.Options{Workers: 1, Duration: time.Second, RateStep: 10, RateStepMax: 100}
-	_, err := runAsyncQCBenchmark(opts, nil, func(context.Context, BenchmarkClient, *Echo, int) func() error {
+	_, err := runAsyncQCBenchmark(t.Context(), opts, nil, func(context.Context, BenchmarkClient, *Echo, int) func() error {
 		t.Fatal("asyncQCFunc invoked despite rejected rate-ramp options")
 		return nil
 	})
@@ -279,7 +279,7 @@ func TestQuorumCallHonorsCallTimeout(t *testing.T) {
 		CallTimeout: 20 * time.Millisecond,
 	}
 	start := time.Now()
-	result, err := run(opts)
+	result, err := run(t.Context(), opts)
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("QuorumCall benchmark: %v", err)
@@ -309,7 +309,7 @@ func TestRunAsyncQCBenchmarkCountsErrorsWithoutAborting(t *testing.T) {
 	t.Cleanup(closeFn)
 
 	opts := benchkit.Options{Workers: 1, Duration: 30 * time.Millisecond, MaxAsync: 10, QuorumSize: 1}
-	result, err := runAsyncQCBenchmark(opts, cfg, asyncThreshold)
+	result, err := runAsyncQCBenchmark(t.Context(), opts, cfg, asyncThreshold)
 	if err != nil {
 		t.Fatalf("runAsyncQCBenchmark aborted on call error: %v", err)
 	}
@@ -499,7 +499,7 @@ func TestAsyncMulticastBenchmarkRuns(t *testing.T) {
 	if idx < 0 {
 		t.Fatal("AsyncMulticast benchmark not registered")
 	}
-	result, err := benches[idx].Run(benchkit.Options{
+	result, err := benches[idx].Run(t.Context(), benchkit.Options{
 		Workers: 2, MaxAsync: 8, Duration: 50 * time.Millisecond,
 	})
 	if err != nil {
@@ -545,7 +545,7 @@ func TestServerMeasuredMulticastHDR(t *testing.T) {
 			}
 		})
 
-	result, err := run(benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond, StatsMode: benchkit.StatsMode_HDR})
+	result, err := run(t.Context(), benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond, StatsMode: benchkit.StatsMode_HDR})
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -586,7 +586,7 @@ func TestServerMeasuredQuiesce(t *testing.T) {
 			return nil
 		}))
 
-	result, err := run(benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond})
+	result, err := run(t.Context(), benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond})
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -624,7 +624,7 @@ func TestServerMeasuredVerify(t *testing.T) {
 			gotNodes = len(replies)
 			return nil
 		}))
-	if _, err := run(benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond}); err != nil {
+	if _, err := run(t.Context(), benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond}); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	if gotNodes != 3 {
@@ -634,7 +634,7 @@ func TestServerMeasuredVerify(t *testing.T) {
 	errVerify := errors.New("per-server ops diverged")
 	failing := benchkit.ServerMeasured(target.peers[0].Server().PeerConfig(), setup,
 		benchkit.WithVerify(func(map[uint32]*benchkit.Result) error { return errVerify }))
-	if _, err := failing(benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond}); !errors.Is(err, errVerify) {
+	if _, err := failing(t.Context(), benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond}); !errors.Is(err, errVerify) {
 		t.Errorf("run with failing verify = %v, want %v", err, errVerify)
 	}
 }
@@ -674,7 +674,7 @@ func TestServerMeasuredWindowExcludesClockSync(t *testing.T) {
 	}
 
 	run := benchkit.ServerMeasured(target.peers[0].Server().PeerConfig(), setup)
-	result, err := run(benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond, Interval: 5 * time.Millisecond})
+	result, err := run(t.Context(), benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond, Interval: 5 * time.Millisecond})
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}

@@ -185,7 +185,7 @@ func main() {
 
 	opts.QuorumSize = f.quorumSize(opts.NumNodes)
 
-	results, err := benchmark.Run(f.Benchmarks, opts, target)
+	results, err := benchmark.Run(context.Background(), f.Benchmarks, target, opts)
 	checkf("Error running benchmarks: %v", err)
 	f.report(results, opts)
 }

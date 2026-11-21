@@ -171,13 +171,15 @@ func (o Options) Validate() error {
 }
 
 // Bench is a named, runnable benchmark. Run performs one measured campaign with
-// the given options and returns this node's Result. The harness (Run) stamps the
-// shared run metadata (name, node count, mode, duration, …) onto the returned
-// Result, so a Bench.Run closure only fills in the measured fields.
+// the given options and returns this node's Result. Run returns soon after ctx
+// ends, typically by deriving its context from ctx with [BenchContext]. The
+// harness (Run) stamps the shared run metadata (name, node count, mode,
+// duration, …) onto the returned Result, so a Bench.Run closure only fills in
+// the measured fields.
 type Bench struct {
 	Name        string
 	Description string
-	Run         func(Options) (*Result, error)
+	Run         func(context.Context, Options) (*Result, error)
 }
 
 // ListBenches writes a name/description listing of benches to w, one per
@@ -190,11 +192,11 @@ func ListBenches(w io.Writer, benches []Bench) {
 	tw.Flush()
 }
 
-// BenchContext returns a context bounded by the benchmark's run duration plus a
-// fixed slack, so a stuck RPC fails the benchmark instead of blocking
-// indefinitely.
-func BenchContext(opts Options) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), opts.Duration+benchSlack)
+// BenchContext returns a context derived from ctx and bounded by the
+// benchmark's run duration plus a fixed slack, so a stuck RPC fails the
+// benchmark instead of blocking indefinitely.
+func BenchContext(ctx context.Context, opts Options) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, opts.Duration+benchSlack)
 }
 
 // CollectReplies drains a ResponseSeq into a map keyed by node ID. It returns
@@ -617,10 +619,10 @@ func WithVerify(f func(map[uint32]*Result) error) LifecycleOption {
 // In remote mode, the Result also holds each server's memory stats, collected
 // with [StartRemote] and [StopRemote]. The lifecycle options add hooks, such as
 // [WithQuiesce] and [WithVerify].
-func ClientMeasured(cfg Config, setup SetupFunc, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
+func ClientMeasured(cfg Config, setup SetupFunc, lifecycleOpts ...LifecycleOption) func(context.Context, Options) (*Result, error) {
 	hooks := newLifecycleHooks(lifecycleOpts)
-	return func(opts Options) (*Result, error) {
-		ctx, cancel := BenchContext(opts)
+	return func(ctx context.Context, opts Options) (*Result, error) {
+		ctx, cancel := BenchContext(ctx, opts)
 		defer cancel()
 		if err := StartRemote(ctx, cfg, opts); err != nil {
 			return nil, err
@@ -649,10 +651,10 @@ func ClientMeasured(cfg Config, setup SetupFunc, lifecycleOpts ...LifecycleOptio
 // combines the servers' latency samples, each corrected for its clock offset
 // to the client. A failed send fails the run. The lifecycle options add hooks,
 // such as [WithQuiesce] and [WithVerify].
-func ServerMeasured(cfg Config, setup SetupFunc, lifecycleOpts ...LifecycleOption) func(Options) (*Result, error) {
+func ServerMeasured(cfg Config, setup SetupFunc, lifecycleOpts ...LifecycleOption) func(context.Context, Options) (*Result, error) {
 	hooks := newLifecycleHooks(lifecycleOpts)
-	return func(opts Options) (*Result, error) {
-		ctx, cancel := BenchContext(opts)
+	return func(ctx context.Context, opts Options) (*Result, error) {
+		ctx, cancel := BenchContext(ctx, opts)
 		defer cancel()
 		control := NewControlClient(cfg)
 		send := setup(ctx, cfg, opts)
@@ -713,13 +715,11 @@ func ServerMeasured(cfg Config, setup SetupFunc, lifecycleOpts ...LifecycleOptio
 	}
 }
 
-// Run selects the benchmarks whose name matches sel, runs each with opts, stamps
-// the shared run metadata onto each Result, and returns the results sorted by
-// benchmark name. The mode metadata ("local"/"remote") is derived from
-// opts.Remote. Run rejects invalid options (see [Options.Validate]) and a
-// selector matching no benchmark, instead of returning an empty successful
-// result set.
-func Run(sel *regexp.Regexp, opts Options, benches []Bench) ([]*Result, error) {
+// Run runs the benchmarks whose names match sel, with opts, and returns their
+// results sorted by name, each stamped with the run metadata from opts. Run
+// returns an error when sel matches no benchmark. When ctx ends, the running
+// benchmark stops, and Run returns an error that wraps ctx.Err().
+func Run(ctx context.Context, sel *regexp.Regexp, benches []Bench, opts Options) ([]*Result, error) {
 	if err := opts.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid options: %w", err)
 	}
@@ -738,9 +738,12 @@ func Run(sel *regexp.Regexp, opts Options, benches []Bench) ([]*Result, error) {
 		}
 		matched = true
 		opts.BenchName = b.Name
-		result, err := b.Run(opts)
+		result, err := b.Run(ctx, opts)
 		if err != nil {
 			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("benchmark %s: %w", b.Name, err)
 		}
 		// The runner stamped the measurement mode via Finish/Attach; preserve it
 		// while filling in the rest of the metadata from opts.
