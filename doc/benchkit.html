@@ -563,11 +563,21 @@
             Stabilizing those two contracts is what lets sweep drive any protocol without importing its code.</p>
 
         <p>Behind the binary, the measurement control plane is split from the workload. The <code>Control</code>
-            service (<code>Start</code> / <code>Stop</code> / <code>ClockSync</code>) is workload-agnostic and lives
+            service (<code>Start</code> / <code>Stop</code> / <code>ClockSync</code> / <code>Done</code> /
+            <code>PeerView</code>) is workload-agnostic and lives
             in the neutral <code>benchkit</code> package alongside the statistics library, the result schema, the run
             harness, the pacer, and clock-offset correction. A protocol author writes only their workload
             <code>.proto</code> and a workload callback for <code>harness.Run</code>, and reuses everything else
             unchanged. <code>benchmark/</code> is itself just the gorums consumer of that neutral surface.</p>
+
+        <p>A workload registers the service with <code>benchkit.RegisterControlServer(srv, ctrl)</code> before the server starts
+            serving. A workload in which a node relays messages to other nodes needs more than its own streams to
+            its peers: each peer must also have streams to its own peers. <code>benchkit.AwaitMesh(ctx,
+            srv.PeerConfig())</code> checks this before a run. It calls <code>PeerView</code> on every node,
+            and each node answers from its current connected-peer view. <code>AwaitMesh</code> returns when one
+            round of calls finds every view complete. When <code>ctx</code> ends first, the error names the nodes
+            that did not answer and the connections that each node is missing. The check is an observation at
+            startup; a stream can still fail later.</p>
 
         <div class="grid2">
           <div class="panel">

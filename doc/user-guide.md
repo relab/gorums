@@ -2411,6 +2411,7 @@ It is included in the configuration returned by `PeerConfig()` so that all quoru
 
 Peers appear in `ConnectedPeers()` as connections to them are established.
 Use `WaitForPeers` to wait for enough peers to connect before issuing calls.
+A handler reads the same view through `ctx.ConnectedPeers()`.
 
 A symmetric server (one that both tracks peers and calls them via `WithPeers`) re-establishes a dropped outbound stream proactively, also while it has nothing to send.
 The peer thus reappears in the remote's `ConnectedPeers()` as soon as the stream is back.

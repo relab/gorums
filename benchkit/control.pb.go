@@ -321,6 +321,111 @@ func (b0 DoneRequest_builder) Build() *DoneRequest {
 	return m0
 }
 
+// PeerViewRequest is an empty message for requesting a server's current
+// connected-peer view.
+type PeerViewRequest struct {
+	state         protoimpl.MessageState `protogen:"opaque.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PeerViewRequest) Reset() {
+	*x = PeerViewRequest{}
+	mi := &file_benchkit_control_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeerViewRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeerViewRequest) ProtoMessage() {}
+
+func (x *PeerViewRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_benchkit_control_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+type PeerViewRequest_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+}
+
+func (b0 PeerViewRequest_builder) Build() *PeerViewRequest {
+	m0 := &PeerViewRequest{}
+	b, x := &b0, m0
+	_, _ = b, x
+	return m0
+}
+
+// PeerViewResponse carries a server's current connected-peer view.
+type PeerViewResponse struct {
+	state              protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Missing []uint32               `protobuf:"varint,1,rep,packed,name=missing"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *PeerViewResponse) Reset() {
+	*x = PeerViewResponse{}
+	mi := &file_benchkit_control_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeerViewResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeerViewResponse) ProtoMessage() {}
+
+func (x *PeerViewResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_benchkit_control_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+func (x *PeerViewResponse) GetMissing() []uint32 {
+	if x != nil {
+		return x.xxx_hidden_Missing
+	}
+	return nil
+}
+
+func (x *PeerViewResponse) SetMissing(v []uint32) {
+	x.xxx_hidden_Missing = v
+}
+
+type PeerViewResponse_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// missing lists, in increasing order, the IDs of the configured peers whose
+	// streams with the server are not connected.
+	Missing []uint32
+}
+
+func (b0 PeerViewResponse_builder) Build() *PeerViewResponse {
+	m0 := &PeerViewResponse{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Missing = b.Missing
+	return m0
+}
+
 var File_benchkit_control_proto protoreflect.FileDescriptor
 
 const file_benchkit_control_proto_rawDesc = "" +
@@ -335,14 +440,18 @@ const file_benchkit_control_proto_rawDesc = "" +
 	"\x11ClockSyncResponse\x12\x1f\n" +
 	"\vserver_time\x18\x01 \x01(\x03R\n" +
 	"serverTime\"\r\n" +
-	"\vDoneRequest2\x89\x02\n" +
+	"\vDoneRequest\"\x11\n" +
+	"\x0fPeerViewRequest\",\n" +
+	"\x10PeerViewResponse\x12\x18\n" +
+	"\amissing\x18\x01 \x03(\rR\amissing2\xd2\x02\n" +
 	"\aControl\x12>\n" +
 	"\x05Start\x12\x16.benchkit.StartRequest\x1a\x17.benchkit.StartResponse\"\x04\xa0\xb5\x18\x01\x125\n" +
 	"\x04Stop\x12\x15.benchkit.StopRequest\x1a\x10.benchkit.Result\"\x04\xa0\xb5\x18\x01\x12J\n" +
 	"\tClockSync\x12\x1a.benchkit.ClockSyncRequest\x1a\x1b.benchkit.ClockSyncResponse\"\x04\xa0\xb5\x18\x01\x12;\n" +
-	"\x04Done\x12\x15.benchkit.DoneRequest\x1a\x16.google.protobuf.Empty\"\x04\x98\xb5\x18\x01B'Z github.com/relab/gorums/benchkit\x92\x03\x02\b\x02b\beditionsp\xe9\a"
+	"\x04Done\x12\x15.benchkit.DoneRequest\x1a\x16.google.protobuf.Empty\"\x04\x98\xb5\x18\x01\x12G\n" +
+	"\bPeerView\x12\x19.benchkit.PeerViewRequest\x1a\x1a.benchkit.PeerViewResponse\"\x04\xa0\xb5\x18\x01B'Z github.com/relab/gorums/benchkit\x92\x03\x02\b\x02b\beditionsp\xe9\a"
 
-var file_benchkit_control_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_benchkit_control_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_benchkit_control_proto_goTypes = []any{
 	(*StartRequest)(nil),      // 0: benchkit.StartRequest
 	(*StartResponse)(nil),     // 1: benchkit.StartResponse
@@ -350,25 +459,29 @@ var file_benchkit_control_proto_goTypes = []any{
 	(*ClockSyncRequest)(nil),  // 3: benchkit.ClockSyncRequest
 	(*ClockSyncResponse)(nil), // 4: benchkit.ClockSyncResponse
 	(*DoneRequest)(nil),       // 5: benchkit.DoneRequest
-	(StatsMode)(0),            // 6: benchkit.StatsMode
-	(*Result)(nil),            // 7: benchkit.Result
-	(*emptypb.Empty)(nil),     // 8: google.protobuf.Empty
+	(*PeerViewRequest)(nil),   // 6: benchkit.PeerViewRequest
+	(*PeerViewResponse)(nil),  // 7: benchkit.PeerViewResponse
+	(StatsMode)(0),            // 8: benchkit.StatsMode
+	(*Result)(nil),            // 9: benchkit.Result
+	(*emptypb.Empty)(nil),     // 10: google.protobuf.Empty
 }
 var file_benchkit_control_proto_depIdxs = []int32{
-	6, // 0: benchkit.StartRequest.stats_mode:type_name -> benchkit.StatsMode
-	0, // 1: benchkit.Control.Start:input_type -> benchkit.StartRequest
-	2, // 2: benchkit.Control.Stop:input_type -> benchkit.StopRequest
-	3, // 3: benchkit.Control.ClockSync:input_type -> benchkit.ClockSyncRequest
-	5, // 4: benchkit.Control.Done:input_type -> benchkit.DoneRequest
-	1, // 5: benchkit.Control.Start:output_type -> benchkit.StartResponse
-	7, // 6: benchkit.Control.Stop:output_type -> benchkit.Result
-	4, // 7: benchkit.Control.ClockSync:output_type -> benchkit.ClockSyncResponse
-	8, // 8: benchkit.Control.Done:output_type -> google.protobuf.Empty
-	5, // [5:9] is the sub-list for method output_type
-	1, // [1:5] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	8,  // 0: benchkit.StartRequest.stats_mode:type_name -> benchkit.StatsMode
+	0,  // 1: benchkit.Control.Start:input_type -> benchkit.StartRequest
+	2,  // 2: benchkit.Control.Stop:input_type -> benchkit.StopRequest
+	3,  // 3: benchkit.Control.ClockSync:input_type -> benchkit.ClockSyncRequest
+	5,  // 4: benchkit.Control.Done:input_type -> benchkit.DoneRequest
+	6,  // 5: benchkit.Control.PeerView:input_type -> benchkit.PeerViewRequest
+	1,  // 6: benchkit.Control.Start:output_type -> benchkit.StartResponse
+	9,  // 7: benchkit.Control.Stop:output_type -> benchkit.Result
+	4,  // 8: benchkit.Control.ClockSync:output_type -> benchkit.ClockSyncResponse
+	10, // 9: benchkit.Control.Done:output_type -> google.protobuf.Empty
+	7,  // 10: benchkit.Control.PeerView:output_type -> benchkit.PeerViewResponse
+	6,  // [6:11] is the sub-list for method output_type
+	1,  // [1:6] is the sub-list for method input_type
+	1,  // [1:1] is the sub-list for extension type_name
+	1,  // [1:1] is the sub-list for extension extendee
+	0,  // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_benchkit_control_proto_init() }
@@ -383,7 +496,7 @@ func file_benchkit_control_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_benchkit_control_proto_rawDesc), len(file_benchkit_control_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

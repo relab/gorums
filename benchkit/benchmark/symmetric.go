@@ -188,7 +188,7 @@ func ExitGrace(numNodes int) time.Duration {
 func SignalDone(ctx context.Context, t *SymmetricTarget) {
 	ctx, cancel := context.WithTimeout(ctx, ExitGrace(t.numPeers))
 	defer cancel()
-	for i, srv := range t.servers {
+	for _, srv := range t.servers {
 		out := srv.PeerConfig()
 		if out.Size() == 0 {
 			continue
@@ -199,7 +199,7 @@ func SignalDone(ctx context.Context, t *SymmetricTarget) {
 		// fault. Logging it still distinguishes that from a run where every
 		// send failed and no peer was ever told.
 		if err := benchkit.NewControlClient(out).Done(ctx, req).Async().Wait(); err != nil {
-			benchkit.Logf("Done signal from node %d: %v\n", t.controls[i].ID(), err)
+			benchkit.Logf("Done signal from node %d: %v\n", srv.NodeID(), err)
 		}
 	}
 }

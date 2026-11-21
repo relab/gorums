@@ -30,7 +30,7 @@ var _ emptypb.Empty
 //
 // Control is the protocol-neutral measurement control plane. Any gorums-based
 // protocol embeds it alongside its own workload service on the same listener.
-// The four RPCs never reference a workload, so they are shared by every
+// The RPCs never reference a workload, so they are shared by every
 // protocol that benchkit measures.
 type ControlClient interface {
 	// Start resets the server-side op counter and Stats baseline.
@@ -60,6 +60,12 @@ type ControlClient interface {
 	//	h := client.Done(ctx, in).Async()
 	//	err = h.Wait()
 	Done(ctx context.Context, in *DoneRequest) *gorums.OnewayCall[*DoneRequest]
+
+	// PeerView returns the server's current connected-peer view: the configured
+	// peers whose streams with the server are not connected. A caller uses it to
+	// check, before a run starts, that every peer has streams to all of its own
+	// peers. See benchkit.AwaitMesh.
+	PeerView(ctx context.Context, in *PeerViewRequest) *gorums.Call[*PeerViewRequest, *PeerViewResponse]
 }
 
 // NewControlClient returns a client whose calls execute on config.
@@ -88,17 +94,22 @@ func (c controlClient) Done(ctx context.Context, in *DoneRequest) *gorums.Oneway
 	return gorumsimpl.Multicast(ctx, c.config, in, "benchkit.Control.Done")
 }
 
+func (c controlClient) PeerView(ctx context.Context, in *PeerViewRequest) *gorums.Call[*PeerViewRequest, *PeerViewResponse] {
+	return gorumsimpl.QuorumCall[*PeerViewRequest, *PeerViewResponse](ctx, c.config, in, "benchkit.Control.PeerView")
+}
+
 // ControlServer is the server API for Control.
 //
 // Control is the protocol-neutral measurement control plane. Any gorums-based
 // protocol embeds it alongside its own workload service on the same listener.
-// The four RPCs never reference a workload, so they are shared by every
+// The RPCs never reference a workload, so they are shared by every
 // protocol that benchkit measures.
 type ControlServer interface {
 	Start(gorums.ServerContext, *StartRequest) (*StartResponse, error)
 	Stop(gorums.ServerContext, *StopRequest) (*Result, error)
 	ClockSync(gorums.ServerContext, *ClockSyncRequest) (*ClockSyncResponse, error)
 	Done(gorums.ServerContext, *DoneRequest)
+	PeerView(gorums.ServerContext, *PeerViewRequest) (*PeerViewResponse, error)
 }
 
 func RegisterControlServer(srv *gorums.Server, impl ControlServer) {
@@ -132,6 +143,15 @@ func RegisterControlServer(srv *gorums.Server, impl ControlServer) {
 	srv.RegisterHandler("benchkit.Control.Done", func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) error {
 		req := gorums.AsProto[*DoneRequest](in)
 		impl.Done(ctx, req)
+		return nil
+	})
+	srv.RegisterHandler("benchkit.Control.PeerView", func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
+		req := gorums.AsProto[*PeerViewRequest](in)
+		resp, err := impl.PeerView(ctx, req)
+		if err != nil {
+			return err
+		}
+		send(resp)
 		return nil
 	})
 }

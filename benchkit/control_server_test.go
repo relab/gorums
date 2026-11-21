@@ -177,3 +177,11 @@ func TestControlDoneIgnoresSenderIDOutOfRange(t *testing.T) {
 		t.Errorf("MissingDone() = %v, want [1 2]", got)
 	}
 }
+
+// TestControlPeerViewWithoutPeers verifies that PeerView returns an error on
+// a server without configured peers.
+func TestControlPeerViewWithoutPeers(t *testing.T) {
+	if _, err := NewControl().PeerView(gorumstest.ServerContext(t, 1), &PeerViewRequest{}); err == nil {
+		t.Error("PeerView without peers = nil error, want error")
+	}
+}
