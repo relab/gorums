@@ -30,30 +30,24 @@ func TestDescriptions(t *testing.T) {
 	if len(descs) != len(wantNames) {
 		t.Fatalf("got %d descriptions, want %d", len(descs), len(wantNames))
 	}
-	seen := make(map[string]bool, len(wantNames))
-	for _, d := range descs {
+	for i, d := range descs {
 		if d.Description == "" {
 			t.Errorf("%q: empty description", d.Name)
 		}
-		seen[d.Name] = true
-	}
-	for _, want := range wantNames {
-		if !seen[want] {
-			t.Errorf("missing benchmark %q", want)
+		if d.Name != wantNames[i] {
+			t.Errorf("description %d has name %q, want %q", i, d.Name, wantNames[i])
 		}
 	}
 }
 
 func TestBenchmarksTargetRouting(t *testing.T) {
-	symTarget := &SymmetricTarget{}
-
 	tests := []struct {
 		name  string
 		t     Target
 		count int
 	}{
 		{"empty", Target{}, 0},
-		{"symmetric only", Target{Symmetric: symTarget}, 2},
+		{"empty symmetric target", Target{Symmetric: peerConfig{}}, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -66,14 +60,7 @@ func TestBenchmarksTargetRouting(t *testing.T) {
 }
 
 // TestBenchmarksExcludesConfigBenchmarksForDistributedTarget verifies that
-// a distributed (multi-process) symmetric target excludes needsConfig
-// benchmarks (QuorumCall, Multicast, ...), unlike a local symmetric target.
-// Every distributed node runs the same binary; if a needsConfig benchmark
-// were exposed, more than one node selecting it would each issue their own
-// Control.Start/Stop against the same peer group concurrently, corrupting
-// every other node's Stats window mid-run. Only the needsSymmetric
-// benchmarks (SymmetricQuorumCall, SymmetricMulticast), designed for
-// concurrent per-node execution, are safe here.
+// each distributed peer gets the symmetric benchmarks in listing order.
 func TestBenchmarksExcludesConfigBenchmarksForDistributedTarget(t *testing.T) {
 	var opts benchkit.Options
 	peers := []string{"127.0.0.1:0", "127.0.0.2:0"}
@@ -87,41 +74,36 @@ func TestBenchmarksExcludesConfigBenchmarksForDistributedTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Workload().Setup: %v", err)
 	}
-	for _, b := range got {
-		if b.Name == "QuorumCall" || b.Name == "Multicast" || b.Name == "AsyncMulticast" || b.Name == "AsyncQuorumCall" || b.Name == "SlowServer" {
-			t.Errorf("benchmarks(distributed target) included needsConfig benchmark %q, want excluded", b.Name)
-		}
+	checkBenchmarkDescriptors(t, got, DistributedDescriptions())
+	want := []string{"SymmetricQuorumCall", "SymmetricMulticast"}
+	var names []string
+	for _, bench := range got {
+		names = append(names, bench.Name)
 	}
-	const wantCount = 2 // SymmetricQuorumCall, SymmetricMulticast
-	if len(got) != wantCount {
-		t.Errorf("benchmarks(distributed target) returned %d benchmarks, want %d", len(got), wantCount)
+	if !slices.Equal(names, want) {
+		t.Errorf("distributed benchmarks = %v, want %v", names, want)
 	}
 }
 
-// TestBenchmarksMatchesDescriptionsForFullTarget verifies that a target
-// exposing both a Config and a SymmetricTarget produces exactly the
-// runnable benchmarks Descriptions lists, by name and count: both
-// views are derived from the one benchDescs table, so
-// they cannot drift the way two hand-written lists could.
+// TestBenchmarksMatchesDescriptionsForFullTarget verifies the names,
+// descriptions, and run order for a local target.
 func TestBenchmarksMatchesDescriptionsForFullTarget(t *testing.T) {
 	target := symmetricServers(t, 2)
+	checkBenchmarkDescriptors(t, benchmarks(Target{Symmetric: target}), Descriptions())
+}
 
-	// Symmetric alone is enough: benchmarks derives cfg from server 0's
-	// outbound config when t.Config is unset, so needsConfig benchmarks are
-	// also included.
-	got := benchmarks(Target{Symmetric: target})
-	gotNames := make(map[string]bool, len(got))
-	for _, b := range got {
-		gotNames[b.Name] = true
+func checkBenchmarkDescriptors(t *testing.T, benches, descs []benchkit.Bench) {
+	t.Helper()
+	if len(benches) != len(descs) {
+		t.Fatalf("got %d runnable benchmarks, want %d", len(benches), len(descs))
 	}
-
-	wantDescs := Descriptions()
-	if len(got) != len(wantDescs) {
-		t.Fatalf("benchmarks returned %d benchmarks, want %d (Descriptions)", len(got), len(wantDescs))
-	}
-	for _, d := range wantDescs {
-		if !gotNames[d.Name] {
-			t.Errorf("Descriptions lists %q but benchmarks did not return it", d.Name)
+	for i, bench := range benches {
+		desc := descs[i]
+		if bench.Name != desc.Name || bench.Description != desc.Description {
+			t.Errorf("benchmark %d metadata = (%q, %q), want (%q, %q)", i, bench.Name, bench.Description, desc.Name, desc.Description)
+		}
+		if bench.Run == nil {
+			t.Errorf("benchmark %q has no runner", bench.Name)
 		}
 	}
 }
@@ -150,7 +132,7 @@ func TestAsyncQCBoundsInFlight(t *testing.T) {
 		peak        int
 	)
 	opts := benchkit.Options{Workers: 2, MaxAsync: maxAsync, Duration: 2 * time.Second, QuorumSize: 2}
-	res, err := runAsyncQCBenchmark(t.Context(), opts, target.peers[0].Server().PeerConfig(),
+	res, err := runAsyncQCBenchmark(t.Context(), opts, target[0].Server().PeerConfig(),
 		func(ctx context.Context, client BenchmarkClient, in *Echo, quorumSize int) func() error {
 			wait := asyncThreshold(ctx, client, in, quorumSize)
 			mu.Lock()
@@ -273,7 +255,7 @@ func TestQuorumCallHonorsCallTimeout(t *testing.T) {
 	}
 	t.Cleanup(closeFn)
 
-	run := benchDescs[0].build(cfg, nil) // "QuorumCall"
+	run := configBenchDescs[0].build(cfg) // "QuorumCall"
 	opts := benchkit.Options{
 		Workers: 1, Duration: 100 * time.Millisecond, QuorumSize: 1,
 		CallTimeout: 20 * time.Millisecond,
@@ -330,7 +312,7 @@ func TestAsyncSendsPipelinesAndDrains(t *testing.T) {
 	if err := awaitReady(ctx, target); err != nil {
 		t.Fatalf("awaitReady: %v", err)
 	}
-	client := NewBenchmarkClient(target.peers[0].Server().PeerConfig())
+	client := NewBenchmarkClient(target[0].Server().PeerConfig())
 
 	const depth = 4
 	outstanding := newAsyncSends(depth)
@@ -494,7 +476,7 @@ func TestAsyncMulticastBenchmarkRuns(t *testing.T) {
 		t.Fatalf("awaitReady: %v", err)
 	}
 
-	benches := benchmarks(Target{Config: target.peers[0].Server().PeerConfig()})
+	benches := benchmarks(Target{Config: target[0].Server().PeerConfig()})
 	idx := slices.IndexFunc(benches, func(b benchkit.Bench) bool { return b.Name == "AsyncMulticast" })
 	if idx < 0 {
 		t.Fatal("AsyncMulticast benchmark not registered")
@@ -526,8 +508,8 @@ func TestServerMeasuredMulticastHDR(t *testing.T) {
 	// The coordinator is a regular client, whose SenderID is 0, so the servers
 	// record into the flat samples that Stop returns. A peer's configuration
 	// would record into per-sender buckets that only a clock-corrected result reads.
-	addrs := make([]string, len(target.peers))
-	for i, p := range target.peers {
+	addrs := make([]string, len(target))
+	for i, p := range target {
 		addrs[i] = p.Server().Addr()
 	}
 	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs), gorumstest.InsecureDialOptions(t))
@@ -573,7 +555,7 @@ func TestServerMeasuredQuiesce(t *testing.T) {
 	}
 
 	quiesceCalls := 0
-	run := benchkit.ServerMeasured(target.peers[0].Server().PeerConfig(),
+	run := benchkit.ServerMeasured(target[0].Server().PeerConfig(),
 		func(ctx context.Context, cfg Config, _ benchkit.Options) func() error {
 			client := NewBenchmarkClient(cfg)
 			return func() error {
@@ -619,7 +601,7 @@ func TestServerMeasuredVerify(t *testing.T) {
 	}
 
 	var gotNodes int
-	run := benchkit.ServerMeasured(target.peers[0].Server().PeerConfig(), setup,
+	run := benchkit.ServerMeasured(target[0].Server().PeerConfig(), setup,
 		benchkit.WithVerify(func(replies map[uint32]*benchkit.Result) error {
 			gotNodes = len(replies)
 			return nil
@@ -632,7 +614,7 @@ func TestServerMeasuredVerify(t *testing.T) {
 	}
 
 	errVerify := errors.New("per-server ops diverged")
-	failing := benchkit.ServerMeasured(target.peers[0].Server().PeerConfig(), setup,
+	failing := benchkit.ServerMeasured(target[0].Server().PeerConfig(), setup,
 		benchkit.WithVerify(func(map[uint32]*benchkit.Result) error { return errVerify }))
 	if _, err := failing(t.Context(), benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond}); !errors.Is(err, errVerify) {
 		t.Errorf("run with failing verify = %v, want %v", err, errVerify)
@@ -673,7 +655,7 @@ func TestServerMeasuredWindowExcludesClockSync(t *testing.T) {
 		}
 	}
 
-	run := benchkit.ServerMeasured(target.peers[0].Server().PeerConfig(), setup)
+	run := benchkit.ServerMeasured(target[0].Server().PeerConfig(), setup)
 	result, err := run(t.Context(), benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond, Interval: 5 * time.Millisecond})
 	if err != nil {
 		t.Fatalf("run: %v", err)

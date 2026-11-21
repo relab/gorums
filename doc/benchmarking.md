@@ -56,6 +56,14 @@ Usage of benchkit/cmd/benchmark/benchmark:
 By default, the `benchkit/cmd/benchmark` program starts internal servers to perform benchmarks locally.
 To run the benchmarks with remote servers, the `--remotes` flag must be used.
 
+### Go benchmark targets
+
+`benchmark.SetupTarget` prepares a target for local or coordinator runs and returns a cleanup function.
+A local target stores its peers as a `[]*benchkit.Peer` in `Target.Symmetric`.
+The local run offers both traditional and symmetric benchmarks and uses the first peer's outbound configuration for traditional benchmarks when `Target.Config` is nil.
+A coordinator target stores its configuration in `Target.Config` and offers the traditional benchmarks.
+In distributed mode, each peer runs the symmetric benchmarks through `benchmark.Workload`.
+
 ### Remote benchmarks with ansible
 
 In the `scripts/` folder, we provide some simple ansible scripts that can be used to run benchmarks on remote servers.
