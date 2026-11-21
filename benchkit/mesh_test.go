@@ -106,8 +106,9 @@ func TestMeshAwaitMeshWaitsForPeerView(t *testing.T) {
 			if err == nil {
 				t.Fatal("AwaitMesh = nil while node 2 has no stream to node 3, want error")
 			}
-			if want := "node 2 is missing peers [3]"; !strings.Contains(err.Error(), want) {
-				t.Errorf("AwaitMesh error = %q, want it to contain %q", err, want)
+			missing := "node 2 (" + servers[1].Addr() + ") is missing peers [3]"
+			if !strings.Contains(err.Error(), missing) {
+				t.Errorf("AwaitMesh error = %q, want it to contain %q", err, missing)
 			}
 			if strings.Contains(err.Error(), "did not answer") {
 				t.Errorf("AwaitMesh error = %q, want every node to answer", err)
@@ -133,7 +134,7 @@ func TestMeshAwaitMeshWaitsForPeerView(t *testing.T) {
 			if err == nil {
 				t.Fatal("AwaitMesh = nil after node 3 stopped, want error")
 			}
-			for _, want := range []string{"node 2 is missing peers [3]", "node 3 did not answer"} {
+			for _, want := range []string{missing, "node 3 (" + servers[2].Addr() + ") did not answer"} {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("AwaitMesh error = %q, want it to contain %q", err, want)
 				}
@@ -190,7 +191,7 @@ func TestMeshAwaitMeshStalledPeer(t *testing.T) {
 			if err == nil {
 				t.Fatal("AwaitMesh = nil with a stalled peer, want error")
 			}
-			if want := "node 3 did not answer"; !strings.Contains(err.Error(), want) {
+			if want := "node 3 (" + servers[2].Addr() + ") did not answer"; !strings.Contains(err.Error(), want) {
 				t.Errorf("AwaitMesh error = %q, want it to contain %q", err, want)
 			}
 			if !errors.Is(err, tt.wantErr) {

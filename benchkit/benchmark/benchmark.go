@@ -391,8 +391,8 @@ func DistributedDescriptions() []benchkit.Bench {
 // included whenever t.Symmetric is set, local or distributed.
 func benchmarks(t Target) []benchkit.Bench {
 	cfg := t.Config
-	if cfg == nil && t.Symmetric != nil && t.Symmetric.selfAddr == "" && len(t.Symmetric.servers) > 0 {
-		cfg = t.Symmetric.servers[0].PeerConfig()
+	if cfg == nil && t.Symmetric != nil && !t.Symmetric.distributed && len(t.Symmetric.peers) > 0 {
+		cfg = t.Symmetric.peers[0].Server().PeerConfig()
 	}
 	var m []benchkit.Bench
 	for _, d := range benchDescs {

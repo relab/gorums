@@ -4,13 +4,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"io"
-	"net"
-	"os"
-	"runtime/pprof"
-	"slices"
-	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -18,14 +11,21 @@ import (
 	"github.com/relab/gorums/benchkit"
 )
 
-// SymmetricTarget bundles the gorums servers and their registered control
-// planes for symmetric (peer-to-peer) benchmarks.
+// SymmetricTarget holds the peers for symmetric (peer-to-peer) benchmarks.
+// In local mode it holds every peer of the run, all in this process. In
+// distributed mode it holds the one peer of this process.
 type SymmetricTarget struct {
-	servers  []*gorums.Server
-	controls []*benchkit.Control
-	numPeers int // cluster size (including self); sizes the exit grace period
-	labels   []string
-	selfAddr string // distributed mode only: this node's address in the peer list; enables the probe-stall self-diagnosis
+	peers       []*benchkit.Peer
+	distributed bool
+}
+
+// newBenchPeer returns a [benchkit.Peer] for srv with the gorums workload
+// server registered on it, recording into the Control of the peer. Call it
+// before srv serves.
+func newBenchPeer(srv *gorums.Server) *benchkit.Peer {
+	p := benchkit.NewPeer(srv)
+	RegisterBenchmarkServer(srv, &workloadServer{ctrl: p.Control()})
+	return p
 }
 
 // setupSymmetricServers creates n local Gorums servers with the benchkit Control
@@ -40,202 +40,62 @@ func setupSymmetricServers(n int, serverOpts []gorums.ServerOption, dialOpts ...
 	if err != nil {
 		return nil, nil, err
 	}
-	controls := make([]*benchkit.Control, n)
-	labels := make([]string, n)
+	peers := make([]*benchkit.Peer, n)
 	for i, srv := range servers {
-		controls[i] = attachBenchServer(srv)
-		labels[i] = fmt.Sprintf("server %d (%s)", i+1, srv.Addr())
+		peers[i] = newBenchPeer(srv)
 	}
 	for _, srv := range servers {
 		go func() { _ = srv.ListenAndServe() }()
 	}
-	return &SymmetricTarget{servers: servers, controls: controls, numPeers: n, labels: labels}, stop, nil
+	return &SymmetricTarget{peers: peers}, stop, nil
 }
 
-// setupRemoteServer creates a single Gorums server for distributed
-// benchmarking. selfAddr must appear in peerAddrs; the slice is sorted to
-// assign stable node IDs (1..N) across all machines.
-//
-// Exit synchronization is not handled here: after a node finishes its own
-// benchmark it must keep its listener open for a short grace period (see
-// ExitGrace) before exiting, so that slower peers can complete their final
-// cross-node RPCs without hitting a closed listener. The caller is responsible
-// for that linger; see cmd/benchmark.
-func setupRemoteServer(selfAddr string, peerAddrs []string, serverOpts []gorums.ServerOption, dialOpts ...gorums.DialOption) (*SymmetricTarget, func(), error) {
-	sorted := slices.Clone(peerAddrs)
-	slices.Sort(sorted)
-	idx := slices.Index(sorted, selfAddr)
-	if idx < 0 {
-		return nil, nil, fmt.Errorf("self address %q not found in peer list", selfAddr)
-	}
-	myID := uint32(idx + 1)
-	peerList := gorums.WithNodeList(sorted)
-
-	// Listen on the wildcard address rather than selfAddr: listening on a
-	// hostname binds the single IP the local resolver returns for it, and
-	// hosts following the Debian convention resolve their own name to the
-	// loopback address 127.0.1.1, leaving the listener unreachable for all
-	// peers. selfAddr is still used
-	// for node identity and ID assignment above.
-	_, port, err := net.SplitHostPort(selfAddr)
+// setupRemoteServer creates and serves the peer self of a distributed run over
+// the addresses in peerAddrs (see [benchkit.ListenPeer]).
+func setupRemoteServer(self string, peerAddrs []string, opts benchkit.Options, dialOpts ...gorums.DialOption) (*SymmetricTarget, func(), error) {
+	p, err := benchkit.ListenPeer(self, peerAddrs, opts, dialOpts...)
 	if err != nil {
-		return nil, nil, fmt.Errorf("invalid self address %q: %w", selfAddr, err)
+		return nil, nil, err
 	}
-	srv := gorums.NewServer(append([]gorums.ServerOption{
-		gorums.WithAddr(net.JoinHostPort("", port)),
-		gorums.WithPeers(myID, peerList, dialOpts...),
-	}, serverOpts...)...)
-
-	ctrl := attachBenchServer(srv)
-	ctrl.ArmDone(len(peerAddrs)) // same count used for numPeers below
-	label := fmt.Sprintf("node %d (%s)", myID, selfAddr)
-
-	go func() { _ = srv.ListenAndServe() }()
-	benchkit.Logf("[%s] listener bound to %s\n", label, srv.Addr())
-	t := &SymmetricTarget{
-		servers:  []*gorums.Server{srv},
-		controls: []*benchkit.Control{ctrl},
-		numPeers: len(peerAddrs),
-		labels:   []string{label},
-		selfAddr: selfAddr,
-	}
+	RegisterBenchmarkServer(p.Server(), &workloadServer{ctrl: p.Control()})
+	go func() { _ = p.Server().ListenAndServe() }()
+	t := &SymmetricTarget{peers: []*benchkit.Peer{p}, distributed: true}
 	return t, func() {
-		stopFlushed(srv, stopFlushBound)
-		benchkit.Logf("[%s %s] server stopped\n", time.Now().Format(time.TimeOnly), label)
+		p.Stop()
+		benchkit.Logf("[%s %s] server stopped\n", time.Now().Format(time.TimeOnly), p)
 	}, nil
 }
 
-// stopFlushBound caps how long [stopFlushed] waits for a graceful stop.
-const stopFlushBound = time.Second
-
-// stopFlushed stops srv so that a one-way message queued just before the stop,
-// such as the Done signal of [SignalDone], reaches its peer before the process
-// exits. [gorums.Server.GracefulStop] first waits until the peers have ended
-// the streams that they dialed to srv. The streams that srv dialed keep sending
-// during that wait, which normally gives a request queued before the stop the
-// time to leave the queue. GracefulStop then drains the streams that srv
-// dialed, and a request still queued at that point fails with
-// [gorums.ErrNodeClosed]. [gorums.Server.Stop] discards every queued request at
-// once, so the last node to finish would exit without its peers seeing its
-// Done, and they would wait out their grace period.
-//
-// A graceful stop also waits for running handlers and for slow peers, so after
-// bound stopFlushed falls back to [gorums.Server.Stop] and returns. It does not
-// wait for the graceful stop to end after that: Stop does not end in-process
-// handlers that ignore their context, and the graceful stop waits for them. The
-// process exits right after, which ends that wait.
-func stopFlushed(srv *gorums.Server, bound time.Duration) {
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		srv.GracefulStop()
-	}()
-	select {
-	case <-done:
-	case <-time.After(bound):
-		srv.Stop()
-	}
+// numPeers returns the number of nodes in the run, including self.
+func (t *SymmetricTarget) numPeers() int {
+	return t.peers[0].Server().PeerConfig().Size()
 }
 
-// ExitGrace returns the fallback ceiling a distributed-mode replica waits,
-// after finishing its own benchmark, for its peers to also finish before it
-// gives up and exits anyway.
-//
-// The symmetric topology has no exit barrier: a node multicasts an advisory
-// Done signal (see [SignalDone]) and races it against this ceiling (see
-// [AwaitPeersDoneOrGrace]), exiting as soon as every peer has signaled or this
-// timeout elapses, whichever comes first. Because most runs finish within
-// milliseconds of each other and exit via the Done signal long before the
-// ceiling is reached, this is a worst-case bound, not the expected wait — it
-// only matters when Done itself doesn't arrive (e.g. a peer's inbound
-// channel is broken, the same class of issue that made the previous Done
-// barrier unreliable) or the whole cluster is unusually slow. The bound is
-// the inter-node completion skew, which is dominated by mesh-formation/
-// release skew in awaitReady and therefore grows with cluster size; the
-// trailing round-trips are sub-second and absorbed by the base term. The
-// result is clamped so a very large cluster does not linger excessively.
-func ExitGrace(numNodes int) time.Duration {
-	const (
-		base     = 3 * time.Second
-		perNode  = 300 * time.Millisecond
-		maxGrace = 20 * time.Second
-	)
-	return min(base+time.Duration(numNodes)*perNode, maxGrace)
+// awaitReady waits until the mesh of t is complete (see
+// [benchkit.Peer.AwaitReady]). One check covers every peer of the run, so it
+// runs once, from the first peer of t.
+func awaitReady(ctx context.Context, t *SymmetricTarget) error {
+	return t.peers[0].AwaitReady(ctx)
 }
 
-// SignalDone notifies every outbound peer that this node has finished its
-// own benchmark work and trailing flush and will issue no further calls. The
-// send is best-effort: per-peer errors are discarded, since a dropped or failed
-// notification only costs the receiving peer its fast exit via
-// AwaitPeersDoneOrGrace, never correctness, because that wait always falls
-// back to its own grace deadline.
-//
-// The whole notification is bounded by a deadline. Done is a one-way Multicast
-// whose enqueue waits for send-queue space until the request context is done
-// (the one-way path in internal/stream.(*Channel).Enqueue). Callers pass a
-// deadline-free context (cmd/benchmark passes context.Background), so without a
-// bound a full or backpressured send queue during the teardown broadcast traps
-// this call — and hence the caller — forever; this deadlocked node teardown on
-// the cluster. The bound mirrors the peers' own wait (ExitGrace over the
-// cluster size): never spend longer announcing Done than a peer will wait to
-// hear it. Wait blocks until each send completes or the deadline fires,
-// keeping the deferred cancel from aborting a send still in flight.
-//
-// Send returns once the request is queued, not once a peer has it. The
-// server's cleanup stops it with [stopFlushed], which keeps the streams
-// sending while the peers end theirs, so the queued Done normally reaches each
-// peer before the process exits.
+// SignalDone sends the Done signal of every peer of t (see
+// [benchkit.Peer.SignalDone]).
 func SignalDone(ctx context.Context, t *SymmetricTarget) {
-	ctx, cancel := context.WithTimeout(ctx, ExitGrace(t.numPeers))
-	defer cancel()
-	for _, srv := range t.servers {
-		out := srv.PeerConfig()
-		if out.Size() == 0 {
-			continue
-		}
-		req := &benchkit.DoneRequest{}
-		// Report rather than return: Done is advisory, and a peer that already
-		// finished and exited makes a failed send the expected outcome, not a
-		// fault. Logging it still distinguishes that from a run where every
-		// send failed and no peer was ever told.
-		if err := benchkit.NewControlClient(out).Done(ctx, req).Async().Wait(); err != nil {
-			benchkit.Logf("Done signal from node %d: %v\n", srv.NodeID(), err)
-		}
+	for _, p := range t.peers {
+		p.SignalDone(ctx)
 	}
 }
 
-// AwaitPeersDoneOrGrace blocks until every peer has signaled Done or grace
-// elapses, whichever is first, using one shared deadline across all of t's
-// local servers. It returns true only if every server's peers all signaled
-// Done before the deadline; false means at least one server fell back to
-// the grace timeout. It never errors: the timeout is a safe, expected
-// fallback, not a failure.
-func AwaitPeersDoneOrGrace(ctx context.Context, t *SymmetricTarget, grace time.Duration) bool {
-	ctx, cancel := context.WithTimeout(ctx, grace)
-	defer cancel()
-	for _, ctrl := range t.controls {
-		ch := ctrl.DoneCh()
-		if ch == nil {
-			continue
-		}
-		select {
-		case <-ch:
-		case <-ctx.Done():
-			return false
+// AwaitPeersDone returns nil once every peer of t has received the Done
+// signals of all its peers, or an error when ctx ends first (see
+// [benchkit.Peer.AwaitPeersDone]).
+func AwaitPeersDone(ctx context.Context, t *SymmetricTarget) error {
+	for _, p := range t.peers {
+		if err := p.AwaitPeersDone(ctx); err != nil {
+			return fmt.Errorf("%s: %w", p, err)
 		}
 	}
-	return true
-}
-
-// MissingDoneSenders returns the peer node IDs across all of t's local
-// servers that have not yet signaled Done, for diagnostics when
-// AwaitPeersDoneOrGrace falls back to its timeout.
-func MissingDoneSenders(t *SymmetricTarget) []uint32 {
-	var missing []uint32
-	for _, ctrl := range t.controls {
-		missing = append(missing, ctrl.MissingDone()...)
-	}
-	return missing
+	return nil
 }
 
 // runComplete reports whether so many of outSize outbound peers have finished
@@ -253,8 +113,8 @@ func runComplete(outSize, done, need int) bool {
 // expected end of the run (peers finished and closed their listeners), not a
 // fault, so a straggler treats it as a clean stop rather than a failure.
 func quorumRunOver(t *SymmetricTarget, quorumSize int) bool {
-	for i, srv := range t.servers {
-		if runComplete(srv.PeerConfig().Size(), t.controls[i].DoneCount(), quorumSize) {
+	for _, p := range t.peers {
+		if runComplete(p.Server().PeerConfig().Size(), p.Control().DoneCount(), quorumSize) {
 			return true
 		}
 	}
@@ -267,177 +127,23 @@ func quorumRunOver(t *SymmetricTarget, quorumSize int) bool {
 // Done marks their failure as the expected end of the run. It is false until a
 // peer finishes, so startup failures before anyone is Done are not masked.
 func anyPeerFinished(t *SymmetricTarget) bool {
-	for i := range t.servers {
-		if t.controls[i].DoneCount() > 0 {
+	for _, p := range t.peers {
+		if p.Control().DoneCount() > 0 {
 			return true
 		}
 	}
 	return false
 }
 
-// readyStallTimeout bounds how long the outbound probe in awaitReady may go
-// without any peer responding. A peer that died during startup (e.g. because
-// its listen port was taken) never responds, so waiting out the rest of the
-// readiness deadline only delays the inevitable failure; each response resets
-// the timer, so a large mesh that is still forming keeps the probe alive. It
-// is a variable so tests can shorten it.
-var readyStallTimeout = 20 * time.Second
-
-// probeAttemptTimeout bounds one per-peer echo attempt in the outbound probe
-// of awaitReady. A reply that is silently lost (e.g. to stream churn during
-// setup) costs one attempt round rather than the caller's whole
-// readiness deadline; the next round re-sends a fresh echo over whatever
-// stream is then current. It is a variable so tests can shorten it.
-var probeAttemptTimeout = 2 * time.Second
-
-// probeLogf emits outbound-probe progress, notably the per-round straggler
-// list. It is a variable so tests can capture and assert on the straggler
-// log; production code logs via benchkit.Logf.
-var probeLogf = benchkit.Logf
-
-// awaitReady waits until every server in t is ready to run the benchmark: it
-// validates round-trip connectivity to every outbound peer of every server,
-// sending each peer echoes until it responds, so every outbound connection is
-// established before the benchmark starts (gRPC dials lazily and may still be
-// in backoff after setup). See probeOutbound for the per-peer retry/stall
-// semantics. In distributed mode a probe failure additionally writes a
-// network self-diagnosis (see diagnoseProbeStall).
-//
-// In dedup mode, call this after [gorums.Server.WaitForAll] so every shared
-// stream is live before the probe exercises it.
-func awaitReady(ctx context.Context, t *SymmetricTarget) error {
-	for i, srv := range t.servers {
-		label := t.label(i)
-		if err := probeOutbound(ctx, srv, label); err != nil {
-			if t.selfAddr != "" {
-				diagnoseProbeStall(diagWriter, srv, t.selfAddr)
-			}
-			return fmt.Errorf("%s: outbound peers not ready: %w", label, err)
-		}
-		benchkit.Logf("[ready] %s: outbound ready\n", label)
-	}
-	return nil
-}
-
-// probeOutbound validates round-trip connectivity to every outbound peer of
-// srv before the benchmark starts. Each peer that has not yet responded is
-// probed in parallel with a single-node echo call under its own
-// probeAttemptTimeout deadline, so a silently lost reply costs one round, not
-// the caller's whole readiness deadline (the all-or-nothing Threshold(N)
-// probe it replaces blocked on one missing reply with "incomplete call
-// (errors: 0)" until ctx expired). Responders leave the pending set; the
-// remaining stragglers are logged by node ID each round. The probe fails
-// early, naming the pending peers, when no peer has responded for
-// readyStallTimeout: with nobody making progress, waiting out the rest of the
-// deadline only delays the inevitable failure.
-func probeOutbound(ctx context.Context, srv *gorums.Server, label string) error {
-	pending := srv.PeerConfig()
-	msg := Echo_builder{}.Build()
-	probeLogf("[ready] %s: probing %d outbound connections...\n", label, pending.Size())
-	lastResponse := time.Now()
-	for pending.Size() > 0 {
-		attemptCtx, cancel := context.WithTimeout(ctx, probeAttemptTimeout)
-		var mu sync.Mutex
-		var responded []uint32
-		var wg sync.WaitGroup
-		for _, node := range pending {
-			wg.Go(func() {
-				if _, err := NewBenchmarkClient(Config{node}).QuorumCall(attemptCtx, msg).Threshold(1); err == nil {
-					mu.Lock()
-					responded = append(responded, node.ID())
-					mu.Unlock()
-				}
-			})
-		}
-		wg.Wait()
-		cancel()
-		if len(responded) > 0 {
-			lastResponse = time.Now()
-		}
-		pending = pending.Remove(responded...)
-		if pending.Size() == 0 {
-			break
-		}
-		probeLogf("[ready] %s: outbound probe: %d peers pending: %s\n", label, pending.Size(), pendingPeerDetails(pending))
-		if time.Since(lastResponse) >= readyStallTimeout {
-			return fmt.Errorf("no outbound peer responded for %v; pending: %s", readyStallTimeout, pendingPeerDetails(pending))
-		}
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("pending: %s: %w", pendingPeerDetails(pending), ctx.Err())
-		case <-time.After(200 * time.Millisecond):
-		}
-	}
-	return nil
-}
-
-// pendingPeerDetails names each peer still pending in the outbound probe.
-func pendingPeerDetails(pending Config) string {
-	details := make([]string, 0, len(pending))
-	for _, node := range pending {
-		details = append(details, node.Detail())
-	}
-	return strings.Join(details, ", ")
-}
-
-// diagWriter receives the probe-stall self-diagnosis. It is a variable so
-// tests can capture and assert on the diagnosis instead of spamming stderr.
-var diagWriter io.Writer = os.Stderr
-
-// diagnoseProbeStall writes a network self-diagnosis to w when the outbound
-// readiness probe fails in distributed mode. At that point this process is
-// still alive on the affected host, which makes it ideally placed to
-// discriminate the known failure classes:
-//
-//   - self-dial fails and the bound address differs from the advertised
-//     address: the listener is bound to the wrong interface because the
-//     host resolved its own name unexpectedly (e.g. to a loopback address).
-//   - self-dial fails with matching addresses: a local firewall is refusing
-//     new connections, or the listener died.
-//   - self-dial succeeds: the listener works from this host, so the blockage
-//     is between the peers and this host (network filtering, peer-side state).
-//
-// The goroutine dump at the end shows whether the probe's own calls stalled
-// inside gorums rather than on the network, which would indicate a gorums
-// bug rather than a host or network condition.
-func diagnoseProbeStall(w io.Writer, srv *gorums.Server, selfAddr string) {
-	fmt.Fprintf(w, "[diag] probe stall: listener bound to %s; self peer-list address %s\n", srv.Addr(), selfAddr)
-	tcpAddr, err := net.ResolveTCPAddr("tcp", selfAddr)
-	if err != nil {
-		fmt.Fprintf(w, "[diag] cannot resolve self address %s: %v\n", selfAddr, err)
-		return
-	}
-	advertised := tcpAddr.String()
-	if tcpAddr.IP.IsLoopback() {
-		fmt.Fprintf(w, "[diag] note: %s resolves to a loopback address on this host; remote peers dialing the host's real IP cannot reach a loopback-bound listener\n", selfAddr)
-	}
-	conn, err := net.DialTimeout("tcp", advertised, 2*time.Second)
-	if err != nil {
-		fmt.Fprintf(w, "[diag] self-dial %s failed: %v (listener unreachable on advertised address: wrong bind or local firewall)\n", advertised, err)
-	} else {
-		_ = conn.Close()
-		fmt.Fprintf(w, "[diag] self-dial %s ok (listener reachable from this host; inbound blockage is between peers and this host)\n", advertised)
-	}
-	fmt.Fprintf(w, "[diag] goroutine dump:\n")
-	_ = pprof.Lookup("goroutine").WriteTo(w, 2)
-}
-
-func (t *SymmetricTarget) label(i int) string {
-	if i >= 0 && i < len(t.labels) && t.labels[i] != "" {
-		return t.labels[i]
-	}
-	return fmt.Sprintf("server %d", i+1)
-}
-
 // estimateAllOffsets runs benchkit.EstimateOffsets from every server in t to its
 // outbound peers, returning one offset map per server, indexed to match
-// t.servers (and t.controls).
+// t.peers.
 func estimateAllOffsets(ctx context.Context, t *SymmetricTarget) ([]map[uint32]int64, error) {
-	offsets := make([]map[uint32]int64, len(t.servers))
-	for i, srv := range t.servers {
-		off, err := benchkit.EstimateOffsets(ctx, srv.PeerConfig())
+	offsets := make([]map[uint32]int64, len(t.peers))
+	for i, p := range t.peers {
+		off, err := benchkit.EstimateOffsets(ctx, p.Server().PeerConfig())
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", t.label(i), err)
+			return nil, fmt.Errorf("%s: %w", p, err)
 		}
 		offsets[i] = off
 	}
@@ -445,50 +151,12 @@ func estimateAllOffsets(ctx context.Context, t *SymmetricTarget) ([]map[uint32]i
 }
 
 func flushSymmetricOutbound(ctx context.Context, t *SymmetricTarget) error {
-	for i, srv := range t.servers {
-		if err := flushOutbound(ctx, srv); err != nil {
-			return fmt.Errorf("%s: %w", t.label(i), err)
+	for _, p := range t.peers {
+		if err := p.FlushOutbound(ctx); err != nil {
+			return fmt.Errorf("%s: %w", p, err)
 		}
 	}
 	return nil
-}
-
-func flushOutbound(ctx context.Context, srv *gorums.Server) error {
-	out := srv.PeerConfig()
-	if out == nil {
-		return fmt.Errorf("missing outbound configuration")
-	}
-	n := out.Size()
-	if n == 0 {
-		return gorums.ErrIncomplete
-	}
-	_, err := NewBenchmarkClient(out).QuorumCall(ctx, Echo_builder{}.Build()).Threshold(n)
-	if err != nil {
-		// A flush failure means a peer stopped responding mid-run (e.g. it
-		// exited before the grace period elapsed). Name the unresponsive peers
-		// so the cause is identifiable without cross-referencing logs.
-		if unresponsive := unresponsiveOutbound(srv); unresponsive != "" {
-			return fmt.Errorf("%w; unresponsive peers: %s", err, unresponsive)
-		}
-	}
-	return err
-}
-
-// unresponsiveOutbound names the outbound peers with a recorded dial/call error,
-// formatted as "node ID (address): error". It returns "" when every peer is
-// healthy, so callers can include it only when there is something to report.
-func unresponsiveOutbound(srv *gorums.Server) string {
-	out := srv.PeerConfig()
-	if out == nil {
-		return ""
-	}
-	details := make([]string, 0, out.Size())
-	for _, node := range out {
-		if err := node.LastErr(); err != nil {
-			details = append(details, node.Detail())
-		}
-	}
-	return strings.Join(details, ", ")
 }
 
 // runSymmetricQuorumCall benchmarks quorum call round-trip latency and
@@ -502,8 +170,8 @@ func runSymmetricQuorumCall(t *SymmetricTarget, opts benchkit.Options) (*benchki
 	// Yield each server's outbound configuration so MeasureLatency drives one
 	// concurrent send target per server in a single measurement phase.
 	configs := func(yield func(Config) bool) {
-		for _, srv := range t.servers {
-			if !yield(srv.PeerConfig()) {
+		for _, p := range t.peers {
+			if !yield(p.Server().PeerConfig()) {
 				return
 			}
 		}
@@ -567,8 +235,8 @@ func runSymmetricMulticast(t *SymmetricTarget, opts benchkit.Options) (*benchkit
 	// so a symmetric server-measured run honors -stats-mode like the coordinator
 	// path does via the Start RPC.
 	resetServerStats := func() {
-		for _, ctrl := range t.controls {
-			ctrl.Reset(opts.StatsMode)
+		for _, p := range t.peers {
+			p.Control().Reset(opts.StatsMode)
 		}
 	}
 
@@ -582,9 +250,9 @@ func runSymmetricMulticast(t *SymmetricTarget, opts benchkit.Options) (*benchkit
 
 	// One send target per server; the receiving server buckets and
 	// clock-corrects samples by the sender's node ID.
-	sends := make([]func() error, len(t.servers))
-	for i, srv := range t.servers {
-		client := NewBenchmarkClient(srv.PeerConfig())
+	sends := make([]func() error, len(t.peers))
+	for i, p := range t.peers {
+		client := NewBenchmarkClient(p.Server().PeerConfig())
 		sends[i] = func() error {
 			if err := client.Multicast(ctx, newMsg()).Async().Wait(); err != nil {
 				return err
@@ -600,9 +268,9 @@ func runSymmetricMulticast(t *SymmetricTarget, opts benchkit.Options) (*benchkit
 	// runners. Going through MeasureOneWay also gives the symmetric multicast the
 	// rate-ramp and ticker rate-step support the coordinator runners already have.
 	m, window := benchkit.MeasureOneWay(ctx, opts, sends...)
-	latencyStats := make([]*benchkit.Stats, len(t.controls))
-	for i, ctrl := range t.controls {
-		latencyStats[i] = ctrl.Stats()
+	latencyStats := make([]*benchkit.Stats, len(t.peers))
+	for i, p := range t.peers {
+		latencyStats[i] = p.Control().Stats()
 	}
 	m.TrackLatency(latencyStats...)
 
@@ -615,7 +283,7 @@ func runSymmetricMulticast(t *SymmetricTarget, opts benchkit.Options) (*benchkit
 			// empty offset map per server to keep buildReplies' per-server
 			// indexing in bounds; AverageOffsets tolerates the empty side, so
 			// the samples are left uncorrected rather than failing the run.
-			return make([]map[uint32]int64, len(t.servers)), nil
+			return make([]map[uint32]int64, len(t.peers)), nil
 		}
 		return off, err
 	}
@@ -633,16 +301,16 @@ func runSymmetricMulticast(t *SymmetricTarget, opts benchkit.Options) (*benchkit
 		return nil
 	}
 	buildReplies := func(before, after []map[uint32]int64) (map[uint32]*benchkit.Result, error) {
-		for _, ctrl := range t.controls {
-			ctrl.Stats().End()
+		for _, p := range t.peers {
+			p.Control().Stats().End()
 		}
 		// Aggregate server-side latency samples across all local servers,
 		// correcting each sample by its sender's averaged clock offset.
-		replies := make(map[uint32]*benchkit.Result, len(t.controls))
-		for i, ctrl := range t.controls {
-			benchkit.LogOffsets(t.label(i), before[i], after[i])
+		replies := make(map[uint32]*benchkit.Result, len(t.peers))
+		for i, p := range t.peers {
+			benchkit.LogOffsets(p.String(), before[i], after[i])
 			offsets := benchkit.AverageOffsets(before[i], after[i])
-			replies[uint32(i+1)] = ctrl.Stats().GetResultCorrected(offsets)
+			replies[uint32(i+1)] = p.Control().Stats().GetResultCorrected(offsets)
 		}
 		return replies, nil
 	}

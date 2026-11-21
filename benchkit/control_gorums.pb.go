@@ -49,7 +49,7 @@ type ControlClient interface {
 	// once it has finished its own benchmark work and trailing flush. It is
 	// not a barrier — a missing or delayed Done never blocks or fails a run,
 	// it only means the waiting peer falls back to its own timeout. See
-	// benchmark.AwaitPeersDoneOrGrace.
+	// benchkit.Peer.AwaitPeersDone.
 	//
 	// Example:
 	//
