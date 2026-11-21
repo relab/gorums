@@ -15,7 +15,7 @@ import (
 // ready symmetric target and fills in the topology-derived Options fields.
 func TestSetupTargetLocal(t *testing.T) {
 	var opts benchkit.Options
-	target, cleanup, err := SetupTarget(&opts, "", nil, 3, gorumstest.InsecureDialOptions(t))
+	target, cleanup, err := SetupTarget(&opts, nil, 3, gorumstest.InsecureDialOptions(t))
 	if err != nil {
 		t.Fatalf("SetupTarget: %v", err)
 	}
@@ -38,20 +38,34 @@ func TestSetupTargetLocal(t *testing.T) {
 func TestSetupTargetLocalRejectsNonPositiveConfigSize(t *testing.T) {
 	for _, configSize := range []int{0, -1} {
 		var opts benchkit.Options
-		_, _, err := SetupTarget(&opts, "", nil, configSize, gorumstest.InsecureDialOptions(t))
+		_, _, err := SetupTarget(&opts, nil, configSize, gorumstest.InsecureDialOptions(t))
 		if err == nil {
 			t.Errorf("SetupTarget(local, config-size=%d) = nil error, want error", configSize)
 		}
 	}
 }
 
-// TestSetupTargetDistributedRequiresPeers verifies that distributed mode with
+// TestTargetListenDistributedRequiresPeers verifies that distributed mode with
 // fewer than two remotes fails instead of running a degenerate benchmark.
-func TestSetupTargetDistributedRequiresPeers(t *testing.T) {
+func TestTargetListenDistributedRequiresPeers(t *testing.T) {
 	var opts benchkit.Options
-	_, _, err := SetupTarget(&opts, "127.0.0.1:9000", []string{"127.0.0.1:9000"}, 0, gorumstest.InsecureDialOptions(t))
-	if err == nil {
-		t.Fatal("SetupTarget(distributed, 1 remote) = nil error, want error")
+	if _, err := ListenDistributed(&opts, "127.0.0.1:9000", []string{"127.0.0.1:9000"}, gorumstest.InsecureDialOptions(t)); err == nil {
+		t.Fatal("ListenDistributed(1 remote) = nil error, want error")
+	}
+}
+
+// TestTargetListenDistributedSetsOptions verifies that ListenDistributed fills
+// in the topology-derived Options fields.
+func TestTargetListenDistributedSetsOptions(t *testing.T) {
+	var opts benchkit.Options
+	remotes := []string{"127.0.0.1:0", "127.0.0.2:0", "127.0.0.3:0"}
+	p, err := ListenDistributed(&opts, remotes[0], remotes, gorumstest.InsecureDialOptions(t))
+	if err != nil {
+		t.Fatalf("ListenDistributed: %v", err)
+	}
+	t.Cleanup(p.Stop)
+	if !opts.Remote || opts.NumNodes != len(remotes) {
+		t.Errorf("opts.Remote, opts.NumNodes = %v, %d; want true, %d", opts.Remote, opts.NumNodes, len(remotes))
 	}
 }
 
@@ -130,7 +144,7 @@ func TestSetupTargetCoordinatorNumNodes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var opts benchkit.Options
-			target, cleanup, err := SetupTarget(&opts, "", remotes, tt.configSize, gorumstest.InsecureDialOptions(t))
+			target, cleanup, err := SetupTarget(&opts, remotes, tt.configSize, gorumstest.InsecureDialOptions(t))
 			if err != nil {
 				t.Fatalf("SetupTarget: %v", err)
 			}

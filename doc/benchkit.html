@@ -571,13 +571,15 @@
             unchanged. <code>benchmark/</code> is itself just the gorums consumer of that neutral surface.</p>
 
         <p>A workload registers the service with <code>benchkit.RegisterControlServer(srv, ctrl)</code> before the server starts
-            serving. A workload in which a node relays messages to other nodes needs more than its own streams to
-            its peers: each peer must also have streams to its own peers. <code>benchkit.AwaitMesh(ctx,
-            srv.PeerConfig())</code> checks this before a run. It calls <code>PeerView</code> on every node,
-            and each node answers from its current connected-peer view. <code>AwaitMesh</code> returns when one
-            round of calls finds every view complete. When <code>ctx</code> ends first, the error names the nodes
-            that did not answer and the connections that each node is missing. The check is an observation at
-            startup; a stream can still fail later.</p>
+            serving; <code>benchkit.NewPeer</code> does this for a peer-to-peer run (<a href="#peer">&sect;8</a>).
+            In a symmetric run every node calls every other node, and a node that relays messages needs its peers
+            to have streams to their own peers. <code>benchkit.AwaitMesh(ctx, srv.PeerConfig())</code> checks the
+            whole mesh before a run. It calls <code>PeerView</code> on every node, and each node answers from its
+            current connected-peer view. <code>AwaitMesh</code> returns when one round of calls finds every view
+            complete. It returns an error when <code>ctx</code> ends, or when no further node has reported a
+            complete view for 20&nbsp;s, so a dead peer fails the check early. The error names the nodes that did
+            not answer and the connections that each node is missing. The check is an observation at startup; a
+            stream can still fail later.</p>
 
         <div class="grid2">
           <div class="panel">
@@ -968,6 +970,60 @@
         <p><code>ServerMeasured</code> reports client-side memory cost per <em>send</em>: it divides the client's
             memory delta by the client's own op count (<code>Stats.Ops</code>), not by the aggregated server op count,
             which for multicast would be N× the sends and under-report the per-send cost.</p>
+
+        <h3 id="peer">Peer-to-peer lifecycle &mdash; <code>benchkit/peer.go</code></h3>
+        <p>In a distributed (symmetric) run, every node runs the same binary, and every node is both a client and a
+            server. <code>benchkit.Peer</code> holds the gorums server of one node and the <code>Control</code>
+            service on it. <code>ListenPeer(self, remotes, opts)</code> builds the server of a distributed node: it
+            sorts <code>remotes</code>, so node <em>i</em> of the sorted list has node ID <em>i</em>+1 on every
+            machine, and it listens on the wildcard address. <code>NewPeer(srv)</code> wraps a server that exists
+            already. <code>Peer.Run</code> runs the whole lifecycle in one order:</p>
+        <div class="diagram">  Peer.Run(ctx, sel, workload, opts)
+
+  workload.Setup(peer)    register the workload services, return []Bench   (server not serving yet)
+        │
+  serve
+        │
+  readiness               AwaitMesh over PeerConfig: every node has every stream (stall bound 20 s)
+        │
+  benchkit.Run            the benchmarks that match sel
+        │
+  SignalDone              one-way Done to every peer
+        │
+  AwaitPeersDone          until every peer signaled Done, or ExitGrace(N) = min(3s + 300ms&times;N, 20s)
+        │
+  workload.Final(peer, results)   optional; sees every request of the peers, may change the results
+        │
+  Stop                    graceful stop that flushes queued requests, Stop after 1 s
+        │
+  return results          the caller writes the report
+        </div>
+        <p class="legend">Figure 2 &mdash; The lifecycle of one peer. An error in setup, readiness, the benchmarks,
+            or the final hook stops the server and returns the error. When <code>ctx</code> ends during the wait for
+            the Done signals, <code>Peer.Run</code> returns its error and skips the final hook.</p>
+        <p>A workload provides only the two hooks. The setup hook registers the services before the server serves,
+            and each <code>Bench</code> closure uses <code>peer.Server().PeerConfig()</code> and
+            <code>peer.Control()</code>. A peer sends its Done signal after its own calls on the same stream, so the
+            final hook observes every request of the peers. The building blocks (<code>AwaitReady</code>,
+            <code>FlushOutbound</code>, <code>SignalDone</code>, <code>AwaitPeersDone</code>, <code>Stop</code>)
+            stay exported for a process that drives several peers in one measurement, as the local mode of the
+            reference binary does.</p>
+        <pre><code>w := benchkit.Workload{
+    Setup: func(p *benchkit.Peer) ([]benchkit.Bench, error) {
+        pb.RegisterMyServiceServer(p.Server(), newHandler(p.Control()))
+        return myBenches(p), nil
+    },
+    Final: func(p *benchkit.Peer, results []*benchkit.Result) error {
+        return checkCounters(p, results)
+    },
+}
+p, err := benchkit.ListenPeer(self, remotes, opts, dialOpts...)
+results, err := p.Run(ctx, sel, w, opts)
+// write the report from results</code></pre>
+        <p><code>benchkit.RunLocal(ctx, n, sel, w, opts, localOpts...)</code> runs <em>n</em> peers in one process,
+            each with <code>Peer.Run</code>, over <code>gorums.NewLocalServers</code>. It returns the results of each
+            peer, so a workload can test its distributed lifecycle with <code>go test</code>. An error in one peer
+            cancels the others.</p>
 
         <h3>Measurement cores</h3>
         <p>The two cores are the reusable send window underneath the helpers. Each takes the run configuration(s) and a

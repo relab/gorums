@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/benchkit"
@@ -100,12 +99,12 @@ func (f *flags) dialOpts() []gorums.DialOption {
 	}
 }
 
-// target configures the benchmark target for one of three modes:
-// distributed (-self set), local (no -remotes), or coordinator (-remotes set).
-// It returns the target and a cleanup function that must be deferred by the
-// caller. The mode selection and setup live in benchmark.SetupTarget.
+// target configures the benchmark target for local mode (no -remotes) or
+// coordinator mode (-remotes set). It returns the target and a cleanup
+// function that must be deferred by the caller. The mode selection and setup
+// live in benchmark.SetupTarget.
 func (f *flags) target(opts *benchkit.Options, dialOpts []gorums.DialOption) (benchmark.Target, func()) {
-	target, cleanup, err := benchmark.SetupTarget(opts, f.Self, f.Remotes, f.configSize, dialOpts...)
+	target, cleanup, err := benchmark.SetupTarget(opts, f.Remotes, f.configSize, dialOpts...)
 	checkf("Failed to set up benchmark target: %v", err)
 	return target, cleanup
 }
@@ -177,6 +176,10 @@ func main() {
 	}
 
 	opts := f.options()
+	if f.Self != "" {
+		f.runDistributed(opts)
+		return
+	}
 	target, cleanup := f.target(&opts, f.dialOpts())
 	defer cleanup()
 
@@ -184,32 +187,18 @@ func main() {
 
 	results, err := benchmark.Run(f.Benchmarks, opts, target)
 	checkf("Error running benchmarks: %v", err)
-
 	f.report(results, opts)
+}
 
-	// In distributed mode the symmetric topology has no exit barrier: signal
-	// peers that this node is done, then wait for their signals up to a grace
-	// deadline (deferred cleanup happens once one of the two resolves). See
-	// benchkit.ExitGrace and benchmark.AwaitPeersDone.
-	if f.Self != "" {
-		nodeLabel := f.label
-		if nodeLabel == "" {
-			nodeLabel = f.Self
-		}
-		grace := benchkit.ExitGrace(opts.NumNodes)
-		benchkit.Logf("[%s %s] Benchmark complete; signaling done, waiting up to %v for peers...\n", time.Now().Format(time.TimeOnly), nodeLabel, grace)
-		benchmark.SignalDone(context.Background(), target.Symmetric)
-		waitStart := time.Now()
-		ctx, cancel := context.WithTimeout(context.Background(), grace)
-		err := benchmark.AwaitPeersDone(ctx, target.Symmetric)
-		cancel()
-		if err == nil {
-			benchkit.Logf("[%s %s] All peers done after %v; exiting early.\n", time.Now().Format(time.TimeOnly), nodeLabel, time.Since(waitStart))
-		} else {
-			benchkit.Logf("[%s %s] Grace exhausted after %v: %v; exiting anyway.\n",
-				time.Now().Format(time.TimeOnly), nodeLabel, time.Since(waitStart), err)
-		}
-	}
+// runDistributed runs this node of a distributed run (-self set) through the
+// whole peer lifecycle of benchkit.Peer.Run, and then writes the report.
+func (f *flags) runDistributed(opts benchkit.Options) {
+	p, err := benchmark.ListenDistributed(&opts, f.Self, f.Remotes, f.dialOpts()...)
+	checkf("Failed to set up distributed node: %v", err)
+	opts.QuorumSize = f.quorumSize(opts.NumNodes)
+	results, err := p.Run(context.Background(), f.Benchmarks, benchmark.Workload(), opts)
+	checkf("Error running benchmarks: %v", err)
+	f.report(results, opts)
 }
 
 func checkf(format string, args ...any) {
