@@ -9,59 +9,48 @@ import (
 	"github.com/relab/gorums/benchkit"
 )
 
-// SetupTarget builds the Target for one of the three run modes and fills
-// in the topology-derived Options fields (Remote, NumNodes):
+// SetupTarget builds the Target for local or coordinator mode and fills in
+// the topology-derived Options fields (Remote, NumNodes):
 //
-//   - distributed: self is this node's listen address and remotes lists all
-//     peers (including self); every node runs the same binary.
-//   - local: neither self nor remotes is set; configSize in-process servers are
-//     created.
-//   - coordinator: remotes lists the servers and self is unset; this process
-//     coordinates against them, using configSize nodes when 1 <= configSize <=
-//     len(remotes) and all of them otherwise.
+//   - local: remotes is empty; configSize in-process servers are created.
+//   - coordinator: remotes lists the servers; this process coordinates against
+//     them, using configSize nodes when 1 <= configSize <= len(remotes) and all
+//     of them otherwise.
 //
-// It returns the target and a cleanup function the caller must invoke (e.g.
-// defer) once the benchmarks finish. In distributed mode the caller must also
-// wait for the Done signals of the peers (see [SignalDone] and
-// [AwaitPeersDone]) before invoking cleanup, so slower peers can finish their
-// trailing cross-node RPCs before this node closes its listener.
-func SetupTarget(opts *benchkit.Options, self string, remotes []string, configSize int, dialOpts ...gorums.DialOption) (Target, func(), error) {
-	switch {
-	case self != "":
-		return setupDistributed(opts, self, remotes, dialOpts)
-	case len(remotes) < 1:
+// Distributed mode uses [ListenDistributed] and [Workload] instead. SetupTarget
+// returns the target and a cleanup function the caller must invoke (e.g.
+// defer) once the benchmarks finish.
+func SetupTarget(opts *benchkit.Options, remotes []string, configSize int, dialOpts ...gorums.DialOption) (Target, func(), error) {
+	if len(remotes) < 1 {
 		return setupLocal(opts, configSize, dialOpts)
-	default:
-		return setupCoordinator(opts, remotes, configSize, dialOpts)
 	}
+	return setupCoordinator(opts, remotes, configSize, dialOpts)
 }
 
-// setupDistributed builds the symmetric peer-to-peer target for one node of a
-// distributed run and waits until every peer is reachable.
-func setupDistributed(opts *benchkit.Options, self string, remotes []string, dialOpts []gorums.DialOption) (Target, func(), error) {
-	var target Target
+// ListenDistributed returns the peer self of a distributed run over remotes
+// (see [benchkit.ListenPeer]) and fills in the topology-derived Options fields
+// (Remote, NumNodes). remotes must hold at least two addresses, self included.
+// Run the peer with [Workload].
+func ListenDistributed(opts *benchkit.Options, self string, remotes []string, dialOpts ...gorums.DialOption) (*benchkit.Peer, error) {
 	if len(remotes) < 2 {
-		return target, nil, fmt.Errorf("distributed mode requires at least 2 remotes (including self)")
+		return nil, fmt.Errorf("distributed mode requires at least 2 remotes (including self)")
 	}
 	opts.Remote = true
 	opts.NumNodes = len(remotes)
+	return benchkit.ListenPeer(self, remotes, *opts, dialOpts...)
+}
 
-	symTarget, symStop, err := setupRemoteServer(self, remotes, *opts, dialOpts...)
-	if err != nil {
-		return target, nil, fmt.Errorf("remote server setup: %w", err)
+// Workload returns the workload of one peer of a distributed run for
+// [benchkit.Peer.Run]: its setup hook registers the Benchmark service and
+// returns the symmetric benchmarks.
+func Workload() benchkit.Workload {
+	return benchkit.Workload{
+		Setup: func(p *benchkit.Peer) ([]benchkit.Bench, error) {
+			RegisterBenchmarkServer(p.Server(), &workloadServer{ctrl: p.Control()})
+			t := &SymmetricTarget{peers: []*benchkit.Peer{p}, distributed: true}
+			return benchmarks(Target{Symmetric: t}), nil
+		},
 	}
-	// The deadline is only an upper bound for very large clusters that are
-	// still making progress; the readiness check fails within its stall bound
-	// when a peer is dead.
-	readyCtx, readyCancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer readyCancel()
-	if err := awaitReady(readyCtx, symTarget); err != nil {
-		symStop()
-		return target, nil, fmt.Errorf("remote peers not ready: %w", err)
-	}
-
-	target.Symmetric = symTarget
-	return target, symStop, nil
 }
 
 // setupLocal builds the symmetric target backed by configSize in-process

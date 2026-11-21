@@ -50,22 +50,6 @@ func setupSymmetricServers(n int, serverOpts []gorums.ServerOption, dialOpts ...
 	return &SymmetricTarget{peers: peers}, stop, nil
 }
 
-// setupRemoteServer creates and serves the peer self of a distributed run over
-// the addresses in peerAddrs (see [benchkit.ListenPeer]).
-func setupRemoteServer(self string, peerAddrs []string, opts benchkit.Options, dialOpts ...gorums.DialOption) (*SymmetricTarget, func(), error) {
-	p, err := benchkit.ListenPeer(self, peerAddrs, opts, dialOpts...)
-	if err != nil {
-		return nil, nil, err
-	}
-	RegisterBenchmarkServer(p.Server(), &workloadServer{ctrl: p.Control()})
-	go func() { _ = p.Server().ListenAndServe() }()
-	t := &SymmetricTarget{peers: []*benchkit.Peer{p}, distributed: true}
-	return t, func() {
-		p.Stop()
-		benchkit.Logf("[%s %s] server stopped\n", time.Now().Format(time.TimeOnly), p)
-	}, nil
-}
-
 // numPeers returns the number of nodes in the run, including self.
 func (t *SymmetricTarget) numPeers() int {
 	return t.peers[0].Server().PeerConfig().Size()
@@ -76,26 +60,6 @@ func (t *SymmetricTarget) numPeers() int {
 // runs once, from the first peer of t.
 func awaitReady(ctx context.Context, t *SymmetricTarget) error {
 	return t.peers[0].AwaitReady(ctx)
-}
-
-// SignalDone sends the Done signal of every peer of t (see
-// [benchkit.Peer.SignalDone]).
-func SignalDone(ctx context.Context, t *SymmetricTarget) {
-	for _, p := range t.peers {
-		p.SignalDone(ctx)
-	}
-}
-
-// AwaitPeersDone returns nil once every peer of t has received the Done
-// signals of all its peers, or an error when ctx ends first (see
-// [benchkit.Peer.AwaitPeersDone]).
-func AwaitPeersDone(ctx context.Context, t *SymmetricTarget) error {
-	for _, p := range t.peers {
-		if err := p.AwaitPeersDone(ctx); err != nil {
-			return fmt.Errorf("%s: %w", p, err)
-		}
-	}
-	return nil
 }
 
 // runComplete reports whether so many of outSize outbound peers have finished

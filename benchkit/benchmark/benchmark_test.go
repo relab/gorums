@@ -75,14 +75,18 @@ func TestBenchmarksTargetRouting(t *testing.T) {
 // benchmarks (SymmetricQuorumCall, SymmetricMulticast), designed for
 // concurrent per-node execution, are safe here.
 func TestBenchmarksExcludesConfigBenchmarksForDistributedTarget(t *testing.T) {
+	var opts benchkit.Options
 	peers := []string{"127.0.0.1:0", "127.0.0.2:0"}
-	target, stop, err := setupRemoteServer(peers[0], peers, benchkit.Options{}, gorumstest.InsecureDialOptions(t))
+	p, err := ListenDistributed(&opts, peers[0], peers, gorumstest.InsecureDialOptions(t))
 	if err != nil {
-		t.Fatalf("setupRemoteServer: %v", err)
+		t.Fatalf("ListenDistributed: %v", err)
 	}
-	t.Cleanup(stop)
+	t.Cleanup(p.Stop)
 
-	got := benchmarks(Target{Symmetric: target})
+	got, err := Workload().Setup(p)
+	if err != nil {
+		t.Fatalf("Workload().Setup: %v", err)
+	}
 	for _, b := range got {
 		if b.Name == "QuorumCall" || b.Name == "Multicast" || b.Name == "AsyncMulticast" || b.Name == "AsyncQuorumCall" || b.Name == "SlowServer" {
 			t.Errorf("benchmarks(distributed target) included needsConfig benchmark %q, want excluded", b.Name)
