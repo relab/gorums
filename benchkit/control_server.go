@@ -1,6 +1,8 @@
 package benchkit
 
 import (
+	"errors"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -149,4 +151,21 @@ func (c *Control) Done(ctx gorums.ServerContext, _ *DoneRequest) {
 	if c.doneLeft.Add(-1) == 0 {
 		close(c.doneCh)
 	}
+}
+
+// errNoPeerView is the error from [Control.PeerView] on a server without
+// configured peers.
+var errNoPeerView = errors.New("benchkit: no peer view: the server has no configured peers")
+
+// PeerView returns the IDs of the configured peers whose streams with the
+// server are not connected at the time of the call. It returns an error if the
+// server has no configured peers.
+func (*Control) PeerView(ctx gorums.ServerContext, _ *PeerViewRequest) (*PeerViewResponse, error) {
+	peers := ctx.PeerConfig()
+	if peers == nil {
+		return nil, errNoPeerView
+	}
+	missing := peers.Difference(ctx.ConnectedPeers()).NodeIDs()
+	slices.Sort(missing)
+	return PeerViewResponse_builder{Missing: missing}.Build(), nil
 }
