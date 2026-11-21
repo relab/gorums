@@ -11,13 +11,8 @@ import (
 	"github.com/relab/gorums/benchkit"
 )
 
-// SymmetricTarget holds the peers for symmetric (peer-to-peer) benchmarks.
-// In local mode it holds every peer of the run, all in this process. In
-// distributed mode it holds the one peer of this process.
-type SymmetricTarget struct {
-	peers       []*benchkit.Peer
-	distributed bool
-}
+// peerConfig contains the peers driven by this process in a symmetric run.
+type peerConfig = []*benchkit.Peer
 
 // newBenchPeer returns a [benchkit.Peer] for srv with the gorums workload
 // server registered on it, recording into the Control of the peer. Call it
@@ -29,9 +24,9 @@ func newBenchPeer(srv *gorums.Server) *benchkit.Peer {
 }
 
 // setupSymmetricServers creates n local Gorums servers with the benchkit Control
-// plane and the gorums workload server registered and serving. Returns a
-// SymmetricTarget, a stop function, and any error.
-func setupSymmetricServers(n int, serverOpts []gorums.ServerOption, dialOpts ...gorums.DialOption) (*SymmetricTarget, func(), error) {
+// plane and the gorums workload server registered and serving. It returns the peers,
+// a stop function, and any error.
+func setupSymmetricServers(n int, serverOpts []gorums.ServerOption, dialOpts ...gorums.DialOption) (peerConfig, func(), error) {
 	servers, stop, err := gorums.NewLocalServers(
 		n,
 		gorums.WithLocalServerOptions(serverOpts...),
@@ -40,26 +35,20 @@ func setupSymmetricServers(n int, serverOpts []gorums.ServerOption, dialOpts ...
 	if err != nil {
 		return nil, nil, err
 	}
-	peers := make([]*benchkit.Peer, n)
+	peers := make(peerConfig, n)
 	for i, srv := range servers {
 		peers[i] = newBenchPeer(srv)
 	}
 	for _, srv := range servers {
 		go func() { _ = srv.ListenAndServe() }()
 	}
-	return &SymmetricTarget{peers: peers}, stop, nil
+	return peers, stop, nil
 }
 
-// numPeers returns the number of nodes in the run, including self.
-func (t *SymmetricTarget) numPeers() int {
-	return t.peers[0].Server().PeerConfig().Size()
-}
-
-// awaitReady waits until the mesh of t is complete (see
-// [benchkit.Peer.AwaitReady]). One check covers every peer of the run, so it
-// runs once, from the first peer of t.
-func awaitReady(ctx context.Context, t *SymmetricTarget) error {
-	return t.peers[0].AwaitReady(ctx)
+// awaitReady waits for the mesh to complete. The first peer's check covers
+// the whole mesh.
+func awaitReady(ctx context.Context, peers peerConfig) error {
+	return peers[0].AwaitReady(ctx)
 }
 
 // runComplete reports whether so many of outSize outbound peers have finished
@@ -76,8 +65,8 @@ func runComplete(outSize, done, need int) bool {
 // live peers. When true, an incomplete/connection-refused quorum call is the
 // expected end of the run (peers finished and closed their listeners), not a
 // fault, so a straggler treats it as a clean stop rather than a failure.
-func quorumRunOver(t *SymmetricTarget, quorumSize int) bool {
-	for _, p := range t.peers {
+func quorumRunOver(peers peerConfig, quorumSize int) bool {
+	for _, p := range peers {
 		if runComplete(p.Server().PeerConfig().Size(), p.Control().DoneCount(), quorumSize) {
 			return true
 		}
@@ -90,8 +79,8 @@ func quorumRunOver(t *SymmetricTarget, quorumSize int) bool {
 // peer, a requirement no live-peer set can meet once a peer exits, so a single
 // Done marks their failure as the expected end of the run. It is false until a
 // peer finishes, so startup failures before anyone is Done are not masked.
-func anyPeerFinished(t *SymmetricTarget) bool {
-	for _, p := range t.peers {
+func anyPeerFinished(peers peerConfig) bool {
+	for _, p := range peers {
 		if p.Control().DoneCount() > 0 {
 			return true
 		}
@@ -99,12 +88,11 @@ func anyPeerFinished(t *SymmetricTarget) bool {
 	return false
 }
 
-// estimateAllOffsets runs benchkit.EstimateOffsets from every server in t to its
-// outbound peers, returning one offset map per server, indexed to match
-// t.peers.
-func estimateAllOffsets(ctx context.Context, t *SymmetricTarget) ([]map[uint32]int64, error) {
-	offsets := make([]map[uint32]int64, len(t.peers))
-	for i, p := range t.peers {
+// estimateAllOffsets runs benchkit.EstimateOffsets from each server to its outbound peers.
+// The returned offset maps follow the order of peers.
+func estimateAllOffsets(ctx context.Context, peers peerConfig) ([]map[uint32]int64, error) {
+	offsets := make([]map[uint32]int64, len(peers))
+	for i, p := range peers {
 		off, err := benchkit.EstimateOffsets(ctx, p.Server().PeerConfig())
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", p, err)
@@ -114,8 +102,8 @@ func estimateAllOffsets(ctx context.Context, t *SymmetricTarget) ([]map[uint32]i
 	return offsets, nil
 }
 
-func flushSymmetricOutbound(ctx context.Context, t *SymmetricTarget) error {
-	for _, p := range t.peers {
+func flushSymmetricOutbound(ctx context.Context, peers peerConfig) error {
+	for _, p := range peers {
 		if err := p.FlushOutbound(ctx); err != nil {
 			return fmt.Errorf("%s: %w", p, err)
 		}
@@ -127,14 +115,14 @@ func flushSymmetricOutbound(ctx context.Context, t *SymmetricTarget) error {
 // throughput in a symmetric (peer-to-peer) topology. Each server issues
 // QuorumCall RPCs to its outbound peers; the client side measures latency.
 // quorumSize defaults to a majority of the outbound peer count.
-func runSymmetricQuorumCall(ctx context.Context, t *SymmetricTarget, opts benchkit.Options) (*benchkit.Result, error) {
+func runSymmetricQuorumCall(ctx context.Context, peers peerConfig, opts benchkit.Options) (*benchkit.Result, error) {
 	ctx, cancel := benchkit.BenchContext(ctx, opts)
 	defer cancel()
 
 	// Yield each server's outbound configuration so MeasureLatency drives one
 	// concurrent send target per server in a single measurement phase.
 	configs := func(yield func(Config) bool) {
-		for _, p := range t.peers {
+		for _, p := range peers {
 			if !yield(p.Server().PeerConfig()) {
 				return
 			}
@@ -148,7 +136,7 @@ func runSymmetricQuorumCall(ctx context.Context, t *SymmetricTarget, opts benchk
 		quorumSize := cmp.Or(opts.QuorumSize, cfg.Size()/2+1)
 		call := func(ctx context.Context) error {
 			_, err := client.QuorumCall(ctx, msg).Threshold(quorumSize)
-			if err != nil && quorumRunOver(t, quorumSize) {
+			if err != nil && quorumRunOver(peers, quorumSize) {
 				// Peers finished and closed their listeners; the incomplete
 				// quorum is the expected end of the run, not a fault. Cancel the
 				// window so every worker stops promptly, and return ErrRunOver
@@ -180,7 +168,7 @@ func runSymmetricQuorumCall(ctx context.Context, t *SymmetricTarget, opts benchk
 // one-way latency in a symmetric topology. Each server sends Multicast RPCs
 // to its outbound peers; the server side measures latency via TimedMsg.SendTime.
 // Throughput is reported as total sends per second across all servers.
-func runSymmetricMulticast(ctx context.Context, t *SymmetricTarget, opts benchkit.Options) (*benchkit.Result, error) {
+func runSymmetricMulticast(ctx context.Context, peers peerConfig, opts benchkit.Options) (*benchkit.Result, error) {
 	ctx, cancel := benchkit.BenchContext(ctx, opts)
 	defer cancel()
 
@@ -199,13 +187,13 @@ func runSymmetricMulticast(ctx context.Context, t *SymmetricTarget, opts benchki
 	// so a symmetric server-measured run honors -stats-mode like the coordinator
 	// path does via the Start RPC.
 	resetServerStats := func() {
-		for _, p := range t.peers {
+		for _, p := range peers {
 			p.Control().Reset(opts.StatsMode)
 		}
 	}
 
 	resetServerStats()
-	if err := flushSymmetricOutbound(ctx, t); err != nil && !anyPeerFinished(t) {
+	if err := flushSymmetricOutbound(ctx, peers); err != nil && !anyPeerFinished(peers) {
 		return nil, err
 	}
 
@@ -214,8 +202,8 @@ func runSymmetricMulticast(ctx context.Context, t *SymmetricTarget, opts benchki
 
 	// One send target per server; the receiving server buckets and
 	// clock-corrects samples by the sender's node ID.
-	sends := make([]func() error, len(t.peers))
-	for i, p := range t.peers {
+	sends := make([]func() error, len(peers))
+	for i, p := range peers {
 		client := NewBenchmarkClient(p.Server().PeerConfig())
 		sends[i] = func() error {
 			if err := client.Multicast(ctx, newMsg()).Async().Wait(); err != nil {
@@ -232,22 +220,22 @@ func runSymmetricMulticast(ctx context.Context, t *SymmetricTarget, opts benchki
 	// runners. Going through MeasureOneWay also gives the symmetric multicast the
 	// rate-ramp and ticker rate-step support the coordinator runners already have.
 	m, window := benchkit.MeasureOneWay(ctx, opts, sends...)
-	latencyStats := make([]*benchkit.Stats, len(t.peers))
-	for i, p := range t.peers {
+	latencyStats := make([]*benchkit.Stats, len(peers))
+	for i, p := range peers {
 		latencyStats[i] = p.Control().Stats()
 	}
 	m.TrackLatency(latencyStats...)
 
 	estimate := func() ([]map[uint32]int64, error) {
-		off, err := estimateAllOffsets(ctx, t)
-		if err != nil && anyPeerFinished(t) {
+		off, err := estimateAllOffsets(ctx, peers)
+		if err != nil && anyPeerFinished(peers) {
 			// Peers finished and exited before this straggler could sync clocks;
 			// the incomplete offset set is the expected end of the run, not a
 			// fault. estimateAllOffsets returns nil on error, so hand back one
 			// empty offset map per server to keep buildReplies' per-server
 			// indexing in bounds; AverageOffsets tolerates the empty side, so
 			// the samples are left uncorrected rather than failing the run.
-			return make([]map[uint32]int64, len(t.peers)), nil
+			return make([]map[uint32]int64, len(peers)), nil
 		}
 		return off, err
 	}
@@ -255,23 +243,23 @@ func runSymmetricMulticast(ctx context.Context, t *SymmetricTarget, opts benchki
 		// Reset server stats so the measurement phase counts from zero.
 		resetServerStats()
 		startTime := time.Now()
-		if err := window(); err != nil && !anyPeerFinished(t) {
+		if err := window(); err != nil && !anyPeerFinished(peers) {
 			return err
 		}
 		elapsed = time.Since(startTime)
-		if err := flushSymmetricOutbound(ctx, t); err != nil && !anyPeerFinished(t) {
+		if err := flushSymmetricOutbound(ctx, peers); err != nil && !anyPeerFinished(peers) {
 			return err
 		}
 		return nil
 	}
 	buildReplies := func(before, after []map[uint32]int64) (map[uint32]*benchkit.Result, error) {
-		for _, p := range t.peers {
+		for _, p := range peers {
 			p.Control().Stats().End()
 		}
 		// Aggregate server-side latency samples across all local servers,
 		// correcting each sample by its sender's averaged clock offset.
-		replies := make(map[uint32]*benchkit.Result, len(t.peers))
-		for i, p := range t.peers {
+		replies := make(map[uint32]*benchkit.Result, len(peers))
+		for i, p := range peers {
 			benchkit.LogOffsets(p.String(), before[i], after[i])
 			offsets := benchkit.AverageOffsets(before[i], after[i])
 			replies[uint32(i+1)] = p.Control().Stats().GetResultCorrected(offsets)

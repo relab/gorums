@@ -19,13 +19,13 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Target carries the targets for benchmark execution. Set Config for
-// traditional (coordinator→servers) benchmarks and Symmetric for peer-to-peer
-// benchmarks; either or both may be set. Benchmarks for unset targets are
-// not run.
+// Target supplies inputs for local or coordinator benchmark execution.
+// Config enables traditional benchmarks. Symmetric holds the local peers
+// for symmetric benchmarks and supplies the first peer's outbound config
+// for traditional benchmarks when Config is nil.
 type Target struct {
 	Config    Config
-	Symmetric *SymmetricTarget
+	Symmetric []*benchkit.Peer
 }
 
 // asyncQCFunc starts one QuorumCall on the configuration of client and returns
@@ -221,36 +221,21 @@ func (a *asyncSends) drain() error {
 	}
 }
 
-// targetNeeds identifies which Target field a benchDesc's build
-// function requires, so [benchmarks] can filter benchDescs by what the
-// caller's target actually provides.
-type targetNeeds int
+type runFunc = func(context.Context, benchkit.Options) (*benchkit.Result, error)
 
-const (
-	needsConfig    targetNeeds = iota // requires a non-nil Config (traditional coordinator→servers)
-	needsSymmetric                    // requires a non-nil *SymmetricTarget (peer-to-peer)
-)
-
-// benchDesc is the single source of truth for one benchmark: its name and
-// description (used by -list via [Descriptions]) and how to build
-// its runnable closure (used by [benchmarks]).
-type benchDesc struct {
+// benchDesc defines a benchmark's listing metadata and builds its runner
+// from a target of type T.
+type benchDesc[T any] struct {
 	Name        string
 	Description string
-	Needs       targetNeeds
-	build       func(cfg Config, sym *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error)
+	build       func(T) runFunc
 }
 
-// benchDescs lists every known benchmark. Traditional benchmarks (needsConfig)
-// receive cfg, which [benchmarks] derives from t.Config or, when unset,
-// from the symmetric target's server 0 outbound config; peer-to-peer
-// benchmarks (needsSymmetric) receive sym.
-var benchDescs = []benchDesc{
+var configBenchDescs = []benchDesc[Config]{
 	{
 		Name:        "QuorumCall",
 		Description: "NodeStream based quorum call implementation with FIFO ordering",
-		Needs:       needsConfig,
-		build: func(cfg Config, _ *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error) {
+		build: func(cfg Config) runFunc {
 			return benchkit.ClientMeasured(cfg, func(ctx context.Context, cfg Config, opts benchkit.Options) func() error {
 				client := NewBenchmarkClient(cfg)
 				msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
@@ -275,8 +260,7 @@ var benchDescs = []benchDesc{
 	{
 		Name:        "AsyncQuorumCall",
 		Description: "NodeStream based async quorum call implementation with FIFO ordering",
-		Needs:       needsConfig,
-		build: func(cfg Config, _ *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error) {
+		build: func(cfg Config) runFunc {
 			return func(ctx context.Context, opts benchkit.Options) (*benchkit.Result, error) {
 				return runAsyncQCBenchmark(ctx, opts, cfg, asyncThreshold)
 			}
@@ -285,8 +269,7 @@ var benchDescs = []benchDesc{
 	{
 		Name:        "SlowServer",
 		Description: "Quorum Call with a 10ms processing time on the server",
-		Needs:       needsConfig,
-		build: func(cfg Config, _ *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error) {
+		build: func(cfg Config) runFunc {
 			return benchkit.ClientMeasured(cfg, func(ctx context.Context, cfg Config, opts benchkit.Options) func() error {
 				client := NewBenchmarkClient(cfg)
 				msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
@@ -300,8 +283,7 @@ var benchDescs = []benchDesc{
 	{
 		Name:        "Multicast",
 		Description: "NodeStream based multicast implementation (servers measure latency and throughput)",
-		Needs:       needsConfig,
-		build: func(cfg Config, _ *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error) {
+		build: func(cfg Config) runFunc {
 			return benchkit.ServerMeasured(cfg, func(ctx context.Context, cfg Config, opts benchkit.Options) func() error {
 				client := NewBenchmarkClient(cfg)
 				payload := make([]byte, opts.Payload)
@@ -315,8 +297,7 @@ var benchDescs = []benchDesc{
 	{
 		Name:        "AsyncMulticast",
 		Description: "Multicast pipelined with Async, up to -max-async sends outstanding (servers measure latency and throughput)",
-		Needs:       needsConfig,
-		build: func(cfg Config, _ *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error) {
+		build: func(cfg Config) runFunc {
 			// outstanding is rebound by setup on every run and drained by the
 			// quiesce hook after that run's send window; both run on the run
 			// goroutine, in that order.
@@ -336,83 +317,74 @@ var benchDescs = []benchDesc{
 				}))
 		},
 	},
+}
+
+var symmetricBenchDescs = []benchDesc[peerConfig]{
 	{
 		Name:        "SymmetricQuorumCall",
 		Description: "Peer-to-peer quorum call benchmark; each node is both client and server",
-		Needs:       needsSymmetric,
-		build: func(_ Config, sym *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error) {
+		build: func(peers peerConfig) runFunc {
 			return func(ctx context.Context, opts benchkit.Options) (*benchkit.Result, error) {
-				return runSymmetricQuorumCall(ctx, sym, opts)
+				return runSymmetricQuorumCall(ctx, peers, opts)
 			}
 		},
 	},
 	{
 		Name:        "SymmetricMulticast",
 		Description: "Peer-to-peer multicast benchmark; servers measure one-way latency",
-		Needs:       needsSymmetric,
-		build: func(_ Config, sym *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error) {
+		build: func(peers peerConfig) runFunc {
 			return func(ctx context.Context, opts benchkit.Options) (*benchkit.Result, error) {
-				return runSymmetricMulticast(ctx, sym, opts)
+				return runSymmetricMulticast(ctx, peers, opts)
 			}
 		},
 	},
 }
 
-// Descriptions returns name and description for every known
-// benchmark, regardless of which targets are available. Used by -list.
+func (d benchDesc[T]) description() benchkit.Bench {
+	return benchkit.Bench{Name: d.Name, Description: d.Description}
+}
+
+func describeBenchmarks[T any](descs []benchDesc[T]) []benchkit.Bench {
+	benches := make([]benchkit.Bench, len(descs))
+	for i, d := range descs {
+		benches[i] = d.description()
+	}
+	return benches
+}
+
+func bindBenchmarks[T any](descs []benchDesc[T], target T) []benchkit.Bench {
+	benches := make([]benchkit.Bench, len(descs))
+	for i, d := range descs {
+		benches[i] = d.description()
+		benches[i].Run = d.build(target)
+	}
+	return benches
+}
+
+// Descriptions returns the name and description of every benchmark in run order.
 func Descriptions() []benchkit.Bench {
-	descs := make([]benchkit.Bench, len(benchDescs))
-	for i, d := range benchDescs {
-		descs[i] = benchkit.Bench{Name: d.Name, Description: d.Description}
-	}
-	return descs
+	return append(describeBenchmarks(configBenchDescs), describeBenchmarks(symmetricBenchDescs)...)
 }
 
-// DistributedDescriptions returns benchmarks available to each peer in a
-// distributed symmetric run. It uses the same descriptors as [Descriptions].
+// DistributedDescriptions returns the names and descriptions of the symmetric
+// benchmarks available to each peer in a distributed run.
 func DistributedDescriptions() []benchkit.Bench {
-	var descs []benchkit.Bench
-	for _, d := range benchDescs {
-		if d.Needs == needsSymmetric {
-			descs = append(descs, benchkit.Bench{Name: d.Name, Description: d.Description})
-		}
-	}
-	return descs
+	return describeBenchmarks(symmetricBenchDescs)
 }
 
-// benchmarks returns runnable benchmarks for the given targets. Traditional
-// (needsConfig) benchmarks are included when t.Config is set, or when
-// t.Symmetric is a single-process local target, in which case server 0's
-// outbound config serves as the Config. They are excluded for a distributed
-// (multi-process) symmetric target: every node there runs the same binary, so
-// if more than one selected a needsConfig benchmark, each would issue its own
-// Control.Start/Stop against the same peer group concurrently, resetting and
-// reading every other node's Stats window mid-run. Symmetric benchmarks are
-// included whenever t.Symmetric is set, local or distributed.
 func benchmarks(t Target) []benchkit.Bench {
 	cfg := t.Config
-	if cfg == nil && t.Symmetric != nil && !t.Symmetric.distributed && len(t.Symmetric.peers) > 0 {
-		cfg = t.Symmetric.peers[0].Server().PeerConfig()
+	if cfg == nil && len(t.Symmetric) > 0 {
+		cfg = t.Symmetric[0].Server().PeerConfig()
 	}
-	var m []benchkit.Bench
-	for _, d := range benchDescs {
-		switch d.Needs {
-		case needsConfig:
-			if cfg == nil {
-				continue
-			}
-		case needsSymmetric:
-			if t.Symmetric == nil {
-				continue
-			}
-		}
-		m = append(m, benchkit.Bench{
-			Name:        d.Name,
-			Description: d.Description,
-			Run:         d.build(cfg, t.Symmetric),
-		})
+	var benches []benchkit.Bench
+	if cfg != nil {
+		benches = bindBenchmarks(configBenchDescs, cfg)
 	}
-	return m
+	if len(t.Symmetric) > 0 {
+		benches = append(benches, bindBenchmarks(symmetricBenchDescs, t.Symmetric)...)
+	}
+	return benches
 }
 
 // Run runs all the benchmarks that match the given regex with the

@@ -41,18 +41,18 @@ func localServers(t *testing.T, n int, serverOpt gorums.ServerOption) []*gorums.
 	return servers
 }
 
-// peerTarget returns a distributed-mode SymmetricTarget that holds one peer
-// for srv, with the workload server registered. Call it before srv serves.
-func peerTarget(srv *gorums.Server) *SymmetricTarget {
-	return &SymmetricTarget{peers: []*benchkit.Peer{newBenchPeer(srv)}, distributed: true}
+// peerTarget builds the peer config for one distributed node and registers
+// the workload server. Call it before srv serves.
+func peerTarget(srv *gorums.Server) peerConfig {
+	return peerConfig{newBenchPeer(srv)}
 }
 
 // peerTargets returns a serving peerTarget for each of n local servers, so a
 // test can drive each node on its own, as separate processes do.
-func peerTargets(t *testing.T, n int, serverOpt gorums.ServerOption) []*SymmetricTarget {
+func peerTargets(t *testing.T, n int, serverOpt gorums.ServerOption) []peerConfig {
 	t.Helper()
 	servers := localServers(t, n, serverOpt)
-	targets := make([]*SymmetricTarget, n)
+	targets := make([]peerConfig, n)
 	for i, srv := range servers {
 		targets[i] = peerTarget(srv)
 	}
@@ -62,9 +62,9 @@ func peerTargets(t *testing.T, n int, serverOpt gorums.ServerOption) []*Symmetri
 	return targets
 }
 
-// symmetricServers starts n local servers as one in-process SymmetricTarget,
+// symmetricServers starts n local peers in one process,
 // with serverOpts applied to every server, and stops them when the test ends.
-func symmetricServers(t *testing.T, n int, serverOpts ...gorums.ServerOption) *SymmetricTarget {
+func symmetricServers(t *testing.T, n int, serverOpts ...gorums.ServerOption) peerConfig {
 	t.Helper()
 	target, stop, err := setupSymmetricServers(n, serverOpts, gorumstest.InsecureDialOptions(t))
 	if err != nil {
@@ -119,13 +119,13 @@ func TestSetupSymmetricServersAppliesAllServerOptions(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	for _, p := range target.peers {
+	for _, p := range target {
 		if _, err := p.Server().WaitForAll(ctx); err != nil {
 			t.Fatalf("WaitForAll: %v", err)
 		}
 	}
 
-	srv3 := target.peers[2].Server()
+	srv3 := target[2].Server()
 	for _, node := range srv3.PeerConfig() {
 		if node.ID() >= 3 {
 			continue
@@ -166,7 +166,7 @@ func TestRunComplete(t *testing.T) {
 func TestSymmetricRunOver(t *testing.T) {
 	target := symmetricServers(t, 3)
 
-	size := target.peers[0].Server().PeerConfig().Size()
+	size := target[0].Server().PeerConfig().Size()
 	quorum := size/2 + 1
 
 	// No peer has signaled Done yet: nothing is over, so a failure now would
@@ -179,9 +179,9 @@ func TestSymmetricRunOver(t *testing.T) {
 	}
 
 	// Signal every peer done on the first server; the run is now winding down.
-	target.peers[0].Control().ArmDone(size)
+	target[0].Control().ArmDone(size)
 	for id := 1; id <= size; id++ {
-		target.peers[0].Control().Done(gorumstest.ServerContext(t, gorums.ID(id)), &benchkit.DoneRequest{})
+		target[0].Control().Done(gorumstest.ServerContext(t, gorums.ID(id)), &benchkit.DoneRequest{})
 	}
 	if !anyPeerFinished(target) {
 		t.Error("anyPeerFinished = false after all peers Done, want true")
@@ -249,7 +249,7 @@ func TestRunSymmetricQuorumCallStragglerEndsCleanly(t *testing.T) {
 	// and it has signaled Done, so quorumRunOver must recognize this as the
 	// expected end of the run rather than a fault.
 	servers[1].Stop()
-	target.peers[0].Control().Done(gorumstest.ServerContext(t, 2), &benchkit.DoneRequest{})
+	target[0].Control().Done(gorumstest.ServerContext(t, 2), &benchkit.DoneRequest{})
 
 	// Duration is deliberately long relative to the expected stop: a regular
 	// (non-run-over) failure is only counted via Stats.RecordError and the
@@ -330,7 +330,7 @@ func TestRunSymmetricMulticastDrainsServerMessages(t *testing.T) {
 		t.Fatalf("runSymmetricMulticast: %v", err)
 	}
 
-	wantSamples := int(result.GetTotalOps()) * target.numPeers()
+	wantSamples := int(result.GetTotalOps()) * len(target)
 	if got := len(result.GetLatencies()); got != wantSamples {
 		t.Fatalf("len(Latencies) = %d, want %d", got, wantSamples)
 	}
@@ -368,7 +368,7 @@ func TestRunSymmetricMulticastHDR(t *testing.T) {
 	for _, c := range h.GetCount() {
 		total += c
 	}
-	if wantSamples := result.GetTotalOps() * uint64(target.numPeers()); total != wantSamples {
+	if wantSamples := result.GetTotalOps() * uint64(len(target)); total != wantSamples {
 		t.Errorf("histogram counts sum = %d, want %d", total, wantSamples)
 	}
 }
@@ -404,7 +404,7 @@ func TestSymmetricMulticastLatencySeries(t *testing.T) {
 					intervals++
 				}
 			}
-			if want := r.GetTotalOps() * uint64(target.numPeers()); samples != want || samples == 0 {
+			if want := r.GetTotalOps() * uint64(len(target)); samples != want || samples == 0 {
 				t.Errorf("latency interval samples = %d, want %d", samples, want)
 			}
 			if sends != r.GetTotalOps() {

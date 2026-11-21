@@ -47,8 +47,9 @@ func Workload() benchkit.Workload {
 	return benchkit.Workload{
 		Setup: func(p *benchkit.Peer) ([]benchkit.Bench, error) {
 			RegisterBenchmarkServer(p.Server(), &workloadServer{ctrl: p.Control()})
-			t := &SymmetricTarget{peers: []*benchkit.Peer{p}, distributed: true}
-			return benchmarks(Target{Symmetric: t}), nil
+			// Symmetric benchmarks let each process own its peer's measurement
+			// window. Traditional benchmarks control the windows of all peers.
+			return bindBenchmarks(symmetricBenchDescs, peerConfig{p}), nil
 		},
 	}
 }
@@ -63,20 +64,20 @@ func setupLocal(opts *benchkit.Options, configSize int, dialOpts []gorums.DialOp
 	opts.Remote = false
 	opts.NumNodes = configSize
 
-	symTarget, symStop, err := setupSymmetricServers(configSize, opts.ServerOptions(), dialOpts...)
+	peers, stop, err := setupSymmetricServers(configSize, opts.ServerOptions(), dialOpts...)
 	if err != nil {
 		return target, nil, fmt.Errorf("symmetric servers setup: %w", err)
 	}
 
 	readyCtx, readyCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer readyCancel()
-	if err := awaitReady(readyCtx, symTarget); err != nil {
-		symStop()
+	if err := awaitReady(readyCtx, peers); err != nil {
+		stop()
 		return target, nil, fmt.Errorf("symmetric servers not ready: %w", err)
 	}
 
-	target.Symmetric = symTarget
-	return target, symStop, nil
+	target.Symmetric = peers
+	return target, stop, nil
 }
 
 // setupCoordinator builds the traditional coordinator-side configuration
