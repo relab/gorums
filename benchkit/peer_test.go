@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,15 +21,34 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// lockedBuffer is a [bytes.Buffer] that several peers of one test can write
+// at the same time.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 // captureDiag sends the self-diagnosis of [Peer.AwaitReady] to a buffer until
 // the test ends.
-func captureDiag(t *testing.T) *bytes.Buffer {
+func captureDiag(t *testing.T) *lockedBuffer {
 	t.Helper()
-	var buf bytes.Buffer
+	buf := new(lockedBuffer)
 	orig := diagWriter
-	diagWriter = &buf
+	diagWriter = buf
 	t.Cleanup(func() { diagWriter = orig })
-	return &buf
+	return buf
 }
 
 // shortenReadiness sets the attempt and stall bounds of [AwaitMesh] to the
@@ -417,6 +438,186 @@ func TestPeerSignalDoneSurvivesImmediateStop(t *testing.T) {
 			defer cancel()
 			if err := waiter.AwaitPeersDone(waitCtx); err != nil {
 				t.Fatalf("peer missed Done from a node that stopped right after SignalDone: %v", err)
+			}
+		})
+	}
+}
+
+// pingWorkload returns a [Workload] whose one benchmark sends sends one-way
+// requests from each peer to every peer, itself included. Its final hook sets
+// the TotalOps of the result of each peer to the number of requests that the
+// peer received.
+func pingWorkload(sends int) Workload {
+	var received [8]atomic.Int64 // indexed by node ID
+	return Workload{
+		Setup: func(p *Peer) ([]Bench, error) {
+			id := p.Server().NodeID()
+			p.Server().RegisterHandler(mock.TestMethod, func(gorums.ServerContext, *gorums.Message, func(proto.Message)) error {
+				received[id].Add(1)
+				return nil
+			})
+			ping := func(Options) (*Result, error) {
+				cfg := p.Server().PeerConfig()
+				for range sends {
+					if err := mockcall.Multicast(context.Background(), cfg, "ping").Async().Wait(); err != nil {
+						return nil, err
+					}
+				}
+				r := &Result{}
+				r.SetTotalOps(uint64(sends))
+				return r, nil
+			}
+			return []Bench{{Name: "Ping", Run: ping}}, nil
+		},
+		Final: func(p *Peer, results []*Result) error {
+			results[0].SetTotalOps(uint64(received[p.Server().NodeID()].Load()))
+			return nil
+		},
+	}
+}
+
+// localOpts returns the local server options of a test run of [RunLocal] in
+// the given stream mode.
+func localOpts(t *testing.T, serverOpts []gorums.ServerOption) []gorums.LocalServerOption {
+	return []gorums.LocalServerOption{
+		gorums.WithLocalServerOptions(serverOpts...),
+		gorums.WithLocalDialOptions(gorumstest.InsecureDialOptions(t)),
+	}
+}
+
+// pingOpts are the benchmark options of the tests of [Peer.Run].
+var pingOpts = Options{Workers: 1, Duration: 10 * time.Millisecond}
+
+// TestPeerRunLocal verifies the lifecycle of [Peer.Run] through [RunLocal] in
+// both stream modes. The final hook of every peer observes the requests of all
+// peers, so it ran after every peer finished, and the change of the hook to the
+// results shows in the returned results.
+func TestPeerRunLocal(t *testing.T) {
+	const n, sends = 3, 50
+	for _, mode := range streamModes {
+		t.Run(mode.name, func(t *testing.T) {
+			results, err := RunLocal(gorumstest.Context(t, 30*time.Second), n, regexp.MustCompile("Ping"),
+				pingWorkload(sends), pingOpts, localOpts(t, mode.opts)...)
+			if err != nil {
+				t.Fatalf("RunLocal: %v", err)
+			}
+			if len(results) != n {
+				t.Fatalf("len(results) = %d, want %d", len(results), n)
+			}
+			for i, r := range results {
+				if len(r) != 1 {
+					t.Fatalf("node %d: len(results) = %d, want 1", i+1, len(r))
+				}
+				if got, want := r[0].GetTotalOps(), uint64(n*sends); got != want {
+					t.Errorf("node %d: final hook saw %d requests, want %d", i+1, got, want)
+				}
+				if got := r[0].GetConfig().GetName(); got != "Ping" {
+					t.Errorf("node %d: result name = %q, want %q", i+1, got, "Ping")
+				}
+			}
+		})
+	}
+}
+
+// TestPeerRunLocalSetupError verifies that a setup error on one peer makes
+// [RunLocal] return an error that names that peer and wraps the setup error,
+// without waiting out the readiness bounds of the other peers.
+func TestPeerRunLocalSetupError(t *testing.T) {
+	captureDiag(t)
+	errSetup := errors.New("setup error")
+	w := pingWorkload(1)
+	setup := w.Setup
+	w.Setup = func(p *Peer) ([]Bench, error) {
+		if p.Server().NodeID() == 2 {
+			return nil, errSetup
+		}
+		return setup(p)
+	}
+	start := time.Now()
+	_, err := RunLocal(gorumstest.Context(t, 30*time.Second), 3, regexp.MustCompile("Ping"), w, pingOpts, localOpts(t, nil)...)
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("RunLocal took %v, want the setup error to end the run at once", elapsed)
+	}
+	if !errors.Is(err, errSetup) {
+		t.Fatalf("RunLocal error = %v, want it to wrap %v", err, errSetup)
+	}
+	if want := "node 2"; !strings.Contains(err.Error(), want) {
+		t.Errorf("RunLocal error = %q, want it to contain %q", err, want)
+	}
+}
+
+// TestPeerRunLocalIncompleteMesh verifies that [Peer.Run] fails at readiness
+// when one stream of the mesh never comes up: node 3 refuses the streams of
+// node 2.
+func TestPeerRunLocalIncompleteMesh(t *testing.T) {
+	captureDiag(t)
+	gate, _ := streamGate(2)
+	opts := append(localOpts(t, nil), gorums.WithLocalServerOptionsFunc(func(id gorums.ID) []gorums.ServerOption {
+		if id == 3 {
+			return []gorums.ServerOption{gate}
+		}
+		return nil
+	}))
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	_, err := RunLocal(ctx, 3, regexp.MustCompile("Ping"), pingWorkload(1), pingOpts, opts...)
+	if err == nil {
+		t.Fatal("RunLocal = nil error, want a readiness error")
+	}
+	for _, want := range []string{"peers not ready", "is missing peers [3]"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("RunLocal error = %q, want it to contain %q", err, want)
+		}
+	}
+}
+
+// TestPeerRunCanceledSkipsFinal verifies that [Peer.Run] returns the error of a
+// canceled context, instead of results, when the context ends during the wait
+// for the Done signals, and that it skips the final hook. Node 1 cancels the
+// run at the end of its benchmark, before it signals Done, so no peer can
+// receive every Done signal before the cancel.
+func TestPeerRunCanceledSkipsFinal(t *testing.T) {
+	ctx, cancel := context.WithCancel(gorumstest.Context(t, 30*time.Second))
+	defer cancel()
+	var finals atomic.Int32
+	w := pingWorkload(1)
+	setup := w.Setup
+	w.Setup = func(p *Peer) ([]Bench, error) {
+		benches, err := setup(p)
+		if err != nil || p.Server().NodeID() != 1 {
+			return benches, err
+		}
+		run := benches[0].Run
+		benches[0].Run = func(opts Options) (*Result, error) {
+			defer cancel()
+			return run(opts)
+		}
+		return benches, nil
+	}
+	w.Final = func(*Peer, []*Result) error {
+		finals.Add(1)
+		return nil
+	}
+	_, err := RunLocal(ctx, 3, regexp.MustCompile("Ping"), w, pingOpts, localOpts(t, nil)...)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("RunLocal error = %v, want it to wrap %v", err, context.Canceled)
+	}
+	if got := finals.Load(); got != 0 {
+		t.Errorf("final hook ran %d times, want 0", got)
+	}
+}
+
+// TestPeerRunLocalRejectsPeerCount verifies that [RunLocal] returns an error
+// for fewer than two peers.
+func TestPeerRunLocalRejectsPeerCount(t *testing.T) {
+	for _, n := range []int{-1, 0, 1} {
+		t.Run(fmt.Sprintf("n=%d", n), func(t *testing.T) {
+			results, err := RunLocal(t.Context(), n, regexp.MustCompile("Ping"), pingWorkload(1), pingOpts, localOpts(t, nil)...)
+			if err == nil {
+				t.Fatalf("RunLocal(%d) = %v, nil error; want an error", n, results)
+			}
+			if want := "at least 2 peers"; !strings.Contains(err.Error(), want) {
+				t.Errorf("RunLocal(%d) error = %q, want it to contain %q", n, err, want)
 			}
 		})
 	}

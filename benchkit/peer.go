@@ -2,13 +2,16 @@ package benchkit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
+	"regexp"
 	"runtime/pprof"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/relab/gorums"
@@ -87,12 +90,15 @@ func (p *Peer) selfAddr() string {
 // AwaitReady returns nil once every peer of p reports a connected stream to
 // each of its peers, as [AwaitMesh] checks it. The server of p must serve, and
 // every peer must run a [Control] service. A peer that does not answer fails
-// the check within the stall bound of [AwaitMesh]. On an error, AwaitReady
-// also writes a network self-diagnosis of this host to stderr: whether the
-// listener is reachable at the address of p, and a goroutine dump.
+// the check within the stall bound of [AwaitMesh]. On an error other than a
+// canceled ctx, AwaitReady also writes a network self-diagnosis of this host to
+// stderr: whether the listener is reachable at the address of p, and a
+// goroutine dump.
 func (p *Peer) AwaitReady(ctx context.Context) error {
 	if err := AwaitMesh(ctx, p.srv.PeerConfig()); err != nil {
-		diagnoseStall(diagWriter, p.srv, p.selfAddr())
+		if !errors.Is(err, context.Canceled) {
+			diagnoseStall(diagWriter, p.srv, p.selfAddr())
+		}
 		return fmt.Errorf("%s: peers not ready: %w", p, err)
 	}
 	Logf("[ready] %s: listening on %s, every peer connected\n", p, p.srv.Addr())
@@ -165,6 +171,114 @@ func (p *Peer) AwaitPeersDone(ctx context.Context) error {
 // peer before the process exits. Stop returns within one second.
 func (p *Peer) Stop() {
 	stopFlushed(p.srv, stopFlushBound)
+}
+
+// readyTimeout bounds the readiness check of [Peer.Run]. A large run that
+// still makes progress needs this much time; a dead peer fails the check
+// within the stall bound of [AwaitMesh].
+const readyTimeout = 2 * time.Minute
+
+// Workload holds the hooks of one workload for [Peer.Run].
+type Workload struct {
+	// Setup registers the services of the workload on the server of the peer
+	// and returns its benchmarks. Setup runs before the server serves.
+	Setup func(*Peer) ([]Bench, error)
+	// Final, if set, runs after every peer has signaled Done, or after the exit
+	// grace period, so it observes the requests of the peers on this server.
+	// It can change the results before [Peer.Run] returns them.
+	Final func(*Peer, []*Result) error
+}
+
+// Run runs the whole lifecycle of p for one benchmark run and returns the
+// results of the benchmarks of w that match sel. Run calls w.Setup, serves,
+// waits until the mesh of the run is complete (see [Peer.AwaitReady]), and runs
+// the benchmarks with [Run]. It then signals Done, waits for the Done signals
+// of its peers up to [ExitGrace] of the peer count, calls w.Final, and stops
+// the server (see [Peer.Stop]). Run stops the server on every return, and
+// returns at the first error of a step. When ctx ends during the wait for the
+// Done signals, Run returns an error that wraps ctx.Err() and skips w.Final.
+func (p *Peer) Run(ctx context.Context, sel *regexp.Regexp, w Workload, opts Options) ([]*Result, error) {
+	defer p.Stop()
+	benches, err := w.Setup(p)
+	if err != nil {
+		return nil, fmt.Errorf("%s: setup: %w", p, err)
+	}
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- p.srv.ListenAndServe() }()
+
+	readyCtx, cancel := context.WithTimeout(ctx, readyTimeout)
+	err = p.AwaitReady(readyCtx)
+	cancel()
+	if err != nil {
+		select {
+		case serr := <-serveErr:
+			return nil, errors.Join(err, fmt.Errorf("%s: serve: %w", p, serr))
+		default:
+			return nil, err
+		}
+	}
+
+	results, err := Run(sel, opts, benches)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", p, err)
+	}
+
+	grace := ExitGrace(p.srv.PeerConfig().Size())
+	Logf("[%s %s] benchmarks complete; signaling Done, waiting up to %v for peers\n", time.Now().Format(time.TimeOnly), p, grace)
+	p.SignalDone(ctx)
+	start := time.Now()
+	doneCtx, cancel := context.WithTimeout(ctx, grace)
+	err = p.AwaitPeersDone(doneCtx)
+	cancel()
+	switch {
+	case err != nil && ctx.Err() != nil:
+		return nil, fmt.Errorf("%s: %w", p, err)
+	case err != nil:
+		Logf("[%s %s] exit grace ended after %v: %v\n", time.Now().Format(time.TimeOnly), p, time.Since(start), err)
+	default:
+		Logf("[%s %s] all peers done after %v\n", time.Now().Format(time.TimeOnly), p, time.Since(start))
+	}
+
+	if w.Final != nil {
+		if err := w.Final(p, results); err != nil {
+			return nil, fmt.Errorf("%s: final: %w", p, err)
+		}
+	}
+	return results, nil
+}
+
+// RunLocal runs n peers in this process, each with [Peer.Run], and returns
+// the results of each peer, indexed by node ID - 1. The servers come from
+// [gorums.NewLocalServers], with the server options of opts and then localOpts.
+// n must be at least 2. RunLocal returns the errors of all peers, each naming
+// its peer. An error in one peer cancels the context of the others.
+func RunLocal(ctx context.Context, n int, sel *regexp.Regexp, w Workload, opts Options, localOpts ...gorums.LocalServerOption) ([][]*Result, error) {
+	if n < 2 {
+		return nil, fmt.Errorf("RunLocal needs at least 2 peers, got %d", n)
+	}
+	servers, stop, err := gorums.NewLocalServers(n,
+		append([]gorums.LocalServerOption{gorums.WithLocalServerOptions(opts.ServerOptions()...)}, localOpts...)...)
+	if err != nil {
+		return nil, err
+	}
+	defer stop()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	results := make([][]*Result, n)
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	for i, srv := range servers {
+		p := NewPeer(srv)
+		wg.Go(func() {
+			results[i], errs[i] = p.Run(ctx, sel, w, opts)
+			if errs[i] != nil {
+				cancel()
+			}
+		})
+	}
+	wg.Wait()
+	return results, errors.Join(errs...)
 }
 
 // stopFlushBound caps how long [Peer.Stop] waits for a graceful stop.
