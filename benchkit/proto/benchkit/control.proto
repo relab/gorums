@@ -38,13 +38,24 @@ message ClockSyncResponse {
 // it diagnoses a timeout.
 message DoneRequest {}
 
+// PeerViewRequest is an empty message for requesting a server's current
+// connected-peer view.
+message PeerViewRequest {}
+
+// PeerViewResponse carries a server's current connected-peer view.
+message PeerViewResponse {
+  // missing lists, in increasing order, the IDs of the configured peers whose
+  // streams with the server are not connected.
+  repeated uint32 missing = 1;
+}
+
 // The Result, Report, and MemoryStat data messages live in benchkit.proto, a
 // gorums-free file that consumers (e.g. sweep) can compile standalone without
 // pulling in gorums.proto. The Stop RPC below returns benchkit.Result.
 
 // Control is the protocol-neutral measurement control plane. Any gorums-based
 // protocol embeds it alongside its own workload service on the same listener.
-// The four RPCs never reference a workload, so they are shared by every
+// The RPCs never reference a workload, so they are shared by every
 // protocol that benchkit measures.
 service Control {
   // Start resets the server-side op counter and Stats baseline.
@@ -72,5 +83,13 @@ service Control {
   // benchmark.AwaitPeersDoneOrGrace.
   rpc Done(DoneRequest) returns (google.protobuf.Empty) {
     option (gorums.multicast) = true;
+  }
+
+  // PeerView returns the server's current connected-peer view: the configured
+  // peers whose streams with the server are not connected. A caller uses it to
+  // check, before a run starts, that every peer has streams to all of its own
+  // peers. See benchkit.AwaitMesh.
+  rpc PeerView(PeerViewRequest) returns (PeerViewResponse) {
+    option (gorums.quorumcall) = true;
   }
 }
