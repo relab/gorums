@@ -479,6 +479,18 @@ func (ctx *ServerContext) PeerConfig() Config {
 	return ctx.srv.PeerConfig()
 }
 
+// ConnectedPeers returns the subset of [ServerContext.PeerConfig] whose peers
+// are currently connected. A peer is connected while this server has an open
+// stream on which it can call that peer. The configuration always includes the
+// local node, and it equals [ServerContext.PeerConfig] when all peers are
+// connected. A returned configuration remains valid across connectivity changes.
+func (ctx *ServerContext) ConnectedPeers() Config {
+	if ctx.srv == nil {
+		return nil
+	}
+	return ctx.srv.ConnectedPeers()
+}
+
 // ConnectedClients returns a [Config] of the clients currently connected to
 // this server that can receive back-channel calls. An empty (non-nil)
 // configuration is returned when no clients are connected. A returned

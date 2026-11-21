@@ -477,6 +477,51 @@ func TestServerConnectedPeersDropsStoppedPeer(t *testing.T) {
 	}
 }
 
+// TestServerContextConnectedPeers verifies that a handler reads the server's
+// current connected-peer view through ServerContext.ConnectedPeers, and that
+// the view drops a stopped peer.
+func TestServerContextConnectedPeers(t *testing.T) {
+	servers := gorumstest.LocalServers(t, 3)
+	views := make(chan []uint32, len(servers))
+	for _, srv := range servers {
+		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) error {
+			ids := ctx.ConnectedPeers().NodeIDs()
+			slices.Sort(ids)
+			views <- ids
+			return nil
+		})
+	}
+	gorumstest.WaitForPeers(t, servers)
+
+	// checkViews multicasts to cfg and checks that each receiver's handler
+	// sees the connected peers want.
+	checkViews := func(cfg gorums.Config, want []uint32) {
+		t.Helper()
+		mockcall.MustMulticast(t, gorumstest.Context(t, 2*time.Second), cfg, "view")
+		for range cfg.Size() {
+			select {
+			case got := <-views:
+				if !slices.Equal(got, want) {
+					t.Errorf("ServerContext.ConnectedPeers() = %v, want %v", got, want)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("timeout waiting for a handler to read its view")
+			}
+		}
+	}
+	checkViews(servers[0].PeerConfig(), []uint32{1, 2, 3})
+
+	servers[2].Stop()
+	for _, srv := range servers[:2] {
+		if err := srv.WaitForPeers(gorumstest.Context(t, 5*time.Second), func(cfg gorums.Config) bool {
+			return !cfg.Contains(3)
+		}); err != nil {
+			t.Fatalf("server %d still lists stopped peer 3: %v", srv.NodeID(), err)
+		}
+	}
+	checkViews(servers[0].PeerConfig().Remove(3), []uint32{1, 2})
+}
+
 // waitWithTimeout waits for wg to reach zero or calls t.Fatal if the timeout elapses.
 func waitWithTimeout(t *testing.T, wg *sync.WaitGroup) {
 	t.Helper()
