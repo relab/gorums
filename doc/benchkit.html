@@ -881,17 +881,19 @@
 
         <p>A benchmark is a named, runnable <code>Bench</code>. The harness <code>Run</code> stamps the shared run
             metadata (<code>RunConfig</code>) onto each returned <code>Result</code>, so a <code>Bench.Run</code>
-            closure only fills in the measured fields.</p>
+            closure only fills in the measured fields.
+            Each <code>Bench.Run</code> derives its context from the <code>ctx</code> it receives, so a cancel of the
+            run ends the running benchmark.</p>
         <pre>
 <span class="k">type</span> Bench <span class="k">struct</span> {
     Name        string
     Description string
-    Run         <span class="k">func</span>(Options) (*Result, error)
+    Run         <span class="k">func</span>(context.Context, Options) (*Result, error)
 }
 
-<span class="c">// Run selects benches matching sel, runs each with opts, stamps RunConfig
-// metadata, and returns results sorted by benchmark name.</span>
-<span class="k">func</span> Run(sel *regexp.Regexp, opts Options, benches []Bench) ([]*Result, error)</pre>
+<span class="c">// Run runs the benches whose names match sel, with opts, and returns their
+// results sorted by name, each stamped with RunConfig metadata.</span>
+<span class="k">func</span> Run(ctx context.Context, sel *regexp.Regexp, benches []Bench, opts Options) ([]*Result, error)</pre>
 
         <h3>The <code>Measurement</code> lifecycle helper</h3>
         <p>Every runner wires up observability through one helper
@@ -1062,7 +1064,8 @@ results, err := p.Run(ctx, sel, w, opts)
                 <em>maximum</em> <code>total_time</code> across servers — the measurement window's wall-clock time, not
                 a sum.</dd>
             <dt><code>BenchContext</code></dt>
-            <dd>A context bounded by <code>Duration + benchSlack</code> so a stuck RPC fails rather than hangs.</dd>
+            <dd>A context derived from the run's <code>ctx</code> and bounded by <code>Duration + benchSlack</code>, so
+                a stuck RPC fails rather than hangs.</dd>
             <dt><code>CollectReplies</code></dt>
             <dd>Drains a <code>ResponseSeq</code> into a per-node map, joining every node's error rather than dropping
                 failures.</dd>

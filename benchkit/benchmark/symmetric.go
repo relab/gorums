@@ -127,8 +127,8 @@ func flushSymmetricOutbound(ctx context.Context, t *SymmetricTarget) error {
 // throughput in a symmetric (peer-to-peer) topology. Each server issues
 // QuorumCall RPCs to its outbound peers; the client side measures latency.
 // quorumSize defaults to a majority of the outbound peer count.
-func runSymmetricQuorumCall(t *SymmetricTarget, opts benchkit.Options) (*benchkit.Result, error) {
-	ctx, cancel := benchkit.BenchContext(opts)
+func runSymmetricQuorumCall(ctx context.Context, t *SymmetricTarget, opts benchkit.Options) (*benchkit.Result, error) {
+	ctx, cancel := benchkit.BenchContext(ctx, opts)
 	defer cancel()
 
 	// Yield each server's outbound configuration so MeasureLatency drives one
@@ -180,8 +180,8 @@ func runSymmetricQuorumCall(t *SymmetricTarget, opts benchkit.Options) (*benchki
 // one-way latency in a symmetric topology. Each server sends Multicast RPCs
 // to its outbound peers; the server side measures latency via TimedMsg.SendTime.
 // Throughput is reported as total sends per second across all servers.
-func runSymmetricMulticast(t *SymmetricTarget, opts benchkit.Options) (*benchkit.Result, error) {
-	ctx, cancel := benchkit.BenchContext(opts)
+func runSymmetricMulticast(ctx context.Context, t *SymmetricTarget, opts benchkit.Options) (*benchkit.Result, error) {
+	ctx, cancel := benchkit.BenchContext(ctx, opts)
 	defer cancel()
 
 	payload := make([]byte, opts.Payload)

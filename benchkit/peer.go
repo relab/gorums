@@ -218,7 +218,7 @@ func (p *Peer) Run(ctx context.Context, sel *regexp.Regexp, w Workload, opts Opt
 		}
 	}
 
-	results, err := Run(sel, opts, benches)
+	results, err := Run(ctx, sel, benches, opts)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", p, err)
 	}

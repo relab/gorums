@@ -612,11 +612,11 @@ func TestRunRejectsInvalidOptions(t *testing.T) {
 	opts := validOptions()
 	opts.Workers = 0
 	var ran bool
-	benches := []Bench{{Name: "Bench", Run: func(Options) (*Result, error) {
+	benches := []Bench{{Name: "Bench", Run: func(context.Context, Options) (*Result, error) {
 		ran = true
 		return &Result{}, nil
 	}}}
-	_, err := Run(regexp.MustCompile(".*"), opts, benches)
+	_, err := Run(t.Context(), regexp.MustCompile(".*"), benches, opts)
 	if err == nil {
 		t.Fatal("Run with invalid options = nil error, want error")
 	}
@@ -625,14 +625,38 @@ func TestRunRejectsInvalidOptions(t *testing.T) {
 	}
 }
 
+// TestRunCanceled verifies that [Run] passes its context to each benchmark, so
+// a cancel ends a running benchmark at once, and that Run then returns an error
+// that wraps the cancel.
+func TestRunCanceled(t *testing.T) {
+	opts := validOptions()
+	opts.Duration = time.Minute
+	ctx, cancel := context.WithCancel(t.Context())
+	benches := []Bench{{Name: "Bench", Run: func(ctx context.Context, opts Options) (*Result, error) {
+		benchCtx, benchCancel := BenchContext(ctx, opts)
+		defer benchCancel()
+		cancel()
+		<-benchCtx.Done()
+		return &Result{}, nil
+	}}}
+	start := time.Now()
+	_, err := Run(ctx, regexp.MustCompile(".*"), benches, opts)
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("Run took %v, want the cancel to end the benchmark at once", elapsed)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run error = %v, want it to wrap %v", err, context.Canceled)
+	}
+}
+
 // TestRunNoMatchingBenchmark verifies that a selector matching no benchmark
 // fails instead of returning an empty, successful result set — a selector
 // typo should not look like a clean zero-benchmark run.
 func TestRunNoMatchingBenchmark(t *testing.T) {
-	benches := []Bench{{Name: "QuorumCall", Run: func(Options) (*Result, error) {
+	benches := []Bench{{Name: "QuorumCall", Run: func(context.Context, Options) (*Result, error) {
 		return &Result{}, nil
 	}}}
-	_, err := Run(regexp.MustCompile("^NoSuchBenchmark$"), validOptions(), benches)
+	_, err := Run(t.Context(), regexp.MustCompile("^NoSuchBenchmark$"), benches, validOptions())
 	if err == nil {
 		t.Fatal("Run with no matching benchmark = nil error, want error")
 	}
@@ -659,8 +683,8 @@ func TestRunStampsFullConfig(t *testing.T) {
 		NumNodes:    4,
 		Remote:      true,
 	}
-	benches := []Bench{{Name: "Bench", Run: func(Options) (*Result, error) { return &Result{}, nil }}}
-	results, err := Run(regexp.MustCompile(".*"), opts, benches)
+	benches := []Bench{{Name: "Bench", Run: func(context.Context, Options) (*Result, error) { return &Result{}, nil }}}
+	results, err := Run(t.Context(), regexp.MustCompile(".*"), benches, opts)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -706,7 +730,7 @@ func TestClientMeasuredCountsErrorsWithoutAborting(t *testing.T) {
 			}
 			return nil
 		}))
-	result, err := run(Options{Workers: 1, Duration: 30 * time.Millisecond})
+	result, err := run(t.Context(), Options{Workers: 1, Duration: 30 * time.Millisecond})
 	if err != nil {
 		t.Fatalf("run aborted on op error: %v", err)
 	}
@@ -736,7 +760,7 @@ func TestClientMeasuredQuiesce(t *testing.T) {
 			return nil
 		}))
 
-	result, err := run(Options{Workers: 2, Duration: 20 * time.Millisecond})
+	result, err := run(t.Context(), Options{Workers: 2, Duration: 20 * time.Millisecond})
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -755,7 +779,7 @@ func TestClientMeasuredQuiesce(t *testing.T) {
 	failing := ClientMeasured(gorumstest.UnreachableConfig(t),
 		setupOp(func() error { return nil }),
 		WithQuiesce(func(context.Context) error { return errDrain }))
-	if _, err := failing(Options{Workers: 1, Duration: time.Millisecond}); !errors.Is(err, errDrain) {
+	if _, err := failing(t.Context(), Options{Workers: 1, Duration: time.Millisecond}); !errors.Is(err, errDrain) {
 		t.Errorf("run with failing quiesce = %v, want %v", err, errDrain)
 	}
 }
@@ -773,7 +797,7 @@ func TestClientMeasuredVerify(t *testing.T) {
 			gotReplies = replies
 			return nil
 		}))
-	if _, err := run(Options{Workers: 1, Duration: time.Millisecond}); err != nil {
+	if _, err := run(t.Context(), Options{Workers: 1, Duration: time.Millisecond}); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	if verifyCalls != 1 {
@@ -786,7 +810,7 @@ func TestClientMeasuredVerify(t *testing.T) {
 	errVerify := errors.New("ops diverged")
 	failing := ClientMeasured(gorumstest.UnreachableConfig(t), setup,
 		WithVerify(func(map[uint32]*Result) error { return errVerify }))
-	if _, err := failing(Options{Workers: 1, Duration: time.Millisecond}); !errors.Is(err, errVerify) {
+	if _, err := failing(t.Context(), Options{Workers: 1, Duration: time.Millisecond}); !errors.Is(err, errVerify) {
 		t.Errorf("run with failing verify = %v, want %v", err, errVerify)
 	}
 }

@@ -73,11 +73,11 @@ func asyncQCComplete(err error, elapsed time.Duration, m *benchkit.Measurement) 
 // [benchkit.ClientMeasured]. A failed call is counted without aborting the run,
 // [benchkit.ErrRunOver] ends it cleanly, and a paced run that falls behind its
 // offered-load schedule warns on stderr.
-func runAsyncQCBenchmark(opts benchkit.Options, config Config, f asyncQCFunc) (*benchkit.Result, error) {
+func runAsyncQCBenchmark(ctx context.Context, opts benchkit.Options, config Config, f asyncQCFunc) (*benchkit.Result, error) {
 	if opts.RateStep > 0 || opts.RateStepMax > 0 {
 		return nil, fmt.Errorf("benchmark %q: %w", opts.BenchName, errAsyncQCRampUnsupported)
 	}
-	ctx, cancel := benchkit.BenchContext(opts)
+	ctx, cancel := benchkit.BenchContext(ctx, opts)
 	defer cancel()
 	client := NewBenchmarkClient(config)
 	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
@@ -238,7 +238,7 @@ type benchDesc struct {
 	Name        string
 	Description string
 	Needs       targetNeeds
-	build       func(cfg Config, sym *SymmetricTarget) func(benchkit.Options) (*benchkit.Result, error)
+	build       func(cfg Config, sym *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error)
 }
 
 // benchDescs lists every known benchmark. Traditional benchmarks (needsConfig)
@@ -250,7 +250,7 @@ var benchDescs = []benchDesc{
 		Name:        "QuorumCall",
 		Description: "NodeStream based quorum call implementation with FIFO ordering",
 		Needs:       needsConfig,
-		build: func(cfg Config, _ *SymmetricTarget) func(benchkit.Options) (*benchkit.Result, error) {
+		build: func(cfg Config, _ *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error) {
 			return benchkit.ClientMeasured(cfg, func(ctx context.Context, cfg Config, opts benchkit.Options) func() error {
 				client := NewBenchmarkClient(cfg)
 				msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
@@ -276,9 +276,9 @@ var benchDescs = []benchDesc{
 		Name:        "AsyncQuorumCall",
 		Description: "NodeStream based async quorum call implementation with FIFO ordering",
 		Needs:       needsConfig,
-		build: func(cfg Config, _ *SymmetricTarget) func(benchkit.Options) (*benchkit.Result, error) {
-			return func(opts benchkit.Options) (*benchkit.Result, error) {
-				return runAsyncQCBenchmark(opts, cfg, asyncThreshold)
+		build: func(cfg Config, _ *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error) {
+			return func(ctx context.Context, opts benchkit.Options) (*benchkit.Result, error) {
+				return runAsyncQCBenchmark(ctx, opts, cfg, asyncThreshold)
 			}
 		},
 	},
@@ -286,7 +286,7 @@ var benchDescs = []benchDesc{
 		Name:        "SlowServer",
 		Description: "Quorum Call with a 10ms processing time on the server",
 		Needs:       needsConfig,
-		build: func(cfg Config, _ *SymmetricTarget) func(benchkit.Options) (*benchkit.Result, error) {
+		build: func(cfg Config, _ *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error) {
 			return benchkit.ClientMeasured(cfg, func(ctx context.Context, cfg Config, opts benchkit.Options) func() error {
 				client := NewBenchmarkClient(cfg)
 				msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
@@ -301,7 +301,7 @@ var benchDescs = []benchDesc{
 		Name:        "Multicast",
 		Description: "NodeStream based multicast implementation (servers measure latency and throughput)",
 		Needs:       needsConfig,
-		build: func(cfg Config, _ *SymmetricTarget) func(benchkit.Options) (*benchkit.Result, error) {
+		build: func(cfg Config, _ *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error) {
 			return benchkit.ServerMeasured(cfg, func(ctx context.Context, cfg Config, opts benchkit.Options) func() error {
 				client := NewBenchmarkClient(cfg)
 				payload := make([]byte, opts.Payload)
@@ -316,7 +316,7 @@ var benchDescs = []benchDesc{
 		Name:        "AsyncMulticast",
 		Description: "Multicast pipelined with Async, up to -max-async sends outstanding (servers measure latency and throughput)",
 		Needs:       needsConfig,
-		build: func(cfg Config, _ *SymmetricTarget) func(benchkit.Options) (*benchkit.Result, error) {
+		build: func(cfg Config, _ *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error) {
 			// outstanding is rebound by setup on every run and drained by the
 			// quiesce hook after that run's send window; both run on the run
 			// goroutine, in that order.
@@ -340,9 +340,9 @@ var benchDescs = []benchDesc{
 		Name:        "SymmetricQuorumCall",
 		Description: "Peer-to-peer quorum call benchmark; each node is both client and server",
 		Needs:       needsSymmetric,
-		build: func(_ Config, sym *SymmetricTarget) func(benchkit.Options) (*benchkit.Result, error) {
-			return func(opts benchkit.Options) (*benchkit.Result, error) {
-				return runSymmetricQuorumCall(sym, opts)
+		build: func(_ Config, sym *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error) {
+			return func(ctx context.Context, opts benchkit.Options) (*benchkit.Result, error) {
+				return runSymmetricQuorumCall(ctx, sym, opts)
 			}
 		},
 	},
@@ -350,9 +350,9 @@ var benchDescs = []benchDesc{
 		Name:        "SymmetricMulticast",
 		Description: "Peer-to-peer multicast benchmark; servers measure one-way latency",
 		Needs:       needsSymmetric,
-		build: func(_ Config, sym *SymmetricTarget) func(benchkit.Options) (*benchkit.Result, error) {
-			return func(opts benchkit.Options) (*benchkit.Result, error) {
-				return runSymmetricMulticast(sym, opts)
+		build: func(_ Config, sym *SymmetricTarget) func(context.Context, benchkit.Options) (*benchkit.Result, error) {
+			return func(ctx context.Context, opts benchkit.Options) (*benchkit.Result, error) {
+				return runSymmetricMulticast(ctx, sym, opts)
 			}
 		},
 	},
@@ -417,7 +417,7 @@ func benchmarks(t Target) []benchkit.Bench {
 
 // Run runs all the benchmarks that match the given regex with the
 // given options against the target, delegating selection, the per-benchmark
-// metadata, and ordering to the benchkit harness.
-func Run(benchRegex *regexp.Regexp, opts benchkit.Options, t Target) ([]*benchkit.Result, error) {
-	return benchkit.Run(benchRegex, opts, benchmarks(t))
+// metadata, and ordering to the benchkit harness (see [benchkit.Run]).
+func Run(ctx context.Context, benchRegex *regexp.Regexp, t Target, opts benchkit.Options) ([]*benchkit.Result, error) {
+	return benchkit.Run(ctx, benchRegex, benchmarks(t), opts)
 }
