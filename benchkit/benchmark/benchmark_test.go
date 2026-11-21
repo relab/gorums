@@ -76,7 +76,7 @@ func TestBenchmarksTargetRouting(t *testing.T) {
 // concurrent per-node execution, are safe here.
 func TestBenchmarksExcludesConfigBenchmarksForDistributedTarget(t *testing.T) {
 	peers := []string{"127.0.0.1:0", "127.0.0.2:0"}
-	target, stop, err := setupRemoteServer(peers[0], peers, nil, gorumstest.InsecureDialOptions(t))
+	target, stop, err := setupRemoteServer(peers[0], peers, benchkit.Options{}, gorumstest.InsecureDialOptions(t))
 	if err != nil {
 		t.Fatalf("setupRemoteServer: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestAsyncQCBoundsInFlight(t *testing.T) {
 		peak        int
 	)
 	opts := benchkit.Options{Workers: 2, MaxAsync: maxAsync, Duration: 2 * time.Second, QuorumSize: 2}
-	res, err := runAsyncQCBenchmark(opts, target.servers[0].PeerConfig(),
+	res, err := runAsyncQCBenchmark(opts, target.peers[0].Server().PeerConfig(),
 		func(ctx context.Context, client BenchmarkClient, in *Echo, quorumSize int) func() error {
 			wait := asyncThreshold(ctx, client, in, quorumSize)
 			mu.Lock()
@@ -326,7 +326,7 @@ func TestAsyncSendsPipelinesAndDrains(t *testing.T) {
 	if err := awaitReady(ctx, target); err != nil {
 		t.Fatalf("awaitReady: %v", err)
 	}
-	client := NewBenchmarkClient(target.servers[0].PeerConfig())
+	client := NewBenchmarkClient(target.peers[0].Server().PeerConfig())
 
 	const depth = 4
 	outstanding := newAsyncSends(depth)
@@ -490,7 +490,7 @@ func TestAsyncMulticastBenchmarkRuns(t *testing.T) {
 		t.Fatalf("awaitReady: %v", err)
 	}
 
-	benches := benchmarks(Target{Config: target.servers[0].PeerConfig()})
+	benches := benchmarks(Target{Config: target.peers[0].Server().PeerConfig()})
 	idx := slices.IndexFunc(benches, func(b benchkit.Bench) bool { return b.Name == "AsyncMulticast" })
 	if idx < 0 {
 		t.Fatal("AsyncMulticast benchmark not registered")
@@ -522,9 +522,9 @@ func TestServerMeasuredMulticastHDR(t *testing.T) {
 	// The coordinator is a regular client, whose SenderID is 0, so the servers
 	// record into the flat samples that Stop returns. A peer's configuration
 	// would record into per-sender buckets that only a clock-corrected result reads.
-	addrs := make([]string, len(target.servers))
-	for i, srv := range target.servers {
-		addrs[i] = srv.Addr()
+	addrs := make([]string, len(target.peers))
+	for i, p := range target.peers {
+		addrs[i] = p.Server().Addr()
 	}
 	cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs), gorumstest.InsecureDialOptions(t))
 	if err != nil {
@@ -569,7 +569,7 @@ func TestServerMeasuredQuiesce(t *testing.T) {
 	}
 
 	quiesceCalls := 0
-	run := benchkit.ServerMeasured(target.servers[0].PeerConfig(),
+	run := benchkit.ServerMeasured(target.peers[0].Server().PeerConfig(),
 		func(ctx context.Context, cfg Config, _ benchkit.Options) func() error {
 			client := NewBenchmarkClient(cfg)
 			return func() error {
@@ -615,7 +615,7 @@ func TestServerMeasuredVerify(t *testing.T) {
 	}
 
 	var gotNodes int
-	run := benchkit.ServerMeasured(target.servers[0].PeerConfig(), setup,
+	run := benchkit.ServerMeasured(target.peers[0].Server().PeerConfig(), setup,
 		benchkit.WithVerify(func(replies map[uint32]*benchkit.Result) error {
 			gotNodes = len(replies)
 			return nil
@@ -628,7 +628,7 @@ func TestServerMeasuredVerify(t *testing.T) {
 	}
 
 	errVerify := errors.New("per-server ops diverged")
-	failing := benchkit.ServerMeasured(target.servers[0].PeerConfig(), setup,
+	failing := benchkit.ServerMeasured(target.peers[0].Server().PeerConfig(), setup,
 		benchkit.WithVerify(func(map[uint32]*benchkit.Result) error { return errVerify }))
 	if _, err := failing(benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond}); !errors.Is(err, errVerify) {
 		t.Errorf("run with failing verify = %v, want %v", err, errVerify)
@@ -669,7 +669,7 @@ func TestServerMeasuredWindowExcludesClockSync(t *testing.T) {
 		}
 	}
 
-	run := benchkit.ServerMeasured(target.servers[0].PeerConfig(), setup)
+	run := benchkit.ServerMeasured(target.peers[0].Server().PeerConfig(), setup)
 	result, err := run(benchkit.Options{Workers: 1, Duration: 20 * time.Millisecond, Interval: 5 * time.Millisecond})
 	if err != nil {
 		t.Fatalf("run: %v", err)

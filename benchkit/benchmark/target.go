@@ -22,8 +22,9 @@ import (
 //
 // It returns the target and a cleanup function the caller must invoke (e.g.
 // defer) once the benchmarks finish. In distributed mode the caller must also
-// linger for ExitGrace before invoking cleanup, so slower peers can finish
-// their trailing cross-node RPCs before this node closes its listener.
+// wait for the Done signals of the peers (see [SignalDone] and
+// [AwaitPeersDone]) before invoking cleanup, so slower peers can finish their
+// trailing cross-node RPCs before this node closes its listener.
 func SetupTarget(opts *benchkit.Options, self string, remotes []string, configSize int, dialOpts ...gorums.DialOption) (Target, func(), error) {
 	switch {
 	case self != "":
@@ -45,26 +46,13 @@ func setupDistributed(opts *benchkit.Options, self string, remotes []string, dia
 	opts.Remote = true
 	opts.NumNodes = len(remotes)
 
-	symTarget, symStop, err := setupRemoteServer(self, remotes, opts.ServerOptions(), dialOpts...)
+	symTarget, symStop, err := setupRemoteServer(self, remotes, *opts, dialOpts...)
 	if err != nil {
 		return target, nil, fmt.Errorf("remote server setup: %w", err)
 	}
-
-	// In dedup mode, wait for every shared stream to be live first, so the
-	// probe below exercises the shared topology instead of failing fast with
-	// ErrStreamDown for lower-ID peers that have not yet connected.
-	if opts.StreamMode == "dedup" {
-		dedupCtx, dedupCancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		err := awaitStreamDedup(dedupCtx, symTarget)
-		dedupCancel()
-		if err != nil {
-			symStop()
-			return target, nil, err
-		}
-	}
 	// The deadline is only an upper bound for very large clusters that are
-	// still making progress; a dead peer is detected within readyStallTimeout
-	// by the probe's stall check.
+	// still making progress; the readiness check fails within its stall bound
+	// when a peer is dead.
 	readyCtx, readyCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer readyCancel()
 	if err := awaitReady(readyCtx, symTarget); err != nil {
@@ -91,18 +79,6 @@ func setupLocal(opts *benchkit.Options, configSize int, dialOpts []gorums.DialOp
 		return target, nil, fmt.Errorf("symmetric servers setup: %w", err)
 	}
 
-	// In dedup mode, wait for every shared stream to be live first, so the
-	// probe below exercises the shared topology instead of failing fast with
-	// ErrStreamDown for lower-ID peers that have not yet connected.
-	if opts.StreamMode == "dedup" {
-		dedupCtx, dedupCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		err := awaitStreamDedup(dedupCtx, symTarget)
-		dedupCancel()
-		if err != nil {
-			symStop()
-			return target, nil, err
-		}
-	}
 	readyCtx, readyCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer readyCancel()
 	if err := awaitReady(readyCtx, symTarget); err != nil {
@@ -112,15 +88,6 @@ func setupLocal(opts *benchkit.Options, configSize int, dialOpts []gorums.DialOp
 
 	target.Symmetric = symTarget
 	return target, symStop, nil
-}
-
-func awaitStreamDedup(ctx context.Context, t *SymmetricTarget) error {
-	for i, srv := range t.servers {
-		if _, err := srv.WaitForAll(ctx); err != nil {
-			return fmt.Errorf("%s: stream dedup setup: %w", t.label(i), err)
-		}
-	}
-	return nil
 }
 
 // setupCoordinator builds the traditional coordinator-side configuration

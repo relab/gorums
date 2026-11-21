@@ -1,7 +1,6 @@
 package benchmark
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -111,52 +110,6 @@ func TestDualReconnectsDroppedIdleStream(t *testing.T) {
 	// self-initiated reconnect the observer has lost the peer for good.
 	if err := observer.WaitForPeers(ctx, hasPeer); err != nil {
 		t.Fatalf("did not reconnect the dropped idle stream: %v", err)
-	}
-}
-
-// TestDedupSetupProbesSharedTopology verifies that the setup sequence
-// setupDistributed/setupLocal use in dedup mode — the dedup wait
-// (awaitStreamDedup, which calls Server.WaitForAll), then the outbound
-// probe — leaves every lower-ID outbound peer backed by its live shared
-// inbound stream before the probe runs, and that the probe then succeeds
-// against that shared topology. Probing before the dedup wait would fail
-// fast with ErrStreamDown for any lower-ID peer that has not yet connected.
-func TestDedupSetupProbesSharedTopology(t *testing.T) {
-	targets := localSymmetricTargets(t, 3, gorums.WithStreamDedup())
-
-	// One ctx is shared across the sequential dedup-wait and probe steps
-	// below. Setup is in-process over kept-open listeners, so it completes in
-	// milliseconds; the timeout only bounds a genuinely stuck peer.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Step 1: the dedup wait, exactly as setupDistributed does before probing.
-	for _, target := range targets {
-		if err := awaitStreamDedup(ctx, target); err != nil {
-			t.Fatalf("awaitStreamDedup: %v", err)
-		}
-	}
-
-	// By the time the probe runs, every peer with a lower ID than node 3
-	// must be a shared node backed by a live inbound stream.
-	srv3 := targets[2].servers[0]
-	for _, node := range srv3.PeerConfig() {
-		if node.ID() >= 3 {
-			continue
-		}
-		if node.IsOutbound() {
-			t.Errorf("node %d: IsOutbound() = true, want false (expected a shared inbound stream before the probe)", node.ID())
-		}
-		if !node.IsInbound() {
-			t.Errorf("node %d: IsInbound() = false, want true (expected a shared inbound stream before the probe)", node.ID())
-		}
-	}
-
-	// Step 2: the probe must succeed against that shared topology.
-	for _, target := range targets {
-		if err := awaitReady(ctx, target); err != nil {
-			t.Fatalf("awaitReady: %v", err)
-		}
 	}
 }
 

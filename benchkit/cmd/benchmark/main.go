@@ -188,23 +188,26 @@ func main() {
 	f.report(results, opts)
 
 	// In distributed mode the symmetric topology has no exit barrier: signal
-	// peers that this node is done, then race that signal against a grace
+	// peers that this node is done, then wait for their signals up to a grace
 	// deadline (deferred cleanup happens once one of the two resolves). See
-	// benchmark.ExitGrace and benchmark.AwaitPeersDoneOrGrace.
+	// benchkit.ExitGrace and benchmark.AwaitPeersDone.
 	if f.Self != "" {
 		nodeLabel := f.label
 		if nodeLabel == "" {
 			nodeLabel = f.Self
 		}
-		grace := benchmark.ExitGrace(opts.NumNodes)
+		grace := benchkit.ExitGrace(opts.NumNodes)
 		benchkit.Logf("[%s %s] Benchmark complete; signaling done, waiting up to %v for peers...\n", time.Now().Format(time.TimeOnly), nodeLabel, grace)
 		benchmark.SignalDone(context.Background(), target.Symmetric)
 		waitStart := time.Now()
-		if benchmark.AwaitPeersDoneOrGrace(context.Background(), target.Symmetric, grace) {
+		ctx, cancel := context.WithTimeout(context.Background(), grace)
+		err := benchmark.AwaitPeersDone(ctx, target.Symmetric)
+		cancel()
+		if err == nil {
 			benchkit.Logf("[%s %s] All peers done after %v; exiting early.\n", time.Now().Format(time.TimeOnly), nodeLabel, time.Since(waitStart))
 		} else {
-			benchkit.Logf("[%s %s] Grace exhausted after %v; missing done from node(s) %v; exiting anyway.\n",
-				time.Now().Format(time.TimeOnly), nodeLabel, time.Since(waitStart), benchmark.MissingDoneSenders(target.Symmetric))
+			benchkit.Logf("[%s %s] Grace exhausted after %v: %v; exiting anyway.\n",
+				time.Now().Format(time.TimeOnly), nodeLabel, time.Since(waitStart), err)
 		}
 	}
 }
