@@ -37,15 +37,22 @@ var ErrNodeClosed = stream.ErrNodeClosed
 // ErrNoNode is the error of a remote call or unicast on a nil node.
 // It is a gRPC status error with the InvalidArgument code; test for it with
 // [errors.Is]. The InvalidArgument code alone does not tell it apart from
-// [ErrEmptyConfig].
+// [ErrEmptyConfig] or [ErrScatterCount].
 var ErrNoNode = impl.ErrNoNode
 
 // ErrEmptyConfig is the error of a quorum call or multicast on an empty
 // configuration, such as one that [Config.Remove] or [Config.WithoutErrors]
 // emptied. It is a gRPC status error with the InvalidArgument code; test for
 // it with [errors.Is]. The InvalidArgument code alone does not tell it apart
-// from [ErrNoNode].
+// from [ErrNoNode] or [ErrScatterCount].
 var ErrEmptyConfig = impl.ErrEmptyConfig
+
+// ErrScatterCount is the error of a scatter call whose number of requests
+// differs from the size of its configuration; the call sends nothing. It is a
+// gRPC status error with the InvalidArgument code; test for it with
+// [errors.Is]. The InvalidArgument code alone does not tell it apart from
+// [ErrNoNode] or [ErrEmptyConfig].
+var ErrScatterCount = impl.ErrScatterCount
 
 // ErrSendQueueFull is the error of a request that a node cannot admit because
 // its send queue is full; see [WithDialBufferSizes]. It is a gRPC status error
@@ -58,7 +65,9 @@ var ErrSendQueueFull = stream.ErrSendQueueFull
 // its stream.
 var ErrSendStalled = stream.ErrSendStalled
 
-// ErrSkipNode is returned when a node is skipped by request transformations.
+// ErrSkipNode is returned for a node that a call skips: a request transform
+// returned nil or an invalid message for it, or a scatter call has a nil
+// request for it.
 // This allows the response iterator to account for all nodes without blocking.
 var ErrSkipNode = impl.ErrSkipNode
 

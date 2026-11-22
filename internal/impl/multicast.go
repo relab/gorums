@@ -16,8 +16,20 @@ func Multicast[Req proto.Message](ctx context.Context, config Config, req Req, m
 		method:  method,
 		oneway:  true,
 	}
-	if len(config) == 0 {
-		callCtx.err = ErrEmptyConfig
+	callCtx.err = callCtx.configError()
+	return &OnewayCall[Req]{ctx: callCtx}
+}
+
+// MulticastScatter is exported and documented as gorumsimpl.MulticastScatter.
+func MulticastScatter[Req proto.Message](ctx context.Context, config Config, reqs []Req, method string) *OnewayCall[Req] {
+	callCtx := &CallContext[Req, *emptypb.Empty]{
+		Context:  ctx,
+		config:   config,
+		requests: reqs,
+		scatter:  true,
+		method:   method,
+		oneway:   true,
 	}
+	callCtx.err = callCtx.configError()
 	return &OnewayCall[Req]{ctx: callCtx}
 }

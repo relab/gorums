@@ -98,8 +98,9 @@ func (r *Responses[Resp]) Size() int {
 // Results returns a single-use sequence that yields responses as they arrive.
 // Iteration dispatches the call and ends after every node responds or the
 // context is canceled. On an empty configuration, the sequence yields one
-// response whose Err is [ErrEmptyConfig]. Calling [Call.Intercept] after
-// Results panics.
+// response whose Err is [ErrEmptyConfig]; for a scatter call whose request
+// count differs from the configuration size, it yields one response whose Err
+// is [ErrScatterCount]. Calling [Call.Intercept] after Results panics.
 func (r *Responses[Resp]) Results() ResponseSeq[Resp] {
 	r.markDispatched()
 	return r.seq
@@ -146,8 +147,8 @@ func (r *Responses[Resp]) All() (resp Resp, err error) {
 
 // Threshold waits for a threshold number of successful responses.
 // It returns the first response once the threshold is reached.
-// A response skipped by a request transform ([ErrSkipNode]) counts toward
-// neither the successful-response count nor the reported node errors.
+// A skipped node ([ErrSkipNode]) counts toward neither the successful-response
+// count nor the reported node errors.
 // It panics if threshold is not positive.
 func (r *Responses[Resp]) Threshold(threshold int) (resp Resp, err error) {
 	checkThreshold("Threshold", threshold)

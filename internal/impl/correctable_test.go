@@ -18,7 +18,7 @@ func TestCorrectableEmptyConfigWatch(t *testing.T) {
 			name = "QuorumCallStream"
 		}
 		t.Run(name, func(t *testing.T) {
-			call := invokeQuorumCall[*pb.StringValue, *pb.StringValue](t.Context(), nil, pb.String("hello"), "test.Method", streaming)
+			call := newCall(newQuorumCallContext[*pb.StringValue, *pb.StringValue](t.Context(), nil, pb.String("hello"), "test.Method", streaming))
 			corr := call.Correctable(1)
 			select {
 			case <-corr.Done():

@@ -24,3 +24,6 @@ var ErrNoNode = status.Error(codes.InvalidArgument, "no such node")
 
 // ErrEmptyConfig is exported and documented as gorums.ErrEmptyConfig.
 var ErrEmptyConfig = status.Error(codes.InvalidArgument, "empty configuration")
+
+// ErrScatterCount is exported and documented as gorums.ErrScatterCount.
+var ErrScatterCount = status.Error(codes.InvalidArgument, "scatter request count differs from configuration size")
