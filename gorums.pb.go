@@ -54,6 +54,14 @@ var file_gorums_proto_extTypes = []protoimpl.ExtensionInfo{
 		Tag:           "varint,50004,opt,name=quorumcall",
 		Filename:      "gorums.proto",
 	},
+	{
+		ExtendedType:  (*descriptorpb.MethodOptions)(nil),
+		ExtensionType: (*bool)(nil),
+		Field:         50010,
+		Name:          "gorums.scatter",
+		Tag:           "varint,50010,opt,name=scatter",
+		Filename:      "gorums.proto",
+	},
 }
 
 // Extension fields to descriptorpb.MethodOptions.
@@ -68,6 +76,10 @@ var (
 	E_Multicast = &file_gorums_proto_extTypes[2]
 	// optional bool quorumcall = 50004;
 	E_Quorumcall = &file_gorums_proto_extTypes[3]
+	// call type modifier for quorumcall and multicast methods
+	//
+	// optional bool scatter = 50010;
+	E_Scatter = &file_gorums_proto_extTypes[4]
 )
 
 var File_gorums_proto protoreflect.FileDescriptor
@@ -82,7 +94,8 @@ const file_gorums_proto_rawDesc = "" +
 	"\tmulticast\x12\x1e.google.protobuf.MethodOptions\x18ӆ\x03 \x01(\bR\tmulticast:@\n" +
 	"\n" +
 	"quorumcall\x12\x1e.google.protobuf.MethodOptions\x18Ԇ\x03 \x01(\bR\n" +
-	"quorumcallB\x1eZ\x17github.com/relab/gorums\x92\x03\x02\b\x02b\beditionsp\xe8\a"
+	"quorumcall::\n" +
+	"\ascatter\x12\x1e.google.protobuf.MethodOptions\x18چ\x03 \x01(\bR\ascatterB\x1eZ\x17github.com/relab/gorums\x92\x03\x02\b\x02b\beditionsp\xe8\a"
 
 var file_gorums_proto_goTypes = []any{
 	(*descriptorpb.MethodOptions)(nil), // 0: google.protobuf.MethodOptions
@@ -92,10 +105,11 @@ var file_gorums_proto_depIdxs = []int32{
 	0, // 1: gorums.unicast:extendee -> google.protobuf.MethodOptions
 	0, // 2: gorums.multicast:extendee -> google.protobuf.MethodOptions
 	0, // 3: gorums.quorumcall:extendee -> google.protobuf.MethodOptions
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	0, // [0:4] is the sub-list for extension extendee
+	0, // 4: gorums.scatter:extendee -> google.protobuf.MethodOptions
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	0, // [0:5] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
 }
 
@@ -111,7 +125,7 @@ func file_gorums_proto_init() {
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gorums_proto_rawDesc), len(file_gorums_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   0,
-			NumExtensions: 4,
+			NumExtensions: 5,
 			NumServices:   0,
 		},
 		GoTypes:           file_gorums_proto_goTypes,
