@@ -43,3 +43,19 @@ func (c zorumsServiceClient) QuorumCallStreamWithEmptyResponse(ctx context.Conte
 func (c zorumsServiceClient) QuorumCallStreamWithEmptyRequest(ctx context.Context, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response] {
 	return gorumsimpl.QuorumCallStream[*emptypb.Empty, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCallStreamWithEmptyRequest")
 }
+
+func (c zorumsServiceClient) QuorumCallPerNode(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
+	return gorumsimpl.QuorumCall[*Request, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCallPerNode")
+}
+
+func (c zorumsServiceClient) QuorumCallPerNodeScatter(ctx context.Context, in []*Request) *gorums.Call[*Request, *Response] {
+	return gorumsimpl.QuorumCallScatter[*Request, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCallPerNode")
+}
+
+func (c zorumsServiceClient) QuorumCallStreamPerNode(ctx context.Context, in *Request) *gorums.Call[*Request, *Response] {
+	return gorumsimpl.QuorumCallStream[*Request, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCallStreamPerNode")
+}
+
+func (c zorumsServiceClient) QuorumCallStreamPerNodeScatter(ctx context.Context, in []*Request) *gorums.Call[*Request, *Response] {
+	return gorumsimpl.QuorumCallStreamScatter[*Request, *Response](ctx, c.config, in, "dev.ZorumsService.QuorumCallStreamPerNode")
+}

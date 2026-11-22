@@ -1,0 +1,34 @@
+// Test that Gorums generates a scatter method for each call type that takes
+// the scatter option, next to the method that sends one request to every node.
+
+edition = "2023";
+
+package internal.testprotos.calltypes.scatter;
+option go_package = "github.com/relab/gorums/internal/testprotos/calltypes/scatter";
+
+option features.field_presence = IMPLICIT;
+
+import "gorums.proto";
+import "google/protobuf/empty.proto";
+
+service Scatter {
+    rpc Write(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+        option (gorums.scatter) = true;
+    }
+    rpc Watch(Request) returns (stream Response) {
+        option (gorums.quorumcall) = true;
+        option (gorums.scatter) = true;
+    }
+    rpc Send(Request) returns (google.protobuf.Empty) {
+        option (gorums.multicast) = true;
+        option (gorums.scatter) = true;
+    }
+}
+
+message Request {
+    string value = 1;
+}
+message Response {
+    int64 result = 1;
+}

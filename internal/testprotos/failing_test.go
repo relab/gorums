@@ -397,6 +397,41 @@ service Stream {
 			want: "Stream.Watch: option 'gorums.quorumcall' is required for server-client stream methods",
 		},
 		{
+			name: "ScatterWithUnicast",
+			decl: `
+service Scatter {
+	rpc Send(Request) returns (google.protobuf.Empty) {
+		option (gorums.unicast) = true;
+		option (gorums.scatter) = true;
+	}
+}`,
+			want: "Scatter.Send: option 'gorums.scatter' requires option 'gorums.quorumcall' or 'gorums.multicast'",
+		},
+		{
+			name: "ScatterWithoutCallType",
+			decl: `
+service Scatter {
+	rpc Read(Request) returns (Response) {
+		option (gorums.scatter) = true;
+	}
+}`,
+			want: "Scatter.Read: option 'gorums.scatter' requires option 'gorums.quorumcall' or 'gorums.multicast'",
+		},
+		{
+			name: "ScatterNameCollision",
+			decl: `
+service Scatter {
+	rpc Write(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+		option (gorums.scatter) = true;
+	}
+	rpc WriteScatter(Request) returns (Response) {
+		option (gorums.quorumcall) = true;
+	}
+}`,
+			want: "Scatter.Write: option 'gorums.scatter' generates method WriteScatter, which collides with Scatter.WriteScatter",
+		},
+		{
 			name: "QuorumCallAndMulticast",
 			decl: `
 service Conflict {

@@ -12,8 +12,9 @@ import (
 
 // callTypeInfo describes how to generate code for one call type.
 type callTypeInfo struct {
-	// template generates one client method of this call type. It is empty if
-	// nested holds the templates.
+	// template generates the client methods of one method of this call type:
+	// the method itself, and its scatter method if the method has the scatter
+	// option. It is empty if nested holds the templates.
 	template string
 	// client is the client interface that holds the methods of this call type.
 	// It is nil if nested holds the variants.
@@ -172,6 +173,11 @@ func validateOptions(method *protogen.Method) error {
 		return fmt.Errorf("%s.%s: options '%s' and '%s' cannot be combined", method.Parent.Desc.Name(), method.Desc.Name(),
 			set[0].TypeDescriptor().FullName(), set[1].TypeDescriptor().FullName())
 
+	case hasMethodOption(method, gorums.E_Scatter) && !hasMethodOption(method, gorums.E_Quorumcall, gorums.E_Multicast):
+		return fmt.Errorf("%s.%s: option '%s' requires option '%s' or '%s'", method.Parent.Desc.Name(), method.Desc.Name(),
+			gorums.E_Scatter.TypeDescriptor().FullName(), gorums.E_Quorumcall.TypeDescriptor().FullName(),
+			gorums.E_Multicast.TypeDescriptor().FullName())
+
 	case !hasMethodOption(method, gorums.E_Multicast) && method.Desc.IsStreamingClient():
 		return optionErrorf("is required for client-server stream methods", method, gorums.E_Multicast)
 
@@ -182,7 +188,31 @@ func validateOptions(method *protogen.Method) error {
 		return fmt.Errorf("%s.%s: option '%s' requires response type %s, not %s", method.Parent.Desc.Name(), method.Desc.Name(),
 			set[0].TypeDescriptor().FullName(), emptyMessage, method.Output.Desc.FullName())
 	}
+	return validateScatterName(method)
+}
+
+// validateScatterName returns an error if the method has the scatter option
+// and its scatter method name, the method's Go name with the suffix Scatter,
+// is the Go name of another method of the same service.
+func validateScatterName(method *protogen.Method) error {
+	if !hasMethodOption(method, gorums.E_Scatter) {
+		return nil
+	}
+	name := scatterName(method)
+	for _, other := range method.Parent.Methods {
+		if other.GoName == name {
+			return fmt.Errorf("%s.%s: option '%s' generates method %s, which collides with %s.%s",
+				method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_Scatter.TypeDescriptor().FullName(),
+				name, other.Parent.Desc.Name(), other.Desc.Name())
+		}
+	}
 	return nil
+}
+
+// scatterName returns the Go name of the client method that the scatter
+// option generates for the method.
+func scatterName(method *protogen.Method) string {
+	return method.GoName + "Scatter"
 }
 
 // emptyMessage is the full name of the only response type that one-way calls

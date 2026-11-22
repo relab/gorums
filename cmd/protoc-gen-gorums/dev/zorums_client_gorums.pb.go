@@ -93,6 +93,59 @@ type ZorumsServiceClient interface {
 	// QuorumCallStreamWithEmptyRequest tests an imported message type as the
 	// request, with the same streamed response type as QuorumCallStream.
 	QuorumCallStreamWithEmptyRequest(ctx context.Context, in *emptypb.Empty) *gorums.Call[*emptypb.Empty, *Response]
+
+	// QuorumCallPerNode tests a quorum call with the scatter option, which
+	// adds QuorumCallPerNodeScatter to the client.
+	QuorumCallPerNode(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
+
+	// QuorumCallPerNodeScatter is the scatter variant of QuorumCallPerNode.
+	// It sends in[i] to the i-th node of the client's configuration, in one
+	// call. A nil in[i] skips that node. If the length of in differs from the
+	// configuration size, the call sends nothing and fails with
+	// [gorums.ErrScatterCount].
+	//
+	// Example:
+	//
+	//	resp, err := client.QuorumCallPerNodeScatter(ctx, in).Majority()
+	QuorumCallPerNodeScatter(ctx context.Context, in []*Request) *gorums.Call[*Request, *Response]
+
+	// QuorumCallStreamPerNode tests a streaming quorum call with the scatter
+	// option.
+	QuorumCallStreamPerNode(ctx context.Context, in *Request) *gorums.Call[*Request, *Response]
+
+	// QuorumCallStreamPerNodeScatter is the scatter variant of QuorumCallStreamPerNode.
+	// It sends in[i] to the i-th node of the client's configuration, in one
+	// call. A nil in[i] skips that node. If the length of in differs from the
+	// configuration size, the call sends nothing and fails with
+	// [gorums.ErrScatterCount].
+	//
+	// Example:
+	//
+	//	corr := client.QuorumCallStreamPerNodeScatter(ctx, in).Correctable(2)
+	QuorumCallStreamPerNodeScatter(ctx context.Context, in []*Request) *gorums.Call[*Request, *Response]
+
+	// MulticastPerNode tests a multicast with the scatter option.
+	//
+	// Example:
+	//
+	//	err := client.MulticastPerNode(ctx, in).Send()
+	//
+	// To wait for the stream writes:
+	//
+	//	h := client.MulticastPerNode(ctx, in).Async()
+	//	err = h.Wait()
+	MulticastPerNode(ctx context.Context, in *Request) *gorums.OnewayCall[*Request]
+
+	// MulticastPerNodeScatter is the scatter variant of MulticastPerNode.
+	// It sends in[i] to the i-th node of the client's configuration, in one
+	// call. A nil in[i] skips that node. If the length of in differs from the
+	// configuration size, the call sends nothing and fails with
+	// [gorums.ErrScatterCount].
+	//
+	// Example:
+	//
+	//	err := client.MulticastPerNodeScatter(ctx, in).Send()
+	MulticastPerNodeScatter(ctx context.Context, in []*Request) *gorums.OnewayCall[*Request]
 }
 
 // NewZorumsServiceClient returns a client whose calls execute on config.

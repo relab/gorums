@@ -3,9 +3,12 @@ package gengorums
 var mcVar = `
 {{$genFile := .GenFile}}
 {{$multicast := use "gorumsimpl.Multicast" .GenFile}}
+{{$multicastScatter := use "gorumsimpl.MulticastScatter" .GenFile}}
+{{$errScatterCount := use "gorums.ErrScatterCount" .GenFile}}
 {{$onewayCall := use "gorums.OnewayCall" .GenFile}}
 {{$impl := .Impl}}
-{{$local := localNames "c ctx in" $in $context $multicast}}
+{{$scatterName := scatterName .Method}}
+{{$local := localNames "c ctx in" $in $context $multicast $multicastScatter}}
 `
 
 var multicastComment = `
@@ -15,8 +18,13 @@ var multicastComment = `
 {{$comments -}}
 {{else}}
 // {{$method}} returns a one-way call handle for the client's configuration.
+{{- if isScatter .Method}}
+// No reply is returned. Use {{$scatterName}} to send a different message to
+// each node.
+{{- else}}
 // No reply is returned. Use gorums.MapRequest to send a different message to
 // each node.
+{{- end}}
 //
 // Send queues the request for every node and returns the admission errors;
 // it does not wait for queue space or for the stream writes. Async queues the
@@ -44,8 +52,24 @@ var multicastBody = `{{if not .Decl}} {
 }
 {{end}}`
 
+var multicastScatterSignature = `{{if not .Decl}}func ({{$local.c}} {{$impl}}) {{end}}{{$scatterName}}(` +
+	`{{$local.ctx}} {{$context}}, {{$local.in}} []*{{$in}})` +
+	` *{{$onewayCall}}[*{{$in}}]`
+
+var multicastScatterBody = `{{if not .Decl}} {
+	return {{$multicastScatter}}({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
+}
+{{end}}`
+
+// multicastScatter generates the scatter method of a multicast with the
+// scatter option.
+var multicastScatter = `{{if isScatter .Method}}` +
+	scatterComment(`err := client.{{$scatterName}}(ctx, in).Send()`) +
+	multicastScatterSignature + multicastScatterBody + `{{end}}`
+
 var multicastCall = commonVariables +
 	mcVar +
 	multicastComment +
 	multicastSignature +
-	multicastBody
+	multicastBody +
+	multicastScatter

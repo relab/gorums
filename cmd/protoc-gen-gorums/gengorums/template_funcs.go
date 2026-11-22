@@ -57,6 +57,10 @@ var funcMap = template.FuncMap{
 	"isOneway": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast)
 	},
+	"isScatter": func(method *protogen.Method) bool {
+		return hasMethodOption(method, gorums.E_Scatter)
+	},
+	"scatterName": scatterName,
 	"out":         out,
 	"methodTypes": methodTypes,
 	"localNames":  localNames,

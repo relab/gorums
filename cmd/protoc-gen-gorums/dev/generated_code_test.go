@@ -13,7 +13,9 @@ package dev_test
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,9 +24,9 @@ import (
 	"github.com/relab/gorums/gorumstest"
 )
 
-// quorumCallServer implements the QuorumCall and RemoteCall methods of the
-// generated [dev.ZorumsServiceServer] interface. QuorumCall returns the length
-// of the request value. RemoteCall returns the server's tag, which identifies
+// quorumCallServer implements the QuorumCall, QuorumCallPerNode, and
+// RemoteCall methods of the generated [dev.ZorumsServiceServer] interface.
+// QuorumCall and QuorumCallPerNode return the length of the request value. RemoteCall returns the server's tag, which identifies
 // the server that handled the call. The embedded interface is nil, so the
 // other methods panic if called.
 type quorumCallServer struct {
@@ -36,6 +38,11 @@ func (quorumCallServer) QuorumCall(_ gorums.ServerContext, req *dev.Request) (*d
 	resp := &dev.Response{}
 	resp.SetResult(int64(len(req.GetValue())))
 	return resp, nil
+}
+
+// QuorumCallPerNode returns the length of the request value, like QuorumCall.
+func (s quorumCallServer) QuorumCallPerNode(ctx gorums.ServerContext, req *dev.Request) (*dev.Response, error) {
+	return s.QuorumCall(ctx, req)
 }
 
 func (s quorumCallServer) RemoteCall(_ gorums.ServerContext, _ *dev.Request) (*dev.Response, error) {
@@ -321,5 +328,34 @@ func TestGeneratedCodeClientAllocs(t *testing.T) {
 				t.Errorf("%s allocates %v times per run, want %v", tt.name, allocs, tt.want)
 			}
 		})
+	}
+}
+
+// TestGeneratedCodeScatter verifies that the scatter option generates a
+// sibling method that sends in[i] to config[i]: each node returns the length
+// of the value it received, which differs per node.
+func TestGeneratedCodeScatter(t *testing.T) {
+	config := gorumstest.Config(t, 3, newQuorumCallServer)
+	client := dev.NewZorumsServiceClient(config)
+	in := make([]*dev.Request, config.Size())
+	want := make(map[gorums.ID]int64)
+	for i, node := range config {
+		value := strings.Repeat("x", i+1)
+		in[i] = dev.Request_builder{Value: value}.Build()
+		want[node.ID()] = int64(len(value))
+	}
+	ctx := gorumstest.Context(t, 5*time.Second)
+	got := make(map[gorums.ID]int64)
+	for resp := range client.QuorumCallPerNodeScatter(ctx, in).Results() {
+		if resp.Err != nil {
+			t.Fatalf("node %d: %v", resp.NodeID, resp.Err)
+		}
+		got[resp.NodeID] = resp.Value.GetResult()
+		if len(got) == len(want) {
+			break
+		}
+	}
+	if !maps.Equal(got, want) {
+		t.Errorf("results = %v, want %v", got, want)
 	}
 }
