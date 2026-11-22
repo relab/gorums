@@ -13,4 +13,7 @@ extend google.protobuf.MethodOptions {
     bool unicast    = 50002;
     bool multicast  = 50003;
     bool quorumcall = 50004;
+
+    // call type modifier for quorumcall and multicast methods
+    bool scatter = 50010;
 }
