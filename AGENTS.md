@@ -99,7 +99,8 @@ The default mode uses in-memory bufconn; `-tags=integration` uses real TCP.
 
 - Branch from `master` as `feature/[ID/]short-description` or `fix/[ID/]short-description`.
 - One coherent change per commit, with its tests and docs; never mix unrelated code, docs, or formatting.
-- Commit generated files last, in their own commit, after the templates and static code.
+- Commit generated files with the source change that produces them, so every commit builds.
+  When a generator or template change rewrites many files, put the regenerated files in their own commit directly after the generator change.
 - When a branch grows large and holds changes that stand on their own, such as new test infrastructure or helper options that the feature uses, split them into stacked PRs (`gh stack`), with the independent changes at the bottom.
   Keep such changes in their own commits from the start, so the split is a reorder, not a rewrite.
 - Check `git status` before staging; never `git add -A` blindly.
