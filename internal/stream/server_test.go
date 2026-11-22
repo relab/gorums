@@ -466,6 +466,8 @@ func TestServerNodeStreamOrderingBoundary(t *testing.T) {
 // the requests of each stream in the order the channel sent them, while the
 // channel's streams break and reopen. Every request is a two-way call, so the
 // calls pending on a lost stream fail; none of them runs on a later stream.
+// The first request runs before the churn and the final request runs after
+// it, so requests run on at least two streams.
 func TestServerNodeStreamPerStreamOrderUnderChurn(t *testing.T) {
 	var mu sync.Mutex
 	var starts []handlerStart // in start order
@@ -481,14 +483,6 @@ func TestServerNodeStreamPerStreamOrderUnderChurn(t *testing.T) {
 		t.Fatal("channel never connected")
 	}
 
-	churnDone := make(chan struct{})
-	go func() {
-		defer close(churnDone)
-		for start := time.Now(); time.Since(start) < 200*time.Millisecond; {
-			time.Sleep(time.Millisecond)
-			tc.endSessions()
-		}
-	}()
 	// One goroutine sends, so the message IDs are in send order. A request
 	// that the full send queue rejects is skipped.
 	request := func(id uint64) NodeRequest {
@@ -498,7 +492,30 @@ func TestServerNodeStreamPerStreamOrderUnderChurn(t *testing.T) {
 			ResponseChan: make(chan response, 1),
 		}
 	}
-	last := uint64(1)
+	started := func(id uint64) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.ContainsFunc(starts, func(s handlerStart) bool { return s.id == id })
+	}
+
+	// Request 1 runs on the first stream. The churn ends that stream, so the
+	// final request runs on a later stream.
+	if err := tc.Enqueue(request(1)); err != nil {
+		t.Fatalf("Enqueue(1) error: %v", err)
+	}
+	if !waitUntil(defaultTestTimeout, func() bool { return started(1) }) {
+		t.Fatal("request 1 did not run")
+	}
+
+	churnDone := make(chan struct{})
+	go func() {
+		defer close(churnDone)
+		for start := time.Now(); time.Since(start) < 200*time.Millisecond; {
+			time.Sleep(time.Millisecond)
+			tc.endSessions()
+		}
+	}()
+	last := uint64(2)
 	for ; ; last++ {
 		select {
 		case <-churnDone:
@@ -515,11 +532,7 @@ func TestServerNodeStreamPerStreamOrderUnderChurn(t *testing.T) {
 	if !waitUntil(defaultTestTimeout, func() bool { return tc.Enqueue(final) == nil }) {
 		t.Fatal("the send queue did not admit the final request")
 	}
-	if !waitUntil(defaultTestTimeout, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return slices.ContainsFunc(starts, func(s handlerStart) bool { return s.id == last })
-	}) {
+	if !waitUntil(defaultTestTimeout, func() bool { return started(last) }) {
 		t.Fatal("the final request did not run")
 	}
 
