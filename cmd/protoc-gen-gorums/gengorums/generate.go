@@ -204,8 +204,9 @@ func genMethods(g *protogen.GeneratedFile, file *protogen.File, target string) {
 	}
 }
 
-// renderMethod renders the client method of the given method with the
-// template of its call type. Each template renders in one of two modes, chosen
+// renderMethod renders the client methods of the given method with the
+// template of its call type: the method itself, and its scatter method if the
+// method has the scatter option. Each template renders in one of two modes, chosen
 // by decl, so that a signature is written once. If decl is true, it renders
 // the doc comment and the signature for the client interface; the doc comment
 // is the proto comment, or a default text with an example. Otherwise, it

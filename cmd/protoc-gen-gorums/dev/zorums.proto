@@ -91,6 +91,28 @@ service ZorumsService {
     }
 
     // ---------------------------------------------------------------
+    // Scatter variants
+    // ---------------------------------------------------------------
+
+    // QuorumCallPerNode tests a quorum call with the scatter option, which
+    // adds QuorumCallPerNodeScatter to the client.
+    rpc QuorumCallPerNode(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+        option (gorums.scatter) = true;
+    }
+    // QuorumCallStreamPerNode tests a streaming quorum call with the scatter
+    // option.
+    rpc QuorumCallStreamPerNode(Request) returns (stream Response) {
+        option (gorums.quorumcall) = true;
+        option (gorums.scatter) = true;
+    }
+    // MulticastPerNode tests a multicast with the scatter option.
+    rpc MulticastPerNode(Request) returns (google.protobuf.Empty) {
+        option (gorums.multicast) = true;
+        option (gorums.scatter) = true;
+    }
+
+    // ---------------------------------------------------------------
     // Unicast
     // ---------------------------------------------------------------
 

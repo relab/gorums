@@ -34,3 +34,11 @@ func (c zorumsServiceClient) MulticastSecondMethod(ctx context.Context, in *Requ
 func (c zorumsServiceClient) MulticastWithEmptyRequestAndResponse(ctx context.Context, in *emptypb.Empty) *gorums.OnewayCall[*emptypb.Empty] {
 	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.MulticastWithEmptyRequestAndResponse")
 }
+
+func (c zorumsServiceClient) MulticastPerNode(ctx context.Context, in *Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.Multicast(ctx, c.config, in, "dev.ZorumsService.MulticastPerNode")
+}
+
+func (c zorumsServiceClient) MulticastPerNodeScatter(ctx context.Context, in []*Request) *gorums.OnewayCall[*Request] {
+	return gorumsimpl.MulticastScatter(ctx, c.config, in, "dev.ZorumsService.MulticastPerNode")
+}

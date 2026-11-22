@@ -220,7 +220,7 @@ const file_zorums_proto_rawDesc = "" +
 	"\x06result\x18\x01 \x01(\x03R\x06result\"\"\n" +
 	"\n" +
 	"MyResponse\x12\x14\n" +
-	"\x05value\x18\x01 \x01(\tR\x05value2\x86\x06\n" +
+	"\x05value\x18\x01 \x01(\tR\x05value2\xca\a\n" +
 	"\rZorumsService\x12+\n" +
 	"\n" +
 	"RemoteCall\x12\f.dev.Request\x1a\r.dev.Response\"\x00\x12/\n" +
@@ -233,7 +233,10 @@ const file_zorums_proto_rawDesc = "" +
 	"$MulticastWithEmptyRequestAndResponse\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\"\x04\x98\xb5\x18\x01\x127\n" +
 	"\x10QuorumCallStream\x12\f.dev.Request\x1a\r.dev.Response\"\x04\xa0\xb5\x18\x010\x01\x12Q\n" +
 	"!QuorumCallStreamWithEmptyResponse\x12\f.dev.Request\x1a\x16.google.protobuf.Empty\"\x04\xa0\xb5\x18\x010\x01\x12Q\n" +
-	" QuorumCallStreamWithEmptyRequest\x12\x16.google.protobuf.Empty\x1a\r.dev.Response\"\x04\xa0\xb5\x18\x010\x01\x125\n" +
+	" QuorumCallStreamWithEmptyRequest\x12\x16.google.protobuf.Empty\x1a\r.dev.Response\"\x04\xa0\xb5\x18\x010\x01\x12:\n" +
+	"\x11QuorumCallPerNode\x12\f.dev.Request\x1a\r.dev.Response\"\b\xa0\xb5\x18\x01е\x18\x01\x12B\n" +
+	"\x17QuorumCallStreamPerNode\x12\f.dev.Request\x1a\r.dev.Response\"\b\xa0\xb5\x18\x01е\x18\x010\x01\x12B\n" +
+	"\x10MulticastPerNode\x12\f.dev.Request\x1a\x16.google.protobuf.Empty\"\b\x98\xb5\x18\x01е\x18\x01\x125\n" +
 	"\aUnicast\x12\f.dev.Request\x1a\x16.google.protobuf.Empty\"\x04\x90\xb5\x18\x01B Z\x19cmd/protoc-gen-gorums/dev\x92\x03\x02\b\x02b\beditionsp\xe8\a"
 
 var file_zorums_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
@@ -254,20 +257,26 @@ var file_zorums_proto_depIdxs = []int32{
 	0,  // 7: dev.ZorumsService.QuorumCallStream:input_type -> dev.Request
 	0,  // 8: dev.ZorumsService.QuorumCallStreamWithEmptyResponse:input_type -> dev.Request
 	3,  // 9: dev.ZorumsService.QuorumCallStreamWithEmptyRequest:input_type -> google.protobuf.Empty
-	0,  // 10: dev.ZorumsService.Unicast:input_type -> dev.Request
-	1,  // 11: dev.ZorumsService.RemoteCall:output_type -> dev.Response
-	1,  // 12: dev.ZorumsService.QuorumCall:output_type -> dev.Response
-	1,  // 13: dev.ZorumsService.QuorumCallWithEmptyRequest:output_type -> dev.Response
-	3,  // 14: dev.ZorumsService.QuorumCallWithEmptyResponse:output_type -> google.protobuf.Empty
-	3,  // 15: dev.ZorumsService.MulticastWithEmptyResponse:output_type -> google.protobuf.Empty
-	3,  // 16: dev.ZorumsService.MulticastSecondMethod:output_type -> google.protobuf.Empty
-	3,  // 17: dev.ZorumsService.MulticastWithEmptyRequestAndResponse:output_type -> google.protobuf.Empty
-	1,  // 18: dev.ZorumsService.QuorumCallStream:output_type -> dev.Response
-	3,  // 19: dev.ZorumsService.QuorumCallStreamWithEmptyResponse:output_type -> google.protobuf.Empty
-	1,  // 20: dev.ZorumsService.QuorumCallStreamWithEmptyRequest:output_type -> dev.Response
-	3,  // 21: dev.ZorumsService.Unicast:output_type -> google.protobuf.Empty
-	11, // [11:22] is the sub-list for method output_type
-	0,  // [0:11] is the sub-list for method input_type
+	0,  // 10: dev.ZorumsService.QuorumCallPerNode:input_type -> dev.Request
+	0,  // 11: dev.ZorumsService.QuorumCallStreamPerNode:input_type -> dev.Request
+	0,  // 12: dev.ZorumsService.MulticastPerNode:input_type -> dev.Request
+	0,  // 13: dev.ZorumsService.Unicast:input_type -> dev.Request
+	1,  // 14: dev.ZorumsService.RemoteCall:output_type -> dev.Response
+	1,  // 15: dev.ZorumsService.QuorumCall:output_type -> dev.Response
+	1,  // 16: dev.ZorumsService.QuorumCallWithEmptyRequest:output_type -> dev.Response
+	3,  // 17: dev.ZorumsService.QuorumCallWithEmptyResponse:output_type -> google.protobuf.Empty
+	3,  // 18: dev.ZorumsService.MulticastWithEmptyResponse:output_type -> google.protobuf.Empty
+	3,  // 19: dev.ZorumsService.MulticastSecondMethod:output_type -> google.protobuf.Empty
+	3,  // 20: dev.ZorumsService.MulticastWithEmptyRequestAndResponse:output_type -> google.protobuf.Empty
+	1,  // 21: dev.ZorumsService.QuorumCallStream:output_type -> dev.Response
+	3,  // 22: dev.ZorumsService.QuorumCallStreamWithEmptyResponse:output_type -> google.protobuf.Empty
+	1,  // 23: dev.ZorumsService.QuorumCallStreamWithEmptyRequest:output_type -> dev.Response
+	1,  // 24: dev.ZorumsService.QuorumCallPerNode:output_type -> dev.Response
+	1,  // 25: dev.ZorumsService.QuorumCallStreamPerNode:output_type -> dev.Response
+	3,  // 26: dev.ZorumsService.MulticastPerNode:output_type -> google.protobuf.Empty
+	3,  // 27: dev.ZorumsService.Unicast:output_type -> google.protobuf.Empty
+	14, // [14:28] is the sub-list for method output_type
+	0,  // [0:14] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name

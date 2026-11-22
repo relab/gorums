@@ -32,9 +32,13 @@ var quorumCallVariables = `
 {{$genFile := .GenFile}}
 {{$quorumCall := use "gorumsimpl.QuorumCall" .GenFile}}
 {{$quorumCallStream := use "gorumsimpl.QuorumCallStream" .GenFile}}
+{{$quorumCallScatter := use "gorumsimpl.QuorumCallScatter" .GenFile}}
+{{$quorumCallStreamScatter := use "gorumsimpl.QuorumCallStreamScatter" .GenFile}}
+{{$errScatterCount := use "gorums.ErrScatterCount" .GenFile}}
 {{$call := use "gorums.Call" .GenFile}}
 {{$impl := .Impl}}
-{{$local := localNames "c ctx in" $in $out $context $quorumCall $quorumCallStream}}
+{{$scatterName := scatterName .Method}}
+{{$local := localNames "c ctx in" $in $out $context $quorumCall $quorumCallStream $quorumCallScatter $quorumCallStreamScatter}}
 `
 
 var quorumCallSignature = `{{if not .Decl}}func ({{$local.c}} {{$impl}}) {{end}}{{$method}}(` +
@@ -46,11 +50,47 @@ var quorumCallBody = `{{if not .Decl}} {
 }
 {{end}}`
 
+// scatterComment returns the template of the doc comment of the method that
+// the scatter option adds, with the given example call.
+func scatterComment(example string) string {
+	return `
+{{- if .Decl}}
+
+// {{$scatterName}} is the scatter variant of {{$method}}.
+// It sends in[i] to the i-th node of the client's configuration, in one
+// call. A nil in[i] skips that node. If the length of in differs from the
+// configuration size, the call sends nothing and fails with
+// [{{$errScatterCount}}].
+//
+// Example:
+//
+//	` + example + `
+{{else}}
+{{end -}}
+`
+}
+
+var quorumCallScatterSignature = `{{if not .Decl}}func ({{$local.c}} {{$impl}}) {{end}}{{$scatterName}}(` +
+	`{{$local.ctx}} {{$context}}, {{$local.in}} []*{{$in}})` +
+	` *{{$call}}[*{{$in}}, *{{$out}}]`
+
+var quorumCallScatterBody = `{{if not .Decl}} {
+	return {{$quorumCallScatter}}[*{{$in}}, *{{$out}}]({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
+}
+{{end}}`
+
+// quorumCallScatter generates the scatter method of a quorum call with the
+// scatter option.
+var quorumCallScatter = `{{if isScatter .Method}}` +
+	scatterComment(`resp, err := client.{{$scatterName}}(ctx, in).Majority()`) +
+	quorumCallScatterSignature + quorumCallScatterBody + `{{end}}`
+
 var quorumCall = commonVariables +
 	quorumCallVariables +
 	quorumCallComment +
 	quorumCallSignature +
-	quorumCallBody
+	quorumCallBody +
+	quorumCallScatter
 
 // Streaming quorum call template
 var quorumCallStreamComment = `
@@ -77,8 +117,20 @@ var quorumCallStreamBody = `{{if not .Decl}} {
 }
 {{end}}`
 
+var quorumCallStreamScatterBody = `{{if not .Decl}} {
+	return {{$quorumCallStreamScatter}}[*{{$in}}, *{{$out}}]({{$local.ctx}}, {{$local.c}}.config, {{$local.in}}, "{{$fullName}}")
+}
+{{end}}`
+
+// quorumCallStreamScatter generates the scatter method of a streaming quorum
+// call with the scatter option.
+var quorumCallStreamScatter = `{{if isScatter .Method}}` +
+	scatterComment(`corr := client.{{$scatterName}}(ctx, in).Correctable(2)`) +
+	quorumCallScatterSignature + quorumCallStreamScatterBody + `{{end}}`
+
 var quorumCallStream = commonVariables +
 	quorumCallVariables +
 	quorumCallStreamComment +
 	quorumCallSignature +
-	quorumCallStreamBody
+	quorumCallStreamBody +
+	quorumCallStreamScatter
