@@ -1,0 +1,31 @@
+edition = "2023";
+
+package scatter;
+option go_package = "github.com/relab/gorums/internal/tests/scatter";
+
+option features.field_presence = IMPLICIT;
+
+import "gorums.proto";
+import "google/protobuf/empty.proto";
+
+service ScatterTest {
+    rpc Write(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+        option (gorums.scatter) = true;
+    }
+    rpc WriteStream(Request) returns (stream Response) {
+        option (gorums.quorumcall) = true;
+        option (gorums.scatter) = true;
+    }
+    rpc Send(Request) returns (google.protobuf.Empty) {
+        option (gorums.multicast) = true;
+        option (gorums.scatter) = true;
+    }
+}
+
+message Request {
+    string value = 1;
+}
+message Response {
+    string value = 1;
+}
