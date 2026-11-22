@@ -122,6 +122,8 @@ func (c *OnewayCall[Req]) Intercept(ics ...ClientInterceptor[Req, *emptypb.Empty
 //   - nil, if every destination queued the request;
 //   - the context's error, if the context had already ended; nothing is sent;
 //   - [ErrNoNode] or [ErrEmptyConfig], if the call has no target;
+//   - [ErrScatterCount], if a scatter call's request count differs from the
+//     configuration size; nothing is sent;
 //   - for unicast, the node's error, such as [stream.ErrSendQueueFull] or
 //     [stream.ErrNodeClosed];
 //   - for multicast, a [conn.QuorumCallError] with cause [ErrSendFailure] that
@@ -154,7 +156,9 @@ func (c *OnewayCall[Req]) Send() error {
 // The context bounds the call until every stream write completes. If the
 // context has already ended, nothing is sent and Wait returns the context
 // error; a call without a target returns [ErrNoNode] or [ErrEmptyConfig]
-// instead. A request still in the send queue when the context ends is discarded.
+// instead, and a scatter call with the wrong request count returns
+// [ErrScatterCount]. A request still in the send queue when the context ends
+// is discarded.
 //
 // Async dispatches the call; calling Send or Async on the same handle after
 // dispatch panics.
@@ -211,10 +215,10 @@ func (c *OnewayCall[Req]) collect(failed []NodeResponse[*stream.Message]) error 
 
 // result returns the error of a one-way call whose failed responses hold one
 // error per failed node. Unicast returns its single error. Multicast returns
-// the errors in a [conn.QuorumCallError] with cause [ErrSendFailure]. A node
-// skipped by a request transform ([ErrSkipNode]) is left out of it, since the
-// sends to the other nodes still went out; a skipped unicast sent nothing at
-// all, so its [ErrSkipNode] is returned.
+// the errors in a [conn.QuorumCallError] with cause [ErrSendFailure]. A
+// skipped node ([ErrSkipNode]) is left out of it, since the sends to the other
+// nodes still went out; a skipped unicast sent nothing at all, so its
+// [ErrSkipNode] is returned.
 func (c *OnewayCall[Req]) result(failed []NodeResponse[*stream.Message]) error {
 	if c.unicast {
 		if len(failed) == 0 {

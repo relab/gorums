@@ -3,12 +3,17 @@ package impl
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/relab/gorums/internal/conn"
 	"github.com/relab/gorums/internal/stream"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -268,4 +273,352 @@ func TestCallOnewaySkipNode(t *testing.T) {
 			t.Errorf("skipped node %d received %d requests, want 0", skipID, got)
 		}
 	})
+}
+
+// valueRecorder records the values of the [pb.StringValue] requests dispatched
+// to it, in arrival order. It sends no replies.
+type valueRecorder struct {
+	mu     sync.Mutex
+	values []string
+}
+
+func (h *valueRecorder) HandleRequest(_ context.Context, _ ID, msg *stream.Message, release func(), _ func(*stream.Message)) {
+	var req pb.StringValue
+	if err := proto.Unmarshal(msg.GetPayload(), &req); err != nil {
+		panic(err)
+	}
+	h.mu.Lock()
+	h.values = append(h.values, req.GetValue())
+	h.mu.Unlock()
+	release()
+}
+
+// wait returns the recorded values once n requests have arrived, or fails
+// the test after two seconds.
+func (h *valueRecorder) wait(t *testing.T, n int) []string {
+	t.Helper()
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
+		h.mu.Lock()
+		if len(h.values) >= n {
+			values := slices.Clone(h.values)
+			h.mu.Unlock()
+			return values
+		}
+		h.mu.Unlock()
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %d requests", n)
+	return nil
+}
+
+// newScatterConfig returns a configuration with one node per ID, in the given
+// order, and the recorder of each node. A node with ID down has no channel, so
+// a send to it fails with [stream.ErrStreamDown].
+func newScatterConfig(t *testing.T, down ID, ids ...ID) (Config, map[ID]*valueRecorder) {
+	t.Helper()
+	config := make(Config, 0, len(ids))
+	recorders := make(map[ID]*valueRecorder)
+	for _, id := range ids {
+		transport := stream.NewTransport(id, func() uint64 { return uint64(id) })
+		if id != down {
+			recorders[id] = &valueRecorder{}
+			local := stream.NewLocalChannel(id, recorders[id], conn.DefaultRecvBufferSize, nil)
+			t.Cleanup(local.Wait)
+			transport.StoreChannel(local)
+		}
+		config = append(config, conn.NewNodeForTest(id, transport))
+	}
+	return config, recorders
+}
+
+// scatterRequests returns one request per node of config, "to-<id>" for
+// config[i].
+func scatterRequests(config Config) []*pb.StringValue {
+	reqs := make([]*pb.StringValue, len(config))
+	for i, n := range config {
+		reqs[i] = pb.String(fmt.Sprintf("to-%d", n.ID()))
+	}
+	return reqs
+}
+
+// scatterDispatches lists the ways to dispatch a scatter call without waiting
+// for replies; the recorders send none.
+var scatterDispatches = []struct {
+	name     string
+	dispatch func(ctx context.Context, config Config, reqs []*pb.StringValue) error
+}{
+	{name: "QuorumCall", dispatch: func(ctx context.Context, config Config, reqs []*pb.StringValue) error {
+		QuorumCallScatter[*pb.StringValue, *pb.StringValue](ctx, config, reqs, "test.Method").Async()
+		return nil
+	}},
+	{name: "QuorumCallStream", dispatch: func(ctx context.Context, config Config, reqs []*pb.StringValue) error {
+		QuorumCallStreamScatter[*pb.StringValue, *pb.StringValue](ctx, config, reqs, "test.Method").Async()
+		return nil
+	}},
+	{name: "Multicast/Send", dispatch: func(ctx context.Context, config Config, reqs []*pb.StringValue) error {
+		return MulticastScatter(ctx, config, reqs, "test.Method").Send()
+	}},
+	{name: "Multicast/Async", dispatch: func(ctx context.Context, config Config, reqs []*pb.StringValue) error {
+		return MulticastScatter(ctx, config, reqs, "test.Method").Async().Wait()
+	}},
+}
+
+// TestCallScatterPairing verifies that a scatter call sends reqs[i] to
+// config[i], for a configuration whose node IDs are neither sorted nor
+// consecutive. Repeated calls cover different random fan-out starts.
+func TestCallScatterPairing(t *testing.T) {
+	const calls = 20
+	for _, sd := range scatterDispatches {
+		t.Run(sd.name, func(t *testing.T) {
+			config, recorders := newScatterConfig(t, 0, 7, 3, 12)
+			reqs := scatterRequests(config)
+			for range calls {
+				if err := sd.dispatch(t.Context(), config, reqs); err != nil {
+					t.Fatalf("dispatch = %v, want nil", err)
+				}
+			}
+			for id, r := range recorders {
+				want := slices.Repeat([]string{fmt.Sprintf("to-%d", id)}, calls)
+				if got := r.wait(t, calls); !slices.Equal(got, want) {
+					t.Errorf("node %d received %v, want %v", id, got, want)
+				}
+			}
+		})
+	}
+}
+
+// TestCallScatterCountMismatch verifies that a scatter call whose request
+// count differs from the configuration size returns [ErrScatterCount] from
+// every entry point and queues nothing. A broadcast sent afterwards must be the
+// first request that each node receives.
+func TestCallScatterCountMismatch(t *testing.T) {
+	qc := func(ctx context.Context, config Config, reqs []*pb.StringValue) *Call[*pb.StringValue, *pb.StringValue] {
+		return QuorumCallScatter[*pb.StringValue, *pb.StringValue](ctx, config, reqs, "test.Method")
+	}
+	qcs := func(ctx context.Context, config Config, reqs []*pb.StringValue) *Call[*pb.StringValue, *pb.StringValue] {
+		return QuorumCallStreamScatter[*pb.StringValue, *pb.StringValue](ctx, config, reqs, "test.Method")
+	}
+	type entryPoint struct {
+		name string
+		call func(ctx context.Context, config Config, reqs []*pb.StringValue) error
+	}
+	var entryPoints []entryPoint
+	for _, kind := range []struct {
+		name string
+		new  func(context.Context, Config, []*pb.StringValue) *Call[*pb.StringValue, *pb.StringValue]
+	}{{"QuorumCall", qc}, {"QuorumCallStream", qcs}} {
+		entryPoints = append(entryPoints,
+			entryPoint{kind.name + "/First", func(ctx context.Context, c Config, r []*pb.StringValue) error {
+				_, err := kind.new(ctx, c, r).First()
+				return err
+			}},
+			entryPoint{kind.name + "/All", func(ctx context.Context, c Config, r []*pb.StringValue) error {
+				_, err := kind.new(ctx, c, r).All()
+				return err
+			}},
+			entryPoint{kind.name + "/AsyncMajority", func(ctx context.Context, c Config, r []*pb.StringValue) error {
+				_, err := kind.new(ctx, c, r).Async().Majority()
+				return err
+			}},
+			entryPoint{kind.name + "/Results", func(ctx context.Context, c Config, r []*pb.StringValue) error {
+				for resp := range kind.new(ctx, c, r).Results() {
+					return resp.Err
+				}
+				return nil
+			}},
+			entryPoint{kind.name + "/Correctable", func(ctx context.Context, c Config, r []*pb.StringValue) error {
+				corr := kind.new(ctx, c, r).Correctable(1)
+				<-corr.Done()
+				_, level, err := corr.Get()
+				if level != LevelNotSet {
+					t.Errorf("Correctable level = %d, want %d", level, LevelNotSet)
+				}
+				return err
+			}},
+		)
+	}
+	entryPoints = append(entryPoints,
+		entryPoint{"Multicast/Send", func(ctx context.Context, c Config, r []*pb.StringValue) error {
+			return MulticastScatter(ctx, c, r, "test.Method").Send()
+		}},
+		entryPoint{"Multicast/Async", func(ctx context.Context, c Config, r []*pb.StringValue) error {
+			return MulticastScatter(ctx, c, r, "test.Method").Async().Wait()
+		}},
+	)
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	contexts := []struct {
+		name string
+		ctx  context.Context
+	}{{"Live", t.Context()}, {"Cancelled", cancelled}}
+
+	// A nil slice must fail the count check too, not fall back to a broadcast.
+	sizes := []struct {
+		name string
+		reqs func() []*pb.StringValue
+	}{
+		{"nil", func() []*pb.StringValue { return nil }},
+		{"0", func() []*pb.StringValue { return []*pb.StringValue{} }},
+		{"2", func() []*pb.StringValue { return []*pb.StringValue{pb.String("mismatch"), pb.String("mismatch")} }},
+		{"4", func() []*pb.StringValue { return slices.Repeat([]*pb.StringValue{pb.String("mismatch")}, 4) }},
+	}
+	for _, ep := range entryPoints {
+		for _, size := range sizes {
+			for _, c := range contexts {
+				t.Run(fmt.Sprintf("%s/Requests=%s/%s", ep.name, size.name, c.name), func(t *testing.T) {
+					config, recorders := newScatterConfig(t, 0, 7, 3, 12)
+					reqs := size.reqs()
+					err := ep.call(c.ctx, config, reqs)
+					if !errors.Is(err, ErrScatterCount) {
+						t.Fatalf("call error = %v, want %v", err, ErrScatterCount)
+					}
+					if got := status.Code(err); got != codes.InvalidArgument {
+						t.Errorf("status.Code(err) = %v, want %v", got, codes.InvalidArgument)
+					}
+					if err := Multicast(t.Context(), config, pb.String("after"), "test.Method").Send(); err != nil {
+						t.Fatal(err)
+					}
+					for id, r := range recorders {
+						if got := r.wait(t, 1); got[0] != "after" {
+							t.Errorf("node %d first received %q, want %q", id, got[0], "after")
+						}
+					}
+				})
+			}
+		}
+	}
+
+	t.Run("EmptyConfig", func(t *testing.T) {
+		for _, ep := range entryPoints {
+			if err := ep.call(t.Context(), nil, []*pb.StringValue{pb.String("x")}); !errors.Is(err, ErrEmptyConfig) {
+				t.Errorf("%s: call error = %v, want %v", ep.name, err, ErrEmptyConfig)
+			}
+		}
+	})
+}
+
+// TestCallScatterSkipNil verifies that a nil request skips its node with
+// [ErrSkipNode] before any request transform runs, while the other nodes
+// receive their own requests.
+func TestCallScatterSkipNil(t *testing.T) {
+	config, recorders := newScatterConfig(t, 0, 7, 3, 12)
+	reqs := scatterRequests(config)
+	reqs[1] = nil // node 3
+	var (
+		mu          sync.Mutex
+		transformed []ID
+	)
+	record := MapRequest[*pb.StringValue, *emptypb.Empty](func(req *pb.StringValue, n *Node) *pb.StringValue {
+		mu.Lock()
+		transformed = append(transformed, n.ID())
+		mu.Unlock()
+		return req
+	})
+	if err := MulticastScatter(t.Context(), config, reqs, "test.Method").Intercept(record).Send(); err != nil {
+		t.Fatalf("Send() = %v, want nil", err)
+	}
+	for _, id := range []ID{7, 12} {
+		if got := recorders[id].wait(t, 1); got[0] != fmt.Sprintf("to-%d", id) {
+			t.Errorf("node %d received %q, want %q", id, got[0], fmt.Sprintf("to-%d", id))
+		}
+	}
+	slices.Sort(transformed)
+	if want := []ID{7, 12}; !slices.Equal(transformed, want) {
+		t.Errorf("transform called for %v, want %v", transformed, want)
+	}
+	if err := Multicast(t.Context(), config, pb.String("after"), "test.Method").Send(); err != nil {
+		t.Fatal(err)
+	}
+	if got := recorders[3].wait(t, 1); got[0] != "after" {
+		t.Errorf("skipped node 3 first received %q, want %q", got[0], "after")
+	}
+
+	t.Run("QuorumCall", func(t *testing.T) {
+		config, recorders := newScatterConfig(t, 0, 7, 3, 12)
+		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+		defer cancel()
+		reqs := scatterRequests(config)
+		reqs[1] = nil
+		var skipped []ID
+		for resp := range QuorumCallScatter[*pb.StringValue, *pb.StringValue](ctx, config, reqs, "test.Method").Results() {
+			if errors.Is(resp.Err, ErrSkipNode) {
+				skipped = append(skipped, resp.NodeID)
+			}
+		}
+		if want := []ID{3}; !slices.Equal(skipped, want) {
+			t.Errorf("skipped nodes = %v, want %v", skipped, want)
+		}
+		for _, id := range []ID{7, 12} {
+			if got := recorders[id].wait(t, 1); got[0] != fmt.Sprintf("to-%d", id) {
+				t.Errorf("node %d received %q, want %q", id, got[0], fmt.Sprintf("to-%d", id))
+			}
+		}
+	})
+}
+
+// TestCallScatterMapRequest verifies that each request transform of a scatter
+// call receives the request of its own destination.
+func TestCallScatterMapRequest(t *testing.T) {
+	config, recorders := newScatterConfig(t, 0, 7, 3, 12)
+	var (
+		mu   sync.Mutex
+		seen = make(map[ID]string)
+	)
+	suffix := MapRequest[*pb.StringValue, *emptypb.Empty](func(req *pb.StringValue, n *Node) *pb.StringValue {
+		mu.Lock()
+		seen[n.ID()] = req.GetValue()
+		mu.Unlock()
+		return pb.String(req.GetValue() + "!")
+	})
+	if err := MulticastScatter(t.Context(), config, scatterRequests(config), "test.Method").Intercept(suffix).Send(); err != nil {
+		t.Fatalf("Send() = %v, want nil", err)
+	}
+	for id, r := range recorders {
+		want := fmt.Sprintf("to-%d", id)
+		if seen[id] != want {
+			t.Errorf("transform for node %d received %q, want %q", id, seen[id], want)
+		}
+		if got := r.wait(t, 1); got[0] != want+"!" {
+			t.Errorf("node %d received %q, want %q", id, got[0], want+"!")
+		}
+	}
+}
+
+// TestCallScatterRequest verifies that [CallContext.Request] returns the zero
+// value for a scatter call.
+func TestCallScatterRequest(t *testing.T) {
+	config, _ := newScatterConfig(t, 0, 7, 3, 12)
+	got := pb.String("unset")
+	inspect := func(ctx *CallContext[*pb.StringValue, *emptypb.Empty], next ResponseSeq[*emptypb.Empty]) ResponseSeq[*emptypb.Empty] {
+		got = ctx.Request()
+		return next
+	}
+	if err := MulticastScatter(t.Context(), config, scatterRequests(config), "test.Method").Intercept(inspect).Send(); err != nil {
+		t.Fatalf("Send() = %v, want nil", err)
+	}
+	if got != nil {
+		t.Errorf("Request() = %v, want nil", got)
+	}
+}
+
+// TestCallScatterFailedNode verifies that a send error of a scatter call is
+// attributed to the node whose send failed.
+func TestCallScatterFailedNode(t *testing.T) {
+	config, recorders := newScatterConfig(t, 3, 7, 3, 12)
+	err := MulticastScatter(t.Context(), config, scatterRequests(config), "test.Method").Send()
+	qcErr, ok := errors.AsType[conn.QuorumCallError](err)
+	if !ok {
+		t.Fatalf("Send() = %v, want a QuorumCallError", err)
+	}
+	if got := qcErr.NumErrors(); got != 1 {
+		t.Fatalf("NumErrors() = %d, want 1", got)
+	}
+	if !slices.Equal(config.WithoutErrors(qcErr).NodeIDs(), []ID{7, 12}) {
+		t.Errorf("failed nodes = %v, want only node 3", err)
+	}
+	for _, id := range []ID{7, 12} {
+		if got := recorders[id].wait(t, 1); got[0] != fmt.Sprintf("to-%d", id) {
+			t.Errorf("node %d received %q, want %q", id, got[0], fmt.Sprintf("to-%d", id))
+		}
+	}
 }

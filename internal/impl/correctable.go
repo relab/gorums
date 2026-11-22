@@ -54,9 +54,11 @@ func (c *Correctable[Resp]) Watch(level int) <-chan struct{} {
 
 // Correctable returns a call result that updates as responses arrive.
 // Its level increases with each successful response and completes at threshold.
-// A response skipped by a request transform ([ErrSkipNode]) counts toward
-// neither the level nor the final node-error count.
-// On an empty configuration, it completes at once with [ErrEmptyConfig].
+// A skipped node ([ErrSkipNode]) counts toward neither the level nor the final
+// node-error count.
+// On an empty configuration, it completes at once with [ErrEmptyConfig]; for a
+// scatter call whose request count differs from the configuration size, it
+// completes at once with [ErrScatterCount].
 // It panics if threshold is not positive.
 func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
 	checkThreshold("Correctable", threshold)

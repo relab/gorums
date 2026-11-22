@@ -37,6 +37,40 @@ func Multicast[Req proto.Message](ctx context.Context, config gorums.Config, req
 	return impl.Multicast(ctx, config, req, method)
 }
 
+// QuorumCallScatter returns a quorum-call handle that sends reqs[i] to
+// config[i]. A terminal method or [gorums.Call.Async] dispatches the call. A
+// nil reqs[i] skips config[i] with [gorums.ErrSkipNode]. If config is empty,
+// the call sends nothing and fails with [gorums.ErrEmptyConfig]; if the length
+// of reqs differs from the size of config, it sends nothing and fails with
+// [gorums.ErrScatterCount].
+// It is used by generated code.
+func QuorumCallScatter[Req, Resp proto.Message](ctx context.Context, config gorums.Config, reqs []Req, method string) *gorums.Call[Req, Resp] {
+	return impl.QuorumCallScatter[Req, Resp](ctx, config, reqs, method)
+}
+
+// QuorumCallStreamScatter returns a streaming quorum-call handle that sends
+// reqs[i] to config[i]. It accepts multiple responses per node until ctx
+// ends. A terminal method or [gorums.Call.Async] dispatches the call. A nil
+// reqs[i] skips config[i] with [gorums.ErrSkipNode]. If config is empty, the
+// call sends nothing and fails with [gorums.ErrEmptyConfig]; if the length of
+// reqs differs from the size of config, it sends nothing and fails with
+// [gorums.ErrScatterCount].
+// It is used by generated code.
+func QuorumCallStreamScatter[Req, Resp proto.Message](ctx context.Context, config gorums.Config, reqs []Req, method string) *gorums.Call[Req, Resp] {
+	return impl.QuorumCallStreamScatter[Req, Resp](ctx, config, reqs, method)
+}
+
+// MulticastScatter returns a one-way call handle that sends reqs[i] to
+// config[i]. [gorums.OnewayCall.Send] or [gorums.OnewayCall.Async] dispatches
+// the call. A nil reqs[i] skips config[i] with [gorums.ErrSkipNode]. If config
+// is empty, the call sends nothing and fails with [gorums.ErrEmptyConfig]; if
+// the length of reqs differs from the size of config, it sends nothing and
+// fails with [gorums.ErrScatterCount].
+// It is used by generated code.
+func MulticastScatter[Req proto.Message](ctx context.Context, config gorums.Config, reqs []Req, method string) *gorums.OnewayCall[Req] {
+	return impl.MulticastScatter(ctx, config, reqs, method)
+}
+
 // Unicast returns a one-way call handle for node.
 // [gorums.OnewayCall.Send] or [gorums.OnewayCall.Async] dispatches the call.
 // If node is nil, the call sends nothing and fails with [gorums.ErrNoNode].
