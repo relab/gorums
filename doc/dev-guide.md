@@ -101,6 +101,16 @@ Every method has the same shape `(ctx, in)`, and calls one runtime constructor:
 | remote call                          | `(*Out, error)`      | `gorumsimpl.RemoteCall(ctx, c.node, in, method)`         |
 | unicast                              | `*gorums.OnewayCall` | `gorumsimpl.Unicast(ctx, c.node, in, method)`            |
 
+A quorum call or multicast with the `gorums.scatter` option also gets a method `MScatter(ctx, in []*In)`.
+The template that generates `M` generates `MScatter` too, so the call types need no scatter variants.
+`MScatter` has the result of `M` and calls the scatter constructor with the RPC name of `M`:
+
+| Call type                            | Runtime constructor of `MScatter`                               |
+| ------------------------------------ | --------------------------------------------------------------- |
+| quorum call                          | `gorumsimpl.QuorumCallScatter(ctx, c.config, in, method)`       |
+| quorum call with a `stream` response | `gorumsimpl.QuorumCallStreamScatter(ctx, c.config, in, method)` |
+| multicast                            | `gorumsimpl.MulticastScatter(ctx, c.config, in, method)`        |
+
 ```mermaid
 flowchart LR
     gen["generated method<br/>c.ReadQC(ctx, in)"] --> rt["runtime/gorumsimpl<br/>QuorumCall(ctx, c.config, in, method)"]
@@ -577,8 +587,10 @@ flowchart LR
 
 A call constructor takes the call's `context.Context` and its target directly: a `Config` for quorum calls and multicasts, and a `*Node` for remote calls and unicasts.
 On an empty `Config`, the `CallContext` holds `ErrEmptyConfig`: a quorum call sends nothing, its terminal methods return the error, and its response iterator yields one response that holds the error; `Multicast` returns a `OnewayCall` that sends nothing and returns the error from `Send` and `Wait`.
+A scatter call whose request count differs from the size of its `Config` is handled the same way, with `ErrScatterCount`.
 On a nil `*Node`, `RemoteCall` returns `ErrNoNode`, and `Unicast` returns a `OnewayCall` whose `CallContext` holds `ErrNoNode` and that sends nothing.
 A quorum call constructor builds a `CallContext` that holds the request, the target `Config`, the response channel, and the response iterator (`ResponseSeq`).
+A scatter constructor builds the same `CallContext` with one request per node instead of one request: `requests[i]` goes to `Config[i]`, and `CallContext.Request` returns the zero value.
 `Multicast` and `Unicast` build a `CallContext` that holds the request and the target `Config`, but no response iterator.
 A unicast's `CallContext` holds a one-node `Config`.
 A one-way `CallContext` gets a response channel only when `Async` dispatches the call; it carries the local send confirmations of the accepted requests.

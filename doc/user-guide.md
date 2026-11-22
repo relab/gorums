@@ -71,6 +71,9 @@ To select a call type for a Protobuf service method, specify one of the followin
 | Synchronous Quorum Call | `gorums.quorumcall`            | Synchronous variant; chain a terminal method (`.First()`, `.Majority()`, `.All()`, `.Threshold(n)`) to block until the quorum threshold is met. |
 | Correctable             | `gorums.quorumcall` + `stream` | Streaming quorum call; use `.Correctable(n)` to observe progressive updates as nodes respond.                                                   |
 
+The `gorums.scatter` option combines with `gorums.quorumcall` or `gorums.multicast`.
+It adds a client method that sends a different request to each node; see [Scatter: One Request per Node](#scatter-one-request-per-node).
+
 A unicast or multicast method must declare `google.protobuf.Empty` as its response type, since the call has no reply.
 The request may be any message, including `google.protobuf.Empty`.
 `protoc-gen-gorums` rejects any other response type and names the method and the type in its error.
@@ -188,6 +191,7 @@ For the `unicast` and `multicast` call types, the response message type will be 
 > It also generates the server names `SServer` and `RegisterSServer`.
 > Messages, enums, enum values, and oneof wrapper types in any `.proto` file of the same Go package cannot use these names.
 > An RPC method may have any name, also `Config` or `Node`, because the clients have no helper methods.
+> A method `M` with the `gorums.scatter` option also generates the client method `MScatter`, so no other method of the service may be named `MScatter`.
 > The generator reports an error for a `.proto` file that uses one of these names.
 > Do not name a `.proto` file `gorums.proto` in a directory with Gorums output, since its `gorums.pb.go` file would collide with the Gorums package file.
 > The generator reports an error for such a file and asks you to rename it.
@@ -776,7 +780,7 @@ acc, err := client.PromiseQC(ctx, PromiseRequest_builder{Round: round}.Build()).
 
 * If `add` returns an error, `Reduce` returns the accumulator from that call and the same error.
 * If fewer than `n` nodes respond successfully, `Reduce` returns the latest accumulator and an error that matches `gorums.ErrIncomplete`.
-  This error also holds the node errors, but not the nodes that a request transform skipped.
+  This error also holds the node errors, but not the nodes that a request transform or a nil scatter request skipped.
 
 In both cases, you can inspect the partial accumulator.
 `Reduce` panics if `n` is not positive or if `add` is nil.
@@ -826,7 +830,7 @@ if err != nil {
 When you need only the agreed value, use `agreement.Value` and ignore the evidence.
 
 If no key gets `n` responses, `Matching` returns an empty agreement and a `gorums.ErrIncomplete` error.
-This error also holds the node errors, but not the nodes that a request transform skipped.
+This error also holds the node errors, but not the nodes that a request transform or a nil scatter request skipped.
 `Matching` panics if `n` is not positive or if `key` is nil.
 
 ### Async and Correctable Variants
@@ -1294,6 +1298,62 @@ A Gorums `.proto` file may import a plain gRPC file of the same Go package.
 The collision check covers the `SServer` and `RegisterSServer` names of a plain gRPC service in an imported file.
 It does not cover the client names `SClient` and `NewSClient` that `protoc-gen-go-grpc` generates; a collision with them shows when the package compiles.
 
+## Scatter: One Request per Node
+
+A scatter call sends a different request to each node of a configuration, in one call.
+To get one, add the `gorums.scatter` option to a quorum call or a multicast:
+
+```proto
+rpc WriteShard(Shard) returns (google.protobuf.Empty) {
+  option (gorums.multicast) = true;
+  option (gorums.scatter) = true;
+}
+```
+
+The configuration client then has two methods for the RPC:
+
+```go
+WriteShard(ctx context.Context, in *Shard) *gorums.OnewayCall[*Shard]          // sends in to every node
+WriteShardScatter(ctx context.Context, in []*Shard) *gorums.OnewayCall[*Shard] // sends in[i] to cfg[i]
+```
+
+Both methods call the same RPC, so the server has one handler, `WriteShard`.
+A protocol can use the scatter method where each node needs its own request, and the other method where all nodes need the same request.
+For example, a client can send one erasure-coded fragment to each node:
+
+```go
+client := NewStorageClient(cfg)
+shards := encode(value, cfg.Size()) // shards[i] is for cfg[i]
+if err := client.WriteShardScatter(ctx, shards).Async().Wait(); err != nil {
+    return err
+}
+```
+
+A quorum call with the option works the same way and returns a `*gorums.Call`:
+
+```go
+resp, err := client.ReadShardScatter(ctx, reqs).Majority()
+```
+
+A scatter call follows these rules:
+
+* `in[i]` goes to `cfg[i]`, where `cfg` is the client's configuration.
+  Build `in` in the order of `cfg`, for example with `for i, node := range cfg`.
+  The values of the node IDs do not matter.
+* If `len(in)` differs from `cfg.Size()`, the call sends nothing and fails with `gorums.ErrScatterCount`.
+  On an empty configuration, the call fails with `gorums.ErrEmptyConfig` instead.
+* A nil `in[i]` skips `cfg[i]`, like a `MapRequest` function that returns nil.
+  A multicast leaves the skipped node out of its error, and a quorum call counts it as neither a reply nor an error.
+* `MapRequest` interceptors work on a scatter call.
+  Each function receives the request of its own node, and no function runs for a nil `in[i]`.
+* In an interceptor, `CallContext.Request()` returns nil for a scatter call.
+  Use `MapRequest` to see the request of each node.
+* Errors name the node they belong to, as for other calls.
+  Each node must appear once in the configuration; `NewConfig` and the `Config` methods return such configurations.
+* `Send`, `Async`, `Wait`, and the terminal methods behave as for other calls.
+
+`protoc-gen-gorums` rejects the `gorums.scatter` option on a method that is not a quorum call or a multicast.
+
 ## Interceptors for Request/Response Transformation
 
 Gorums provides interceptors to transform requests and responses on a per-node basis.
@@ -1358,6 +1418,8 @@ client.WriteMulticast(ctx, &WriteRequest{}).
 The response type of a one-way call is always `google.protobuf.Empty`, so their interceptors use `*emptypb.Empty` (from `google.golang.org/protobuf/types/known/emptypb`) as `Resp`.
 
 **Note:** If `MapRequest` returns `nil` for a node, the message will not be sent to that node.
+
+To send one request per node, built ahead of the call, use a [scatter call](#scatter-one-request-per-node) instead.
 
 ### Custom Interceptors
 
@@ -1844,6 +1906,7 @@ Do not match a status code with `errors.Is(err, status.Error(codes.Unavailable, 
 A gRPC status error matches another status error only if the code, the message, and the details are all equal.
 Use `status.Code` on each node error instead.
 `errors.Is` works for the Gorums sentinel errors, such as `gorums.ErrSendQueueFull`, also inside a `QuorumCallError`.
+A scatter call with the wrong number of requests returns `gorums.ErrScatterCount` directly, not inside a `QuorumCallError`; test for it with `errors.Is`.
 
 ## Handling Failed Nodes in Configurations
 
