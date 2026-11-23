@@ -498,6 +498,14 @@ func (s *storageServer) WriteMulticast(ctx gorums.ServerContext, req *pb.WriteRe
 So when a handler dispatches its nested call before `Release`, the nested calls leave in the order in which the requests reached the handler.
 A call dispatched after `Release` may overtake the same call from the handler of the next request.
 That is correct only when the nested calls of different requests may run in any order, as for the nested reads in [Nested Quorum Calls with ServerContext.PeerConfig](#nested-quorum-calls-with-servercontextpeerconfig).
+
+`ServerContext.ReceivedAt` returns the time at which the server read the request from its stream.
+The server takes the time before the request waits for earlier requests of the same stream.
+So `time.Since(ctx.ReceivedAt())` at the start of a handler is the time that the request waited in the queue.
+A protocol that compares the arrival time of a message with a deadline reads `ReceivedAt`, not `time.Now`, so that a slow handler does not make a correct peer look late.
+A server interceptor reads the same value.
+A request that a server sends to itself has the time at which the call queued it.
+When the request queue of the stream is full, the server reads later requests only after room opens, so their time is the read time; `WithBufferSizes` sets the queue size.
 A handler that waits for a reply before `Release` keeps the next request waiting.
 If the sender fills the stream's dispatch queue in the meantime, the wait lasts until the context ends; see [Send Queue Capacity and Backpressure](#send-queue-capacity-and-backpressure).
 

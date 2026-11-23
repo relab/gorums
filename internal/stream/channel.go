@@ -50,6 +50,8 @@ type Channel interface {
 // peer's ID on a stream, 0 if the peer has no ID, and the local node's own
 // ID on a [LocalChannel].
 //
+// The receivedAt time is when the channel read the request from its stream.
+//
 // The release function is idempotent. Calling it lets the next request from
 // the stream start before HandleRequest returns; otherwise the next request
 // starts when HandleRequest returns.
@@ -63,7 +65,7 @@ type Channel interface {
 // response as described for [Channel.UnmatchedErrors], and drops any other
 // response.
 type RequestHandler interface {
-	HandleRequest(ctx context.Context, senderID ID, msg *Message, release func(), send func(*Message))
+	HandleRequest(ctx context.Context, senderID ID, msg *Message, receivedAt time.Time, release func(), send func(*Message))
 }
 
 // endpoint holds the state that a stream channel shares across its streams.

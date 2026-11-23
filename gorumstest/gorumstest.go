@@ -48,7 +48,7 @@ func ServerContext(t testing.TB, senderID gorums.ID) gorums.ServerContext {
 		return nil
 	})
 	req := stream.Message_builder{Method: mock.TestMethod}.Build()
-	srv.HandleRequest(t.Context(), senderID, req, func() {}, func(*stream.Message) {})
+	srv.HandleRequest(t.Context(), senderID, req, time.Now(), func() {}, func(*stream.Message) {})
 	if !ran {
 		t.Fatalf("gorumstest: HandleRequest did not run the handler for %s", mock.TestMethod)
 	}

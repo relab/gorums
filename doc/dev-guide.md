@@ -395,7 +395,7 @@ classDiagram
     }
     class RequestHandler {
         <<interface>>
-        HandleRequest(ctx, senderID, msg, release, send)
+        HandleRequest(ctx, senderID, msg, receivedAt, release, send)
     }
     class BidiStream {
         <<interface>>
@@ -733,7 +733,7 @@ classDiagram
     class Server {
         handlers map[string]Handler
         RegisterHandler(method, Handler)
-        HandleRequest(ctx, senderID, msg, release, send)
+        HandleRequest(ctx, senderID, msg, receivedAt, release, send)
         ConnectedPeers() Config
         ConnectedClients() Config
     }
@@ -798,8 +798,9 @@ sequenceDiagram
     IM-->>SS: InboundChannel, cleanup
     SS->>IC: Serve(): receive loop
     P->>IC: request Message
+    IC->>IC: receivedAt = time.Now()
     IC->>D: push handler job
-    D->>H: HandleRequest(ctx, senderID, msg, release, send)
+    D->>H: HandleRequest(ctx, senderID, msg, receivedAt, release, send)
     H->>H: Handler(ServerContext, Message, send)
     H->>IC: send(reply): push on sendQueue
     IC->>P: Send(reply) on send loop

@@ -7,6 +7,7 @@ import (
 	"log"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -36,8 +37,8 @@ func TestSessionHandleDeliversResponse(t *testing.T) {
 	s.pending.add(42, NodeRequest{Ctx: t.Context(), Msg: &Message{}, ResponseChan: responseChan})
 
 	msg := Message_builder{MessageSeqNo: 42}.Build()
-	s.handle(msg)
-	s.handle(msg)
+	s.handle(msg, time.Now())
+	s.handle(msg, time.Now())
 	if got := len(responseChan); got != 1 {
 		t.Fatalf("responses delivered = %d, want 1", got)
 	}
@@ -61,7 +62,7 @@ func TestSessionHandleDoesNotBlockOnCanceledRequest(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		s.handle(Message_builder{MessageSeqNo: 42}.Build())
+		s.handle(Message_builder{MessageSeqNo: 42}.Build(), time.Now())
 		close(done)
 	}()
 	select {
@@ -154,7 +155,7 @@ func TestSessionDrain(t *testing.T) {
 	if s.ended() {
 		t.Fatal("session ended before the server ended the stream")
 	}
-	s.handle(Message_builder{MessageSeqNo: 1}.Build())
+	s.handle(Message_builder{MessageSeqNo: 1}.Build(), time.Now())
 	select {
 	case resp := <-responseChan:
 		if resp.Err != nil {
@@ -316,7 +317,7 @@ func TestSessionDispatchNotWedgedByReentrantReply(t *testing.T) {
 		// Route a back-channel request as the receive loop does. The handler
 		// replies on the same, now-full queue.
 		first := ServerSequenceNumber(1)
-		s.handle(Message_builder{MessageSeqNo: first, Method: mock.TestMethod}.Build())
+		s.handle(Message_builder{MessageSeqNo: first, Method: mock.TestMethod}.Build(), time.Now())
 		synctest.Wait()
 
 		if got := drain(replied); !slices.Equal(got, []uint64{first}) {
@@ -329,7 +330,7 @@ func TestSessionDispatchNotWedgedByReentrantReply(t *testing.T) {
 		// The first handler has returned, so the dispatcher runs the next
 		// request, whose reply is dropped the same way.
 		second := ServerSequenceNumber(2)
-		s.handle(Message_builder{MessageSeqNo: second, Method: mock.TestMethod}.Build())
+		s.handle(Message_builder{MessageSeqNo: second, Method: mock.TestMethod}.Build(), time.Now())
 		synctest.Wait()
 
 		if got, want := drain(dispatched), []uint64{first, second}; !slices.Equal(got, want) {
@@ -370,9 +371,9 @@ func TestSessionHandleKeepsReadingWhileHandlerUnreleased(t *testing.T) {
 	readerDone := make(chan struct{})
 	go func() {
 		defer close(readerDone)
-		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build())
-		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(2), Method: mock.TestMethod}.Build())
-		s.handle(Message_builder{MessageSeqNo: 42, Method: mock.TestMethod}.Build())
+		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build(), time.Now())
+		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(2), Method: mock.TestMethod}.Build(), time.Now())
+		s.handle(Message_builder{MessageSeqNo: 42, Method: mock.TestMethod}.Build(), time.Now())
 	}()
 
 	select {
@@ -432,7 +433,7 @@ func TestSessionHandleBackChannel(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewRequest: %v", err)
 		}
-		s.handle(msg)
+		s.handle(msg, time.Now())
 		select {
 		case md := <-handlerMD:
 			if got := md.Get(key); len(got) != 1 || got[0] != want {
@@ -445,8 +446,8 @@ func TestSessionHandleBackChannel(t *testing.T) {
 
 	t.Run("NoHandlerOrUnknownIDIsDropped", func(t *testing.T) {
 		s := newTestSession(t, 0, nil, true, true)
-		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build())
-		s.handle(Message_builder{MessageSeqNo: 999, Method: mock.TestMethod}.Build())
+		s.handle(Message_builder{MessageSeqNo: ServerSequenceNumber(1), Method: mock.TestMethod}.Build(), time.Now())
+		s.handle(Message_builder{MessageSeqNo: 999, Method: mock.TestMethod}.Build(), time.Now())
 	})
 }
 
@@ -512,7 +513,7 @@ func TestSessionHandleUnmatchedErrors(t *testing.T) {
 				s.pending.add(msgID, NodeRequest{Ctx: ctx, Msg: &Message{}, ResponseChan: responseChan})
 			}
 
-			s.handle(tt.msg)
+			s.handle(tt.msg, time.Now())
 			if got := s.UnmatchedErrors(); got != tt.wantCount {
 				t.Errorf("UnmatchedErrors() = %d, want %d", got, tt.wantCount)
 			}
@@ -936,11 +937,11 @@ func TestSessionHandleSetsResponseLatency(t *testing.T) {
 		s.pending.add(42, NodeRequest{Ctx: t.Context(), Msg: &Message{}, Streaming: true, ResponseChan: responseChan})
 
 		time.Sleep(10 * time.Millisecond)
-		s.handle(Message_builder{MessageSeqNo: 42}.Build())
+		s.handle(Message_builder{MessageSeqNo: 42}.Build(), time.Now())
 		time.Sleep(15 * time.Millisecond)
-		s.handle(Message_builder{MessageSeqNo: 42}.Build())
+		s.handle(Message_builder{MessageSeqNo: 42}.Build(), time.Now())
 		time.Sleep(5 * time.Millisecond)
-		s.handle(Message_builder{MessageSeqNo: 42, Status: status.New(codes.Internal, "boom").Proto()}.Build())
+		s.handle(Message_builder{MessageSeqNo: 42, Status: status.New(codes.Internal, "boom").Proto()}.Build(), time.Now())
 
 		for i, want := range []time.Duration{10 * time.Millisecond, 25 * time.Millisecond, 30 * time.Millisecond} {
 			if got := (<-responseChan).Latency; got != want {
@@ -948,4 +949,39 @@ func TestSessionHandleSetsResponseLatency(t *testing.T) {
 			}
 		}
 	})
+}
+
+// doneRequestHandler marks one request done on wg for each request it handles.
+type doneRequestHandler struct{ wg *sync.WaitGroup }
+
+func (h *doneRequestHandler) HandleRequest(context.Context, ID, *Message, time.Time, func(), func(*Message)) {
+	h.wg.Done()
+}
+
+// BenchmarkSessionHandleRequest measures the cost of routing one request to
+// its handler as the receive loop does, including the receive time that the
+// loop takes with time.Now for each frame. BenchmarkTimeNow isolates that
+// clock read.
+func BenchmarkSessionHandleRequest(b *testing.B) {
+	var wg sync.WaitGroup
+	handler := &doneRequestHandler{wg: &wg}
+	e := newEndpoint(b.Context(), 1, 1, testRecvBufferSize, handler, newLatency())
+	b.Cleanup(e.cancel)
+	ctx, cancel := context.WithCancel(e.ctx)
+	s := newSession(ctx, cancel, &e, mock.NewBidiStream[*Message](), false, false)
+	msg := Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build()
+	b.ReportAllocs()
+	for b.Loop() {
+		wg.Add(1)
+		s.handle(msg, time.Now())
+		wg.Wait()
+	}
+}
+
+// BenchmarkTimeNow measures one clock read, the added cost of stamping each
+// inbound request.
+func BenchmarkTimeNow(b *testing.B) {
+	for b.Loop() {
+		time.Now()
+	}
 }

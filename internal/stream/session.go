@@ -216,6 +216,7 @@ func (s *session) receive() error {
 func (s *session) receiveFrames() error {
 	for {
 		msg, err := s.stream.Recv()
+		receivedAt := time.Now()
 		if err != nil {
 			return err
 		}
@@ -223,7 +224,7 @@ func (s *session) receiveFrames() error {
 		if !s.accepted.Load() {
 			s.accept()
 		}
-		s.handle(msg)
+		s.handle(msg, receivedAt)
 	}
 }
 
@@ -271,14 +272,15 @@ func (s *session) receiveFailed(err error) {
 // frame in this side's ID space is a response to a pending call. If no call is
 // pending for it, the frame is dropped. An error frame with no pending call, or
 // for a call whose context has ended, is counted and logged as an unmatched
-// error.
-func (s *session) handle(msg *Message) {
+// error. The receivedAt time is the time at which the receive loop got msg
+// from the stream; the handler of a request reads it as its receive time.
+func (s *session) handle(msg *Message, receivedAt time.Time) {
 	msgID := msg.GetMessageSeqNo()
 	if isServerSequenceNumber(msgID) == s.serverRequests {
 		if s.handler != nil {
 			ctx := msg.appendToIncomingContext(s.ctx)
 			s.requests.push(s.ctx, func(release func()) {
-				s.handler.HandleRequest(ctx, s.id, msg, release, s.reply)
+				s.handler.HandleRequest(ctx, s.id, msg, receivedAt, release, s.reply)
 			})
 		}
 		return
