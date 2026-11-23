@@ -1614,7 +1614,7 @@ To reject a request, return the error before calling `next`.
 
 #### Delay and Metadata Interceptors
 
-Interceptors can inject arbitrary delays based on client properties or attach metadata to the incoming requests:
+Interceptors can inject delays based on client properties or attach metadata to the incoming requests:
 
 ```go
 func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) error {
@@ -1633,6 +1633,11 @@ func MetadataInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func
     return next(ctx, in, send)
 }
 ```
+
+`DelayedInterceptor` runs in the ordered part of the handler, so its sleep delays every later request on the same stream.
+With delay `d`, `k` requests that arrive together start after `d`, `2d`, ..., `k·d`; a network link with latency `d` delivers them all after `d`.
+The sleep does not model link latency.
+Calling `ctx.Release()` before the sleep lets later requests start, but gives up their order.
 
 #### Rejecting Requests (Filtering)
 

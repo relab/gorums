@@ -46,6 +46,12 @@ func LoggingSimpleInterceptor(ctx gorums.ServerContext, in *gorums.Message, send
 // DelayedInterceptor delays each request before passing it on. The delay grows
 // with the length of the sender's network address; without a known sender
 // address there is no delay.
+//
+// The sleep runs in the ordered part of the handler, so it delays every later
+// request on the same stream. It does not model network link latency: with
+// delay d, k requests that arrive together start after d, 2d, ..., k·d,
+// whereas a link delivers them all after d. Calling [gorums.ServerContext.Release]
+// before the sleep lets later requests start, but gives up their order.
 func DelayedInterceptor(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) error {
 	// delay based on sending node address
 	delay := 0 * time.Millisecond
