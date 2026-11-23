@@ -69,5 +69,6 @@ type ResponseSeq[T proto.Message] = impl.ResponseSeq[T]
 // decides when to stop. [Responses.Aggregate] runs an AggregateFunc.
 type AggregateFunc[Resp proto.Message, Out any] = impl.AggregateFunc[Resp, Out]
 
-// NodeResponse contains a node's response value or error.
+// NodeResponse contains a node's response value or error, and the round-trip
+// time of the response.
 type NodeResponse[T any] = stream.NodeResponse[T]

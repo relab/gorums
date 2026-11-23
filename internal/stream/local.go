@@ -2,6 +2,7 @@ package stream
 
 import (
 	"log"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -45,6 +46,7 @@ func (c *LocalChannel) Enqueue(req NodeRequest) error {
 		return status.Error(codes.Unimplemented, "no request handler registered")
 	}
 	ctx := req.Msg.appendToIncomingContext(req.Ctx)
+	enqueued := time.Now()
 	send := func(msg *Message) {
 		err := msg.errorStatus()
 		if err != nil && (!req.wantServerResponse() || req.Ctx.Err() != nil) {
@@ -53,7 +55,7 @@ func (c *LocalChannel) Enqueue(req NodeRequest) error {
 			c.unmatchedErrors.record(c.id, msg, err)
 		}
 		if req.wantServerResponse() {
-			req.deliver(response{NodeID: c.id, Value: msg, Err: err})
+			req.deliver(response{NodeID: c.id, Value: msg, Err: err, Latency: time.Since(enqueued)})
 		}
 	}
 	run := func(release func()) { c.handler.HandleRequest(ctx, c.id, req.Msg, release, send) }
