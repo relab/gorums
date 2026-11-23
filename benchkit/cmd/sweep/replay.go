@@ -13,20 +13,25 @@ const rebuildSweepCommand = "just sweep"
 
 func writeReplayScript(outDir string, args []string) (string, error) {
 	path := filepath.Join(outDir, replayScriptName)
-	data := []byte(replayScript(args))
+	run, rebuild := sweepInvocation(".")
+	data := []byte(replayScript(run, rebuild, args))
 	if err := os.WriteFile(path, data, 0o755); err != nil {
 		return "", err
 	}
 	return path, nil
 }
 
-func replayScript(args []string) string {
+func replayScript(run, rebuild string, args []string) string {
 	var b strings.Builder
 	b.WriteString("#!/bin/sh\n")
 	b.WriteString("set -eu\n\n")
-	b.WriteString("# Rebuild the sweep driver before replaying the experiment.\n")
-	b.WriteString(rebuildSweepCommand + "\n\n")
-	b.WriteString("exec ./cmd/sweep/sweep")
+	if rebuild != "" {
+		b.WriteString("# Rebuild the sweep driver before replaying the experiment.\n")
+		b.WriteString(rebuild)
+		b.WriteString("\n\n")
+	}
+	b.WriteString("exec ")
+	b.WriteString(run)
 	for _, arg := range args[1:] {
 		b.WriteByte(' ')
 		b.WriteString(iago.Quote(arg))

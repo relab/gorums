@@ -9,13 +9,22 @@ import (
 
 const benchkitModulePath = "github.com/relab/gorums/benchkit"
 
-// requireBenchkitModuleRoot verifies that sweep is running from the benchkit
-// module root, where its relative build and binary paths resolve.
-func requireBenchkitModuleRoot() error {
-	if isBenchkitModuleRoot(".") {
+// checkModuleRoot returns an error when cfg uses the built-in benchmark build
+// outside the benchkit module root, the only place ./cmd/benchmark resolves.
+func checkModuleRoot(cfg *config) error {
+	if cfg.binaryPath != "" || benchmarkBuildCmd(cfg) != "" || isBenchkitModuleRoot(".") {
 		return nil
 	}
-	return errors.New("run sweep from the benchkit module root")
+	return errors.New("run sweep from the benchkit module root, or pass -binary or -build")
+}
+
+// sweepInvocation returns the command that starts sweep in dir, and the
+// command that rebuilds it first; rebuild is empty when run builds sweep.
+func sweepInvocation(dir string) (run, rebuild string) {
+	if isBenchkitModuleRoot(dir) {
+		return "./cmd/sweep/sweep", rebuildSweepCommand
+	}
+	return "go tool sweep", ""
 }
 
 // isBenchkitModuleRoot reports whether dir has benchkit's module directive and

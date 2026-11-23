@@ -107,7 +107,9 @@ func writeCollectScript(outDir string, state lastRunState) (string, error) {
 	var b strings.Builder
 	b.WriteString("#!/bin/sh\nset -eu\n\n")
 	b.WriteString("# Collect only if the remote run has finished; otherwise exit.\n")
-	b.WriteString("exec ./cmd/sweep/sweep")
+	run, _ := sweepInvocation(".")
+	b.WriteString("exec ")
+	b.WriteString(run)
 	for _, arg := range args {
 		b.WriteByte(' ')
 		b.WriteString(shellQuote(arg))
