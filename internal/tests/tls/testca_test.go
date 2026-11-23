@@ -1,54 +1,30 @@
 package tls
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
-	"math/big"
 	"net"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/gorumstest/certs"
 	"google.golang.org/grpc/credentials"
 )
 
 // testCA is a throwaway certificate authority that issues per-replica
 // certificates for the peer identity tests.
 type testCA struct {
-	cert *x509.Certificate
-	key  *ecdsa.PrivateKey
+	ca   *certs.Cert
 	pool *x509.CertPool
 }
 
 func newTestCA(t testing.TB) *testCA {
 	t.Helper()
-	key := newKey(t)
-	tmpl := &x509.Certificate{
-		SerialNumber:          newSerialNumber(t),
-		Subject:               pkix.Name{CommonName: "Gorums Test CA"},
-		NotBefore:             time.Now().Add(-time.Minute),
-		NotAfter:              time.Now().Add(time.Hour),
-		IsCA:                  true,
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
-		BasicConstraintsValid: true,
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, key.Public(), key)
-	if err != nil {
-		t.Fatalf("create CA certificate: %v", err)
-	}
-	cert, err := x509.ParseCertificate(der)
-	if err != nil {
-		t.Fatalf("parse CA certificate: %v", err)
-	}
-	pool := x509.NewCertPool()
-	pool.AddCert(cert)
-	return &testCA{cert: cert, key: key, pool: pool}
+	ca := certs.NewCA(t)
+	return &testCA{ca: ca, pool: ca.Pool()}
 }
 
 // nodeIdentity returns the URI SAN that names node id in these tests.
@@ -61,26 +37,17 @@ func nodeIdentity(id gorums.ID) string {
 // authentication.
 func (ca *testCA) issue(t testing.TB, id gorums.ID) tls.Certificate {
 	t.Helper()
-	key := newKey(t)
 	uri, err := url.Parse(nodeIdentity(id))
 	if err != nil {
 		t.Fatalf("parse node identity: %v", err)
 	}
-	tmpl := &x509.Certificate{
-		SerialNumber: newSerialNumber(t),
-		Subject:      pkix.Name{CommonName: fmt.Sprintf("node %d", id)},
-		URIs:         []*url.URL{uri},
-		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
-		NotBefore:    time.Now().Add(-time.Minute),
-		NotAfter:     time.Now().Add(time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, ca.cert, key.Public(), ca.key)
-	if err != nil {
-		t.Fatalf("create certificate for node %d: %v", id, err)
-	}
-	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+	return ca.ca.Issue(t, &x509.Certificate{
+		Subject:     pkix.Name{CommonName: fmt.Sprintf("node %d", id)},
+		URIs:        []*url.URL{uri},
+		IPAddresses: []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
+		KeyUsage:    x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+	}).TLS()
 }
 
 // serverCreds returns server credentials that present cert and verify a
@@ -109,21 +76,3 @@ type peerNode struct {
 
 func (n peerNode) Addr() string        { return n.addr }
 func (n peerNode) TLSIdentity() string { return n.identity }
-
-func newKey(t testing.TB) *ecdsa.PrivateKey {
-	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatalf("generate key: %v", err)
-	}
-	return key
-}
-
-func newSerialNumber(t testing.TB) *big.Int {
-	t.Helper()
-	sn, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
-		t.Fatalf("generate serial number: %v", err)
-	}
-	return sn
-}
