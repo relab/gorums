@@ -360,7 +360,7 @@ func TestServerHandleRequestRelease(t *testing.T) {
 			}
 			req := stream.Message_builder{Method: tt.method, Payload: payload}.Build()
 			releases, sends := 0, 0
-			srv.HandleRequest(t.Context(), 0, req, func() { releases++ }, func(*stream.Message) { sends++ })
+			srv.HandleRequest(t.Context(), 0, req, time.Now(), func() { releases++ }, func(*stream.Message) { sends++ })
 			if releases != tt.wantReleases {
 				t.Errorf("release called %d times, want %d", releases, tt.wantReleases)
 			}
@@ -428,7 +428,7 @@ func TestServerHandleRequestReplies(t *testing.T) {
 			srv.RegisterHandler(mock.TestMethod, tt.handler)
 			req := stream.Message_builder{Method: mock.TestMethod, Payload: payload}.Build()
 			var got []string
-			srv.HandleRequest(t.Context(), 0, req, func() {}, func(reply *stream.Message) {
+			srv.HandleRequest(t.Context(), 0, req, time.Now(), func() {}, func(reply *stream.Message) {
 				if code := status.FromProto(reply.GetStatus()).Code(); code != codes.OK {
 					got = append(got, "error: "+code.String())
 					return
@@ -1798,6 +1798,105 @@ func TestServerIdentityRefusals(t *testing.T) {
 		servers := start(t)
 		if err := call(t, client(t, servers[0]), 3*time.Second); err != nil {
 			t.Errorf("call from a client that claims no node ID: %v", err)
+		}
+	})
+}
+
+// TestServerContextReceivedAt verifies that a handler and a server
+// interceptor read the time at which the server read the request, and that
+// the time excludes nothing: it is taken before the request waits behind
+// earlier requests of its stream.
+func TestServerContextReceivedAt(t *testing.T) {
+	t.Run("PassedToHandlerAndInterceptor", func(t *testing.T) {
+		payload, err := proto.Marshal(pb.String("x"))
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		var interceptorTime, handlerTime time.Time
+		srv := gorums.NewServer(gorums.WithServerInterceptors(
+			func(ctx gorums.ServerContext, in *gorums.Message, send func(proto.Message), next gorums.Handler) error {
+				interceptorTime = ctx.ReceivedAt()
+				return next(ctx, in, send)
+			}))
+		srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message, send func(proto.Message)) error {
+			handlerTime = ctx.ReceivedAt()
+			send(pb.String("ok"))
+			return nil
+		})
+		want := time.Now().Add(-time.Hour)
+		req := stream.Message_builder{Method: mock.TestMethod, Payload: payload}.Build()
+		srv.HandleRequest(t.Context(), 0, req, want, func() {}, func(*stream.Message) {})
+		if !interceptorTime.Equal(want) {
+			t.Errorf("interceptor ReceivedAt = %v, want %v", interceptorTime, want)
+		}
+		if !handlerTime.Equal(want) {
+			t.Errorf("handler ReceivedAt = %v, want %v", handlerTime, want)
+		}
+	})
+
+	const hold = 200 * time.Millisecond
+
+	// QueueWait sends two requests on one stream. The first handler holds the
+	// stream without calling Release, so the second request waits for it.
+	t.Run("QueueWait", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			release bool
+			minWait time.Duration
+			maxWait time.Duration
+		}{
+			{name: "HeldWithoutRelease", minWait: hold - 20*time.Millisecond, maxWait: time.Minute},
+			{name: "ReleasedFirst", release: true, maxWait: hold / 2},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				waits := make(chan time.Duration, 1)
+				srv := gorums.NewServer()
+				srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, in *gorums.Message, _ func(proto.Message)) error {
+					if gorums.AsProto[*pb.StringValue](in).GetValue() == "first" {
+						if tt.release {
+							ctx.Release()
+						}
+						time.Sleep(hold)
+						return nil
+					}
+					waits <- time.Since(ctx.ReceivedAt())
+					return nil
+				})
+				addrs := gorumstest.Servers(t, 1, func(int) gorumstest.ServerIface { return srv })
+				cfg, closeFn, err := gorums.NewConfig(gorums.WithNodeList(addrs), gorumstest.DialOptions(t))
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(closeFn)
+				node := cfg.Nodes()[0]
+				mockcall.Unicast(t.Context(), node, "first").Async()
+				mockcall.Unicast(t.Context(), node, "second").Async()
+				got := gorumstest.Collect(t, 5*time.Second, 1, waits)[0]
+				if got < tt.minWait || got > tt.maxWait {
+					t.Errorf("wait = %v, want in [%v, %v]", got, tt.minWait, tt.maxWait)
+				}
+			})
+		}
+	})
+
+	// LocalNode sends a request from a server to itself. The stamp is taken
+	// when the call queues the request.
+	t.Run("LocalNode", func(t *testing.T) {
+		servers := gorumstest.LocalServers(t, 1)
+		got := make(chan time.Time, 1)
+		servers[0].RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message, send func(proto.Message)) error {
+			got <- ctx.ReceivedAt()
+			send(pb.String("ok"))
+			return nil
+		})
+		gorumstest.WaitForPeers(t, servers)
+		before := time.Now()
+		mockcall.MustRemoteCall(t, gorumstest.Context(t, 5*time.Second), servers[0].PeerConfig().Nodes()[0], "x")
+		after := time.Now()
+		at := gorumstest.Collect(t, 5*time.Second, 1, got)[0]
+		if at.Before(before) || at.After(after) {
+			t.Errorf("ReceivedAt = %v, want in [%v, %v]", at, before, after)
 		}
 	})
 }

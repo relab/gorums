@@ -608,7 +608,7 @@ func TestChannelCloseCancelsOnlyOwnedPendingRequests(t *testing.T) {
 	default:
 	}
 
-	newChannel.session.handle(newMessage)
+	newChannel.session.handle(newMessage, time.Now())
 	select {
 	case got := <-newResponseChan:
 		if got.Err != nil {
@@ -1654,7 +1654,7 @@ type signalingRequestHandler struct {
 	called chan *Message
 }
 
-func (h *signalingRequestHandler) HandleRequest(_ context.Context, _ ID, msg *Message, release func(), _ func(*Message)) {
+func (h *signalingRequestHandler) HandleRequest(_ context.Context, _ ID, msg *Message, _ time.Time, release func(), _ func(*Message)) {
 	defer release()
 	select {
 	case h.called <- msg:

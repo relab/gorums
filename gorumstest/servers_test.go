@@ -153,7 +153,7 @@ func TestServerLoggerFailsTest(t *testing.T) {
 			srv := tt.server(rec)
 			srv.RegisterHandler(mock.TestMethod, errorAfterSend)
 			req := stream.Message_builder{Method: mock.TestMethod}.Build()
-			srv.HandleRequest(t.Context(), 0, req, func() {}, func(*stream.Message) {})
+			srv.HandleRequest(t.Context(), 0, req, time.Now(), func() {}, func(*stream.Message) {})
 
 			msgs := rec.messages()
 			if tt.wantFailed {

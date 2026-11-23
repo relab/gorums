@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/relab/gorums/internal/conn"
 	"github.com/relab/gorums/internal/impl"
@@ -226,12 +227,13 @@ func chainInterceptors(final Handler, interceptors ...ServerInterceptor) Handler
 // [ServerContext.Release]. Otherwise the caller releases the request when
 // HandleRequest returns, as [stream.RequestHandler] specifies, so the stream's
 // next request can run on the same goroutine.
-func (s *Server) HandleRequest(ctx context.Context, senderID ID, reqMsg *stream.Message, release func(), send func(*stream.Message)) {
+func (s *Server) HandleRequest(ctx context.Context, senderID ID, reqMsg *stream.Message, receivedAt time.Time, release func(), send func(*stream.Message)) {
 	srvCtx := ServerContext{
-		Context:  ctx,
-		senderID: senderID,
-		release:  release,
-		srv:      s,
+		Context:    ctx,
+		senderID:   senderID,
+		receivedAt: receivedAt,
+		release:    release,
+		srv:        s,
 	}
 
 	handler, ok := s.handlers[reqMsg.GetMethod()]
@@ -412,9 +414,10 @@ func (s *Server) Stop() {
 // [ServerContext.Release] or returns.
 type ServerContext struct {
 	context.Context
-	senderID ID
-	release  func()
-	srv      *Server
+	senderID   ID
+	receivedAt time.Time
+	release    func()
+	srv        *Server
 }
 
 // SenderID returns the ID of the node that sent the request, as this server
@@ -441,6 +444,13 @@ type ServerContext struct {
 // it dials.
 func (ctx *ServerContext) SenderID() ID {
 	return ctx.senderID
+}
+
+// ReceivedAt returns the time at which this server read the request from its
+// stream. Use time.Since(ctx.ReceivedAt()) to get the time that the request
+// waited for earlier requests of the same stream.
+func (ctx *ServerContext) ReceivedAt() time.Time {
+	return ctx.receivedAt
 }
 
 // Release ends the ordered part of the handler and lets the next request on

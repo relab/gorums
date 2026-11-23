@@ -46,7 +46,7 @@ func (c *LocalChannel) Enqueue(req NodeRequest) error {
 		return status.Error(codes.Unimplemented, "no request handler registered")
 	}
 	ctx := req.Msg.appendToIncomingContext(req.Ctx)
-	enqueued := time.Now()
+	receivedAt := time.Now()
 	send := func(msg *Message) {
 		err := msg.errorStatus()
 		if err != nil && (!req.wantServerResponse() || req.Ctx.Err() != nil) {
@@ -55,10 +55,10 @@ func (c *LocalChannel) Enqueue(req NodeRequest) error {
 			c.unmatchedErrors.record(c.id, msg, err)
 		}
 		if req.wantServerResponse() {
-			req.deliver(response{NodeID: c.id, Value: msg, Err: err, Latency: time.Since(enqueued)})
+			req.deliver(response{NodeID: c.id, Value: msg, Err: err, Latency: time.Since(receivedAt)})
 		}
 	}
-	run := func(release func()) { c.handler.HandleRequest(ctx, c.id, req.Msg, release, send) }
+	run := func(release func()) { c.handler.HandleRequest(ctx, c.id, req.Msg, receivedAt, release, send) }
 	if !c.requests.tryPush(run) {
 		return ErrSendQueueFull
 	}

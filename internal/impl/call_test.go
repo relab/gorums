@@ -282,7 +282,7 @@ type valueRecorder struct {
 	values []string
 }
 
-func (h *valueRecorder) HandleRequest(_ context.Context, _ ID, msg *stream.Message, release func(), _ func(*stream.Message)) {
+func (h *valueRecorder) HandleRequest(_ context.Context, _ ID, msg *stream.Message, _ time.Time, release func(), _ func(*stream.Message)) {
 	var req pb.StringValue
 	if err := proto.Unmarshal(msg.GetPayload(), &req); err != nil {
 		panic(err)
