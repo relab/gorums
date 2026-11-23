@@ -57,9 +57,10 @@ type ID = uint32
 
 // NodeResponse is exported and documented as gorums.NodeResponse.
 type NodeResponse[T any] struct {
-	NodeID ID
-	Value  T
-	Err    error
+	NodeID  ID
+	Value   T
+	Err     error
+	Latency time.Duration
 }
 
 // response is a type alias for NodeResponse[*Message] to avoid long type names.

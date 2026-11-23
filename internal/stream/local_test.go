@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/relab/gorums/internal/testutils/mock"
@@ -183,4 +184,29 @@ func TestLocalChannelFull(t *testing.T) {
 			t.Fatal("rejection also reported asynchronously")
 		}
 	}
+}
+
+// TestLocalChannelResponseLatency verifies that a response carries the time
+// from the enqueue of the request to the reply of the handler.
+func TestLocalChannelResponseLatency(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		handler := requestHandlerFunc(func(_ context.Context, msg *Message, _ func(), send func(*Message)) {
+			time.Sleep(20 * time.Millisecond)
+			send(Message_builder{MessageSeqNo: msg.GetMessageSeqNo()}.Build())
+		})
+		c := NewLocalChannel(1, handler, testRecvBufferSize, nil)
+		responseChan := make(chan response, 1)
+		if err := c.Enqueue(NodeRequest{
+			Ctx:          t.Context(),
+			Msg:          Message_builder{MessageSeqNo: 1, Method: mock.TestMethod}.Build(),
+			ResponseChan: responseChan,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		resp := <-responseChan
+		if want := 20 * time.Millisecond; resp.Latency != want {
+			t.Errorf("Latency = %v, want %v", resp.Latency, want)
+		}
+		c.Wait()
+	})
 }

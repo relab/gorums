@@ -18,8 +18,9 @@ type NodeResponse[T any] = stream.NodeResponse[T]
 // and reports [ErrTypeMismatch] if the reply is not of type Resp.
 func mapToCallResponse[Resp proto.Message](channelResp NodeResponse[*stream.Message]) NodeResponse[Resp] {
 	callResp := NodeResponse[Resp]{
-		NodeID: channelResp.NodeID,
-		Err:    channelResp.Err,
+		NodeID:  channelResp.NodeID,
+		Err:     channelResp.Err,
+		Latency: channelResp.Latency,
 	}
 	if channelResp.Err == nil {
 		respMsg, err := unmarshalResponse(channelResp.Value)

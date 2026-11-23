@@ -925,3 +925,27 @@ func TestSessionVerdict(t *testing.T) {
 		})
 	}
 }
+
+// TestSessionHandleSetsResponseLatency verifies that every response of a
+// call, also one of a streaming call and one with an error status, carries the
+// time since the single send of the request.
+func TestSessionHandleSetsResponseLatency(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := newTestSession(t, 1, nil, true, true)
+		responseChan := make(chan response, 3)
+		s.pending.add(42, NodeRequest{Ctx: t.Context(), Msg: &Message{}, Streaming: true, ResponseChan: responseChan})
+
+		time.Sleep(10 * time.Millisecond)
+		s.handle(Message_builder{MessageSeqNo: 42}.Build())
+		time.Sleep(15 * time.Millisecond)
+		s.handle(Message_builder{MessageSeqNo: 42}.Build())
+		time.Sleep(5 * time.Millisecond)
+		s.handle(Message_builder{MessageSeqNo: 42, Status: status.New(codes.Internal, "boom").Proto()}.Build())
+
+		for i, want := range []time.Duration{10 * time.Millisecond, 25 * time.Millisecond, 30 * time.Millisecond} {
+			if got := (<-responseChan).Latency; got != want {
+				t.Errorf("response %d: Latency = %v, want %v", i+1, got, want)
+			}
+		}
+	})
+}

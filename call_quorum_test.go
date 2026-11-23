@@ -10,7 +10,11 @@ import (
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/gorumstest"
+	"github.com/relab/gorums/internal/testutils/mock"
 	"github.com/relab/gorums/internal/testutils/mockcall"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -358,4 +362,100 @@ func BenchmarkQuorumCall(b *testing.B) {
 			}
 		})
 	}
+}
+
+// TestQuorumCallResponseLatency verifies that each response carries the
+// round-trip time of its node: the handler's sleep for a success or an error
+// status, and zero when the call fails on the calling side.
+func TestQuorumCallResponseLatency(t *testing.T) {
+	sleeps := []time.Duration{10 * time.Millisecond, 20 * time.Millisecond, 30 * time.Millisecond}
+	sleepServer := func(failWith error) func(int) gorumstest.ServerIface {
+		return func(i int) gorumstest.ServerIface {
+			srv := gorums.NewServer()
+			srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
+				time.Sleep(sleeps[i])
+				if failWith != nil {
+					return failWith
+				}
+				send(pb.String(gorums.AsProto[*pb.StringValue](in).GetValue()))
+				return nil
+			})
+			return srv
+		}
+	}
+
+	tests := []struct {
+		name    string
+		failure error
+		wantErr bool
+	}{
+		{name: "Success"},
+		{name: "ErrorStatus", failure: status.Error(codes.Internal, "boom"), wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				config := gorumstest.Config(t, len(sleeps), sleepServer(tt.failure), gorumstest.SkipGoleak())
+				ctx := gorumstest.Context(t, 2*time.Second)
+
+				seen := 0
+				for r := range mockcall.QuorumCall(ctx, config, "latency").Results() {
+					seen++
+					if gotErr := r.Err != nil; gotErr != tt.wantErr {
+						t.Errorf("node %d: Err = %v, want error: %v", r.NodeID, r.Err, tt.wantErr)
+					}
+					if want := sleeps[r.NodeID-1]; r.Latency != want {
+						t.Errorf("node %d: Latency = %v, want %v", r.NodeID, r.Latency, want)
+					}
+				}
+				if seen != len(sleeps) {
+					t.Errorf("got %d responses, want %d", seen, len(sleeps))
+				}
+			})
+		})
+	}
+}
+
+// TestQuorumCallResponseLatencyCallerSide verifies that a response whose
+// error comes from the calling side has zero latency.
+func TestQuorumCallResponseLatencyCallerSide(t *testing.T) {
+	config := gorumstest.UnreachableConfig(t)
+	ctx := gorumstest.Context(t, 100*time.Millisecond)
+	for r := range mockcall.QuorumCall(ctx, config, "latency").Results() {
+		if r.Err == nil {
+			t.Errorf("node %d: Err = nil, want an error", r.NodeID)
+		}
+		if r.Latency != 0 {
+			t.Errorf("node %d: Latency = %v, want 0", r.NodeID, r.Latency)
+		}
+	}
+}
+
+// TestQuorumCallResponseLatencyAggregate verifies that the add function of
+// Aggregate sees the latency of each response.
+func TestQuorumCallResponseLatencyAggregate(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		config := gorumstest.Config(t, 3, func(i int) gorumstest.ServerIface {
+			srv := gorums.NewServer()
+			srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, in *gorums.Message, send func(proto.Message)) error {
+				time.Sleep(time.Duration(i+1) * 10 * time.Millisecond)
+				send(pb.String("x"))
+				return nil
+			})
+			return srv
+		}, gorumstest.SkipGoleak())
+		ctx := gorumstest.Context(t, 2*time.Second)
+
+		var maxLatency time.Duration
+		_, err := mockcall.QuorumCall(ctx, config, "latency").Reduce(3, 0, func(n int, r gorums.NodeResponse[*pb.StringValue]) (int, error) {
+			maxLatency = max(maxLatency, r.Latency)
+			return n + 1, nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := 30 * time.Millisecond; maxLatency != want {
+			t.Errorf("largest Latency seen by add = %v, want %v", maxLatency, want)
+		}
+	})
 }

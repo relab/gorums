@@ -1112,6 +1112,23 @@ func repliesAndErrors(seq gorums.ResponseSeq[*Response]) (map[gorums.ID]*Respons
 }
 ```
 
+Each response also has a `Latency` field: the round-trip time of that response, measured from the write of the request on the stream.
+It is set also when the response carries an error status, and it is zero when the error comes from the calling side, such as a stream that is down.
+Use it to keep your own statistics per call:
+
+```go
+func slowest(seq gorums.ResponseSeq[*Response]) (gorums.ID, time.Duration) {
+  var id gorums.ID
+  var worst time.Duration
+  for resp := range seq {
+    if resp.Latency > worst {
+      id, worst = resp.NodeID, resp.Latency
+    }
+  }
+  return id, worst
+}
+```
+
 ### Early Termination
 
 Return from the loop as soon as you have enough responses.
@@ -2421,6 +2438,7 @@ on it:
   It reflects the node's overall responsiveness rather than the latency of
   any particular operation, making it a blunt instrument for workloads where
   different RPCs have meaningfully different latency profiles.
+  For the latency of one call, use the `Latency` field of each `NodeResponse`; see [Per-Node Error Inspection](#per-node-error-inspection).
 
 * **Multicast and unicast calls are not measured.** Only calls that receive
   replies update the latency estimate.  Multicast and
@@ -2431,6 +2449,7 @@ on it:
   low-latency node from a high-variance node whose average happens to look good.
   If jitter matters for your workload, the built-in estimate is not sufficient
   on its own.
+  Collect the `Latency` field of each `NodeResponse` and compute the statistic you need.
 
 ### Best Practices
 
