@@ -26,6 +26,9 @@ func TestRunUsage(t *testing.T) {
 		{"prepare major flag", []string{"prepare", "-h"}, 0, "", "-allow-major"},
 		{"check-branch help", []string{"check-branch", "-h"}, 0, "", "-branch"},
 		{"usage names check-branch", []string{"help"}, 0, "check-branch", ""},
+		{"cluster-key help", []string{"cluster-key", "-h"}, 0, "", "-prune"},
+		{"cluster-key jump flag", []string{"cluster-key", "-h"}, 0, "", "gorums@ssh4.ux.uis.no"},
+		{"usage names cluster-key", []string{"help"}, 0, "cluster-key", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

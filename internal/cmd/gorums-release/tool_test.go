@@ -19,10 +19,12 @@ type fakeRunner struct {
 	failFirst map[string]int
 	// onExec, if set, runs when a state-changing command starts.
 	onExec func(line string)
+	// stdin maps each command line that had standard input to that input.
+	stdin map[string]string
 }
 
 func newFakeRunner() *fakeRunner {
-	return &fakeRunner{answers: map[string]string{}, fail: map[string]error{}, failFirst: map[string]int{}}
+	return &fakeRunner{answers: map[string]string{}, fail: map[string]error{}, failFirst: map[string]int{}, stdin: map[string]string{}}
 }
 
 // longest returns the value for the longest key contained in line.
@@ -52,6 +54,7 @@ func (f *fakeRunner) result(c cmd) error {
 
 func (f *fakeRunner) Query(c cmd) (string, error) {
 	f.calls = append(f.calls, "query "+c.String())
+	f.recordStdin(c)
 	err := f.result(c)
 	out, _ := longest(f.answers, c.String())
 	return out, err
@@ -59,10 +62,18 @@ func (f *fakeRunner) Query(c cmd) (string, error) {
 
 func (f *fakeRunner) Exec(c cmd) error {
 	f.calls = append(f.calls, "exec "+c.String())
+	f.recordStdin(c)
 	if f.onExec != nil {
 		f.onExec(c.String())
 	}
 	return f.result(c)
+}
+
+// recordStdin keeps the standard input of c, if it has any.
+func (f *fakeRunner) recordStdin(c cmd) {
+	if c.stdin != "" {
+		f.stdin[c.String()] = c.stdin
+	}
 }
 
 // execs returns the state-changing commands, in order.
@@ -155,6 +166,7 @@ func newTestTool(t *testing.T, f *fakeRunner) (*tool, *bytes.Buffer) {
 		sleep:    func(time.Duration) {},
 		lookPath: func(name string) (string, error) { return "/usr/bin/" + name, nil },
 		path:     "/home/u/go/bin:/usr/bin",
+		now:      func() time.Time { return time.Date(2026, 11, 11, 9, 0, 0, 0, time.UTC) },
 
 		verifyTimeout: time.Minute,
 	}, &out

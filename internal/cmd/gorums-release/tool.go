@@ -25,6 +25,7 @@ type tool struct {
 	sleep      func(time.Duration)
 	lookPath   func(string) (string, error) // finds a program on PATH
 	path       string                       // the value of PATH
+	now        func() time.Time
 
 	// verifyTimeout bounds the wait for the Go module proxy after publishing.
 	verifyTimeout time.Duration
