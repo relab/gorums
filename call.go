@@ -25,6 +25,9 @@ type OnewayCall[Req proto.Message] = impl.OnewayCall[Req]
 type OnewayAsync = impl.OnewayAsync
 
 // CallContext provides an interceptor with the context and state of a call.
+// An interceptor reads the call through the accessors [CallContext.Request],
+// [CallContext.Config], [CallContext.Method], [CallContext.Nodes],
+// [CallContext.Node], and [CallContext.Size].
 type CallContext[Req, Resp proto.Message] = impl.CallContext[Req, Resp]
 
 // ClientInterceptor transforms a call's request or response sequence.
