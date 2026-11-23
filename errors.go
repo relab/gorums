@@ -65,10 +65,7 @@ var ErrSendQueueFull = stream.ErrSendQueueFull
 // its stream.
 var ErrSendStalled = stream.ErrSendStalled
 
-// ErrSkipNode is returned for a node that a call skips: a request transform
-// returned nil or an invalid message for it, or a scatter call has a nil
-// request for it.
-// This allows the response iterator to account for all nodes without blocking.
+// ErrSkipNode is used to skip sending to a node whose request is nil or invalid.
 var ErrSkipNode = impl.ErrSkipNode
 
 // ErrStopped is returned by [Server.WaitForPeers], [Server.WaitForClients],

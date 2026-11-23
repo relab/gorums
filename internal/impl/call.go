@@ -121,9 +121,8 @@ func (c *OnewayCall[Req]) Intercept(ics ...ClientInterceptor[Req, *emptypb.Empty
 // Send returns:
 //   - nil, if every destination queued the request;
 //   - the context's error, if the context had already ended; nothing is sent;
-//   - [ErrNoNode] or [ErrEmptyConfig], if the call has no target;
-//   - [ErrScatterCount], if a scatter call's request count differs from the
-//     configuration size; nothing is sent;
+//   - [ErrNoNode], [ErrEmptyConfig], or [ErrScatterCount], if the call cannot
+//     be sent;
 //   - for unicast, the node's error, such as [stream.ErrSendQueueFull] or
 //     [stream.ErrNodeClosed];
 //   - for multicast, a [conn.QuorumCallError] with cause [ErrSendFailure] that
@@ -153,11 +152,9 @@ func (c *OnewayCall[Req]) Send() error {
 // the queued requests to the stream, in the same form as [OnewayCall.Send].
 // The handle may be dropped without calling Wait, but the errors are then lost.
 //
-// The context bounds the call until every stream write completes. If the
-// context has already ended, nothing is sent and Wait returns the context
-// error; a call without a target returns [ErrNoNode] or [ErrEmptyConfig]
-// instead, and a scatter call with the wrong request count returns
-// [ErrScatterCount]. A request still in the send queue when the context ends
+// The context bounds the call until every stream write completes. If the call
+// cannot be sent or the context has already ended, nothing is sent and Wait
+// returns that error. A request still in the send queue when the context ends
 // is discarded.
 //
 // Async dispatches the call; calling Send or Async on the same handle after
