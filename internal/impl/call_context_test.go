@@ -87,11 +87,11 @@ func TestCallContextAdmitMessageIDs(t *testing.T) {
 	}
 
 	c := &CallContext[*pb.StringValue, *pb.StringValue]{
-		Context: t.Context(),
-		config:  config,
-		request: pb.String("hello"),
-		method:  "test.Method",
-		oneway:  true, // fire-and-forget: no response channel needed
+		Context:       t.Context(),
+		config:        config,
+		sharedRequest: pb.String("hello"),
+		method:        "test.Method",
+		oneway:        true, // fire-and-forget: no response channel needed
 	}
 	if failed := c.admit(c.Context); len(failed) != 0 {
 		t.Fatal(failed)
@@ -112,17 +112,16 @@ func TestCallContextAdmitMessageIDs(t *testing.T) {
 
 // TestCallContextAdmitFanOutStart verifies that admit reaches every node once
 // per call and starts its fan-out at varying nodes, so that no node is reached
-// last in every call, with and without a request transform. Each node is a
-// shared node that draws its message ID from one counter when it is visited,
-// so the node holding a call's lowest ID was visited first.
+// last in every call, with a shared message and with per-node requests. Each
+// node is a shared node that draws its message ID from one counter when it is
+// visited, so the node holding a call's lowest ID was visited first.
 func TestCallContextAdmitFanOutStart(t *testing.T) {
-	identity := func(req *pb.StringValue, _ *Node) *pb.StringValue { return req }
 	tests := []struct {
-		name          string
-		reqTransforms []func(*pb.StringValue, *Node) *pb.StringValue
+		name    string
+		perNode bool
 	}{
 		{name: "SharedPayload"},
-		{name: "Transformed", reqTransforms: []func(*pb.StringValue, *Node) *pb.StringValue{identity}},
+		{name: "PerNode", perNode: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -141,14 +140,18 @@ func TestCallContextAdmitFanOutStart(t *testing.T) {
 				config[i] = conn.NewNodeForTest(id, stream.NewSharedTransportWithGen(transport, serverGen))
 			}
 
+			var requests []*pb.StringValue
+			if tt.perNode {
+				requests = slices.Repeat([]*pb.StringValue{pb.String("hello")}, nodes)
+			}
 			for range calls {
 				c := &CallContext[*pb.StringValue, *pb.StringValue]{
-					Context:       t.Context(),
-					config:        config,
-					request:       pb.String("hello"),
-					method:        "test.Method",
-					oneway:        true,
-					reqTransforms: tt.reqTransforms,
+					Context:         t.Context(),
+					config:          config,
+					sharedRequest:   pb.String("hello"),
+					perNodeRequests: requests,
+					method:          "test.Method",
+					oneway:          true,
 				}
 				if failed := c.admit(c.Context); len(failed) != 0 {
 					t.Fatal(failed)
@@ -184,12 +187,12 @@ func TestCallContextSendResponseChannelFull(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		down := conn.NewNodeForTest(1, stream.NewTransport(1, func() uint64 { return 1 }))
 		c := &CallContext[*pb.StringValue, *pb.StringValue]{
-			Context:      ctx,
-			config:       Config{down},
-			request:      pb.String("hello"),
-			method:       "test.Method",
-			streaming:    true,
-			responseChan: make(chan NodeResponse[*stream.Message]),
+			Context:       ctx,
+			config:        Config{down},
+			sharedRequest: pb.String("hello"),
+			method:        "test.Method",
+			streaming:     true,
+			responseChan:  make(chan NodeResponse[*stream.Message]),
 		}
 		done := make(chan struct{})
 		go func() {

@@ -18,14 +18,11 @@ type CallContext[Req, Resp proto.Message] struct {
 	method string
 	config Config
 
-	request  Req   // request is sent to all nodes in config.
-	requests []Req // requests of a scatter call: requests[i] goes to config[i].
-	scatter  bool  // a scatter call sends requests instead of request.
+	sharedRequest   Req   // sent to every node, unless perNodeRequests is set
+	perNodeRequests []Req // perNodeRequests[i] goes to config[i]; a nil entry skips config[i]
+	scatter         bool  // the caller passed perNodeRequests; their count must match config
 
 	responseChan chan NodeResponse[*stream.Message]
-
-	// reqTransforms holds request transformation functions registered by interceptors.
-	reqTransforms []func(Req, *Node) Req
 
 	// responseSeq is the iterator that yields node responses.
 	// Interceptors can wrap this iterator to modify responses.
@@ -42,7 +39,7 @@ type CallContext[Req, Resp proto.Message] struct {
 
 	// sendOnce ensures messages are sent exactly once, on the first
 	// call to sendNow. This deferred sending allows interceptors
-	// to register request transformations before dispatch.
+	// to transform the requests before dispatch.
 	sendOnce sync.Once
 
 	// dispatched is set once dispatch has been initiated (by sendNow or by
@@ -89,11 +86,11 @@ func newQuorumCallContext[Req, Resp proto.Message](
 	streaming bool,
 ) *CallContext[Req, Resp] {
 	callCtx := &CallContext[Req, Resp]{
-		Context:   ctx,
-		config:    config,
-		request:   req,
-		method:    method,
-		streaming: streaming,
+		Context:       ctx,
+		config:        config,
+		sharedRequest: req,
+		method:        method,
+		streaming:     streaming,
 	}
 	callCtx.initQuorumCall()
 	return callCtx
@@ -109,12 +106,12 @@ func newScatterQuorumCallContext[Req, Resp proto.Message](
 	streaming bool,
 ) *CallContext[Req, Resp] {
 	callCtx := &CallContext[Req, Resp]{
-		Context:   ctx,
-		config:    config,
-		requests:  reqs,
-		scatter:   true,
-		method:    method,
-		streaming: streaming,
+		Context:         ctx,
+		config:          config,
+		perNodeRequests: reqs,
+		scatter:         true,
+		method:          method,
+		streaming:       streaming,
 	}
 	callCtx.initQuorumCall()
 	return callCtx
@@ -141,15 +138,14 @@ func (c *CallContext[Req, Resp]) initQuorumCall() {
 	}
 }
 
-// configError returns the error that a call on c.config reports instead of
-// sending: [ErrEmptyConfig] for an empty configuration, or [ErrScatterCount]
-// for a scatter call whose request count differs from the configuration size.
+// configError returns the error that the call reports instead of sending:
+// [ErrEmptyConfig] or [ErrScatterCount].
 func (c *CallContext[Req, Resp]) configError() error {
 	switch {
 	case len(c.config) == 0:
 		return ErrEmptyConfig
-	case c.scatter && len(c.requests) != len(c.config):
-		return fmt.Errorf("%w: %d requests for %d nodes", ErrScatterCount, len(c.requests), len(c.config))
+	case c.scatter && len(c.perNodeRequests) != len(c.config):
+		return fmt.Errorf("%w: %d requests for %d nodes", ErrScatterCount, len(c.perNodeRequests), len(c.config))
 	}
 	return nil
 }
@@ -158,11 +154,10 @@ func (c *CallContext[Req, Resp]) configError() error {
 // CallContext accessors for client interceptors
 // -------------------------------------------------------------------------
 
-// Request returns the request message of the call. An interceptor can use it
-// to log or inspect the call. For a scatter call, which has one request per
-// node, it returns the zero value.
+// Request returns the request that the call sends to every node, or the zero
+// value for a scatter call. An interceptor can use it to inspect the call.
 func (c *CallContext[Req, Resp]) Request() Req {
-	return c.request
+	return c.sharedRequest
 }
 
 // Config returns the configuration (set of nodes) for this call.
@@ -243,56 +238,57 @@ func (c *CallContext[Req, Resp]) admit(ctx context.Context) (failed []NodeRespon
 	return failed
 }
 
-// messages returns the function that builds the message for node n, which is
-// config[i]. A scatter call builds the message of config[i] from requests[i];
-// a nil request skips the node with [ErrSkipNode] before any request
-// transform runs. With request transforms, each node gets its own transformed
-// message. Otherwise, the request is marshaled once and the ordinary nodes
-// share one message: each such node matches responses only against its own
-// pending calls. A node with a shared stream also carries the remote peer's
-// client-initiated IDs, so it gets its own message with an ID from the
-// server-initiated ID space.
-func (c *CallContext[Req, Resp]) messages() func(i int, n *Node) (*stream.Message, error) {
-	switch {
-	case c.scatter:
-		return func(i int, n *Node) (*stream.Message, error) {
-			if !isValid(c.requests[i]) {
-				return nil, ErrSkipNode
-			}
-			return c.transformAndMarshal(c.requests[i], n)
-		}
-	case len(c.reqTransforms) != 0:
-		return func(_ int, n *Node) (*stream.Message, error) {
-			return c.transformAndMarshal(c.request, n)
+// mapRequests sets the per-node request of each node to fn(req, node), where
+// req is the node's per-node request, or the shared request if the call has
+// none. A skipped node stays skipped. A call with an error stays unchanged.
+func (c *CallContext[Req, Resp]) mapRequests(fn func(Req, *Node) Req) {
+	if c.err != nil {
+		return
+	}
+	mapped := make([]Req, len(c.config))
+	for i, n := range c.config {
+		switch {
+		case c.perNodeRequests == nil:
+			mapped[i] = fn(c.sharedRequest, n)
+		case isValid(c.perNodeRequests[i]):
+			mapped[i] = fn(c.perNodeRequests[i], n)
 		}
 	}
-	payload, err := proto.Marshal(c.request)
+	c.perNodeRequests = mapped
+}
+
+// messages returns a function that builds a message for n, or config[i].
+// A shared request is marshaled once, and ordinary nodes share its message.
+// Each per-node request gets its own message. A nil or invalid message skips
+// the node with [ErrSkipNode].
+func (c *CallContext[Req, Resp]) messages() func(i int, n *Node) (*stream.Message, error) {
+	if c.perNodeRequests != nil {
+		return func(i int, n *Node) (*stream.Message, error) {
+			req := c.perNodeRequests[i]
+			if !isValid(req) {
+				return nil, ErrSkipNode
+			}
+			return stream.NewRequest(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, req)
+		}
+	}
+	payload, err := proto.Marshal(c.sharedRequest)
 	var sharedMsg *stream.Message
 	return func(_ int, n *Node) (*stream.Message, error) {
 		if err != nil {
 			return nil, err
 		}
 		if n.IsShared() {
+			// A shared stream also carries the remote peer's client-initiated
+			// IDs, so this node gets its own message with a server-initiated ID.
 			return stream.NewRequestFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload), nil
 		}
+		// Ordinary nodes can share one message ID, since each node matches
+		// replies only against its own pending calls.
 		if sharedMsg == nil {
 			sharedMsg = stream.NewRequestFromPayload(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, payload)
 		}
 		return sharedMsg, nil
 	}
-}
-
-// transformAndMarshal applies the per-node transformations to req and returns
-// the message for n or a marshaling error. An invalid transformed message
-// returns [ErrSkipNode].
-func (c *CallContext[Req, Resp]) transformAndMarshal(req Req, n *Node) (*stream.Message, error) {
-	for _, transform := range c.reqTransforms {
-		req = transform(req, n)
-	}
-	if !isValid(req) {
-		return nil, ErrSkipNode
-	}
-	return stream.NewRequest(c.Context, conn.NodeTransport(n).NextMsgID(), c.method, req)
 }
 
 // isValid reports whether req is a non-nil, valid message.

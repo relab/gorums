@@ -25,7 +25,7 @@ type ClientInterceptor[Req, Resp proto.Message] func(ctx *CallContext[Req, Resp]
 func MapRequest[Req, Resp proto.Message](fn func(Req, *Node) Req) ClientInterceptor[Req, Resp] {
 	return func(ctx *CallContext[Req, Resp], next ResponseSeq[Resp]) ResponseSeq[Resp] {
 		if fn != nil {
-			ctx.reqTransforms = append(ctx.reqTransforms, fn)
+			ctx.mapRequests(fn)
 		}
 		return next
 	}

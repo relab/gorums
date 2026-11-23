@@ -488,6 +488,22 @@ func TestCallScatterCountMismatch(t *testing.T) {
 		}
 	}
 
+	t.Run("MapRequest", func(t *testing.T) {
+		config, _ := newScatterConfig(t, 0, 7, 3, 12)
+		ran := false
+		mark := MapRequest[*pb.StringValue, *emptypb.Empty](func(req *pb.StringValue, _ *Node) *pb.StringValue {
+			ran = true
+			return req
+		})
+		reqs := []*pb.StringValue{pb.String("mismatch"), pb.String("mismatch")}
+		if err := MulticastScatter(t.Context(), config, reqs, "test.Method").Intercept(mark).Send(); !errors.Is(err, ErrScatterCount) {
+			t.Errorf("Send() = %v, want %v", err, ErrScatterCount)
+		}
+		if ran {
+			t.Error("transform ran for a call with a count mismatch")
+		}
+	})
+
 	t.Run("EmptyConfig", func(t *testing.T) {
 		for _, ep := range entryPoints {
 			if err := ep.call(t.Context(), nil, []*pb.StringValue{pb.String("x")}); !errors.Is(err, ErrEmptyConfig) {
@@ -570,7 +586,8 @@ func TestCallScatterMapRequest(t *testing.T) {
 		mu.Unlock()
 		return pb.String(req.GetValue() + "!")
 	})
-	if err := MulticastScatter(t.Context(), config, scatterRequests(config), "test.Method").Intercept(suffix).Send(); err != nil {
+	reqs := scatterRequests(config)
+	if err := MulticastScatter(t.Context(), config, reqs, "test.Method").Intercept(suffix).Send(); err != nil {
 		t.Fatalf("Send() = %v, want nil", err)
 	}
 	for id, r := range recorders {
@@ -581,6 +598,122 @@ func TestCallScatterMapRequest(t *testing.T) {
 		if got := r.wait(t, 1); got[0] != want+"!" {
 			t.Errorf("node %d received %q, want %q", id, got[0], want+"!")
 		}
+	}
+	for i, req := range reqs {
+		if want := fmt.Sprintf("to-%d", config[i].ID()); req.GetValue() != want {
+			t.Errorf("reqs[%d] = %q after the call, want %q", i, req.GetValue(), want)
+		}
+	}
+}
+
+// onewayBuilders lists a broadcast and a scatter multicast on config. The
+// broadcast sends "hello" to every node; the scatter call sends "to-<id>".
+var onewayBuilders = []struct {
+	name string
+	want func(id ID) string
+	new  func(ctx context.Context, config Config) *OnewayCall[*pb.StringValue]
+}{
+	{
+		name: "Multicast",
+		want: func(ID) string { return "hello" },
+		new: func(ctx context.Context, config Config) *OnewayCall[*pb.StringValue] {
+			return Multicast(ctx, config, pb.String("hello"), "test.Method")
+		},
+	},
+	{
+		name: "MulticastScatter",
+		want: func(id ID) string { return fmt.Sprintf("to-%d", id) },
+		new: func(ctx context.Context, config Config) *OnewayCall[*pb.StringValue] {
+			return MulticastScatter(ctx, config, scatterRequests(config), "test.Method")
+		},
+	},
+}
+
+// TestCallMapRequestRunsAtIntercept verifies that a request transform runs
+// when its interceptor is attached, once per node, in configuration order.
+func TestCallMapRequestRunsAtIntercept(t *testing.T) {
+	for _, b := range onewayBuilders {
+		t.Run(b.name, func(t *testing.T) {
+			config, recorders := newScatterConfig(t, 0, 7, 3, 12)
+			var visited []ID
+			record := MapRequest[*pb.StringValue, *emptypb.Empty](func(req *pb.StringValue, n *Node) *pb.StringValue {
+				visited = append(visited, n.ID())
+				return req
+			})
+			call := b.new(t.Context(), config).Intercept(record)
+			if want := []ID{7, 3, 12}; !slices.Equal(visited, want) {
+				t.Errorf("transform visited %v at Intercept, want %v", visited, want)
+			}
+			if err := call.Send(); err != nil {
+				t.Fatalf("Send() = %v, want nil", err)
+			}
+			for id, r := range recorders {
+				if got := r.wait(t, 1); got[0] != b.want(id) {
+					t.Errorf("node %d received %q, want %q", id, got[0], b.want(id))
+				}
+			}
+			if len(visited) != len(config) {
+				t.Errorf("transform ran %d times, want %d", len(visited), len(config))
+			}
+		})
+	}
+}
+
+// TestCallMapRequestNilShared verifies that a request transform of a broadcast
+// call receives the shared request even when it is nil, so the transform can
+// build each node's request.
+func TestCallMapRequestNilShared(t *testing.T) {
+	config, recorders := newScatterConfig(t, 0, 7, 3, 12)
+	build := MapRequest[*pb.StringValue, *emptypb.Empty](func(_ *pb.StringValue, n *Node) *pb.StringValue {
+		return pb.String(fmt.Sprintf("built-%d", n.ID()))
+	})
+	if err := Multicast[*pb.StringValue](t.Context(), config, nil, "test.Method").Intercept(build).Send(); err != nil {
+		t.Fatalf("Send() = %v, want nil", err)
+	}
+	for id, r := range recorders {
+		if want, got := fmt.Sprintf("built-%d", id), r.wait(t, 1)[0]; got != want {
+			t.Errorf("node %d received %q, want %q", id, got, want)
+		}
+	}
+}
+
+// TestCallMapRequestChain verifies that chained request transforms compose in
+// call-site order, and that a node that one transform skips reaches no later
+// transform and receives nothing.
+func TestCallMapRequestChain(t *testing.T) {
+	const skipID = 3
+	for _, b := range onewayBuilders {
+		t.Run(b.name, func(t *testing.T) {
+			config, recorders := newScatterConfig(t, 0, 7, 3, 12)
+			first := MapRequest[*pb.StringValue, *emptypb.Empty](func(req *pb.StringValue, n *Node) *pb.StringValue {
+				if n.ID() == skipID {
+					return nil
+				}
+				return pb.String(req.GetValue() + "!")
+			})
+			var seen []ID
+			second := MapRequest[*pb.StringValue, *emptypb.Empty](func(req *pb.StringValue, n *Node) *pb.StringValue {
+				seen = append(seen, n.ID())
+				return pb.String(req.GetValue() + "?")
+			})
+			if err := b.new(t.Context(), config).Intercept(first, second).Send(); err != nil {
+				t.Fatalf("Send() = %v, want nil", err)
+			}
+			if want := []ID{7, 12}; !slices.Equal(seen, want) {
+				t.Errorf("second transform saw %v, want %v", seen, want)
+			}
+			for _, id := range []ID{7, 12} {
+				if got := recorders[id].wait(t, 1); got[0] != b.want(id)+"!?" {
+					t.Errorf("node %d received %q, want %q", id, got[0], b.want(id)+"!?")
+				}
+			}
+			if err := Multicast(t.Context(), config, pb.String("after"), "test.Method").Send(); err != nil {
+				t.Fatal(err)
+			}
+			if got := recorders[skipID].wait(t, 1); got[0] != "after" {
+				t.Errorf("skipped node %d first received %q, want %q", skipID, got[0], "after")
+			}
+		})
 	}
 }
 

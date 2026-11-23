@@ -604,7 +604,8 @@ It queues its requests with a context that cannot be canceled, so an accepted re
 A quorum call returns a `Call`, which embeds `Responses` and its terminal methods (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`), as well as the `Correctable` future.
 `Call.Async` sends the requests at once and returns the dispatched `Responses`, so any terminal method collects the replies later.
 A one-way call (`Multicast`, `Unicast`) returns a `OnewayCall`, whose `Send` returns queue-admission errors and whose `Async` returns a `OnewayAsync` that collects admission failures and stream-write errors through `Wait`.
-A `ClientInterceptor` wraps the response iterator and may register per-node request transformations before the call is dispatched.
+A `ClientInterceptor` wraps the response iterator before the call is dispatched.
+A `MapRequest` interceptor sets one request per node when it is attached; scatter calls use the same per-node path.
 `CallContext` reaches each node's send path through `conn.NodeTransport`.
 
 ```mermaid
