@@ -109,10 +109,11 @@ func newQuorumCallContext[Req, Resp proto.Message](
 }
 
 // -------------------------------------------------------------------------
-// CallContext Methods
+// CallContext accessors for client interceptors
 // -------------------------------------------------------------------------
 
-// Request returns the original request message for this call.
+// Request returns the request message of the call. An interceptor can use it
+// to log or inspect the call.
 func (c *CallContext[Req, Resp]) Request() Req {
 	return c.request
 }
