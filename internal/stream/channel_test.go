@@ -914,8 +914,8 @@ func TestChannelReconnectAfterServerDrop(t *testing.T) {
 // waiting for the channel to detect the disconnect.
 //
 // A request sent on a broken stream fails with ErrStreamDown. A request that
-// was not sent goes to a new stream. Every request completes, and at least one
-// completes on a new stream.
+// was not sent goes to a new stream. The whole burst may reach the broken
+// stream. Once the channel observes the disconnect, a fresh request succeeds.
 func TestChannelConcurrentStreamReconnect(t *testing.T) {
 	tc := setupChannel(t, breakStreamServer)
 	if !waitForConnection(tc.OutboundChannel, streamConnectTimeout) {
@@ -929,31 +929,29 @@ func TestChannelConcurrentStreamReconnect(t *testing.T) {
 	}
 
 	// Fire concurrent requests without waiting for the channel to notice the
-	// disconnect. These requests race with the teardown of the broken stream,
-	// validating that the channel correctly routes them to the new stream
-	// without spurious cancellation.
+	// disconnect.
 	const concurrency = 10
 	var wg sync.WaitGroup
-	errs := make([]error, concurrency)
 	for i := range concurrency {
 		wg.Go(func() {
-			resp := sendRequest(t, tc.OutboundChannel, NodeRequest{}, uint64(i+2))
-			errs[i] = resp.Err
+			id := uint64(i + 2)
+			resp, err := trySendRequest(tc.OutboundChannel, NodeRequest{}, id)
+			if err != nil {
+				t.Error(err)
+			} else if resp.Err != nil && !errors.Is(resp.Err, ErrStreamDown) {
+				t.Errorf("request %d: error = %v, want nil or %v", id, resp.Err, ErrStreamDown)
+			}
 		})
 	}
 	wg.Wait()
 
-	succeeded := 0
-	for i, err := range errs {
-		switch {
-		case err == nil:
-			succeeded++
-		case !errors.Is(err, ErrStreamDown):
-			t.Errorf("request %d: error = %v, want nil or %v", i+2, err, ErrStreamDown)
-		}
+	// The server drops each stream after one reply, including any stream
+	// opened during the burst.
+	if !waitForDisconnection(tc.OutboundChannel, streamConnectTimeout) {
+		t.Fatal("channel should be disconnected after the burst")
 	}
-	if succeeded == 0 {
-		t.Error("no request completed on a new stream")
+	if resp := sendRequest(t, tc.OutboundChannel, NodeRequest{}, concurrency+2); resp.Err != nil {
+		t.Fatalf("request after disconnect: %v", resp.Err)
 	}
 }
 
