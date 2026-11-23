@@ -892,7 +892,7 @@ var corr *pb.Correctable[*pb.ReadResponse]
 Understanding when messages are actually sent matters for ordering and for reasoning about concurrent calls.
 
 **Quorum calls are lazy.** A quorum call is not dispatched until the caller calls a terminal method (`First`, `Majority`, `All`, `Threshold`, `Aggregate`, `Reduce`, `Matching`), `Async`, or `Correctable`, or ranges over `.Results()`.
-So interceptors can register per-node request transformations before any message is sent.
+So interceptors attached with `Intercept` can transform the requests before any message is sent.
 
 **Async sends immediately.** `Async()` sends the requests before it returns.
 This preserves message ordering when one goroutine issues several calls in sequence:
@@ -935,7 +935,7 @@ The application uses later protocol replies, timeouts, or periodic updates to re
 Use `Async` followed by `Wait` when the next operation depends on finishing local stream writes, or to pace the number of outstanding writes.
 `Async` also lets context cancellation withdraw queued requests, whether the caller keeps or discards the handle.
 
-Gorums serializes requests and calls application-supplied `MapRequest` functions on the caller's goroutine.
+Gorums serializes requests on the caller's goroutine, and `Intercept` calls application-supplied `MapRequest` functions on that goroutine too.
 When sending while holding a protocol lock, large messages and slow `MapRequest` functions extend the time that the application holds the lock.
 
 The server still replies with an error if it cannot run the handler: it has no handler for the method, or it cannot decode the request.
@@ -1378,6 +1378,9 @@ resp, err := client.WriteQC(ctx, req).
     ).
     Majority()
 ```
+
+`Intercept` calls the function at once, for each node in configuration order.
+If it returns nil for a node, the call skips that node, and later `MapRequest` functions run only for the remaining nodes.
 
 Go cannot infer the response type from the function argument, so `MapRequest` needs explicit type arguments: `MapRequest[Req, Resp]`.
 Likewise, `MapResponse` needs the request type: `MapResponse[Req]`.

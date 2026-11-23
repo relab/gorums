@@ -10,10 +10,10 @@ import (
 // Unicast is exported and documented as gorumsimpl.Unicast.
 func Unicast[Req proto.Message](ctx context.Context, node *Node, req Req, method string) *OnewayCall[Req] {
 	callCtx := &CallContext[Req, *emptypb.Empty]{
-		Context: ctx,
-		request: req,
-		method:  method,
-		oneway:  true,
+		Context:       ctx,
+		sharedRequest: req,
+		method:        method,
+		oneway:        true,
 	}
 	if node == nil {
 		callCtx.err = ErrNoNode

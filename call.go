@@ -33,8 +33,9 @@ type CallContext[Req, Resp proto.Message] = impl.CallContext[Req, Resp]
 // ClientInterceptor transforms a call's request or response sequence.
 type ClientInterceptor[Req, Resp proto.Message] = impl.ClientInterceptor[Req, Resp]
 
-// MapRequest returns an interceptor that transforms the request for each node.
-// Returning nil or an invalid message skips the node with [ErrSkipNode].
+// MapRequest returns an interceptor that sets the request of each node to
+// fn(req, node). Intercept calls fn at once, for each node in configuration
+// order. Returning nil for a node skips that node with [ErrSkipNode].
 func MapRequest[Req, Resp proto.Message](fn func(Req, *Node) Req) ClientInterceptor[Req, Resp] {
 	return impl.MapRequest[Req, Resp](fn)
 }
