@@ -100,22 +100,28 @@ func TestMeshAwaitMeshWaitsForPeerView(t *testing.T) {
 				t.Fatalf("node 1 WaitForPeers: %v", err)
 			}
 
-			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-			err := AwaitMesh(ctx, node1.PeerConfig())
-			cancel()
-			if err == nil {
-				t.Fatal("AwaitMesh = nil while node 2 has no stream to node 3, want error")
+			// The stall timeout is checked after a whole round. A caller
+			// deadline can cut off a healthy peer's reply mid-round.
+			incompleteMesh := func(t *testing.T) string {
+				t.Helper()
+				shortenReadiness(t, meshAttemptTimeout, time.Second)
+				ctx := gorumstest.Context(t, 10*time.Second)
+				err := AwaitMesh(ctx, node1.PeerConfig())
+				if err == nil || ctx.Err() != nil {
+					t.Fatalf("AwaitMesh = %v, want a stalled mesh before the caller deadline", err)
+				}
+				return err.Error()
 			}
 			missing := "node 2 (" + servers[1].Addr() + ") is missing peers [3]"
-			if !strings.Contains(err.Error(), missing) {
-				t.Errorf("AwaitMesh error = %q, want it to contain %q", err, missing)
-			}
-			if strings.Contains(err.Error(), "did not answer") {
-				t.Errorf("AwaitMesh error = %q, want every node to answer", err)
-			}
-			if !errors.Is(err, context.DeadlineExceeded) {
-				t.Errorf("AwaitMesh error = %v, want it to wrap %v", err, context.DeadlineExceeded)
-			}
+			t.Run("GateClosed", func(t *testing.T) {
+				got := incompleteMesh(t)
+				if !strings.Contains(got, missing) {
+					t.Errorf("AwaitMesh error = %q, want it to contain %q", got, missing)
+				}
+				if strings.Contains(got, "did not answer") {
+					t.Errorf("AwaitMesh error = %q, want every node to answer", got)
+				}
+			})
 
 			openGate()
 			if err := AwaitMesh(gorumstest.Context(t, 10*time.Second), node1.PeerConfig()); err != nil {
@@ -128,17 +134,14 @@ func TestMeshAwaitMeshWaitsForPeerView(t *testing.T) {
 			if err := servers[1].WaitForPeers(gorumstest.Context(t, 5*time.Second), lost); err != nil {
 				t.Fatalf("node 2 WaitForPeers(lost node 3): %v", err)
 			}
-			ctx, cancel = context.WithTimeout(t.Context(), time.Second)
-			err = AwaitMesh(ctx, node1.PeerConfig())
-			cancel()
-			if err == nil {
-				t.Fatal("AwaitMesh = nil after node 3 stopped, want error")
-			}
-			for _, want := range []string{missing, "node 3 (" + servers[2].Addr() + ") did not answer"} {
-				if !strings.Contains(err.Error(), want) {
-					t.Errorf("AwaitMesh error = %q, want it to contain %q", err, want)
+			t.Run("PeerStopped", func(t *testing.T) {
+				got := incompleteMesh(t)
+				for _, want := range []string{missing, "node 3 (" + servers[2].Addr() + ") did not answer"} {
+					if !strings.Contains(got, want) {
+						t.Errorf("AwaitMesh error = %q, want it to contain %q", got, want)
+					}
 				}
-			}
+			})
 		})
 	}
 }
