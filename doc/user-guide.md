@@ -780,7 +780,7 @@ acc, err := client.PromiseQC(ctx, PromiseRequest_builder{Round: round}.Build()).
 
 * If `add` returns an error, `Reduce` returns the accumulator from that call and the same error.
 * If fewer than `n` nodes respond successfully, `Reduce` returns the latest accumulator and an error that matches `gorums.ErrIncomplete`.
-  This error also holds the node errors, but not the nodes that a request transform or a nil scatter request skipped.
+  This error also holds node errors, except for skipped nodes.
 
 In both cases, you can inspect the partial accumulator.
 `Reduce` panics if `n` is not positive or if `add` is nil.
@@ -830,7 +830,7 @@ if err != nil {
 When you need only the agreed value, use `agreement.Value` and ignore the evidence.
 
 If no key gets `n` responses, `Matching` returns an empty agreement and a `gorums.ErrIncomplete` error.
-This error also holds the node errors, but not the nodes that a request transform or a nil scatter request skipped.
+This error also holds the node errors, but not the skipped nodes.
 `Matching` panics if `n` is not positive or if `key` is nil.
 
 ### Async and Correctable Variants
@@ -1419,8 +1419,6 @@ client.WriteMulticast(ctx, &WriteRequest{}).
 ```
 
 The response type of a one-way call is always `google.protobuf.Empty`, so their interceptors use `*emptypb.Empty` (from `google.golang.org/protobuf/types/known/emptypb`) as `Resp`.
-
-**Note:** If `MapRequest` returns `nil` for a node, the message will not be sent to that node.
 
 To send one request per node, built ahead of the call, use a [scatter call](#scatter-one-request-per-node) instead.
 

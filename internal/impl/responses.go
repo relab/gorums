@@ -97,10 +97,8 @@ func (r *Responses[Resp]) Size() int {
 
 // Results returns a single-use sequence that yields responses as they arrive.
 // Iteration dispatches the call and ends after every node responds or the
-// context is canceled. On an empty configuration, the sequence yields one
-// response whose Err is [ErrEmptyConfig]; for a scatter call whose request
-// count differs from the configuration size, it yields one response whose Err
-// is [ErrScatterCount]. Calling [Call.Intercept] after Results panics.
+// context is canceled. A call that cannot be sent yields one response with
+// an error. Calling [Call.Intercept] after Results panics.
 func (r *Responses[Resp]) Results() ResponseSeq[Resp] {
 	r.markDispatched()
 	return r.seq
