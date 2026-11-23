@@ -75,7 +75,7 @@ type runManifest struct {
 
 	Diagnosis string `json:"diagnosis,omitempty"` // LLM triage verdict from sweep -explain
 
-	GitSHA  string         `json:"git_sha,omitempty"`  // repository HEAD, best effort
+	GitSHA  string         `json:"git_sha,omitempty"`  // commit the benchmark binary was built from; empty when unknown
 	Binary  string         `json:"binary,omitempty"`   // deployed binary path
 	Hosts   []string       `json:"hosts"`              // host:port per node
 	Files   []string       `json:"files"`              // per-node result file basenames
@@ -248,6 +248,16 @@ func gorumsNodeIDs(nodes []nodeAssignment) map[string]uint32 {
 		ids[peer] = uint32(i + 1)
 	}
 	return ids
+}
+
+// buildGitSHA returns the commit the benchmark binary was built from: -git-sha
+// if set, else HEAD of the current directory when sweep builds the binary, else
+// "" for a prebuilt -binary.
+func buildGitSHA(cfg *config) string {
+	if cfg.gitSHA != "" || cfg.binaryPath != "" {
+		return cfg.gitSHA
+	}
+	return gitHeadSHA()
 }
 
 // gitHeadSHA returns the repository HEAD commit hash, or "" when unavailable

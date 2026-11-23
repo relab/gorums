@@ -29,19 +29,29 @@ func TestReplayScript(t *testing.T) {
 		" '-n' '5,9,17,25' '-workers' '1,2,4,8,16,32' '-duration' '13s' '-trim' '3s'" +
 		" '-verbose' '-benchmarks' 'SymmetricQuorumCall,QuorumCall'" +
 		" '-extra-args' '-label='\\''canary run'\\'''\n"
-	if got := replayScript(args); got != want {
+	if got := replayScript("./cmd/sweep/sweep", rebuildSweepCommand, args); got != want {
 		t.Errorf("replayScript =\n%s\nwant\n%s", got, want)
 	}
 }
 
 func TestReplayScriptShellQuoteEmptyArg(t *testing.T) {
-	got := replayScript([]string{"sweep", "-extra-args", ""})
+	got := replayScript("go tool sweep", "", []string{"sweep", "-extra-args", ""})
 	if !strings.Contains(got, "'-extra-args' ''\n") {
 		t.Errorf("replayScript did not quote empty arg:\n%s", got)
 	}
 }
 
+func TestReplayScriptWithoutRebuild(t *testing.T) {
+	want := "#!/bin/sh\n" +
+		"set -eu\n\n" +
+		"exec go tool sweep '-hosts' 'bb1'\n"
+	if got := replayScript("go tool sweep", "", []string{"sweep", "-hosts", "bb1"}); got != want {
+		t.Errorf("replayScript =\n%s\nwant\n%s", got, want)
+	}
+}
+
 func TestWriteReplayScript(t *testing.T) {
+	t.Chdir(t.TempDir())
 	dir := t.TempDir()
 	path, err := writeReplayScript(dir, []string{"sweep", "-hosts", "bb1"})
 	if err != nil {
@@ -61,7 +71,7 @@ func TestWriteReplayScript(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read replay script: %v", err)
 	}
-	if !strings.Contains(string(data), rebuildSweepCommand+"\n\nexec ./cmd/sweep/sweep '-hosts' 'bb1'\n") {
+	if !strings.Contains(string(data), "\nexec go tool sweep '-hosts' 'bb1'\n") {
 		t.Errorf("replay script content:\n%s", data)
 	}
 }

@@ -173,10 +173,10 @@ func runDriver(cfg *config, hosts []string) error {
 		log.Printf("warning: %d benchmark host(s) after excluding driver %s, but largest -n is %d; "+
 			"nodes will be packed onto fewer hosts", len(benchHosts), driver, maxN)
 	}
-	if err := requireBenchkitModuleRoot(); err != nil {
+	if err := checkModuleRoot(cfg); err != nil {
 		return err
 	}
-	sha := gitHeadSHA()
+	sha := buildGitSHA(cfg)
 	logSweepEstimate(cfg.sweep, cfg.duration)
 
 	// Stage the binaries and SSH config in a local temp dir; they are uploaded
@@ -190,11 +190,7 @@ func runDriver(cfg *config, hosts []string) error {
 	benchLocal := cfg.binaryPath
 	if benchLocal == "" {
 		benchLocal = filepath.Join(stage, "benchmark")
-		buildCmd := cfg.buildCmd
-		if buildCmd == "" {
-			buildCmd = os.Getenv("BENCHKIT_BUILD")
-		}
-		if err := buildBenchmark(benchLocal, buildCmd); err != nil {
+		if err := buildBenchmark(benchLocal, benchmarkBuildCmd(cfg)); err != nil {
 			return fmt.Errorf("build benchmark: %w", err)
 		}
 	}
@@ -290,10 +286,11 @@ func runDriver(cfg *config, hosts []string) error {
 	log.Printf("detached sweep started on %s; laptop is free to disconnect", driver)
 	log.Printf("follow progress with:")
 	log.Printf("  %s", driverSSHCommand(driver, cfg.sshConfig, "tail -F "+iago.Quote(wd+"/console.log")))
+	run, _ := sweepInvocation(".")
 	log.Printf("collect results with:")
-	log.Printf("  ./cmd/sweep/sweep -collect -outdir %s", cfg.rootDir)
+	log.Printf("  %s -collect -outdir %s", run, cfg.rootDir)
 	log.Printf("collect a snapshot before completion with:")
-	log.Printf("  ./cmd/sweep/sweep -collect-now -outdir %s", cfg.rootDir)
+	log.Printf("  %s -collect-now -outdir %s", run, cfg.rootDir)
 	return nil
 }
 
@@ -733,7 +730,8 @@ func collectDriverCompactResults(cfg *config, host iago.Host, wd, remoteOut, run
 	log.Printf("raw .binpb results retained on %s:%s", host.Name(), wd)
 	updateLastRunCollection(cfg.rootDir, wd, "compact")
 	log.Printf("to archive raw results and remove the driver work dir:")
-	log.Printf("  ./cmd/sweep/sweep -collect %s:%s -outdir %s", host.Name(), wd, cfg.rootDir)
+	run, _ := sweepInvocation(".")
+	log.Printf("  %s -collect %s:%s -outdir %s", run, host.Name(), wd, cfg.rootDir)
 	log.Printf("to discard raw driver results without archiving:")
 	log.Printf("  %s", driverSSHCommand(host.Name(), cfg.sshConfig, "rm -rf "+iago.Quote(wd)))
 	autoReport(cfg)
@@ -1323,20 +1321,20 @@ func formatSize(n int64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
 
+// sweepPackage is the import path of sweep, which resolves to the benchkit
+// version that the current module requires.
+const sweepPackage = benchkitModulePath + "/cmd/sweep"
+
 // buildSweepBinary cross-compiles sweep itself for Linux, for amd64 unless
-// GOARCH is set (see [crossBuildEnv]). Run from the benchkit module root, which
-// is where its own package path resolves.
+// GOARCH is set (see [crossBuildEnv]).
 func buildSweepBinary(outputPath string) error {
-	if err := requireBenchkitModuleRoot(); err != nil {
-		return err
-	}
 	abs, err := filepath.Abs(outputPath)
 	if err != nil {
 		return err
 	}
 	env, goarch := crossBuildEnv(os.Environ())
 	log.Printf("building sweep for linux/%s → %s", goarch, abs)
-	return runCrossBuild(exec.Command("go", "build", "-o", abs, "./cmd/sweep"), env)
+	return runCrossBuild(exec.Command("go", "build", "-o", abs, sweepPackage), env)
 }
 
 // joinInts formats an int slice as a comma-separated string for a sweep flag.

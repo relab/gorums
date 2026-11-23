@@ -68,7 +68,8 @@
 // environment variable) if set, substituting the chosen output path for the
 // {{output}} token, and otherwise falls back to the built-in default
 // "go build -o <output> ./cmd/benchmark". The custom command is run via "sh -c"
-// from the benchkit module root.
+// from the current directory, so -binary or -build lets sweep run from any
+// module; the built-in default needs the benchkit module root.
 // With the built-in binary, -benchmarks accepts only symmetric benchmark names
 // because every host runs as a peer rather than as a coordinator.
 //
@@ -110,8 +111,8 @@
 //
 //	-export-compact <work-dir>   rebuild plotdata/ and compact-transfer/, then exit
 //
-// The -driven and -git-sha flags are internal: the launcher sets them on the
-// driver and they are not meant to be passed by hand.
+// The -driven flag is internal: the launcher sets it on the driver and it is
+// not meant to be passed by hand.
 package main
 
 import (
@@ -341,11 +342,11 @@ func main() {
 		return
 	}
 
-	// The module-root requirement, build, replay script, and stale-binary warning
+	// The module-root check, build, replay script, and stale-binary warning
 	// are laptop-only steps; the driven sweep on the driver skips them (it runs
 	// from a temp work dir with a pre-built binary and a forwarded git SHA).
 	if !cfg.driven {
-		if err := requireBenchkitModuleRoot(); err != nil {
+		if err := checkModuleRoot(cfg); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -370,8 +371,8 @@ func main() {
 	// The replay script and stale-binary check are laptop-only: on the driver
 	// os.Args is the driven command (not the user's), there is no repo HEAD, and
 	// the binary was freshly built by the launcher. The launcher writes the
-	// replay script locally and forwards the laptop's HEAD via -git-sha.
-	gitSHA := cfg.gitSHA
+	// replay script locally and forwards the binary's commit via -git-sha.
+	gitSHA := buildGitSHA(cfg)
 	if !cfg.driven {
 		replayScriptPath, err := writeReplayScript(cfg.outDir, os.Args)
 		if err != nil {
@@ -381,8 +382,9 @@ func main() {
 
 		// Catch a sweep binary built before the latest commits: it silently runs
 		// outdated code, so warn before doing any work.
-		gitSHA = gitHeadSHA()
-		warnIfStaleBinary(gitSHA)
+		if isBenchkitModuleRoot(".") {
+			warnIfStaleBinary(gitHeadSHA())
+		}
 	}
 
 	// Verify the triage LLM before spending the sweep: a broken -explain is far
@@ -402,11 +404,17 @@ func main() {
 	// built-in gorums default.
 	if cfg.binaryPath == "" {
 		cfg.binaryPath = defaultBinaryPath
-		buildCmd := cfg.buildCmd
-		if buildCmd == "" {
-			buildCmd = os.Getenv("BENCHKIT_BUILD")
+		// Outside the benchkit module, ./cmd/benchmark belongs to another
+		// project; build into a temp dir there.
+		if !isBenchkitModuleRoot(".") {
+			dir, err := os.MkdirTemp("", "sweep-build-")
+			if err != nil {
+				log.Fatalf("build dir: %v", err)
+			}
+			defer os.RemoveAll(dir)
+			cfg.binaryPath = filepath.Join(dir, "benchmark")
 		}
-		if err := buildBenchmark(cfg.binaryPath, buildCmd); err != nil {
+		if err := buildBenchmark(cfg.binaryPath, benchmarkBuildCmd(cfg)); err != nil {
 			log.Fatalf("build: %v", err)
 		}
 	}
@@ -761,7 +769,7 @@ func parseFlags() (*config, []string) {
 	flag.StringVar(&cfg.remoteDir, "remote-dir", "/tmp", "remote storage root; sweep creates and uses <root>/sweep-$USER")
 	flag.StringVar(&cfg.transferMode, "transfer", "rsync", "file transfer backend for -detach uploads and downloads: rsync >=3.2.4 (default) or sftp")
 	flag.BoolVar(&cfg.driven, "driven", false, "internal: set automatically on the cluster-local driver; relaxes laptop-only steps (repo root, build, replay script)")
-	flag.StringVar(&cfg.gitSHA, "git-sha", "", "internal: repository HEAD forwarded by -detach so the driven sweep records it in manifests")
+	flag.StringVar(&cfg.gitSHA, "git-sha", "", "commit the benchmark binary was built from, recorded in manifests (default: HEAD of the current directory when sweep builds the binary; unknown with -binary)")
 	flag.StringVar(&cfg.readyMarker, "ready-marker", "", "internal: path the driven sweep touches once its peers are dialed, so a -detach launcher knows the forwarded agent is no longer needed")
 	flag.StringVar(&cfg.selfHost, "self-host", "", "internal: set by a driver-routed -check to the driver's own alias, which is probed locally instead of over SSH (a host cannot SSH to itself)")
 

@@ -365,3 +365,27 @@ func TestUpdateManifestDiagnosis(t *testing.T) {
 		t.Errorf("diagnosis after overwrite = %q, want %q", m.Diagnosis, "second verdict")
 	}
 }
+
+func TestManifestBuildGitSHA(t *testing.T) {
+	head := gitHeadSHA()
+	if head == "" {
+		t.Skip("needs a git checkout")
+	}
+	tests := []struct {
+		name string
+		cfg  config
+		want string
+	}{
+		{"sweep builds", config{}, head},
+		{"custom build", config{buildCmd: "go build ./cmd/x"}, head},
+		{"prebuilt binary", config{binaryPath: "./bench"}, ""},
+		{"user supplied", config{binaryPath: "./bench", gitSHA: "abc123"}, "abc123"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := buildGitSHA(&tt.cfg); got != tt.want {
+				t.Errorf("buildGitSHA() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
