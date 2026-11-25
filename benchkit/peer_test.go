@@ -3,11 +3,13 @@ package benchkit
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"net"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,6 +20,7 @@ import (
 	"github.com/relab/gorums/gorumstest"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"github.com/relab/gorums/internal/testutils/mockcall"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -516,6 +519,117 @@ func TestPeerRunLocal(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// namedMetricsWorkload returns a [Workload] with two benchmarks that record
+// named metrics. On every node, Local records sends samples of a client-side
+// series and a counter. On node 1, Server runs [ServerMeasured] against every
+// peer, and the handler of each peer records a server-measured series and a
+// counter for each request; on the other nodes, Server returns an empty result.
+func namedMetricsWorkload(sends int) Workload {
+	return Workload{
+		Setup: func(p *Peer) ([]Bench, error) {
+			stats := p.Control().Stats()
+			deliver := stats.Series("deliver")
+			received := stats.Counter("received", "msgs")
+			p.Server().RegisterHandler(mock.TestMethod, func(ctx gorums.ServerContext, _ *gorums.Message, _ func(proto.Message)) error {
+				stats.AddLatency(time.Microsecond)
+				deliver.AddBySender(ctx.SenderID(), time.Microsecond)
+				received.Add(1)
+				return nil
+			})
+			local := func(_ context.Context, opts Options) (*Result, error) {
+				m := StartMeasurement(opts)
+				encode := m.Stats.Series("encode")
+				blocks := m.Stats.Counter("blocks", "blocks")
+				for i := range sends {
+					m.Stats.AddLatency(time.Microsecond)
+					encode.Add(time.Duration(i+1) * time.Microsecond)
+					blocks.Add(1)
+				}
+				return m.Finish(), nil
+			}
+			server := func(ctx context.Context, opts Options) (*Result, error) {
+				if p.Server().NodeID() != 1 {
+					return &Result{}, nil
+				}
+				setup := func(ctx context.Context, cfg Config, _ Options) func() error {
+					return func() error { return mockcall.Multicast(ctx, cfg, "ping").Async().Wait() }
+				}
+				return ServerMeasured(p.Server().PeerConfig(), setup)(ctx, opts)
+			}
+			return []Bench{{Name: "Local", Run: local}, {Name: "Server", Run: server}}, nil
+		},
+	}
+}
+
+// TestPeerRunLocalNamedMetrics verifies that named metrics reach the results of
+// a local run: the client-side metrics of Local on every node, the metrics
+// that the servers recorded for Server merged across nodes, and both in the
+// protojson form of the results.
+func TestPeerRunLocalNamedMetrics(t *testing.T) {
+	const n, sends = 3, 20
+	opts := Options{Workers: 1, Duration: 20 * time.Millisecond}
+	results, err := RunLocal(gorumstest.Context(t, 30*time.Second), n, regexp.MustCompile(".*"),
+		namedMetricsWorkload(sends), opts, localOpts(t, nil)...)
+	if err != nil {
+		t.Fatalf("RunLocal: %v", err)
+	}
+	for i, r := range results {
+		local := r[0]
+		if got := len(metricByName(local, "encode").GetDistribution().GetSamples()); got != sends {
+			t.Errorf("node %d: encode samples = %d, want %d", i+1, got, sends)
+		}
+		if c := metricByName(local, "blocks").GetCounter(); c.GetSum() != sends || c.GetNodes() != 1 {
+			t.Errorf("node %d: blocks = (sum %d, nodes %d), want (%d, 1)", i+1, c.GetSum(), c.GetNodes(), sends)
+		}
+	}
+
+	server := results[0][1]
+	ops := server.GetTotalOps()
+	if ops == 0 {
+		t.Fatal("node 1: Server recorded no operations")
+	}
+	deliver := metricByName(server, "deliver")
+	if got := deliver.GetMeasurementMode(); got != MeasurementMode_SERVER_MEASURED {
+		t.Errorf("deliver measurement mode = %v, want SERVER_MEASURED", got)
+	}
+	if got := uint64(len(deliver.GetDistribution().GetSamples())); got != ops {
+		t.Errorf("deliver samples = %d, want %d, one per received request", got, ops)
+	}
+	if c := metricByName(server, "received").GetCounter(); c.GetSum() != ops || c.GetNodes() != n || c.GetMax() > ops {
+		t.Errorf("received = (sum %d, max %d, nodes %d), want (%d, <= %d, %d)", c.GetSum(), c.GetMax(), c.GetNodes(), ops, ops, n)
+	}
+
+	// The protojson form names every metric and renders a counter's sum.
+	type jsonMetric struct {
+		Name    string `json:"name"`
+		Counter *struct {
+			Sum string `json:"sum"`
+		} `json:"counter"`
+	}
+	var got []string
+	for _, r := range []*Result{results[0][0], server} {
+		data, err := protojson.Marshal(r)
+		if err != nil {
+			t.Fatalf("protojson.Marshal: %v", err)
+		}
+		var decoded struct {
+			Metrics []jsonMetric `json:"metrics"`
+		}
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatalf("json.Unmarshal: %v", err)
+		}
+		for _, m := range decoded.Metrics {
+			got = append(got, m.Name)
+			if m.Name == "blocks" && (m.Counter == nil || m.Counter.Sum != fmt.Sprint(sends)) {
+				t.Errorf("protojson blocks counter = %+v, want sum %d", m.Counter, sends)
+			}
+		}
+	}
+	if want := []string{"blocks", "encode", "deliver", "received"}; !slices.Equal(got, want) {
+		t.Errorf("protojson metric names = %v, want %v", got, want)
 	}
 }
 
