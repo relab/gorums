@@ -2,10 +2,8 @@ package benchkit
 
 import (
 	"iter"
-	"maps"
 	"math"
 	"runtime"
-	"slices"
 	"sync"
 	"time"
 )
@@ -227,23 +225,7 @@ func (s *Stats) AddLatencyBySender(id uint32, l time.Duration) {
 func (s *Stats) GetResult() *Result {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-
-	store := s.sampleStore()
-	r := &Result{}
-	n := store.Count()
-	r.SetTotalOps(n)
-	r.SetTotalTime(int64(s.endTime.Sub(s.startTime)))
-	if n > 0 {
-		r.SetThroughput(float64(n) / time.Duration(r.GetTotalTime()).Seconds())
-		r.SetAllocsPerOp((s.endMs.Mallocs - s.startMs.Mallocs) / n)
-		r.SetMemPerOp((s.endMs.TotalAlloc - s.startMs.TotalAlloc) / n)
-		if samples := store.Samples(); samples != nil {
-			r.SetLatencies(slices.Clone(samples))
-		} else if hs, ok := store.(*hdrStore); ok {
-			r.SetHistogram(hs.snapshot())
-		}
-	}
-	return r
+	return s.resultFromDist(storeDist(s.sampleStore()))
 }
 
 // GetResultCorrected computes and returns the result from the per-sender
@@ -262,48 +244,21 @@ func (s *Stats) GetResult() *Result {
 func (s *Stats) GetResultCorrected(offsets map[uint32]int64) *Result {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-
-	var r *Result
-	if s.mode == StatsMode_HDR {
-		agg := newHDRHistogram()
-		for _, id := range slices.Sorted(maps.Keys(s.bySender)) {
-			if hs, ok := s.bySender[id].(*hdrStore); ok {
-				agg.recordPairs(hs.buckets(), offsets[id])
-			}
-		}
-		r = s.resultFromHistogram(agg)
-	} else {
-		var corrected []int64
-		for _, id := range slices.Sorted(maps.Keys(s.bySender)) {
-			off := offsets[id]
-			for _, l := range s.bySender[id].Samples() {
-				corrected = append(corrected, l+off)
-			}
-		}
-		r = s.resultFromSamples(corrected)
-	}
+	r := s.resultFromDist(correctedDist(s.mode, s.bySender, offsets))
 	r.SetEvents(s.series.corrected(offsets))
 	return r
 }
 
-// resultFromSamples builds a Result from the given samples and the timing and
-// memory window recorded by Start and End. The caller must hold s.mut.
-func (s *Stats) resultFromSamples(samples []int64) *Result {
-	r := s.resultWindow(uint64(len(samples)))
+// resultFromDist builds a Result carrying the given latency distribution, raw
+// samples or a histogram, with the timing and memory window recorded by Start
+// and End. Total ops is the distribution's sample count. The caller must hold
+// s.mut.
+func (s *Stats) resultFromDist(samples []int64, hist *LatencyHistogram) *Result {
+	r := s.resultWindow(uint64(len(samples)) + totalCount(hist))
 	if len(samples) > 0 {
 		r.SetLatencies(samples)
 	}
-	return r
-}
-
-// resultFromHistogram builds a Result carrying agg as its latency distribution,
-// with the timing and memory window recorded by Start and End. Total ops is the
-// histogram's sample count. The caller must hold s.mut.
-func (s *Stats) resultFromHistogram(agg *Histogram) *Result {
-	r := s.resultWindow(agg.TotalCount())
-	if agg.TotalCount() > 0 {
-		r.SetHistogram(agg.snapshot())
-	}
+	r.SetHistogram(hist)
 	return r
 }
 

@@ -47,8 +47,7 @@ func AggregateServerResults(replies map[uint32]*Result) (*Result, error) {
 	}
 
 	resp := &Result{}
-	var allSamples []int64
-	var hists []*LatencyHistogram
+	var latencies distMerger
 	var latencyEvents []*Event
 	for _, id := range slices.Sorted(maps.Keys(replies)) {
 		reply := replies[id]
@@ -57,19 +56,15 @@ func AggregateServerResults(replies map[uint32]*Result) (*Result, error) {
 		resp.SetTotalOps(resp.GetTotalOps() + reply.GetTotalOps())
 		resp.SetTotalTime(max(resp.GetTotalTime(), reply.GetTotalTime()))
 		resp.SetThroughput(resp.GetThroughput() + reply.GetThroughput())
-		allSamples = append(allSamples, reply.GetLatencies()...)
+		latencies.add(reply.GetLatencies(), reply.GetHistogram())
 		latencyEvents = append(latencyEvents, reply.GetEvents()...)
-		if h := reply.GetHistogram(); h != nil {
-			hists = append(hists, h)
-		}
 		resp.SetServerStats(append(resp.GetServerStats(), serverMemoryStat(reply)))
 	}
-	if len(allSamples) > 0 {
-		resp.SetLatencies(allSamples)
+	samples, hist := latencies.dist()
+	if samples != nil {
+		resp.SetLatencies(samples)
 	}
-	if len(hists) > 0 {
-		resp.SetHistogram(mergeHistograms(hists...))
-	}
+	resp.SetHistogram(hist)
 	resp.SetEvents(mergeLatencyEvents(latencyEvents))
 	return resp, nil
 }

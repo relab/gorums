@@ -75,15 +75,10 @@ func CorrectLatencies(r *Result, offset int64) {
 	if offset == 0 {
 		return
 	}
-	if lat := r.GetLatencies(); len(lat) > 0 {
-		for i := range lat {
-			lat[i] -= offset
-		}
+	lat := r.GetLatencies()
+	r.SetHistogram(offsetDist(lat, r.GetHistogram(), -offset))
+	if len(lat) > 0 {
 		r.SetLatencies(lat)
-		return
-	}
-	if h := r.GetHistogram(); h != nil {
-		r.SetHistogram(offsetHistogram(h, -offset))
 	}
 }
 
