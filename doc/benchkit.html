@@ -1751,6 +1751,24 @@ results, err := p.Run(ctx, sel, w, opts)
             human- and grep-friendly <code>plotdata/runs.csv</code> and <code>plotdata/nodes.csv</code> from it on
             demand — <code>nodes.csv</code> has one row per node with its CDF as a space-separated vector column,
             rather than one row per CDF point.</p>
+        <p>The named metrics (<a href="#metrics">§4</a>) of each node are reduced after the trim and stored on its
+            <code>PlotNode</code>; the metrics merged across the nodes are stored on the <code>PlotBenchmark</code>.
+            A series merges its distribution and keeps its mean, p50, p95, p99, and sample count, in microseconds.
+            A counter keeps its sum, its largest node value, and its node count.
+            A node that recorded metrics but no primary latency gets a <code>PlotNode</code> without a summary or
+            CDF.
+            A metric whose unit, kind, or measurement mode differs between two nodes or between two runs fails the
+            collection with an error that names the run, the benchmark, the metric, and both units, because one CSV
+            column holds the metric of every run.
+            A series whose stats mode differs between two nodes of one run also fails the collection, because exact
+            samples and an hdr histogram do not merge into one distribution.
+            The stats mode may differ between two runs: the column holds one summary per run, and the summaries of
+            the two modes compare.
+            In <code>nodes.csv</code>, each metric adds a column group after <code>cdf_us</code>, sorted by name:
+            <code>&lt;name&gt;.mean_us</code>, <code>&lt;name&gt;.p50_us</code>, <code>&lt;name&gt;.p95_us</code>,
+            and <code>&lt;name&gt;.p99_us</code> for a series, and <code>&lt;name&gt;.sum</code> and
+            <code>&lt;name&gt;.max</code> for a counter.
+            A node without latency has empty latency fields, and a node without a metric has empty fields for it.</p>
 
         <h3>events.binpb</h3>
         <p><code>plotdata/events.binpb</code> is a <code>PlotEvents</code> message holding the time-series event
@@ -1765,8 +1783,8 @@ results, err := p.Run(ctx, sel, w, opts)
 
         <p>The report covers two layers from one command:</p>
         <ul>
-            <li><em>Cross-run figures</em>: how throughput, latency, goodput, and per-op cost change as a sweep
-                dimension (nodes, workers, payload, rate, stream mode) varies, plus throughput-latency curves,
+            <li><em>Cross-run figures</em>: how throughput, latency, goodput, per-op cost, and the named metrics
+                change as a sweep dimension (nodes, workers, payload, rate, stream mode) varies, plus throughput-latency curves,
                 per-node latency CDFs, node-health and degraded-share heatmaps, a run-status table, and — when the run
                 logs carry clock-offset diagnostics — an offset/drift CDF.</li>
             <li><em>Within-run time series</em>: one figure per benchmark with a throughput-over-time and a
@@ -1793,7 +1811,7 @@ results, err := p.Run(ctx, sel, w, opts)
 
         <p>Figures are grouped into sections, each starting a page: <em>Scaling</em> (metric against a swept
             dimension, plus goodput and per-operation cost), <em>Load curves</em> (throughput-latency),
-            <em>Stream-mode comparison</em> (the ratio figures), <em>Cluster health</em> (the heatmaps, the
+            <em>Named metrics</em> (each named metric against a swept dimension), <em>Stream-mode comparison</em> (the ratio figures), <em>Cluster health</em> (the heatmaps, the
             run-outcome table, and the clock-offset CDF), <em>Per-node latency</em> (the CDF grid), <em>Within-run
             time series</em>, and <em>Failed runs</em>. Each section opens with a note stating what its figures show
             and, where the report has to choose which runs to draw, how it chose them.</p>
@@ -1836,7 +1854,16 @@ results, err := p.Run(ctx, sel, w, opts)
             and ratio figures, and it can be a facet or separate the series of another figure, where the legend
             names it as <code>name=value</code>.
             Numeric values sort by value, and the others follow in alphabetical order.
-            The x-axis spaces the values evenly, as for the built-in dimensions.
+            The x-axis spaces the values evenly, as for the built-in dimensions.</p>
+        <p>The named metrics (<a href="#metrics">§4</a>) follow the built-in columns of <code>agg.csv</code>, one
+            column group per metric, sorted by name, each column with <code>_sd</code> and <code>_ci95</code>
+            siblings like the built-in metrics: <code>&lt;name&gt;.mean_us</code>, <code>&lt;name&gt;.p50_us</code>,
+            <code>&lt;name&gt;.p95_us</code>, and <code>&lt;name&gt;.p99_us</code> for a series, and
+            <code>&lt;name&gt;.sum</code> and <code>&lt;name&gt;.max</code> for a counter.
+            Each value is the metric merged across the nodes of a run, averaged across the repetitions that recorded
+            it; a configuration without the metric has empty fields.
+            The dot in a column name keeps it apart from the dimension columns, whose names cannot hold one.
+            A sweep without named metrics writes no such column.
             The figures and the sweep dimension each one needs:</p>
         <table>
             <thead>
@@ -1849,6 +1876,7 @@ results, err := p.Run(ctx, sel, w, opts)
                 <tr><td><code>mem_per_op_vs_nodes</code>, <code>allocs_per_op_vs_nodes</code></td><td>Heap bytes/op and allocations/op vs N</td><td><code>-n</code></td></tr>
                 <tr><td><code>tl_curve_{workers,rate}</code></td><td>Latency vs achieved throughput, one panel per N, one point per level of the load dimension the curve traces along; split into scale-band figures when peak latencies span a wide range. A sweep that varies both load dimensions gets one figure per dimension</td><td><code>-workers</code> or <code>-rate</code> (per N)</td></tr>
                 <tr><td><code>throughput_ratio_vs_{nodes,workers,payload,rate,send_buffer,recv_buffer}</code>, <code>latency_ratio_vs_{nodes,workers,payload,rate,send_buffer,recv_buffer}</code></td><td>Non-baseline/baseline ratio vs a sweep dimension, faceted by the fewest-valued other dimension, with a parity reference line</td><td>exactly two <code>-stream-mode</code>s per configuration, that dimension varying within one comparable series, and — for the latency ratio — latency data in both modes</td></tr>
+                <tr><td><code>metric_&lt;name&gt;_vs_&lt;dim&gt;</code></td><td>Under a &ldquo;Named metrics&rdquo; heading: one named metric vs a sweep dimension, faceted like <code>throughput_vs_*</code>. A series plots its median (<code>&lt;name&gt;.p50_us</code>, in ms); a counter plots its largest per-node value (<code>&lt;name&gt;.max</code>, in its unit)</td><td>that dimension, and a value of the metric in some configuration</td></tr>
                 <tr><td><code>per_node_cdf</code></td><td>One figure whose panels are per-node latency CDFs, three to a row and fifteen to a page, one panel per run. Runs are the first repetition of a configuration (the full dimension tuple, buffer capacities included) selected to spread across the sweep: a configuration earns a panel when it is the first to measure some dimension value, so the panels cover every node count, payload, rate, and mode rather than crowding into whichever corner sorts first. The remaining panels are filled in run order, so the page is used</td><td>nothing — produced for any run with CDF data</td></tr>
                 <tr><td><code>node_health</code></td><td>Hosts × configurations heatmap of per-node throughput relative to each run's median; a slow host shows as a red cell, and a host absent from a configuration as a grey one. A color scale below the grid states the range</td><td>nothing — produced for any sweep</td></tr>
                 <tr><td><code>degraded_share</code></td><td>Heatmap of the degraded-repetition fraction, node count and mode on one axis and the remaining varying dimensions on the other, so one configuration label is split over two axes instead of crowding one</td><td>any degraded repetition</td></tr>
