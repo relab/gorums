@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,14 +8,12 @@ import (
 
 const benchkitModulePath = "github.com/relab/gorums/benchkit"
 
-// checkModuleRoot returns an error when cfg uses the built-in benchmark build
-// outside the benchkit module root, the only place ./cmd/benchmark resolves.
-func checkModuleRoot(cfg *config) error {
-	if cfg.binaryPath != "" || cfg.buildCmd != "" || isBenchkitModuleRoot(".") {
-		return nil
-	}
-	return errors.New("run sweep from the benchkit module root, or pass -binary or -build")
-}
+// benchmarkPackage and sweepPackage are import paths that resolve to the
+// benchkit version that the current module requires.
+const (
+	benchmarkPackage = benchkitModulePath + "/cmd/benchmark"
+	sweepPackage     = benchkitModulePath + "/cmd/sweep"
+)
 
 // sweepInvocation returns the command that starts sweep in dir, and the
 // command that rebuilds it first; rebuild is empty when run builds sweep.

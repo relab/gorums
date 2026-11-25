@@ -5,6 +5,8 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -511,7 +513,7 @@ func TestNewRemoteProgram(t *testing.T) {
 		},
 		{
 			name:       "default binary path",
-			binaryPath: defaultBinaryPath,
+			binaryPath: defaultBinaryName,
 			wantName:   "sweep-benchmark",
 			wantPath:   "/tmp/sweep-benchmark",
 			wantPgrep:  "[s]weep-benchmark",
@@ -693,5 +695,18 @@ func TestDeployCrossBuildEnv(t *testing.T) {
 				t.Errorf("env does not start with the caller's environment: %v", env)
 			}
 		})
+	}
+}
+
+// TestDeployBuildBenchmarkOutsideModuleRoot runs the built-in benchmark build
+// from a directory outside the benchkit module.
+func TestDeployBuildBenchmarkOutsideModuleRoot(t *testing.T) {
+	chdirOutsideBenchkit(t)
+	bin := filepath.Join(t.TempDir(), "benchmark")
+	if err := buildBenchmark(bin, ""); err != nil {
+		t.Fatalf("buildBenchmark: %v", err)
+	}
+	if _, err := os.Stat(bin); err != nil {
+		t.Fatalf("benchmark binary: %v", err)
 	}
 }

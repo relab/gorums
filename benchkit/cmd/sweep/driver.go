@@ -173,9 +173,6 @@ func runDriver(cfg *config, hosts []string) error {
 		log.Printf("warning: %d benchmark host(s) after excluding driver %s, but largest -n is %d; "+
 			"nodes will be packed onto fewer hosts", len(benchHosts), driver, maxN)
 	}
-	if err := checkModuleRoot(cfg); err != nil {
-		return err
-	}
 	sha := buildGitSHA(cfg)
 	logSweepEstimate(cfg.sweep, cfg.duration)
 
@@ -1320,10 +1317,6 @@ func formatSize(n int64) string {
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
-
-// sweepPackage is the import path of sweep, which resolves to the benchkit
-// version that the current module requires.
-const sweepPackage = benchkitModulePath + "/cmd/sweep"
 
 // buildSweepBinary cross-compiles sweep itself for Linux, for amd64 unless
 // GOARCH is set (see [crossBuildEnv]).

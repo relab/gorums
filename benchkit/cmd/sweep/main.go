@@ -65,10 +65,10 @@
 // For a foreign protocol, pass a prebuilt Linux binary for the hosts via
 // -binary; sweep uploads and runs it unchanged. When -binary is omitted, sweep
 // builds the binary itself: it uses the -build command if set, substituting
-// the chosen output path for the {{output}} token, and otherwise falls back to the built-in default
-// "go build -o <output> ./cmd/benchmark". The custom command is run via "sh -c"
-// from the current directory, so -binary or -build lets sweep run from any
-// module; the built-in default needs the benchkit module root.
+// the chosen output path for the {{output}} token, and otherwise builds the
+// benchkit benchmark command at the version that the current module requires.
+// Builds run from the current directory, so sweep runs from any module that
+// requires benchkit; the -build command is run via "sh -c".
 // With the built-in binary, -benchmarks accepts only symmetric benchmark names
 // because every host runs as a peer rather than as a coordinator.
 //
@@ -341,15 +341,6 @@ func main() {
 		return
 	}
 
-	// The module-root check, build, replay script, and stale-binary warning
-	// are laptop-only steps; the driven sweep on the driver skips them (it runs
-	// from a temp work dir with a pre-built binary and a forwarded git SHA).
-	if !cfg.driven {
-		if err := checkModuleRoot(cfg); err != nil {
-			log.Fatal(err)
-		}
-	}
-
 	if err := os.MkdirAll(cfg.outDir, 0o755); err != nil {
 		log.Fatalf("creating output directory: %v", err)
 	}
@@ -401,17 +392,12 @@ func main() {
 	// Build the benchmark binary if a pre-built path was not provided.
 	// Precedence: -binary (prebuilt) > -build > the built-in gorums default.
 	if cfg.binaryPath == "" {
-		cfg.binaryPath = defaultBinaryPath
-		// Outside the benchkit module, ./cmd/benchmark belongs to another
-		// project; build into a temp dir there.
-		if !isBenchkitModuleRoot(".") {
-			dir, err := os.MkdirTemp("", "sweep-build-")
-			if err != nil {
-				log.Fatalf("build dir: %v", err)
-			}
-			defer os.RemoveAll(dir)
-			cfg.binaryPath = filepath.Join(dir, "benchmark")
+		dir, err := os.MkdirTemp("", "sweep-build-")
+		if err != nil {
+			log.Fatalf("build dir: %v", err)
 		}
+		defer os.RemoveAll(dir)
+		cfg.binaryPath = filepath.Join(dir, defaultBinaryName)
 		if err := buildBenchmark(cfg.binaryPath, cfg.buildCmd); err != nil {
 			log.Fatalf("build: %v", err)
 		}
@@ -732,7 +718,7 @@ func parseFlags() (*config, []string) {
 		},
 	}
 	flag.StringVar(&cfg.binaryPath, "binary", "", "pre-built Linux binary path for the hosts' architecture (required for a foreign protocol; default: auto-build for linux/amd64, or linux/$GOARCH when GOARCH is set)")
-	flag.StringVar(&cfg.buildCmd, "build", "", "build command for the auto-build path; {{output}} is replaced with the output path (default: go build ./cmd/benchmark)")
+	flag.StringVar(&cfg.buildCmd, "build", "", "build command for the auto-build path; {{output}} is replaced with the output path (default: go build github.com/relab/gorums/benchkit/cmd/benchmark)")
 	flag.StringVar(&cfg.sshConfig, "config", "", "SSH config file (default: ~/.ssh/config)")
 	flag.StringVar(&cfg.rootDir, "outdir", defaultOutRoot, "root output directory for sweep runs (default: out)")
 	flag.IntVar(&cfg.port, "port", 9000, "base port for benchmark nodes")
