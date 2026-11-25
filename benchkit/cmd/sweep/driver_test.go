@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -724,19 +723,7 @@ func TestDriverRunFinishedProbe(t *testing.T) {
 // TestDriverBuildSweepBinaryOutsideModuleRoot builds sweep from a directory
 // outside the benchkit module, as -detach does in a foreign module.
 func TestDriverBuildSweepBinaryOutsideModuleRoot(t *testing.T) {
-	if testing.Short() {
-		t.Skip("cross-builds sweep")
-	}
-	out, err := exec.Command("go", "env", "GOWORK").Output()
-	if err != nil {
-		t.Fatalf("go env GOWORK: %v", err)
-	}
-	work := strings.TrimSpace(string(out))
-	if work == "" || work == "off" {
-		t.Skip("needs the gorums go.work to resolve benchkit")
-	}
-	t.Setenv("GOWORK", work)
-	t.Chdir(t.TempDir())
+	chdirOutsideBenchkit(t)
 	bin := filepath.Join(t.TempDir(), "sweep")
 	if err := buildSweepBinary(bin); err != nil {
 		t.Fatalf("buildSweepBinary: %v", err)

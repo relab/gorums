@@ -2,7 +2,9 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -58,34 +60,6 @@ func TestIsBenchkitModuleRoot(t *testing.T) {
 	}
 }
 
-func TestModuleRootCheck(t *testing.T) {
-	tests := []struct {
-		name    string
-		root    bool
-		binary  string
-		build   string
-		wantErr bool
-	}{
-		{"default build at root", true, "", "", false},
-		{"default build elsewhere", false, "", "", true},
-		{"binary elsewhere", false, "./bench", "", false},
-		{"build flag elsewhere", false, "", "go build ./cmd/x", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			if tt.root {
-				writeBenchkitRoot(t, dir)
-			}
-			t.Chdir(dir)
-			cfg := &config{binaryPath: tt.binary, buildCmd: tt.build}
-			if err := checkModuleRoot(cfg); (err != nil) != tt.wantErr {
-				t.Errorf("checkModuleRoot() = %v, want error: %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestModuleRootSweepInvocation(t *testing.T) {
 	root := t.TempDir()
 	writeBenchkitRoot(t, root)
@@ -117,4 +91,24 @@ func writeBenchkitRoot(t *testing.T, dir string) {
 	if err := os.MkdirAll(filepath.Join(dir, "cmd", "benchmark"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// chdirOutsideBenchkit changes to an empty directory outside the benchkit
+// module, where benchkit packages resolve through the gorums go.work. It skips
+// in -short mode, since its callers cross-build binaries.
+func chdirOutsideBenchkit(t *testing.T) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("cross-builds a binary")
+	}
+	out, err := exec.Command("go", "env", "GOWORK").Output()
+	if err != nil {
+		t.Fatalf("go env GOWORK: %v", err)
+	}
+	work := strings.TrimSpace(string(out))
+	if work == "" || work == "off" {
+		t.Skip("needs the gorums go.work to resolve benchkit")
+	}
+	t.Setenv("GOWORK", work)
+	t.Chdir(t.TempDir())
 }

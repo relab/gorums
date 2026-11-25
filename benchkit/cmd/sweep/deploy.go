@@ -22,8 +22,9 @@ import (
 	"github.com/relab/iago"
 )
 
-// defaultBinaryPath is the local binary built and deployed when -binary is unset.
-const defaultBinaryPath = "./cmd/benchmark/benchmark"
+// defaultBinaryName is the basename of the binary that sweep builds when
+// -binary is unset.
+const defaultBinaryName = "benchmark"
 
 // remoteProgram is the program deployed in each host's per-user remote namespace. Every
 // remote reference to the binary — its path, the pkill/pgrep pattern, and the
@@ -38,7 +39,7 @@ type remoteProgram struct {
 // programs this tool deployed. An empty path falls back to the default binary.
 func newRemoteProgram(binaryPath string) remoteProgram {
 	if binaryPath == "" {
-		binaryPath = defaultBinaryPath
+		binaryPath = defaultBinaryName
 	}
 	return remoteProgram{name: "sweep-" + filepath.Base(binaryPath)}
 }
@@ -237,10 +238,10 @@ func run(g iago.Group, name string, fn func(context.Context, iago.Host) error) e
 // buildBenchmark cross-compiles the benchmark binary for Linux to outputPath,
 // for amd64 unless GOARCH is set in the environment (see [crossBuildEnv]).
 //
-// When buildCmd is empty, it runs the built-in default, which resolves only
-// from the benchkit module root:
+// When buildCmd is empty, it builds the benchkit benchmark command at the
+// version that the current module requires:
 //
-//	GOOS=linux GOARCH=<goarch> go build -o <output> ./cmd/benchmark/
+//	GOOS=linux GOARCH=<goarch> go build -o <output> github.com/relab/gorums/benchkit/cmd/benchmark
 //
 // Otherwise buildCmd is the -build command template, letting a foreign
 // protocol supply its own package path or toolchain. The chosen output path is
@@ -256,7 +257,7 @@ func buildBenchmark(outputPath, buildCmd string) error {
 	var cmd *exec.Cmd
 	if buildCmd == "" {
 		log.Printf("building benchmark binary for linux/%s → %s", goarch, abs)
-		cmd = exec.Command("go", "build", "-o", abs, "./cmd/benchmark/")
+		cmd = exec.Command("go", "build", "-o", abs, benchmarkPackage)
 	} else {
 		script := expandBuildCmd(buildCmd, abs)
 		log.Printf("building benchmark binary for linux/%s via custom command → %s", goarch, abs)
