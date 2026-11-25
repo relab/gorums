@@ -50,6 +50,20 @@ type plotRunRecord struct {
 	p95US   *float64
 	p99US   *float64
 	samples *uint64
+	// metrics holds the named metrics merged across the run's nodes, and
+	// nodeMetrics each node's own, for the nodes that recorded any; both are
+	// sorted by name.
+	metrics     []*benchkit.MetricSummary
+	nodeMetrics []plotNodeMetrics
+}
+
+// plotNodeMetrics holds the named metrics of one node of a run, sorted by
+// name, with the node's throughput for a node that recorded no latency and so
+// has no CDF rows to carry it.
+type plotNodeMetrics struct {
+	node       string
+	throughput float64
+	metrics    []*benchkit.MetricSummary
 }
 
 type plotNodeCDFRecord struct {
@@ -79,6 +93,7 @@ type plotNodeEntry struct {
 	mem             float64
 	latency         *benchkit.LatencyDist
 	measurementMode benchkit.MeasurementMode
+	metrics         []benchkit.SummaryMetric
 }
 
 // writeCompactPlotData reduces the binary result files into the compact,
@@ -208,6 +223,7 @@ func buildPlotData(runs []plotRunRecord, cdf []plotNodeCDFRecord) *benchkit.Plot
 			MemPerOp:    r.memPerOp,
 			NodesSeen:   int32(r.nodesSeen),
 			Summary:     runLatencySummary(r.meanUS, r.p50US, r.p95US, r.p99US, r.samples),
+			Metrics:     r.metrics,
 		}.Build()))
 	}
 
@@ -241,7 +257,35 @@ func buildPlotData(runs []plotRunRecord, cdf []plotNodeCDFRecord) *benchkit.Plot
 	}
 	flushNode()
 
+	for _, r := range runs {
+		if len(r.nodeMetrics) > 0 {
+			bench := out[runIdx[r.base]].GetBenchmarks()[benchIdx[benchKey{r.base, r.Benchmark}]]
+			addNodeMetrics(bench, r.nodeMetrics)
+		}
+	}
 	return benchkit.PlotData_builder{Runs: out}.Build()
+}
+
+// addNodeMetrics sets the named metrics of each node of bench. A node without
+// CDF rows gets a PlotNode of its own, and the nodes are then sorted by name.
+func addNodeMetrics(bench *benchkit.PlotBenchmark, nodeMetrics []plotNodeMetrics) {
+	nodes := bench.GetNodes()
+	added := false
+	for _, nm := range nodeMetrics {
+		i := slices.IndexFunc(nodes, func(n *benchkit.PlotNode) bool { return n.GetNode() == nm.node })
+		if i >= 0 {
+			nodes[i].SetMetrics(nm.metrics)
+			continue
+		}
+		nodes = append(nodes, benchkit.PlotNode_builder{
+			Node: nm.node, Throughput: nm.throughput, Metrics: nm.metrics,
+		}.Build())
+		added = true
+	}
+	if added {
+		slices.SortStableFunc(nodes, func(a, b *benchkit.PlotNode) int { return strings.Compare(a.GetNode(), b.GetNode()) })
+	}
+	bench.SetNodes(nodes)
 }
 
 // runLatencySummary builds a benchmark-level LatencySummary, returning nil
@@ -278,6 +322,14 @@ func plotRecordsFromMessage(pd *benchkit.PlotData) ([]plotRunRecord, []plotNodeC
 				allocsPerOp: bench.GetAllocsPerOp(),
 				memPerOp:    bench.GetMemPerOp(),
 				nodesSeen:   int(bench.GetNodesSeen()),
+				metrics:     bench.GetMetrics(),
+			}
+			for _, node := range bench.GetNodes() {
+				if len(node.GetMetrics()) > 0 {
+					row.nodeMetrics = append(row.nodeMetrics, plotNodeMetrics{
+						node: node.GetNode(), throughput: node.GetThroughput(), metrics: node.GetMetrics(),
+					})
+				}
 			}
 			if s := bench.GetSummary(); s != nil {
 				meanUS, p50US, p95US, p99US, samples := s.GetMeanUs(), s.GetP50Us(), s.GetP95Us(), s.GetP99Us(), s.GetSamples()
@@ -324,13 +376,17 @@ func collectPlotData(outdir string) ([]plotRunRecord, []plotNodeCDFRecord, *benc
 	var runRows []plotRunRecord
 	var cdfRows []plotNodeCDFRecord
 	var eventRuns []*benchkit.PlotRunEvents
+	catalog := metricCatalog{}
 	for _, rm := range manifests {
 		trim, err := parseManifestTrim(rm.manifest.Trim)
 		if err != nil {
 			log.Printf("  warning: plotdata: %s trim %q: %v", filepath.Base(rm.path), rm.manifest.Trim, err)
 			trim = 0
 		}
-		runs, nodes, events := reducePlotRun(outdir, rm.base, rm.manifest, trim)
+		runs, nodes, events, err := reducePlotRun(outdir, rm.base, rm.manifest, trim, catalog)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 		runRows = append(runRows, runs...)
 		cdfRows = append(cdfRows, nodes...)
 		if events != nil {
@@ -398,6 +454,12 @@ func parseManifestTrim(trim string) (time.Duration, error) {
 // reducePlotRun decodes one run's per-node result files and reduces them to the
 // run's plot rows and its event streams.
 //
+// It merges the named metrics of each benchmark across the run's nodes and
+// checks each merged metric against catalog, which holds the metrics of the
+// runs reduced before this one. It returns an error naming the run, the
+// benchmark, the metric, and both units when a metric's unit, kind, or
+// measurement mode differs between two nodes or between two runs.
+//
 // A degraded run is reduced like a successful one: its per-node data is intact
 // and is what diagnoses the slow node, and its rows carry the status so
 // consumers can exclude it from aggregates. A run with any other status has no
@@ -408,7 +470,7 @@ func parseManifestTrim(trim string) (time.Duration, error) {
 // A result file that is absent is skipped silently: the nodes that crashed in a
 // failed run wrote none, and a compact-transfer directory retains none for a
 // successful run. Any other read or decode failure is reported.
-func reducePlotRun(outdir, base string, m runManifest, trim time.Duration) ([]plotRunRecord, []plotNodeCDFRecord, *benchkit.PlotRunEvents) {
+func reducePlotRun(outdir, base string, m runManifest, trim time.Duration, catalog metricCatalog) ([]plotRunRecord, []plotNodeCDFRecord, *benchkit.PlotRunEvents, error) {
 	plottable := m.Status == runStatusSucceeded || m.Status == runStatusDegraded
 	byBench := make(map[string][]plotNodeEntry)
 	eventsByBench := make(map[string][]*benchkit.PlotNodeEvents)
@@ -465,6 +527,7 @@ func reducePlotRun(outdir, base string, m runManifest, trim time.Duration) ([]pl
 				mem:             float64(r.GetMemPerOp()),
 				latency:         summary.Dist(),
 				measurementMode: cfg.GetMeasurementMode(),
+				metrics:         summary.Metrics,
 			})
 		}
 	}
@@ -477,12 +540,114 @@ func reducePlotRun(outdir, base string, m runManifest, trim time.Duration) ([]pl
 			continue
 		}
 		row := aggregatePlotRun(base, m, bench, entries)
+		var err error
+		row.metrics, row.nodeMetrics, err = plotRunMetrics(entries, catalog)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("run %s, benchmark %s: %w", base, bench, err)
+		}
 		runRows = append(runRows, row)
 		for _, entry := range entries {
 			cdfRows = append(cdfRows, nodeCDFRows(base, m, bench, entry)...)
 		}
 	}
-	return runRows, cdfRows, runEvents(base, eventOrder, eventsByBench)
+	return runRows, cdfRows, runEvents(base, eventOrder, eventsByBench), nil
+}
+
+// metricCatalog holds, for each metric name, the first merged metric of that
+// name in a collection, without its values. One CSV column holds the metric
+// of every run, so every later metric of the same name must match its unit,
+// kind, and measurement mode. The stats mode of a series may differ between
+// runs.
+type metricCatalog map[string]benchkit.SummaryMetric
+
+// check returns an error when m does not match the metric of the same name in
+// c, and adds m to c when c holds no metric of its name.
+func (c metricCatalog) check(m benchkit.SummaryMetric) error {
+	first, ok := c[m.Name]
+	if !ok {
+		c[m.Name] = emptyMetric(m)
+		return nil
+	}
+	// The column holds one summary per run, and the summaries of an exact and
+	// an hdr series compare, so runs of one collection may use different
+	// stats modes. Take the stats mode of m to leave it out of the check.
+	first.HDR = m.HDR
+	return first.CheckMerge(m)
+}
+
+// emptyMetric returns a metric with the name, unit, kind, measurement mode,
+// and stats mode of m and no values, ready to merge into.
+func emptyMetric(m benchkit.SummaryMetric) benchkit.SummaryMetric {
+	empty := benchkit.SummaryMetric{Name: m.Name, Unit: m.Unit, MeasurementMode: m.MeasurementMode, HDR: m.HDR}
+	if m.Dist != nil {
+		empty.Dist = &benchkit.LatencyDist{}
+	} else {
+		empty.Counter = benchkit.CounterValue_builder{}.Build()
+	}
+	return empty
+}
+
+// plotRunMetrics returns the named metrics of one benchmark of a run, merged
+// across the nodes of entries, and the metrics of each node that recorded any.
+// Series merge their distributions and counters merge with
+// [benchkit.CounterValue.Merge]. It returns an error when a metric's unit,
+// kind, measurement mode, or stats mode differs between two nodes, or when its
+// unit, kind, or measurement mode differs from the metric of the same name in
+// catalog.
+func plotRunMetrics(entries []plotNodeEntry, catalog metricCatalog) ([]*benchkit.MetricSummary, []plotNodeMetrics, error) {
+	merged := map[string]*benchkit.SummaryMetric{}
+	var nodeMetrics []plotNodeMetrics
+	for _, entry := range entries {
+		if len(entry.metrics) == 0 {
+			continue
+		}
+		nm := plotNodeMetrics{node: entry.node, throughput: entry.throughput}
+		for _, sm := range entry.metrics {
+			nm.metrics = append(nm.metrics, metricSummary(sm))
+			acc, ok := merged[sm.Name]
+			if !ok {
+				empty := emptyMetric(sm)
+				acc = &empty
+				merged[sm.Name] = acc
+			} else if err := acc.CheckMerge(sm); err != nil {
+				return nil, nil, err
+			}
+			if acc.Dist != nil {
+				acc.Dist.Merge(sm.Dist)
+			} else {
+				acc.Counter.Merge(sm.Counter)
+			}
+		}
+		nodeMetrics = append(nodeMetrics, nm)
+	}
+	var metrics []*benchkit.MetricSummary
+	for _, name := range slices.Sorted(maps.Keys(merged)) {
+		if err := catalog.check(*merged[name]); err != nil {
+			return nil, nil, err
+		}
+		metrics = append(metrics, metricSummary(*merged[name]))
+	}
+	return metrics, nodeMetrics, nil
+}
+
+// metricSummary reduces a named metric to the form the plot data stores: a
+// series to its mean and p50, p95, and p99 in microseconds and its sample
+// count, and a counter to its value. A series without samples gets an empty
+// summary, so that its kind survives.
+func metricSummary(sm benchkit.SummaryMetric) *benchkit.MetricSummary {
+	b := benchkit.MetricSummary_builder{Name: sm.Name, Unit: sm.Unit}
+	switch {
+	case sm.Dist == nil:
+		b.Counter = proto.CloneOf(sm.Counter)
+	case sm.Dist.Empty():
+		b.Distribution = benchkit.LatencySummary_builder{}.Build()
+	default:
+		meanUS, p50US, p95US, p99US := latencyStatsUS(sm.Dist)
+		b.Distribution = benchkit.LatencySummary_builder{
+			MeanUs: meanUS, P50Us: p50US, P95Us: p95US, P99Us: p99US, Samples: sm.Dist.Count(),
+		}.Build()
+	}
+	return b.Build()
 }
 
 // runEvents assembles one run's event streams, in first-seen benchmark order,
