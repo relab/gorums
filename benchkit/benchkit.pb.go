@@ -178,6 +178,7 @@ type RunConfig struct {
 	xxx_hidden_CallTimeout     int64                  `protobuf:"varint,16,opt,name=call_timeout,json=callTimeout"`
 	xxx_hidden_SendBuffer      int32                  `protobuf:"varint,17,opt,name=send_buffer,json=sendBuffer"`
 	xxx_hidden_RecvBuffer      int32                  `protobuf:"varint,18,opt,name=recv_buffer,json=recvBuffer"`
+	xxx_hidden_Params          map[string]string      `protobuf:"bytes,19,rep,name=params" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields              protoimpl.UnknownFields
 	sizeCache                  protoimpl.SizeCache
 }
@@ -333,6 +334,13 @@ func (x *RunConfig) GetRecvBuffer() int32 {
 	return 0
 }
 
+func (x *RunConfig) GetParams() map[string]string {
+	if x != nil {
+		return x.xxx_hidden_Params
+	}
+	return nil
+}
+
 func (x *RunConfig) SetName(v string) {
 	x.xxx_hidden_Name = v
 }
@@ -405,6 +413,10 @@ func (x *RunConfig) SetRecvBuffer(v int32) {
 	x.xxx_hidden_RecvBuffer = v
 }
 
+func (x *RunConfig) SetParams(v map[string]string) {
+	x.xxx_hidden_Params = v
+}
+
 type RunConfig_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
@@ -426,6 +438,9 @@ type RunConfig_builder struct {
 	CallTimeout     int64
 	SendBuffer      int32
 	RecvBuffer      int32
+	// Values of the custom sweep dimensions, keyed by dimension name. The sweep
+	// tool stamps them from the run manifest; a binary may leave them empty.
+	Params map[string]string
 }
 
 func (b0 RunConfig_builder) Build() *RunConfig {
@@ -450,6 +465,7 @@ func (b0 RunConfig_builder) Build() *RunConfig {
 	x.xxx_hidden_CallTimeout = b.CallTimeout
 	x.xxx_hidden_SendBuffer = b.SendBuffer
 	x.xxx_hidden_RecvBuffer = b.RecvBuffer
+	x.xxx_hidden_Params = b.Params
 	return m0
 }
 
@@ -2284,7 +2300,7 @@ var File_benchkit_benchkit_proto protoreflect.FileDescriptor
 
 const file_benchkit_benchkit_proto_rawDesc = "" +
 	"\n" +
-	"\x17benchkit/benchkit.proto\x12\bbenchkit\"\xcf\x04\n" +
+	"\x17benchkit/benchkit.proto\x12\bbenchkit\"\xc3\x05\n" +
 	"\tRunConfig\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n" +
 	"\tnum_nodes\x18\x02 \x01(\x05R\bnumNodes\x12\x12\n" +
@@ -2309,7 +2325,11 @@ const file_benchkit_benchkit_proto_rawDesc = "" +
 	"\vsend_buffer\x18\x11 \x01(\x05R\n" +
 	"sendBuffer\x12\x1f\n" +
 	"\vrecv_buffer\x18\x12 \x01(\x05R\n" +
-	"recvBuffer\"B\n" +
+	"recvBuffer\x127\n" +
+	"\x06params\x18\x13 \x03(\v2\x1f.benchkit.RunConfig.ParamsEntryR\x06params\x1a9\n" +
+	"\vParamsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"B\n" +
 	"\x12ThroughputInterval\x12\x10\n" +
 	"\x03ops\x18\x01 \x01(\x04R\x03ops\x12\x1a\n" +
 	"\bduration\x18\x02 \x01(\x03R\bduration\"S\n" +
@@ -2420,7 +2440,7 @@ const file_benchkit_benchkit_proto_rawDesc = "" +
 	"\x03HDR\x10\x02\"\x04\b\x01\x10\x01B'Z github.com/relab/gorums/benchkit\x92\x03\x02\b\x02b\beditionsp\xe9\a"
 
 var file_benchkit_benchkit_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_benchkit_benchkit_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_benchkit_benchkit_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_benchkit_benchkit_proto_goTypes = []any{
 	(MeasurementMode)(0),        // 0: benchkit.MeasurementMode
 	(StatsMode)(0),              // 1: benchkit.StatsMode
@@ -2443,34 +2463,36 @@ var file_benchkit_benchkit_proto_goTypes = []any{
 	(*PlotBenchmarkEvents)(nil), // 18: benchkit.PlotBenchmarkEvents
 	(*PlotRunEvents)(nil),       // 19: benchkit.PlotRunEvents
 	(*PlotEvents)(nil),          // 20: benchkit.PlotEvents
+	nil,                         // 21: benchkit.RunConfig.ParamsEntry
 }
 var file_benchkit_benchkit_proto_depIdxs = []int32{
 	0,  // 0: benchkit.RunConfig.measurement_mode:type_name -> benchkit.MeasurementMode
 	1,  // 1: benchkit.RunConfig.stats_mode:type_name -> benchkit.StatsMode
-	2,  // 2: benchkit.PhaseMarker.phase:type_name -> benchkit.PhaseMarker.Phase
-	4,  // 3: benchkit.Event.throughput:type_name -> benchkit.ThroughputInterval
-	5,  // 4: benchkit.Event.latency:type_name -> benchkit.LatencyInterval
-	6,  // 5: benchkit.Event.phase:type_name -> benchkit.PhaseMarker
-	3,  // 6: benchkit.Result.config:type_name -> benchkit.RunConfig
-	9,  // 7: benchkit.Result.server_stats:type_name -> benchkit.MemoryStat
-	7,  // 8: benchkit.Result.events:type_name -> benchkit.Event
-	8,  // 9: benchkit.Result.histogram:type_name -> benchkit.LatencyHistogram
-	10, // 10: benchkit.Report.results:type_name -> benchkit.Result
-	12, // 11: benchkit.PlotNode.summary:type_name -> benchkit.LatencySummary
-	3,  // 12: benchkit.PlotBenchmark.config:type_name -> benchkit.RunConfig
-	12, // 13: benchkit.PlotBenchmark.summary:type_name -> benchkit.LatencySummary
-	13, // 14: benchkit.PlotBenchmark.nodes:type_name -> benchkit.PlotNode
-	14, // 15: benchkit.PlotRun.benchmarks:type_name -> benchkit.PlotBenchmark
-	15, // 16: benchkit.PlotData.runs:type_name -> benchkit.PlotRun
-	7,  // 17: benchkit.PlotNodeEvents.events:type_name -> benchkit.Event
-	17, // 18: benchkit.PlotBenchmarkEvents.nodes:type_name -> benchkit.PlotNodeEvents
-	18, // 19: benchkit.PlotRunEvents.benchmarks:type_name -> benchkit.PlotBenchmarkEvents
-	19, // 20: benchkit.PlotEvents.runs:type_name -> benchkit.PlotRunEvents
-	21, // [21:21] is the sub-list for method output_type
-	21, // [21:21] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	21, // 2: benchkit.RunConfig.params:type_name -> benchkit.RunConfig.ParamsEntry
+	2,  // 3: benchkit.PhaseMarker.phase:type_name -> benchkit.PhaseMarker.Phase
+	4,  // 4: benchkit.Event.throughput:type_name -> benchkit.ThroughputInterval
+	5,  // 5: benchkit.Event.latency:type_name -> benchkit.LatencyInterval
+	6,  // 6: benchkit.Event.phase:type_name -> benchkit.PhaseMarker
+	3,  // 7: benchkit.Result.config:type_name -> benchkit.RunConfig
+	9,  // 8: benchkit.Result.server_stats:type_name -> benchkit.MemoryStat
+	7,  // 9: benchkit.Result.events:type_name -> benchkit.Event
+	8,  // 10: benchkit.Result.histogram:type_name -> benchkit.LatencyHistogram
+	10, // 11: benchkit.Report.results:type_name -> benchkit.Result
+	12, // 12: benchkit.PlotNode.summary:type_name -> benchkit.LatencySummary
+	3,  // 13: benchkit.PlotBenchmark.config:type_name -> benchkit.RunConfig
+	12, // 14: benchkit.PlotBenchmark.summary:type_name -> benchkit.LatencySummary
+	13, // 15: benchkit.PlotBenchmark.nodes:type_name -> benchkit.PlotNode
+	14, // 16: benchkit.PlotRun.benchmarks:type_name -> benchkit.PlotBenchmark
+	15, // 17: benchkit.PlotData.runs:type_name -> benchkit.PlotRun
+	7,  // 18: benchkit.PlotNodeEvents.events:type_name -> benchkit.Event
+	17, // 19: benchkit.PlotBenchmarkEvents.nodes:type_name -> benchkit.PlotNodeEvents
+	18, // 20: benchkit.PlotRunEvents.benchmarks:type_name -> benchkit.PlotBenchmarkEvents
+	19, // 21: benchkit.PlotEvents.runs:type_name -> benchkit.PlotRunEvents
+	22, // [22:22] is the sub-list for method output_type
+	22, // [22:22] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_benchkit_benchkit_proto_init() }
@@ -2489,7 +2511,7 @@ func file_benchkit_benchkit_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_benchkit_benchkit_proto_rawDesc), len(file_benchkit_benchkit_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   18,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

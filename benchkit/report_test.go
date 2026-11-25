@@ -136,6 +136,20 @@ func TestConfigDelta(t *testing.T) {
 	}
 }
 
+// TestConfigDeltaParams verifies that [ConfigDelta] reports differing custom
+// dimension values, which change what a run measured like any built-in field.
+func TestConfigDeltaParams(t *testing.T) {
+	a := NewRunConfig(Dimensions{Benchmark: "Q", Params: NewParams(map[string]string{"d": "20"})})
+	b := NewRunConfig(Dimensions{Benchmark: "Q", Params: NewParams(map[string]string{"d": "22"})})
+	delta := ConfigDelta(a, b)
+	if len(delta) != 1 || !strings.HasPrefix(delta[0], "params:") {
+		t.Errorf("ConfigDelta = %v, want one params entry", delta)
+	}
+	if delta := ConfigDelta(a, proto.Clone(a).(*RunConfig)); len(delta) != 0 {
+		t.Errorf("ConfigDelta(equal params) = %v, want empty", delta)
+	}
+}
+
 // TestPrintComparisonFlagsConfigMismatch verifies that PrintComparison warns
 // about a semantic config mismatch (e.g. differing quorum size) between
 // matched baseline and experiment results, instead of comparing them as if

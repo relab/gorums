@@ -50,6 +50,10 @@ message RunConfig {
 
   int32 send_buffer = 17; // per-node send queue capacity
   int32 recv_buffer = 18; // server receive queue capacity
+
+  // Values of the custom sweep dimensions, keyed by dimension name. The sweep
+  // tool stamps them from the run manifest; a binary may leave them empty.
+  map<string, string> params = 19;
 }
 
 // ThroughputInterval is the ops-completed count and elapsed time for one
