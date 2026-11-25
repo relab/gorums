@@ -943,3 +943,46 @@ func TestCollectPlotDataPreservesBufferSizes(t *testing.T) {
 		t.Errorf("aggregated to %d rows, want %d: the arms were folded together", n, len(arms))
 	}
 }
+
+// TestCollectPlotDataStampsManifestParams verifies that the reduction stamps the
+// custom dimension values from the run manifest into each result, replacing
+// whatever the binary recorded, so a binary may leave them out and the values
+// survive the trip through plotdata.binpb.
+func TestCollectPlotDataStampsManifestParams(t *testing.T) {
+	dir := t.TempDir()
+	params := benchkit.NewParams(map[string]string{"d": "20", "ready": "tree"})
+	spec := runSpec{
+		Benchmark: "Idea0", Nodes: 3, Workers: 1, StreamMode: "dual", Params: params, Rep: 1,
+	}
+	base := runBase("s", spec)
+	file := base + "_n1_9000" + resultExt
+	results := []*benchkit.Result{benchkit.Result_builder{
+		Config: benchkit.RunConfig_builder{
+			Name: "Idea0", NumNodes: 3, Workers: 1, StreamMode: "dual",
+			Params: map[string]string{"d": "stale"},
+		}.Build(),
+		Throughput: 100, TotalOps: 1000,
+	}.Build()}
+	if err := benchkit.WriteLabeledReport(results, "n1", filepath.Join(dir, file)); err != nil {
+		t.Fatal(err)
+	}
+	m := runManifest{runSpec: spec, Label: "s", Status: runStatusSucceeded, Files: []string{file}}
+	blob, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, base+manifestSuffix), blob, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeCompactPlotData(dir); err != nil {
+		t.Fatal(err)
+	}
+	pd, err := readPlotData(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs, _ := plotRecordsFromMessage(pd)
+	if len(runs) != 1 || runs[0].Params != params {
+		t.Fatalf("runs = %+v, want one run with params %q", runs, params)
+	}
+}

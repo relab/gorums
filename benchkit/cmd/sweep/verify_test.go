@@ -399,3 +399,47 @@ func TestVerifyMode(t *testing.T) {
 		}
 	})
 }
+
+// TestVerifyRunCustomDimensions verifies that -verify expects one run per
+// combination of the custom dimension values and matches each agg.csv row by
+// its custom columns too.
+func TestVerifyRunCustomDimensions(t *testing.T) {
+	f := newVerifyFixture("Idea0")
+	sc := sweepConfig{
+		numNodes: []int{3}, workers: []int{1}, payloads: []int{0}, rates: []int{0},
+		benchmarks: []string{"Idea0"}, streamModes: []string{"dual"}, reps: 1,
+		dims: []customDimension{{name: "d", values: []string{"20", "22"}}, {name: "ready", values: []string{"all", "tree"}}},
+	}
+	f.specs = slices.Collect(sc.runSpecs())
+	f.manifests = map[string]*runManifest{}
+	f.agg = nil
+	for _, spec := range f.specs {
+		m := &runManifest{runSpec: spec, Label: f.label, Status: runStatusSucceeded, Hosts: f.hosts}
+		for i, h := range f.hosts {
+			m.NodeMap = append(m.NodeMap, nodeMapEntry{ID: uint32(i + 1), Host: h})
+		}
+		f.manifests[runBase(f.label, spec)] = m
+		f.agg = append(f.agg, aggRunRecord{
+			Dimensions: spec.Dimensions, reps: 1,
+			throughput: aggStat{mean: 1000, n: 1}, p50US: aggStat{mean: 200, n: 1},
+		})
+	}
+	findings, _, err := verifyRun(f.write(t), f.options())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 0 {
+		t.Fatalf("findings = %v, want none", findings)
+	}
+
+	// Drop the agg.csv row of one combination: only the custom columns tell it
+	// apart from the others.
+	f.agg = slices.DeleteFunc(f.agg, func(r aggRunRecord) bool { return r.Params.Get("d") == "22" && r.Params.Get("ready") == "tree" })
+	findings, _, err = verifyRun(f.write(t), f.options())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasFinding(findings, "runs", "no agg.csv row") {
+		t.Errorf("findings = %v, want a missing agg.csv row", findings)
+	}
+}

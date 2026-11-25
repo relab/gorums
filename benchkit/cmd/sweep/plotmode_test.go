@@ -213,15 +213,37 @@ func TestFilterRunsExcludeDim(t *testing.T) {
 	}
 }
 
+// TestFilterRunsExcludeCustomDim verifies that -exclude drops the runs of a
+// custom dimension value like those of a built-in one.
+func TestFilterRunsExcludeCustomDim(t *testing.T) {
+	runs := []plotRunRecord{
+		{base: "a", Benchmark: "Q", Params: benchkit.NewParams(map[string]string{"ready": "tree"})},
+		{base: "b", Benchmark: "Q", Params: benchkit.NewParams(map[string]string{"ready": "all"})},
+	}
+	opts := reportOptions{excludes: parseExcludeDims([]string{"ready=tree"})}
+	kept := filterRuns(runs, opts)
+	if len(kept) != 1 || kept[0].base != "b" {
+		t.Errorf("kept = %+v, want only ready=all", kept)
+	}
+}
+
 func TestReadPlotRunsCSVRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "runs.csv")
-	want := []plotRunRecord{{
-		Benchmark: "Q", Nodes: 3, Workers: 8, Payload: 1024, StreamMode: "dedup",
-		base: "run_Q", label: "run", status: runStatusSucceeded, rep: 1,
-		throughput: 40000, allocsPerOp: 12, memPerOp: 2048, nodesSeen: 3,
-		meanUS: new(500.0), p50US: new(450.0), p95US: new(900.0), p99US: new(1200.0),
-	}}
+	want := []plotRunRecord{
+		{
+			Benchmark: "Q", Nodes: 3, Workers: 8, Payload: 1024, StreamMode: "dedup",
+			Params: benchkit.NewParams(map[string]string{"d": "0", "ready": "tree"}),
+			base:   "run_Q", label: "run", status: runStatusSucceeded, rep: 1,
+			throughput: 40000, allocsPerOp: 12, memPerOp: 2048, nodesSeen: 3,
+			meanUS: new(500.0), p50US: new(450.0), p95US: new(900.0), p99US: new(1200.0),
+		},
+		{
+			Benchmark: "Q", Nodes: 3, Workers: 8, Payload: 1024, StreamMode: "dedup",
+			base: "run_Q_plain", label: "run", status: runStatusSucceeded, rep: 1,
+			throughput: 30000,
+		},
+	}
 	if err := writePlotRunsCSV(path, want); err != nil {
 		t.Fatal(err)
 	}
@@ -229,8 +251,8 @@ func TestReadPlotRunsCSVRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("rows = %d, want 1", len(got))
+	if len(got) != len(want) {
+		t.Fatalf("rows = %d, want %d", len(got), len(want))
 	}
 	g := got[0]
 	if g.base != "run_Q" || g.Workers != 8 || g.StreamMode != "dedup" || g.throughput != 40000 {
@@ -238,6 +260,49 @@ func TestReadPlotRunsCSVRoundTrip(t *testing.T) {
 	}
 	if g.p50US == nil || *g.p50US != 450 {
 		t.Errorf("p50US = %v, want 450", g.p50US)
+	}
+	// Each row reads back its own custom dimension values; a row without them
+	// reads back without them.
+	for i, row := range got {
+		if row.Dimensions != want[i].Dimensions {
+			t.Errorf("row %d Dimensions = %+v, want %+v", i, row.Dimensions, want[i].Dimensions)
+		}
+	}
+}
+
+// TestReadReportNodeCDFCSVReadsCustomDimensions verifies that the per-node
+// rows read back the custom dimension values that writePlotNodeCDFCSV writes,
+// so the report tells apart the runs that differ only in a custom dimension.
+func TestReadReportNodeCDFCSVReadsCustomDimensions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "node_cdf.csv")
+	var rows []plotNodeCDFRecord
+	for i, params := range []benchkit.Params{
+		benchkit.NewParams(map[string]string{"ready": "all"}),
+		benchkit.NewParams(map[string]string{"ready": "tree"}),
+		"", // a run without the ready dimension
+	} {
+		rows = append(rows, plotNodeCDFRecord{
+			Benchmark: "Q", Nodes: 2, Workers: 1, StreamMode: "dual", Params: params,
+			base: "run-" + strconv.Itoa(i), label: "run", status: runStatusSucceeded, rep: 1,
+			node: "bb1:9000", throughput: 100, cdfUS: 100,
+		})
+	}
+	if err := writePlotNodeCDFCSV(path, rows); err != nil {
+		t.Fatal(err)
+	}
+	cdf, health, err := readReportNodeCDFCSV(path, reportOptions{}, len(rows))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, got := range map[string][]plotNodeCDFRecord{"cdf": cdf, "health": health} {
+		if len(got) != len(rows) {
+			t.Fatalf("%s rows = %d, want %d", name, len(got), len(rows))
+		}
+		for i, row := range got {
+			if row.Dimensions != rows[i].Dimensions {
+				t.Errorf("%s row %d Dimensions = %+v, want %+v", name, i, row.Dimensions, rows[i].Dimensions)
+			}
+		}
 	}
 }
 

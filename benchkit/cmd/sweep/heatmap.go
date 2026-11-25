@@ -24,8 +24,8 @@ type nodeHealthRecord struct {
 
 // nodeHealthRows first reduces the per-node CDF rows to one throughput per node
 // per run, then divides by that run's median node throughput. It finally takes
-// the median of those relative values for each benchmark/node-count/mode/host
-// combination. A run whose median is zero is treated as uniform (rel 1.0)
+// the median of those relative values for each combination of benchmark, node
+// count, mode, custom dimensions, and host. A run whose median is zero is treated as uniform (rel 1.0)
 // rather than producing NaN. Rows are sorted by benchmark, mode, node count,
 // then host in natural order (bb2 before bb10).
 func nodeHealthRows(cdf []plotNodeCDFRecord) []nodeHealthRecord {

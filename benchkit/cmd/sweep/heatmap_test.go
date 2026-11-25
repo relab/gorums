@@ -61,6 +61,47 @@ func TestNodeHealthRows(t *testing.T) {
 	}
 }
 
+// TestNodeHealthRowsCustomDimensions verifies that runs which differ only in a
+// custom dimension keep separate node-health rows, and that node_health.csv
+// has a column for the custom dimension and a configuration label per value.
+func TestNodeHealthRowsCustomDimensions(t *testing.T) {
+	var cdf []plotNodeCDFRecord
+	for _, d := range []string{"20", "22"} {
+		for _, node := range []string{"bb2:9000", "bb3:9000"} {
+			cdf = append(cdf, plotNodeCDFRecord{
+				Benchmark: "Q", StreamMode: "dual", Nodes: 2, Params: custom("d", d),
+				base: "run_Q_N2_d=" + d, label: "run", node: node, throughput: 100,
+			})
+		}
+	}
+	rows := nodeHealthRows(cdf)
+	if len(rows) != 4 {
+		t.Fatalf("rows = %d, want 4 (two hosts for each value of d)", len(rows))
+	}
+	for _, r := range rows {
+		if r.runs != 1 {
+			t.Errorf("host %s d=%s: runs = %d, want 1", r.host, r.Params.Get("d"), r.runs)
+		}
+	}
+
+	path := filepath.Join(t.TempDir(), "node_health.csv")
+	if err := writeNodeHealthCSV(path, rows); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h := csvHeader(t, path); !slices.Contains(strings.Split(h, ","), "d") {
+		t.Errorf("node_health header = %q, want a column d", h)
+	}
+	for _, want := range []string{"d=20", "d=22"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("node_health.csv has no configuration label %q:\n%s", want, data)
+		}
+	}
+}
+
 // TestNodeHealthRowsZeroMedianTreatedAsUniform verifies that a run whose
 // nodes all report zero throughput (so the run's median is zero) is treated
 // as uniform (rel 1.0) instead of dividing by zero and propagating NaN.

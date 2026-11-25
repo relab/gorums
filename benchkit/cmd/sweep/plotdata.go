@@ -436,6 +436,9 @@ func reducePlotRun(outdir, base string, m runManifest, trim time.Duration) ([]pl
 			fallback := m.Dimensions
 			fallback.StreamMode = cmp.Or(fallback.StreamMode, "dual")
 			dims := cfg.DimensionsWithFallback(fallback)
+			// The manifest holds the custom dimension values sweep passed to the
+			// node, so they replace whatever the binary recorded.
+			dims.Params = m.Params
 			name := dims.Benchmark
 			if name == "" {
 				continue

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"fmt"
 	"maps"
 	"os"
@@ -542,24 +541,17 @@ func experimentSummary(agg []aggRunRecord, settings sweepSettings) string {
 }
 
 // dimensionSpread returns the distinct values a dimension took across the
-// aggregate, numeric dimensions in ascending order and the rest alphabetically.
-// A dimension left at its unset marker (0) yields nothing: the sweep did not
-// configure it, so it describes no part of the experiment.
+// aggregate, numeric values in ascending order before the rest, which are in
+// alphabetical order. The list is empty for a dimension left at its unset
+// marker, since the report describes only the dimensions the sweep configured.
 func dimensionSpread(agg []aggRunRecord, dim dimensionSpec) []string {
 	seen := map[string]bool{}
 	for _, r := range agg {
-		if value := dim.value(r.Dimensions); value != "" && value != "0" {
+		if value := dim.value(r.Dimensions); !dim.unset(value) {
 			seen[value] = true
 		}
 	}
-	values := slices.Collect(maps.Keys(seen))
-	slices.SortFunc(values, func(a, b string) int {
-		if dim.tag == "" {
-			return strings.Compare(a, b)
-		}
-		return cmp.Compare(atoiOr(a, 0), atoiOr(b, 0))
-	})
-	return values
+	return slices.SortedFunc(maps.Keys(seen), compareDimensionValues)
 }
 
 // reportPreamble styles the generated report: a large centered title, section

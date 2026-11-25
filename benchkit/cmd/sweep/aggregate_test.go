@@ -417,3 +417,41 @@ func TestRepOutliers(t *testing.T) {
 		}
 	}
 }
+
+// TestWriteAggRunsCSVCustomColumns verifies that agg.csv has one column per
+// custom dimension, after the built-in dimensions, and keeps configurations
+// that differ only in a custom value apart.
+func TestWriteAggRunsCSVCustomColumns(t *testing.T) {
+	run := func(d, ready string, thr float64) plotRunRecord {
+		r := qRun(1, "dual", runStatusSucceeded, thr, 10)
+		r.Params = benchkit.NewParams(map[string]string{"d": d, "ready": ready})
+		return r
+	}
+	rows := aggregateReps([]plotRunRecord{
+		run("22", "tree", 400), run("20", "all", 100), run("20", "tree", 200), run("22", "all", 300),
+	}, false)
+	path := filepath.Join(t.TempDir(), "agg.csv")
+	if err := writeAggRunsCSV(path, rows); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	recs, err := csv.NewReader(f).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	header := recs[0]
+	if got, want := header[8:11], []string{"d", "ready", "reps"}; !slices.Equal(got, want) {
+		t.Errorf("header[8:11] = %v, want %v (custom columns after the built-ins)", got, want)
+	}
+	var got []string
+	for _, rec := range recs[1:] {
+		got = append(got, rec[8]+" "+rec[9]+" "+rec[slices.Index(header, "throughput")])
+	}
+	if want := []string{"20 all 100", "20 tree 200", "22 all 300", "22 tree 400"}; !slices.Equal(got, want) {
+		t.Errorf("rows = %v, want %v", got, want)
+	}
+}

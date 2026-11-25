@@ -73,7 +73,8 @@
 // that sweep forwards, and the columns of the CSV files that sweep writes. A
 // value is letters, digits, '.', '+', and '-', and the values of one dimension
 // differ in more than case. The values appear in the file names of each run's
-// output (..._d=20_ready=tree_...) and in the manifests.
+// output (..._d=20_ready=tree_...), in the manifests, and as columns in the
+// report's CSV files.
 //
 // For example, with
 //
@@ -800,7 +801,7 @@ func parseFlags() (*config, []string) {
 	flag.StringVar(&cfg.plotDir, "plot", "", "regenerate the Typst report from this collected output directory, then exit (no sweep)")
 	flag.BoolVar(&cfg.includeDegraded, "include-degraded", false, "with -plot, keep degraded repetitions in the aggregate figures")
 	flag.Var(stringListFlag(&cfg.excludeRuns), "exclude-run", "with -plot, comma-separated run base names to drop from the report")
-	flag.Var(stringListFlag(&cfg.excludeDims), "exclude", "with -plot, comma-separated DIM=VALUE tokens to drop (DIM: benchmark, nodes, workers, payload, rate, send_buffer, recv_buffer, stream_mode)")
+	flag.Var(stringListFlag(&cfg.excludeDims), "exclude", "with -plot, comma-separated DIM=VALUE tokens to drop (DIM: benchmark, nodes, workers, payload, rate, send_buffer, recv_buffer, stream_mode, or a -dim name)")
 	flag.StringVar(&cfg.exportCSVDir, "export-csv", "", "regenerate plotdata/runs.csv and plotdata/nodes.csv from this collected directory's plotdata.binpb, then exit (no sweep, no report)")
 	flag.StringVar(&cfg.exportCompactDir, "export-compact", "", "rebuild plotdata/ and compact-transfer/ from this sweep work directory's raw result files, then exit (run on the driver; -collect-profiles includes the profiles)")
 	flag.Var(intListFlag(&cfg.sweep.numNodes), "n", "comma-separated node counts to sweep")
