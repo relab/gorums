@@ -757,3 +757,31 @@ func TestGenerateReportRatioVsNodesCompiles(t *testing.T) {
 		t.Fatalf("report.pdf not produced: %v", err)
 	}
 }
+
+// TestReportFigureCallEscapesLabels verifies that figure calls pass axis labels
+// as Typst string literals inside content blocks, so a label holding Typst
+// markup characters such as "#", "[", or "]" renders as text instead of
+// breaking the compilation.
+func TestReportFigureCallEscapesLabels(t *testing.T) {
+	label := `p50 #x [ms] \ "q"`
+	tests := []struct {
+		name string
+		spec figureSpec
+	}{
+		{"MetricVs", figureSpec{xcol: "workers", ycol: "p50_ms", bandCol: "p50_ms_ci95", ylabel: label, yscale: 1}},
+		{"Ratio", figureSpec{kind: kindRatio, xcol: "workers", ycol: "p50_ms_ratio", ylabel: label}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			call := figureCall(tt.spec)
+			for _, want := range []string{
+				`ylabel: [#text("p50 #x [ms] \\ \"q\"")]`,
+				`xlabel: [#text("Workers")]`,
+			} {
+				if !strings.Contains(call, want) {
+					t.Errorf("figureCall() = %s\nwant it to contain %s", call, want)
+				}
+			}
+		})
+	}
+}

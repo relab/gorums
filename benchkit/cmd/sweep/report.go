@@ -675,7 +675,7 @@ func figureCall(s figureSpec) string {
 			facetLabel = fmt.Sprintf("%q", dimLabel[s.facet])
 		}
 		return fmt.Sprintf(
-			`ratio-vs(cmp, %q, xcol: %q, xlabel: [%s], ylabel: [%s], facet: %s, facet-label: %s)`,
+			`ratio-vs(cmp, %q, xcol: %q, xlabel: [#text(%q)], ylabel: [#text(%q)], facet: %s, facet-label: %s)`,
 			s.ycol, s.xcol, dimLabel[s.xcol], s.ylabel, facet, facetLabel,
 		)
 	case kindNodeHealth:
@@ -718,7 +718,7 @@ func metricVsCall(s figureSpec) string {
 		facetLabel = fmt.Sprintf("%q", dimLabel[s.facet])
 	}
 	return fmt.Sprintf(
-		`metric-vs(%s, xcol: %q, ycol: %q, band-col: %q, ylabel: [%s], xlabel: [%s], yscale: %s, facet: %s, facet-label: %s)`,
+		`metric-vs(%s, xcol: %q, ycol: %q, band-col: %q, ylabel: [#text(%q)], xlabel: [#text(%q)], yscale: %s, facet: %s, facet-label: %s)`,
 		data, s.xcol, s.ycol, s.bandCol,
 		s.ylabel, dimLabel[s.xcol], formatFloat(s.yscale), facet, facetLabel,
 	)
