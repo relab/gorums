@@ -7,51 +7,21 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 )
 
-// dimOrder is the sweep dimensions a figure can vary along or facet by, in a
-// stable display order.
-var dimOrder = func() []string {
-	var names []string
-	for _, dim := range dimensionSpecs {
-		if dim.name != "benchmark" && dim.name != "stream_mode" {
-			names = append(names, dim.name)
-		}
-	}
-	return names
-}()
-
-// dimLabel is the x-axis label for each sweep dimension.
-var dimLabel = func() map[string]string {
-	labels := make(map[string]string, len(dimensionSpecs))
-	for _, dim := range dimensionSpecs {
-		labels[dim.name] = dim.label
-	}
-	return labels
-}()
-
-// dimValue reads one sweep dimension from a record as a number.
-func dimValue(r aggRunRecord, dim string) int {
-	value, _ := strconv.Atoi(dimensionValue(r.Dimensions, dim))
-	return value
-}
-
-// dimCounts returns the number of distinct values each sweep dimension takes.
+// dimCounts returns the number of distinct values each axis of the schema of
+// agg takes.
 func dimCounts(agg []aggRunRecord) map[string]int {
-	seen := map[string]map[int]bool{}
-	for _, d := range dimOrder {
-		seen[d] = map[int]bool{}
-	}
-	for _, r := range agg {
-		for _, d := range dimOrder {
-			seen[d][dimValue(r, d)] = true
-		}
-	}
+	schema := newDimensionSchema(aggConfigs(agg))
 	out := map[string]int{}
-	for d, s := range seen {
-		out[d] = len(s)
+	for _, name := range schema.axes() {
+		dim, _ := findDimension(name)
+		seen := map[string]bool{}
+		for _, r := range agg {
+			seen[dim.value(r.Dimensions)] = true
+		}
+		out[name] = len(seen)
 	}
 	return out
 }
@@ -59,11 +29,12 @@ func dimCounts(agg []aggRunRecord) map[string]int {
 // facetFor picks the dimension to facet a figure's panels by when its x-axis is
 // xcol: the fewest-valued OTHER dimension that varies, chosen only when two or
 // more other dimensions vary (a single varying dimension stays a set of lines
-// in one panel). Ties break by dimOrder. Empty means a single panel.
+// in one panel). Ties break by axis order: the built-in dimensions first, in
+// display order. Empty means a single panel.
 func facetFor(counts map[string]int, xcol string) string {
 	best := ""
 	varying := 0
-	for _, d := range dimOrder {
+	for _, d := range axisOrder(counts) {
 		if d == xcol || counts[d] <= 1 {
 			continue
 		}
@@ -76,6 +47,23 @@ func facetFor(counts map[string]int, xcol string) string {
 		return ""
 	}
 	return best
+}
+
+// axisOrder returns the axes named in counts in schema order: the built-in
+// dimensions in display order, then the others sorted by name.
+func axisOrder(counts map[string]int) []string {
+	var order []string
+	for _, name := range newDimensionSchema(nil).axes() {
+		if _, ok := counts[name]; ok {
+			order = append(order, name)
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(counts)) {
+		if !slices.Contains(order, name) {
+			order = append(order, name)
+		}
+	}
+	return order
 }
 
 // figureKind selects which library function renders a figureSpec.
@@ -249,7 +237,7 @@ func planFigures(agg []aggRunRecord, in reportInputs) []figureSpec {
 	// A throughput-only sweep (no latency samples or histogram recorded by
 	// any run) has no data for a latency figure to show.
 	hasLatency := slices.ContainsFunc(agg, func(r aggRunRecord) bool { return r.p50US.n > 0 })
-	for _, x := range dimOrder {
+	for _, x := range axisOrder(counts) {
 		if counts[x] <= 1 {
 			continue
 		}
@@ -335,7 +323,7 @@ func planFigures(agg []aggRunRecord, in reportInputs) []figureSpec {
 	// rows can actually draw it — the metric present in both modes, and one
 	// series varying along x — since ratio-vs drops a single-point series and
 	// would render nothing but the parity line.
-	for _, x := range dimOrder {
+	for _, x := range axisOrder(counts) {
 		if counts[x] <= 1 {
 			continue
 		}
@@ -524,7 +512,7 @@ func experimentSummary(agg []aggRunRecord, settings sweepSettings) string {
 	if settings.label != "" {
 		parts = append(parts, settings.label)
 	}
-	for _, dim := range dimensionSpecs {
+	for _, dim := range newDimensionSchema(aggConfigs(agg)) {
 		values := dimensionSpread(agg, dim)
 		if len(values) == 0 {
 			continue
@@ -672,11 +660,11 @@ func figureCall(s figureSpec) string {
 			facet = fmt.Sprintf("%q", s.facet)
 			// A plain Typst string, not a content block: the template
 			// concatenates it with "= " + value via the string "+" operator.
-			facetLabel = fmt.Sprintf("%q", dimLabel[s.facet])
+			facetLabel = fmt.Sprintf("%q", dimensionLabel(s.facet))
 		}
 		return fmt.Sprintf(
 			`ratio-vs(cmp, %q, xcol: %q, xlabel: [#text(%q)], ylabel: [#text(%q)], facet: %s, facet-label: %s)`,
-			s.ycol, s.xcol, dimLabel[s.xcol], s.ylabel, facet, facetLabel,
+			s.ycol, s.xcol, dimensionLabel(s.xcol), s.ylabel, facet, facetLabel,
 		)
 	case kindNodeHealth:
 		return `heatmap(nh, xcol: "col", ycol: "host", valuecol: "rel", ` +
@@ -715,11 +703,11 @@ func metricVsCall(s figureSpec) string {
 		facet = fmt.Sprintf("%q", s.facet)
 		// A plain Typst string, not a content block: the template
 		// concatenates it with "= " + value via the string "+" operator.
-		facetLabel = fmt.Sprintf("%q", dimLabel[s.facet])
+		facetLabel = fmt.Sprintf("%q", dimensionLabel(s.facet))
 	}
 	return fmt.Sprintf(
 		`metric-vs(%s, xcol: %q, ycol: %q, band-col: %q, ylabel: [#text(%q)], xlabel: [#text(%q)], yscale: %s, facet: %s, facet-label: %s)`,
 		data, s.xcol, s.ycol, s.bandCol,
-		s.ylabel, dimLabel[s.xcol], formatFloat(s.yscale), facet, facetLabel,
+		s.ylabel, dimensionLabel(s.xcol), formatFloat(s.yscale), facet, facetLabel,
 	)
 }

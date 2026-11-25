@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/relab/gorums/benchkit"
 )
 
 // verifyOptions states what a healthy smoke run looks like for [verifyRun].
@@ -185,6 +187,7 @@ func statusDetail(m runManifest) string {
 // a p50 latency above zero. A run that succeeded without measurements has no
 // row.
 func verifyAggCSV(path string, specs []runSpec) ([]verifyFinding, error) {
+	schema := schemaOf(specs, func(s runSpec) benchkit.Dimensions { return s.Dimensions })
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return []verifyFinding{{"runs", "", "report/agg.csv missing"}}, nil
 	}
@@ -198,7 +201,7 @@ func verifyAggCSV(path string, specs []runSpec) ([]verifyFinding, error) {
 			return ""
 		}
 		dims := map[string]string{}
-		for _, name := range dimensionColumns() {
+		for _, name := range schema.columns() {
 			dims[name] = field(name)
 		}
 		rows = append(rows, dims)
@@ -216,8 +219,8 @@ func verifyAggCSV(path string, specs []runSpec) ([]verifyFinding, error) {
 	}
 	reported := map[string]bool{}
 	for _, spec := range specs {
-		key := strings.Join(dimensionValues(spec.Dimensions), ",")
-		if reported[key] || slices.ContainsFunc(rows, func(row map[string]string) bool { return aggRowMatches(row, spec) }) {
+		key := strings.Join(schema.values(spec.Dimensions), ",")
+		if reported[key] || slices.ContainsFunc(rows, func(row map[string]string) bool { return aggRowMatches(schema, row, spec) }) {
 			continue
 		}
 		reported[key] = true
@@ -231,9 +234,9 @@ func verifyAggCSV(path string, specs []runSpec) ([]verifyFinding, error) {
 // value, holds the configuration of spec. A spec buffer size of 0 selects the
 // binary's default, and the row records the size the binary used, so 0 matches
 // any send_buffer or recv_buffer value.
-func aggRowMatches(row map[string]string, spec runSpec) bool {
-	want := dimensionValues(spec.Dimensions)
-	for i, name := range dimensionColumns() {
+func aggRowMatches(schema dimensionSchema, row map[string]string, spec runSpec) bool {
+	want := schema.values(spec.Dimensions)
+	for i, name := range schema.columns() {
 		if (name == "send_buffer" || name == "recv_buffer") && want[i] == "0" {
 			continue
 		}

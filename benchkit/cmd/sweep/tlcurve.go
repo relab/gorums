@@ -130,12 +130,13 @@ func compareTLIdent(a, b tlIdent) int {
 // tidy layout of the other CSVs; p50 carries a spread column for optional error
 // bars, and group identifies the scale band.
 func writeTLCurveCSV(path string, rows []tlPoint) error {
-	header := append(dimensionColumns(),
+	schema := schemaOf(rows, func(r tlPoint) benchkit.Dimensions { return r.Dimensions })
+	header := append(schema.columns(),
 		[]string{
 			"throughput_kops", "p50_us", "p50_us_sd", "p95_us", "p99_us", "group",
 		}...)
 	return writeCSV(path, header, rows, func(r tlPoint) []string {
-		return append(dimensionValues(r.Dimensions),
+		return append(schema.values(r.Dimensions),
 			[]string{
 				formatFloat(r.throughputKops), formatFloat(r.p50US), formatFloat(r.p50USsd),
 				formatFloat(r.p95US), formatFloat(r.p99US), strconv.Itoa(r.group),

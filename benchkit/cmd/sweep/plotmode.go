@@ -762,7 +762,7 @@ func (r *reportCDFReducer) selectRows(base string, dims benchkit.Dimensions, nod
 // taken configuration took, recording its values either way.
 func (r *reportCDFReducer) spreads(dims benchkit.Dimensions) bool {
 	novel := false
-	for _, dim := range dimensionSpecs {
+	for _, dim := range newDimensionSchema([]benchkit.Dimensions{dims}) {
 		key := dim.name + "=" + dim.value(dims)
 		if !r.valuesSeen[key] {
 			r.valuesSeen[key] = true

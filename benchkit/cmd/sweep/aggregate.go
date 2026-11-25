@@ -212,7 +212,8 @@ func repOutliers(runs []plotRunRecord, spread float64) []string {
 // contributes value/_sd/_ci95 columns; latency percentiles additionally get
 // millisecond mirrors. An absent metric (n == 0) is written as empty fields.
 func writeAggRunsCSV(path string, rows []aggRunRecord) error {
-	header := append(dimensionColumns(),
+	schema := schemaOf(rows, func(r aggRunRecord) benchkit.Dimensions { return r.Dimensions })
+	header := append(schema.columns(),
 		[]string{
 			"reps", "reps_degraded",
 			"throughput", "throughput_sd", "throughput_ci95",
@@ -228,7 +229,7 @@ func writeAggRunsCSV(path string, rows []aggRunRecord) error {
 			"p99_ms", "p99_ms_sd", "p99_ms_ci95",
 		}...)
 	return writeCSV(path, header, rows, func(r aggRunRecord) []string {
-		rec := append(dimensionValues(r.Dimensions),
+		rec := append(schema.values(r.Dimensions),
 			[]string{
 				strconv.Itoa(r.reps), strconv.Itoa(r.repsDegraded),
 			}...)
@@ -344,7 +345,8 @@ func writeComparisonCSV(path string, rows []comparisonRecord) error {
 	}
 	allModes := slices.Sorted(maps.Keys(modeSet))
 
-	header := append(dimensionColumns("stream_mode"), "baseline", "modes")
+	schema := schemaOf(rows, func(r comparisonRecord) benchkit.Dimensions { return r.Dimensions })
+	header := append(schema.columns("stream_mode"), "baseline", "modes")
 	for _, m := range comparisonMetrics {
 		for _, mode := range allModes {
 			header = append(header, m.name+"_"+mode, m.name+"_"+mode+"_sd")
@@ -356,7 +358,7 @@ func writeComparisonCSV(path string, rows []comparisonRecord) error {
 
 	return writeCSV(path, header, rows, func(r comparisonRecord) []string {
 		present := slices.Sorted(maps.Keys(r.perMode))
-		rec := append(dimensionValues(r.Dimensions, "stream_mode"), r.baseline, strings.Join(present, "|"))
+		rec := append(schema.values(r.Dimensions, "stream_mode"), r.baseline, strings.Join(present, "|"))
 		for _, m := range comparisonMetrics {
 			for _, mode := range allModes {
 				rr, ok := r.perMode[mode]
@@ -401,7 +403,8 @@ func writeComparisonCSV(path string, rows []comparisonRecord) error {
 // mode, has no ratio and contributes no point.
 func ratioAxisVaries(rows []comparisonRecord, metric func(aggRunRecord) aggStat, xcol, facet string) bool {
 	// The facet is part of the series identity: each panel holds its own lines.
-	seriesDims := append([]string{facet}, slices.DeleteFunc(slices.Clone(dimOrder), func(d string) bool {
+	axes := schemaOf(rows, func(r comparisonRecord) benchkit.Dimensions { return r.Dimensions }).axes()
+	seriesDims := append([]string{facet}, slices.DeleteFunc(axes, func(d string) bool {
 		return d == xcol || d == facet
 	})...)
 	xvalues := map[string]map[string]bool{}

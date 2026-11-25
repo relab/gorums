@@ -60,7 +60,8 @@ type dimensionSpec struct {
 	value func(benchkit.Dimensions) string
 }
 
-var dimensionSpecs = []dimensionSpec{
+// builtinDimensions are the dimensions every configuration has, in display order.
+var builtinDimensions = []dimensionSpec{
 	{"benchmark", "Benchmark", "", func(d benchkit.Dimensions) string { return d.Benchmark }},
 	{"nodes", "Nodes (N)", "N", func(d benchkit.Dimensions) string { return strconv.Itoa(d.Nodes) }},
 	{"workers", "Workers", "W", func(d benchkit.Dimensions) string { return strconv.Itoa(d.Workers) }},
@@ -71,13 +72,63 @@ var dimensionSpecs = []dimensionSpec{
 	{"stream_mode", "Stream mode", "", func(d benchkit.Dimensions) string { return d.StreamMode }},
 }
 
+// dimensionSchema is the ordered list of dimensions that a set of
+// configurations holds. It fixes the dimension columns of every CSV file and
+// the axes a figure can vary along.
+type dimensionSchema []dimensionSpec
+
+// newDimensionSchema returns the schema of configs.
+func newDimensionSchema(configs []benchkit.Dimensions) dimensionSchema {
+	return dimensionSchema(builtinDimensions)
+}
+
+// schemaOf returns the schema of rows, reading each row's configuration with dims.
+func schemaOf[T any](rows []T, dims func(T) benchkit.Dimensions) dimensionSchema {
+	configs := make([]benchkit.Dimensions, len(rows))
+	for i, row := range rows {
+		configs[i] = dims(row)
+	}
+	return newDimensionSchema(configs)
+}
+
+// columns returns the column names of the schema, without the names in omit.
+func (s dimensionSchema) columns(omit ...string) []string {
+	var columns []string
+	for _, dim := range s {
+		if !slices.Contains(omit, dim.name) {
+			columns = append(columns, dim.name)
+		}
+	}
+	return columns
+}
+
+// values returns the values of dims in schema order, without the dimensions
+// in omit.
+func (s dimensionSchema) values(dims benchkit.Dimensions, omit ...string) []string {
+	var values []string
+	for _, dim := range s {
+		if !slices.Contains(omit, dim.name) {
+			values = append(values, dim.value(dims))
+		}
+	}
+	return values
+}
+
+// axes returns the names of the dimensions a figure can vary along or facet
+// by: every dimension other than the benchmark and the stream mode, which
+// identify a series instead.
+func (s dimensionSchema) axes() []string {
+	return s.columns("benchmark", "stream_mode")
+}
+
 // varyingDimensions returns the dimensions whose value differs across the given
 // configurations. It is what a compact label must name to identify one of them:
 // a label repeating what every configuration shares says nothing about which
 // one it labels, and what they all share belongs in the report header instead.
 func varyingDimensions(configs []benchkit.Dimensions) map[string]bool {
-	varying := make(map[string]bool, len(dimensionSpecs))
-	for _, dim := range dimensionSpecs {
+	schema := newDimensionSchema(configs)
+	varying := make(map[string]bool, len(schema))
+	for _, dim := range schema {
 		for _, config := range configs {
 			if dim.value(config) != dim.value(configs[0]) {
 				varying[dim.name] = true
@@ -95,7 +146,7 @@ func varyingDimensions(configs []benchkit.Dimensions) map[string]bool {
 // nothing varies, which leaves the caller's own heading to identify the run.
 func configLabel(dims benchkit.Dimensions, varying map[string]bool) string {
 	var parts []string
-	for _, dim := range dimensionSpecs {
+	for _, dim := range newDimensionSchema([]benchkit.Dimensions{dims}) {
 		if !varying[dim.name] {
 			continue
 		}
@@ -119,8 +170,9 @@ func dimensionValue(dims benchkit.Dimensions, name string) string {
 	return dim.value(dims)
 }
 
+// findDimension returns the dimension with the given name.
 func findDimension(name string) (dimensionSpec, bool) {
-	for _, dim := range dimensionSpecs {
+	for _, dim := range builtinDimensions {
 		if dim.name == name {
 			return dim, true
 		}
@@ -128,30 +180,8 @@ func findDimension(name string) (dimensionSpec, bool) {
 	return dimensionSpec{}, false
 }
 
-func dimensionColumns(omit ...string) []string {
-	skip := make(map[string]bool, len(omit))
-	for _, name := range omit {
-		skip[name] = true
-	}
-	var columns []string
-	for _, dim := range dimensionSpecs {
-		if !skip[dim.name] {
-			columns = append(columns, dim.name)
-		}
-	}
-	return columns
-}
-
-func dimensionValues(dims benchkit.Dimensions, omit ...string) []string {
-	skip := make(map[string]bool, len(omit))
-	for _, name := range omit {
-		skip[name] = true
-	}
-	var values []string
-	for _, dim := range dimensionSpecs {
-		if !skip[dim.name] {
-			values = append(values, dim.value(dims))
-		}
-	}
-	return values
+// dimensionLabel returns the axis label of the named dimension.
+func dimensionLabel(name string) string {
+	dim, _ := findDimension(name)
+	return dim.label
 }

@@ -300,7 +300,10 @@ func summaryRows(dir, base string) string {
 		return ""
 	}
 	var b strings.Builder
-	if err := writeCSVTo(&b, plotRunsCSVHeader(), matched, plotRunCSVFields); err != nil {
+	schema := plotRunsSchema(matched)
+	if err := writeCSVTo(&b, plotRunsCSVHeader(schema), matched, func(row plotRunRecord) []string {
+		return plotRunCSVFields(schema, row)
+	}); err != nil {
 		return ""
 	}
 	return strings.TrimRight(b.String(), "\n")
