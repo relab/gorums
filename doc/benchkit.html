@@ -514,7 +514,7 @@
             <tbody>
                 <tr>
                     <td><code>.</code> (package <code>benchkit</code>)</td>
-                    <td>Control service, run harness, statistics, sample stores, ticker, event buffer, pacer,
+                    <td>Control service, run harness, statistics, named metrics, sample stores, ticker, event buffer, pacer,
                         clock-sync, result schema, report I/O, time-series CSV rendering.</td>
                 </tr>
                 <tr>
@@ -747,6 +747,75 @@
             <code>GetResult</code> / <code>GetResultCorrected</code> build a <code>Result</code> from the accumulated
             state.</p>
 
+        <h3 id="metrics">Named metrics &mdash; <code>benchkit/metric.go</code></h3>
+        <p>A benchmark often measures more than one quantity per operation: for example, the delivery latency at each
+            replica, the encode time at the leader, or the bytes that each replica uploaded.
+            These quantities come from the same run as the primary latency series, so they live on the same
+            <code>Stats</code>.
+            A custom runner reaches it as <code>m.Stats</code>; a server handler reaches it as
+            <code>Control.Stats()</code>.
+            A <code>SetupFunc</code> runner has no way to record named metrics.</p>
+        <pre>
+<span class="c">// Series returns the duration series with this name, registering it on
+// first use. Its samples follow -stats-mode: raw samples in exact mode,
+// a histogram in hdr mode. The unit is always "ns".</span>
+<span class="k">func</span> (s *Stats) Series(name <span class="k">string</span>) *Series
+<span class="k">func</span> (s *Series) Add(d time.Duration)                  <span class="c">// measured on this node's clock</span>
+<span class="k">func</span> (s *Series) AddBySender(id uint32, d time.Duration) <span class="c">// one-way, across two clocks</span>
+
+<span class="c">// Counter returns the counter with this name and a free unit, such as "B".</span>
+<span class="k">func</span> (s *Stats) Counter(name, unit <span class="k">string</span>) *Counter
+<span class="k">func</span> (c *Counter) Add(n uint64)</pre>
+        <ul>
+            <li>A name matches <code>[a-z][a-z0-9_]*</code> and is unique per <code>Stats</code>.
+                A second call with the same name, kind, and unit returns the same handle.
+                An invalid name, or a name registered as the other kind or with another unit, panics, like
+                <code>NewHistogram</code>.</li>
+            <li><code>Reset</code> clears every metric in place, so a handle that a handler looked up once stays
+                valid for every run.</li>
+            <li><code>AddBySender</code> marks the series <code>SERVER_MEASURED</code>.
+                Clock-offset correction then shifts it like the primary series: <code>GetResultCorrected</code> by
+                sender, and <code>CorrectLatencies</code> by server.
+                A series uses either <code>Add</code> or <code>AddBySender</code> between resets; mixing them
+                panics.</li>
+            <li>Each series and each counter has its own mutex, so recording does not take the
+                <code>Stats</code> mutex.
+                A counter's mutex guards its value and its presence together, so an <code>Add</code> that overlaps a
+                <code>Reset</code> counts wholly before or wholly after it.
+                The lock order is the <code>Stats</code> mutex, then the series or counter mutex.</li>
+            <li><code>GetResult</code> adds each series with samples and each counter with an <code>Add</code> since
+                the last <code>Reset</code> to <code>Result.metrics</code>, sorted by name.
+                It does so also when no primary sample was recorded, as on a relay node.</li>
+            <li>In exact mode, <code>TickInterval</code> records the cumulative sample count of each series, so a
+                reader can trim the series at the same interval as the primary series (<a href="#trim">§10</a>).</li>
+        </ul>
+        <p>Each path that builds a <code>Result</code> carries the metrics:</p>
+        <table>
+            <thead>
+                <tr><th style="width:34%">Path</th><th>Metrics</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>Measurement.Finish</code></td><td>The metrics of <code>m.Stats</code>.</td></tr>
+                <tr><td><code>StopRemote</code> (client-measured, remote)</td><td>The servers' metrics, merged by name,
+                    join the client's metrics.
+                    A server-measured series is an error, because this lifecycle has no clock offsets.</td></tr>
+                <tr><td><code>AggregateServerResults</code></td><td>Metrics merge by name: series combine their
+                    distributions, and counters add <code>sum</code> and <code>nodes</code> and keep the larger
+                    <code>max</code>.</td></tr>
+                <tr><td><code>Measurement.Attach</code> (server-measured)</td><td>The metrics of <code>m.Stats</code>
+                    join the metrics of the attached result.
+                    <code>Attach</code> returns an error for a server-measured series on <code>m.Stats</code>.</td></tr>
+                <tr><td><code>Run</code></td><td>A server-measured series in a client-measured result is an
+                    error.</td></tr>
+            </tbody>
+        </table>
+        <p>A merge returns an error when the two metrics of one name differ in unit, kind, or measurement mode.
+            It also returns an error when one series of the name holds exact samples and the other an hdr histogram.
+            The error names the metric and both descriptions.
+            A metric name recorded both on the client and on the servers of one result is also an error.
+            The local client-measured lifecycle does not call <code>Control.Stop</code>, so it does not collect the
+            servers' metrics.</p>
+
         <hr>
 
         <h2 id="events">5. Event stream</h2>
@@ -910,9 +979,10 @@
 <span class="k">func</span> (m *Measurement) Finish() *Result
 
 <span class="c">// Attach ends the run and attaches the event stream to a Result built
-// elsewhere (server-measured paths). The client Stats then carries only the
-// op count, via Stats.AddOp, for the throughput time-series.</span>
-<span class="k">func</span> (m *Measurement) Attach(result *Result)</pre>
+// elsewhere (server-measured paths). The client Stats then carries the
+// op count, via Stats.AddOp, for the throughput time-series, and its named
+// metrics join the metrics of result.</span>
+<span class="k">func</span> (m *Measurement) Attach(result *Result) error</pre>
         <p><code>Finish</code> and <code>Attach</code> also record the run's <code>MeasurementMode</code>
             (client-measured vs server-measured) on the result, so downstream consumers never infer it.</p>
 
@@ -1186,6 +1256,17 @@ results, err := p.Run(ctx, sel, w, opts)
                 (<a href="#schema">§11</a>) and applies the index-map cut only when the run is
                 <code>CLIENT_MEASURED</code> and <code>EXACT</code>.</p>
         </div>
+        <p>Named metrics (<a href="#metrics">§4</a>) pass through <code>Summarize</code> as
+            <code>Summary.Metrics</code>, one <code>SummaryMetric</code> per metric, sorted by name.
+            A series becomes a <code>LatencyDist</code>; a counter keeps its <code>CounterValue</code>.
+            The cut of a series uses its <code>tick_counts</code>: the cumulative sample count at each ticker
+            interval.
+            When the trim drops the first <code>k</code> throughput intervals, a client-measured series in exact mode
+            keeps <code>samples[tick_counts[k-1]:]</code>.
+            Each throughput event is one tick, so this cut drops the same intervals as the cut of the primary
+            series.
+            A server-measured series, a merged series (which has no tick counts), an hdr histogram, and a counter
+            describe the whole run.</p>
         <p>The throughput coefficient of variation is derived at read time over the trimmed interval throughputs;
             there is no <code>throughput_cv</code> field in the schema, so the CV in a summary row is always consistent
             with the trim window used for the other columns of that row.</p>
@@ -1266,7 +1347,34 @@ results, err := p.Run(ctx, sel, w, opts)
   <span class="c">// Ops that returned an error and were counted but not aborted on
   // (client-measured runs). Total attempts = total_ops + failed_ops.</span>
   uint64 failed_ops = 12;
+
+  <span class="c">// Named metrics beyond the primary latency series, sorted by name (§4).</span>
+  <span class="k">repeated</span> Metric metrics = 13;
 }
+
+<span class="c">// Metric: one named quantity. Two metrics of one name merge only when
+// their unit, kind, and measurement mode match. SERVER_MEASURED marks a
+// one-way latency across two clocks, which offset correction shifts.</span>
+<span class="k">message</span> Metric {
+  string          name             = 1;  <span class="c">// [a-z][a-z0-9_]*</span>
+  string          unit             = 2;  <span class="c">// "ns" for a distribution; free for a counter</span>
+  MeasurementMode measurement_mode = 3;
+  <span class="k">oneof</span> value {
+    Distribution distribution = 4;
+    CounterValue counter      = 5;
+  }
+}
+
+<span class="c">// Distribution: a named duration series, nanoseconds.</span>
+<span class="k">message</span> Distribution {
+  <span class="k">repeated</span> int64   samples     = 1;  <span class="c">// exact mode</span>
+  LatencyHistogram histogram   = 2;  <span class="c">// hdr mode</span>
+  <span class="k">repeated</span> uint64  tick_counts = 3;  <span class="c">// cumulative samples per tick; for the trim cut</span>
+}
+
+<span class="c">// CounterValue: a node reports sum = max = value and nodes = 1; a merge
+// adds sum and nodes and keeps the larger max.</span>
+<span class="k">message</span> CounterValue { uint64 sum = 1; uint64 max = 2; uint32 nodes = 3; }
 
 <span class="c">// LatencyHistogram: the bounded-memory distribution of an hdr run, as
 // ascending weighted (value, count) pairs — value is the bucket's
@@ -1292,8 +1400,10 @@ results, err := p.Run(ctx, sel, w, opts)
             <code>r.GetEvents()</code>).</p>
 
         <p>The same file also defines the <em>reduced</em> schema a consumer writes after aggregating a whole sweep —
-            <code>PlotData</code>, <code>PlotRun</code>, <code>PlotBenchmark</code>, <code>PlotNode</code>, and
-            <code>LatencySummary</code> (<a href="#plot">§14</a>). A producer never writes these; they live here so
+            <code>PlotData</code>, <code>PlotRun</code>, <code>PlotBenchmark</code>, <code>PlotNode</code>,
+            <code>LatencySummary</code>, and <code>MetricSummary</code> (<a href="#plot">§14</a>).
+            A <code>MetricSummary</code> holds a named metric reduced for plotting: a series as a
+            <code>LatencySummary</code>, or a counter as a <code>CounterValue</code>. A producer never writes these; they live here so
             the reduction reuses <code>RunConfig</code> for a run's dimensions instead of restating them, and so a
             consumer compiles one schema rather than two overlapping ones.</p>
 
@@ -1341,7 +1451,10 @@ results, err := p.Run(ctx, sel, w, opts)
             while failed-run <code>.binpb</code> files are still downloaded for diagnosis. Note that protojson encodes
             <code>int64</code>/<code>uint64</code> fields (including <code>latencies</code>) as JSON <em>strings</em>, not
             numbers, so a consumer parses them from strings into integers; <code>throughput</code> is a
-            <code>double</code> and stays a JSON number.</p>
+            <code>double</code> and stays a JSON number.
+            Named metrics appear under <code>"metrics"</code>, one object per metric with its <code>name</code>,
+            <code>unit</code>, and either a <code>distribution</code> or a <code>counter</code>; the samples, tick
+            counts, and counter values are strings for the same reason.</p>
 
         <h3>Producer and consumer obligations</h3>
         <p>A producer writes one <code>Report</code> per node, with <code>label</code> identifying the run or node,
