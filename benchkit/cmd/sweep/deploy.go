@@ -235,10 +235,10 @@ func run(g iago.Group, name string, fn func(context.Context, iago.Host) error) e
 }
 
 // buildBenchmark cross-compiles the benchmark binary for Linux to outputPath,
-// for amd64 unless GOARCH is set in the environment (see [crossBuildEnv]). It
-// must be run from the benchkit module root.
+// for amd64 unless GOARCH is set in the environment (see [crossBuildEnv]).
 //
-// When buildCmd is empty, it runs the built-in default:
+// When buildCmd is empty, it runs the built-in default, which resolves only
+// from the benchkit module root:
 //
 //	GOOS=linux GOARCH=<goarch> go build -o <output> ./cmd/benchmark/
 //
