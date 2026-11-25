@@ -173,7 +173,6 @@ func runDriver(cfg *config, hosts []string) error {
 		log.Printf("warning: %d benchmark host(s) after excluding driver %s, but largest -n is %d; "+
 			"nodes will be packed onto fewer hosts", len(benchHosts), driver, maxN)
 	}
-	sha := buildGitSHA(cfg)
 	logSweepEstimate(cfg.sweep, cfg.duration)
 
 	// Stage the binaries and SSH config in a local temp dir; they are uploaded
@@ -263,7 +262,7 @@ func runDriver(cfg *config, hosts []string) error {
 		}
 	}
 
-	sweepCmd := remoteSweepCommand(cfg, wd, cacheDir, strings.Join(benchHosts, ","), sha)
+	sweepCmd := remoteSweepCommand(cfg, wd, cacheDir, strings.Join(benchHosts, ","))
 	llmEnv := driverLLMEnv(cfg)
 
 	log.Printf("starting remote sweep on %s (detached)", driver)
@@ -945,10 +944,9 @@ func fileExists(path string) bool {
 // cached by cachedUpload (see driverCacheDir); it is independent of wd, the
 // run's own work directory, so a cached binary is never tied to one run's
 // timestamped directory and can be reused by the next.
-func remoteSweepCommand(cfg *config, wd, binDir, hostsCSV, sha string) string {
+func remoteSweepCommand(cfg *config, wd, binDir, hostsCSV string) string {
 	args := []string{
 		"-driven",
-		"-git-sha=" + sha,
 		"-hosts=" + hostsCSV,
 		"-binary=" + binDir + "/benchmark",
 		"-config=" + binDir + "/ssh.config",

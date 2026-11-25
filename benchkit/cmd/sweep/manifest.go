@@ -1,6 +1,7 @@
 package main
 
 import (
+	"debug/buildinfo"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -75,11 +76,39 @@ type runManifest struct {
 
 	Diagnosis string `json:"diagnosis,omitempty"` // LLM triage verdict from sweep -explain
 
-	GitSHA  string         `json:"git_sha,omitempty"`  // commit the benchmark binary was built from; empty when unknown
+	Build   *binaryBuild   `json:"build,omitempty"`    // benchmark binary build; absent for a non-Go binary
 	Binary  string         `json:"binary,omitempty"`   // deployed binary path
 	Hosts   []string       `json:"hosts"`              // host:port per node
 	Files   []string       `json:"files"`              // per-node result file basenames
 	NodeMap []nodeMapEntry `json:"node_map,omitempty"` // per-node alias, peer address, and Gorums ID
+}
+
+// binaryBuild identifies the build of a Go binary, from the build information
+// that the Go toolchain embeds in it.
+type binaryBuild struct {
+	Path     string `json:"path"`               // main package path
+	Version  string `json:"version,omitempty"`  // main module version
+	Revision string `json:"revision,omitempty"` // VCS commit; empty when built as a dependency or without a checkout
+	Modified bool   `json:"modified,omitempty"` // the checkout had uncommitted changes
+}
+
+// readBinaryBuild returns the build of the Go binary at path, or nil for a
+// file without Go build information.
+func readBinaryBuild(path string) *binaryBuild {
+	info, err := buildinfo.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	b := &binaryBuild{Path: info.Path, Version: info.Main.Version}
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			b.Revision = s.Value
+		case "vcs.modified":
+			b.Modified = s.Value == "true"
+		}
+	}
+	return b
 }
 
 type nodeMapEntry struct {
@@ -101,7 +130,7 @@ func trimString(trim time.Duration) string {
 // writeManifest writes the manifest for one run to <outdir>/<base>.manifest.json.
 // Failures are logged, not fatal: the manifest is a convenience for consumers,
 // and the run itself proceeds without it.
-func writeManifest(outdir, base string, spec runSpec, nodes []nodeAssignment, cfg *config, gitSHA, binary string) {
+func writeManifest(outdir, base string, spec runSpec, nodes []nodeAssignment, cfg *config, build *binaryBuild, binary string) {
 	if spec.StreamMode == "" {
 		spec.StreamMode = "dual"
 	}
@@ -112,7 +141,7 @@ func writeManifest(outdir, base string, spec runSpec, nodes []nodeAssignment, cf
 		Trim:      trimString(cfg.trim),
 		Timestamp: time.Now().Format(time.RFC3339),
 		Status:    runStatusStarted,
-		GitSHA:    gitSHA,
+		Build:     build,
 		Binary:    binary,
 	}
 	ids := gorumsNodeIDs(nodes)
@@ -248,16 +277,6 @@ func gorumsNodeIDs(nodes []nodeAssignment) map[string]uint32 {
 		ids[peer] = uint32(i + 1)
 	}
 	return ids
-}
-
-// buildGitSHA returns the commit the benchmark binary was built from: -git-sha
-// if set, else HEAD of the current directory when sweep builds the binary, else
-// "" for a prebuilt -binary.
-func buildGitSHA(cfg *config) string {
-	if cfg.gitSHA != "" || cfg.binaryPath != "" {
-		return cfg.gitSHA
-	}
-	return gitHeadSHA()
 }
 
 // gitHeadSHA returns the repository HEAD commit hash, or "" when unavailable

@@ -200,7 +200,7 @@ func TestRemoteSweepCommand(t *testing.T) {
 			reps:        3,
 		},
 	}
-	cmd := remoteSweepCommand(cfg, "/tmp/sweep-driver-e1-x", "/tmp/sweep-driver-cache", "bb2,bb3", "deadbeef")
+	cmd := remoteSweepCommand(cfg, "/tmp/sweep-driver-e1-x", "/tmp/sweep-driver-cache", "bb2,bb3")
 
 	mustContain := []string{
 		// The sweep executable, -binary, and -config come from binDir (the
@@ -208,7 +208,6 @@ func TestRemoteSweepCommand(t *testing.T) {
 		// timestamped work directory used only for -outdir and the ready marker).
 		"/tmp/sweep-driver-cache/sweep'",
 		"'-driven'",
-		"'-git-sha=deadbeef'",
 		"'-hosts=bb2,bb3'",
 		"'-binary=/tmp/sweep-driver-cache/benchmark'",
 		"'-config=/tmp/sweep-driver-cache/ssh.config'",
@@ -254,7 +253,7 @@ func TestRemoteSweepCommandProfilesWithoutPGO(t *testing.T) {
 		port: 9000, duration: time.Second, sweepLabel: "p", collectProfiles: true,
 		sweep: sweepConfig{numNodes: []int{3}, workers: []int{1}, payloads: []int{0}, rates: []int{0}, benchmarks: []string{"QuorumCall"}, reps: 1},
 	}
-	cmd := remoteSweepCommand(cfg, "/tmp/wd", "/tmp/wd", "bb1", "")
+	cmd := remoteSweepCommand(cfg, "/tmp/wd", "/tmp/wd", "bb1")
 	if !strings.Contains(cmd, "'-collect-profiles'") {
 		t.Errorf("expected -collect-profiles\ngot: %s", cmd)
 	}
@@ -271,7 +270,7 @@ func TestRemoteSweepCommandOmitsDefaultStreamMode(t *testing.T) {
 			rates: []int{0}, benchmarks: []string{"QuorumCall"}, streamModes: []string{"dual"}, reps: 1,
 		},
 	}
-	cmd := remoteSweepCommand(cfg, "/tmp/wd", "/tmp/wd", "bb1", "")
+	cmd := remoteSweepCommand(cfg, "/tmp/wd", "/tmp/wd", "bb1")
 	if strings.Contains(cmd, "-stream-mode") {
 		t.Errorf("default-only stream mode should be omitted\ngot: %s", cmd)
 	}
@@ -283,7 +282,7 @@ func TestRemoteSweepCommandExplain(t *testing.T) {
 		explain: true, explainProvider: "local", explainModel: "llama3.3", explainMaxLog: 4096,
 		sweep: sweepConfig{numNodes: []int{3}, workers: []int{1}, payloads: []int{0}, rates: []int{0}, benchmarks: []string{"QuorumCall"}, reps: 1},
 	}
-	cmd := remoteSweepCommand(cfg, "/tmp/wd", "/tmp/wd", "bb1", "")
+	cmd := remoteSweepCommand(cfg, "/tmp/wd", "/tmp/wd", "bb1")
 	for _, want := range []string{"'-explain'", "'-explain-provider=local'", "'-explain-model=llama3.3'", "'-explain-max-log=4096'"} {
 		if !strings.Contains(cmd, want) {
 			t.Errorf("command missing %q\ngot: %s", want, cmd)
@@ -296,7 +295,7 @@ func TestRemoteSweepCommandExplain(t *testing.T) {
 
 	// Without -explain, none of the flags appear.
 	cfg.explain = false
-	if got := remoteSweepCommand(cfg, "/tmp/wd", "/tmp/wd", "bb1", ""); strings.Contains(got, "-explain") {
+	if got := remoteSweepCommand(cfg, "/tmp/wd", "/tmp/wd", "bb1"); strings.Contains(got, "-explain") {
 		t.Errorf("command should omit -explain when disabled\ngot: %s", got)
 	}
 }
@@ -728,7 +727,7 @@ func TestDriverBuildSweepBinaryOutsideModuleRoot(t *testing.T) {
 	if err := buildSweepBinary(bin); err != nil {
 		t.Fatalf("buildSweepBinary: %v", err)
 	}
-	if _, err := os.Stat(bin); err != nil {
-		t.Fatalf("sweep binary: %v", err)
+	if b := readBinaryBuild(bin); b == nil || b.Path != sweepPackage {
+		t.Errorf("readBinaryBuild() = %+v, want path %s", b, sweepPackage)
 	}
 }
