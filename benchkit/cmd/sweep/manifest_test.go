@@ -26,7 +26,7 @@ func TestWriteManifest(t *testing.T) {
 	}
 	const base = "nscale_Symmetric_N2_W4_P16_R1000_r2"
 
-	writeManifest(dir, base, p, nodes, cfg, "abc123", "/tmp/bench")
+	writeManifest(dir, base, p, nodes, cfg, &binaryBuild{Path: benchmarkPackage, Revision: "abc123", Modified: true}, "/tmp/bench")
 
 	data, err := os.ReadFile(filepath.Join(dir, base+manifestSuffix))
 	if err != nil {
@@ -46,7 +46,7 @@ func TestWriteManifest(t *testing.T) {
 		Trim:      "1s",
 		Timestamp: m.Timestamp, // checked separately below
 		Status:    runStatusStarted,
-		GitSHA:    "abc123",
+		Build:     &binaryBuild{Path: benchmarkPackage, Revision: "abc123", Modified: true},
 		Binary:    "/tmp/bench",
 		Hosts:     []string{"bb1:9000", "bb2:9000"},
 		Files: []string{
@@ -73,7 +73,7 @@ func TestWriteManifest(t *testing.T) {
 		m.Payload != want.Payload || m.Rate != want.Rate || m.Rep != want.Rep ||
 		m.StreamMode != want.StreamMode ||
 		m.Duration != want.Duration || m.Trim != want.Trim ||
-		m.Status != want.Status || m.GitSHA != want.GitSHA || m.Binary != want.Binary {
+		m.Status != want.Status || *m.Build != *want.Build || m.Binary != want.Binary {
 		t.Errorf("manifest = %+v, want %+v", m, want)
 	}
 	if !slices.Equal(m.Hosts, want.Hosts) {
@@ -162,7 +162,7 @@ func TestUpdateManifestOutcome(t *testing.T) {
 
 	t.Run("SetupFailure", func(t *testing.T) {
 		dir := t.TempDir()
-		writeManifest(dir, base, p, nodes, cfg, "", "")
+		writeManifest(dir, base, p, nodes, cfg, nil, "")
 		runErr := os.ErrDeadlineExceeded
 		collected, missing := countResultFiles(dir, base, nodes)
 		if collected != 0 {
@@ -198,7 +198,7 @@ func TestUpdateManifestOutcome(t *testing.T) {
 
 	t.Run("MeasurementFailure", func(t *testing.T) {
 		dir := t.TempDir()
-		writeManifest(dir, base, p, nodes, cfg, "", "")
+		writeManifest(dir, base, p, nodes, cfg, nil, "")
 		// Two of three nodes wrote a result file; the third failed mid-run.
 		writeResultFile(t, dir, base, nodes[0])
 		writeResultFile(t, dir, base, nodes[1])
@@ -228,7 +228,7 @@ func TestUpdateManifestOutcome(t *testing.T) {
 
 	t.Run("Success", func(t *testing.T) {
 		dir := t.TempDir()
-		writeManifest(dir, base, p, nodes, cfg, "", "")
+		writeManifest(dir, base, p, nodes, cfg, nil, "")
 		for _, n := range nodes {
 			writeResultFile(t, dir, base, n)
 		}
@@ -305,7 +305,7 @@ func TestUpdateManifestOutcomeDegraded(t *testing.T) {
 	writeManifest(dir, base, runSpec{
 		Benchmark: "Q", Nodes: 5, Workers: 1,
 		Rep: 1,
-	}, nodes, cfg, "", "")
+	}, nodes, cfg, nil, "")
 
 	deg := []degradedNode{{Host: "bb16:9000", Throughput: 233, Relative: 0.045}}
 	tcp := map[string]map[string]uint64{"bb16": {"TcpExt.TCPTimeouts": 4900}}
@@ -366,26 +366,19 @@ func TestUpdateManifestDiagnosis(t *testing.T) {
 	}
 }
 
-func TestManifestBuildGitSHA(t *testing.T) {
-	head := gitHeadSHA()
-	if head == "" {
-		t.Skip("needs a git checkout")
+func TestManifestReadBinaryBuild(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
 	}
-	tests := []struct {
-		name string
-		cfg  config
-		want string
-	}{
-		{"sweep builds", config{}, head},
-		{"custom build", config{buildCmd: "go build ./cmd/x"}, head},
-		{"prebuilt binary", config{binaryPath: "./bench"}, ""},
-		{"user supplied", config{binaryPath: "./bench", gitSHA: "abc123"}, "abc123"},
+	if b := readBinaryBuild(exe); b == nil || !strings.HasSuffix(b.Path, "/cmd/sweep.test") {
+		t.Errorf("readBinaryBuild(test binary) = %+v, want path ending in /cmd/sweep.test", b)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := buildGitSHA(&tt.cfg); got != tt.want {
-				t.Errorf("buildGitSHA() = %q, want %q", got, tt.want)
-			}
-		})
+	script := filepath.Join(t.TempDir(), "bench.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if b := readBinaryBuild(script); b != nil {
+		t.Errorf("readBinaryBuild(script) = %+v, want nil", b)
 	}
 }

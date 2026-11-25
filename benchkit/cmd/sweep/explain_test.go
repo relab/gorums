@@ -28,7 +28,7 @@ func writeFailedManifest(t *testing.T, dir, base, phase string) []nodeAssignment
 		{host: "bb1", peerHost: "152.94.162.21", port: 9000},
 		{host: "bb2", peerHost: "152.94.162.11", port: 9000},
 	}
-	writeManifest(dir, base, p, nodes, cfg, "abc123", "/tmp/bench")
+	writeManifest(dir, base, p, nodes, cfg, nil, "/tmp/bench")
 	if err := updateManifestOutcome(dir, base, runOutcome{
 		status:       runStatusFailed,
 		failurePhase: phase,
@@ -76,7 +76,7 @@ func TestDiscoverFailedRuns(t *testing.T) {
 	writeManifest(dir, "run_Symmetric_N1_W1_r1", runSpec{
 		Nodes: 1, Workers: 1, Benchmark: "Symmetric",
 		Rep: 1,
-	}, okNodes, cfg, "", "")
+	}, okNodes, cfg, nil, "")
 	if err := updateManifestOutcome(dir, "run_Symmetric_N1_W1_r1", runOutcome{status: runStatusSucceeded}); err != nil {
 		t.Fatalf("update outcome: %v", err)
 	}

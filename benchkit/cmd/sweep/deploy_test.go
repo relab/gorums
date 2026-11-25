@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -706,7 +705,7 @@ func TestDeployBuildBenchmarkOutsideModuleRoot(t *testing.T) {
 	if err := buildBenchmark(bin, ""); err != nil {
 		t.Fatalf("buildBenchmark: %v", err)
 	}
-	if _, err := os.Stat(bin); err != nil {
-		t.Fatalf("benchmark binary: %v", err)
+	if b := readBinaryBuild(bin); b == nil || b.Path != benchmarkPackage {
+		t.Errorf("readBinaryBuild() = %+v, want path %s", b, benchmarkPackage)
 	}
 }

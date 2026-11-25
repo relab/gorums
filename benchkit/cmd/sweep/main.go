@@ -214,7 +214,6 @@ type config struct {
 	remoteDir    string // -remote-dir: remote storage root; each user gets sweep-$USER below it
 	remoteDirs   map[string]string
 	driven       bool   // -driven (internal): this process is the orchestrator on the driver
-	gitSHA       string // -git-sha (internal): HEAD forwarded by the launcher for manifests
 	readyMarker  string // -ready-marker (internal): path to touch once peers are dialed
 	selfHost     string // -self-host (internal): alias of the host running a -check, probed locally instead of via SSH
 	transferMode string // -transfer: file transfer backend for driver uploads/downloads (rsync or sftp)
@@ -359,10 +358,8 @@ func main() {
 	log.SetOutput(io.MultiWriter(os.Stderr, logFile))
 
 	// The replay script and stale-binary check are laptop-only: on the driver
-	// os.Args is the driven command (not the user's), there is no repo HEAD, and
-	// the binary was freshly built by the launcher. The launcher writes the
-	// replay script locally and forwards the binary's commit via -git-sha.
-	gitSHA := buildGitSHA(cfg)
+	// os.Args is the driven command (not the user's) and there is no repo HEAD.
+	// The launcher writes the replay script locally.
 	if !cfg.driven {
 		replayScriptPath, err := writeReplayScript(cfg.outDir, os.Args)
 		if err != nil {
@@ -406,6 +403,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("binary path: %v", err)
 	}
+	build := readBinaryBuild(binAbs)
 
 	// Limit connections to the physical hosts actually needed for this sweep.
 	maxPhysical := 0
@@ -516,7 +514,7 @@ func main() {
 		base := runBase(cfg.sweepLabel, spec)
 		nodes := buildNodeAssignments(allHosts, spec.Nodes, cfg.port)
 		peers := buildPeerList(nodes)
-		writeManifest(cfg.outDir, base, spec, nodes, cfg, gitSHA, binAbs)
+		writeManifest(cfg.outDir, base, spec, nodes, cfg, build, binAbs)
 		for _, n := range nodes {
 			for _, ext := range collectExts {
 				remoteFiles[n.host] = append(remoteFiles[n.host], filepath.Join(cfg.remoteDirs[n.host], resultFilename(base, n, ext)))
@@ -753,7 +751,6 @@ func parseFlags() (*config, []string) {
 	flag.StringVar(&cfg.remoteDir, "remote-dir", "/tmp", "remote storage root; sweep creates and uses <root>/sweep-$USER")
 	flag.StringVar(&cfg.transferMode, "transfer", "rsync", "file transfer backend for -detach uploads and downloads: rsync >=3.2.4 (default) or sftp")
 	flag.BoolVar(&cfg.driven, "driven", false, "internal: set automatically on the cluster-local driver; relaxes laptop-only steps (repo root, build, replay script)")
-	flag.StringVar(&cfg.gitSHA, "git-sha", "", "commit the benchmark binary was built from, recorded in manifests (default: HEAD of the current directory when sweep builds the binary; unknown with -binary)")
 	flag.StringVar(&cfg.readyMarker, "ready-marker", "", "internal: path the driven sweep touches once its peers are dialed, so a -detach launcher knows the forwarded agent is no longer needed")
 	flag.StringVar(&cfg.selfHost, "self-host", "", "internal: set by a driver-routed -check to the driver's own alias, which is probed locally instead of over SSH (a host cannot SSH to itself)")
 
