@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/relab/gorums/benchkit"
 )
 
 // TestBuildNodeCmd verifies the remote command line for one node: the required
@@ -707,5 +709,26 @@ func TestDeployBuildBenchmarkOutsideModuleRoot(t *testing.T) {
 	}
 	if b := readBinaryBuild(bin); b == nil || b.Path != benchmarkPackage {
 		t.Errorf("readBinaryBuild() = %+v, want path %s", b, benchmarkPackage)
+	}
+}
+
+// TestBuildNodeCmdCustomDimensions verifies that each custom dimension value
+// reaches the node as -name=value, sorted by name and before -extra-args, so a
+// flag the binary registers itself receives the swept value.
+func TestBuildNodeCmdCustomDimensions(t *testing.T) {
+	node := nodeAssignment{host: "bb1", port: 9000}
+	cfg := &config{duration: time.Second, prog: newRemoteProgram(""), extraArgs: "-fault-kill-after=5s"}
+	spec := runSpec{
+		Benchmark: "Idea0", Nodes: 1, Workers: 1,
+		Params: benchkit.NewParams(map[string]string{"t": "2", "d": "20", "ready": "tree"}),
+	}
+	got := buildNodeCmd(node, "bb1:9000", spec, "run", cfg)
+	want := "-d=20 -ready=tree -t=2 -fault-kill-after=5s"
+	if !strings.HasSuffix(got, want) {
+		t.Errorf("buildNodeCmd = %s\nwant suffix %q", got, want)
+	}
+	spec.Params = ""
+	if got := buildNodeCmd(node, "bb1:9000", spec, "run", cfg); strings.Contains(got, "-d=") {
+		t.Errorf("buildNodeCmd without custom dimensions = %s", got)
 	}
 }

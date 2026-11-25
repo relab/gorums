@@ -23,21 +23,27 @@ const perRunOverhead = 15 * time.Second
 // contribute a single value are omitted to keep the line readable; the result
 // is "" when every factor is 1 (a single run).
 func sweepFactorBreakdown(sc sweepConfig) string {
-	streamModes := max(len(sc.streamModes), 1) // empty defaults to a single mode (dual)
-	factors := []struct {
+	type factor struct {
 		name string
 		n    int
-	}{
+	}
+	streamModes := max(len(sc.streamModes), 1) // empty defaults to a single mode (dual)
+	factors := []factor{
 		{"n", len(sc.numNodes)},
 		{"workers", len(sc.workers)},
 		{"payload", len(sc.payloads)},
 		{"rate", len(sc.rates)},
 		{"send-buffer", len(sc.sendBuffers)},
 		{"recv-buffer", len(sc.recvBuffers)},
-		{"bench", len(sc.benchmarks)},
-		{"stream", streamModes},
-		{"reps", max(sc.reps, 1)},
 	}
+	for _, dim := range sc.dims {
+		factors = append(factors, factor{dim.name, len(dim.values)})
+	}
+	factors = append(factors,
+		factor{"bench", len(sc.benchmarks)},
+		factor{"stream", streamModes},
+		factor{"reps", max(sc.reps, 1)},
+	)
 	var parts []string
 	for _, f := range factors {
 		if f.n > 1 {

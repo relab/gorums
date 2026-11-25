@@ -1356,13 +1356,14 @@ results, err := p.Run(ctx, sel, w, opts)
         <h2 id="sweep">13. sweep</h2>
 
         <p><code>cmd/sweep</code> runs the Cartesian product of <code>-n × -workers × -payload × -rate ×
-            -send-buffer × -recv-buffer × -benchmarks × -stream-mode × -reps</code> over a set of SSH hosts. For each run it kills lingering processes, launches one
+            -send-buffer × -recv-buffer × -dim × -benchmarks × -stream-mode × -reps</code> over a set of SSH hosts. For each run it kills lingering processes, launches one
             benchmark binary per node, waits, downloads the per-node <code>.binpb</code> result files for local runs,
             writes a protojson <code>.json</code> sibling for each (for inspection), and prints a
             summary table. In driver mode, successful runs are reduced to compact plot CSVs on the driver; failed-run
             <code>.binpb</code> files are downloaded with the compact results. Per-run output files are named
-            <code>&lt;label&gt;_&lt;bench&gt;_N&lt;n&gt;_W&lt;w&gt;_P&lt;p&gt;[_R&lt;rate&gt;][_SB&lt;send&gt;][_RB&lt;recv&gt;]_S&lt;stream&gt;_r&lt;rep&gt;_&lt;host&gt;_&lt;port&gt;</code>.
-            The <code>_SB</code> and <code>_RB</code> components appear only when that buffer is swept.</p>
+            <code>&lt;label&gt;_&lt;bench&gt;_N&lt;n&gt;_W&lt;w&gt;_P&lt;p&gt;[_R&lt;rate&gt;][_SB&lt;send&gt;][_RB&lt;recv&gt;][_&lt;name&gt;=&lt;value&gt;…]_S&lt;stream&gt;_r&lt;rep&gt;_&lt;host&gt;_&lt;port&gt;</code>.
+            The <code>_SB</code> and <code>_RB</code> components appear only when that buffer is swept, and one
+            <code>_&lt;name&gt;=&lt;value&gt;</code> component per custom dimension, sorted by name.</p>
 
         <h3>Flag reference</h3>
         <table>
@@ -1379,6 +1380,7 @@ results, err := p.Run(ctx, sel, w, opts)
                 <tr><td><code>-recv-buffer</code></td><td>binary default</td><td>Server receive queue capacities to sweep. Unset leaves the binary's own default and adds no dimension. A capacity of <code>0</code> is a real setting (unbuffered), distinct from unset.</td></tr>
                 <tr><td><code>-benchmarks</code></td><td><code>SymmetricQuorumCall</code></td><td>Exact benchmark names (each anchored as <code>^name$</code>; not a regexp — see <a href="#flags">§9</a>).</td></tr>
                 <tr><td><code>-stream-mode</code></td><td><code>dual</code></td><td>Symmetric stream topology to sweep: <code>dual</code> or <code>dedup</code>. The default <code>dual</code> mode preserves existing behavior. The special <code>baseline</code> mode labels runs of a prebuilt pre-dedup binary (requires <code>-binary</code>, cannot be mixed with other modes, and is never passed to the node command line).</td></tr>
+                <tr><td><code>-dim name=v1,v2</code></td><td>—</td><td>Repeatable. Declares a custom dimension of a foreign binary and the values to sweep. Each value reaches every node as <code>-name=value</code>, before <code>-extra-args</code>; the binary registers the flag itself. Names are lowercase letters, digits, and dashes, starting with a letter; a built-in dimension, a forwarded flag, a CSV column name, and a name also given in <code>-extra-args</code> are rejected. Values are letters, digits, <code>.</code>, <code>+</code>, and <code>-</code>, and differ in more than case. See <a href="#custom-dims">Custom dimensions</a>.</td></tr>
                 <tr><td><code>-reps</code></td><td><code>1</code></td><td>Repetitions per parameter combination.</td></tr>
                 <tr><td colspan="3"><strong>Run setup</strong></td></tr>
                 <tr><td><code>-hosts</code></td><td>—</td><td>SSH host aliases: <code>bb[1-30]</code> ranges, globs, or comma-separated literals. Required except with <code>-collect</code>, <code>-collect-now</code>, <code>-list</code>, <code>-verify</code>, or a local <code>-explain-check</code>.</td></tr>
@@ -1423,6 +1425,16 @@ results, err := p.Run(ctx, sel, w, opts)
         </table>
         <p class="small">Two internal flags (<code>-driven</code>, <code>-ready-marker</code>)
             are set automatically by the driver machinery and never passed by hand.</p>
+
+        <h3 id="custom-dims">Custom dimensions</h3>
+        <p>A foreign binary has parameters of its own. <code>-dim</code> sweeps them like the built-in
+            dimensions:</p>
+        <pre>sweep ... -binary ./proto -benchmarks Baseline,Idea0 -dim d=20,22 -dim t=1,2,3 -dim ready=all,tree</pre>
+        <p>Each <code>-dim</code> joins the Cartesian product. The custom loops sit outside the benchmark and
+            stream-mode loops, so consecutive runs compare benchmarks at one setting. Sweep passes each value
+            verbatim to every node as <code>-&lt;name&gt;=&lt;value&gt;</code> and records it in the
+            run name and in the manifest's <code>params</code> object. A sweep without <code>-dim</code> keeps its
+            run names and manifests unchanged.</p>
 
         <h3>Host resolution and node identity</h3>
         <p><code>-hosts</code> names SSH aliases, but the nodes never see them: sweep resolves each connected host

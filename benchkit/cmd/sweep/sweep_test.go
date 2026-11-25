@@ -3,6 +3,8 @@ package main
 import (
 	"slices"
 	"testing"
+
+	"github.com/relab/gorums/benchkit"
 )
 
 func TestSweepRunSpecsIncludeStreamModes(t *testing.T) {
@@ -144,5 +146,83 @@ func TestSweepRunSpecsBufferAxes(t *testing.T) {
 				t.Error("unswept send buffer did not select the default")
 			}
 		})
+	}
+}
+
+// TestSweepRunSpecsCustomDimensions verifies that each custom dimension joins
+// the Cartesian product, outside the benchmark and stream-mode loops, with the
+// values stored in each spec's Params.
+func TestSweepRunSpecsCustomDimensions(t *testing.T) {
+	sc := sweepConfig{
+		numNodes: []int{3}, workers: []int{1}, payloads: []int{0}, rates: []int{0},
+		benchmarks:  []string{"Baseline", "Idea0"},
+		streamModes: []string{"dual"},
+		dims: []customDimension{
+			{name: "d", values: []string{"20", "22"}},
+			{name: "ready", values: []string{"all", "tree"}},
+		},
+		reps: 1,
+	}
+	var got []string
+	for spec := range sc.runSpecs() {
+		got = append(got, spec.Benchmark+" "+string(spec.Params))
+	}
+	want := []string{
+		"Baseline d=20&ready=all", "Idea0 d=20&ready=all",
+		"Baseline d=20&ready=tree", "Idea0 d=20&ready=tree",
+		"Baseline d=22&ready=all", "Idea0 d=22&ready=all",
+		"Baseline d=22&ready=tree", "Idea0 d=22&ready=tree",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("runSpecs =\n%v\nwant\n%v", got, want)
+	}
+	if n := countRuns(sc); n != len(want) {
+		t.Errorf("countRuns = %d, want %d", n, len(want))
+	}
+	if got, want := sweepFactorBreakdown(sc), "d:2 × ready:2 × bench:2"; got != want {
+		t.Errorf("sweepFactorBreakdown = %q, want %q", got, want)
+	}
+}
+
+// TestSweepRunSpecsCountCustomDimensions verifies that countRuns equals the
+// number of specs that runSpecs yields for a sweep over several custom
+// dimensions, and that every spec holds a distinct combination.
+func TestSweepRunSpecsCountCustomDimensions(t *testing.T) {
+	sc := sweepConfig{
+		numNodes: []int{3, 5}, workers: []int{1}, payloads: []int{0}, rates: []int{0},
+		benchmarks:  []string{"Baseline", "Idea0"},
+		streamModes: []string{"dual"},
+		dims: []customDimension{
+			{name: "d", values: []string{"20", "22", "24"}},
+			{name: "ready", values: []string{"all"}},
+			{name: "t", values: []string{"1", "2", "3", "4"}},
+		},
+		reps: 2,
+	}
+	seen := map[runSpec]bool{}
+	for spec := range sc.runSpecs() {
+		if seen[spec] {
+			t.Errorf("runSpecs yields %+v twice", spec)
+		}
+		seen[spec] = true
+	}
+	if want := 2 * 2 * 3 * 1 * 4 * 2; len(seen) != want {
+		t.Errorf("runSpecs yields %d specs, want %d", len(seen), want)
+	}
+	if n := countRuns(sc); n != len(seen) {
+		t.Errorf("countRuns = %d, want %d", n, len(seen))
+	}
+}
+
+// TestRunBaseCustomDimensions verifies that custom dimension values reach the
+// run name after the built-in buffer sizes and before the stream mode, sorted by
+// name, so runs that differ only in a custom value land in distinct files.
+func TestRunBaseCustomDimensions(t *testing.T) {
+	spec := runSpec{
+		Benchmark: "Idea0", Nodes: 9, Workers: 4, Payload: 64, RecvBuffer: 16, StreamMode: "dual",
+		Params: benchkit.NewParams(map[string]string{"t": "2", "d": "20"}), Rep: 1,
+	}
+	if got, want := runBase("e1", spec), "e1_Idea0_N9_W4_P64_RB16_d=20_t=2_Sdual_r1"; got != want {
+		t.Errorf("runBase = %q, want %q", got, want)
 	}
 }

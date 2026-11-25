@@ -731,3 +731,26 @@ func TestDriverBuildSweepBinaryOutsideModuleRoot(t *testing.T) {
 		t.Errorf("readBinaryBuild() = %+v, want path %s", b, sweepPackage)
 	}
 }
+
+// TestRemoteSweepCommandCustomDimensions verifies that the driven sweep gets
+// every -dim flag, so it runs the same product as the launcher.
+func TestRemoteSweepCommandCustomDimensions(t *testing.T) {
+	cfg := &config{sweep: sweepConfig{
+		numNodes: []int{3}, workers: []int{1}, payloads: []int{0}, rates: []int{0},
+		benchmarks: []string{"Idea0"},
+		dims: []customDimension{
+			{name: "d", values: []string{"20", "22"}},
+			{name: "ready", values: []string{"all", "tree"}},
+		},
+	}}
+	cmd := remoteSweepCommand(cfg, "/tmp/wd", "/tmp/bin", "bb2,bb3")
+	for _, want := range []string{"'-dim=d=20,22'", "'-dim=ready=all,tree'"} {
+		if !strings.Contains(cmd, want) {
+			t.Errorf("command missing %q\ngot: %s", want, cmd)
+		}
+	}
+	cfg.sweep.dims = nil
+	if cmd := remoteSweepCommand(cfg, "/tmp/wd", "/tmp/bin", "bb2,bb3"); strings.Contains(cmd, "-dim") {
+		t.Errorf("command without custom dimensions has -dim: %s", cmd)
+	}
+}

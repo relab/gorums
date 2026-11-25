@@ -58,6 +58,35 @@
 //	-rate=N                   target sends/sec per node; 0 = unlimited (optional)
 //	-stream-mode=dual|dedup   symmetric stream topology (optional; default dual)
 //	-verbose                  verbose logging (optional)
+//	-<name>=value             one flag per -dim custom dimension (only when -dim is given)
+//
+// Custom dimensions:
+//
+// A protocol binary sweeps its own parameters with the repeatable -dim flag:
+//
+//	sweep ... -benchmarks Baseline,Idea0 -dim d=20,22 -dim t=1,2,3 -dim ready=all,tree
+//
+// Each -dim joins the Cartesian product of the built-in dimensions. Sweep passes
+// each value to every node as -<name>=<value>, before -extra-args; the binary
+// registers the flag itself. A name is lowercase letters, digits, and dashes,
+// starting with a letter, and differs from the built-in dimensions, the flags
+// that sweep forwards, and the columns of the CSV files that sweep writes. A
+// value is letters, digits, '.', '+', and '-', and the values of one dimension
+// differ in more than case. The values appear in the file names of each run's
+// output (..._d=20_ready=tree_...) and in the manifests.
+//
+// For example, with
+//
+//	sweep ... -workers 8 -payload 1024 -dim d=20,22 -dim ready=all,tree -extra-args '-fault'
+//
+// each node of the run with d=20 and ready=tree starts as
+//
+//	benchmark -self=... -remotes=... -benchmarks='^Idea0$' -workers=8 -payload=1024 \
+//	    -time=10s -output=... -d=20 -ready=tree -fault
+//
+// The built-in dimensions become fixed flags, each -dim becomes -name=value in
+// name order, and -extra-args comes last. Use -extra-args for constant flags
+// that are not swept, such as a flag without a value.
 //
 // Sweep builds for linux/amd64 hosts. To target other hosts, set GOARCH in
 // sweep's environment, e.g. GOARCH=arm64; GOOS is always linux.
@@ -126,6 +155,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/relab/gorums/benchkit"
 	"github.com/relab/gorums/benchkit/benchmark"
 	"github.com/relab/iago"
 )
@@ -527,9 +557,10 @@ func main() {
 
 		// Progress goes through log so each run is timestamped (stalls are then
 		// visible in the log) and recorded in sweep.log.
-		log.Printf("[%d/%d] %-8s  N=%-4d  workers=%-4d  payload=%-6d  rate=%-8d  stream=%-5s  bench=%s",
+		log.Printf("[%d/%d] %-8s  N=%-4d  workers=%-4d  payload=%-6d  rate=%-8d  stream=%-5s  bench=%s%s",
 			runNum, total, cfg.sweepLabel,
-			spec.Nodes, spec.Workers, spec.Payload, spec.Rate, spec.StreamMode, spec.Benchmark)
+			spec.Nodes, spec.Workers, spec.Payload, spec.Rate, spec.StreamMode, spec.Benchmark,
+			paramsSummary(spec.Params))
 		// Refresh the completion range using only the static per-run bounds.
 		if runNum > 1 {
 			log.Print(sweepProgressLine(time.Now(), cfg.duration, runNum-1, total))
@@ -780,6 +811,7 @@ func parseFlags() (*config, []string) {
 	flag.Var(intListFlag(&cfg.sweep.recvBuffers), "recv-buffer", "comma-separated server receive queue capacities to sweep (default: the binary's own)")
 	flag.Var(stringListFlag(&cfg.sweep.benchmarks), "benchmarks", "comma-separated benchmark names to run (built-in binary: symmetric benchmarks only)")
 	flag.Var(stringListFlag(&cfg.sweep.streamModes), "stream-mode", "comma-separated stream modes to sweep: dual,dedup; or baseline alone (requires -binary)")
+	flag.Var(dimFlag{&cfg.sweep.dims}, "dim", "repeatable: declare a custom sweep dimension as `name=v1,v2`; every node gets -name=value")
 	flag.IntVar(&cfg.sweep.reps, "reps", 1, "repetitions per parameter combination")
 
 	var (
@@ -848,6 +880,9 @@ func parseFlags() (*config, []string) {
 	}
 	if err := validateStreamModes(cfg.sweep.streamModes, cfg.binaryPath); err != nil {
 		log.Fatalf("-stream-mode: %v", err)
+	}
+	if err := validateDimensionArgs(cfg.sweep.dims, cfg.extraArgs); err != nil {
+		log.Fatal(err)
 	}
 
 	sweepExplicit = applyTestMode(cfg, testN, sweepExplicit, benchmarksExplicit)
@@ -942,14 +977,28 @@ func parseFlags() (*config, []string) {
 	return cfg, hosts
 }
 
+// paramsSummary renders custom dimension values for a progress line, as
+// "  name=value" per dimension, or "" when there are none.
+func paramsSummary(params benchkit.Params) string {
+	var b strings.Builder
+	for name, value := range params.All() {
+		fmt.Fprintf(&b, "  %s=%s", name, value)
+	}
+	return b.String()
+}
+
 func countRuns(sc sweepConfig) int {
 	streamModes := sc.streamModes
 	if len(streamModes) == 0 {
 		streamModes = []string{"dual"}
 	}
-	return max(sc.reps, 1) * len(sc.numNodes) * len(sc.workers) * len(sc.payloads) *
+	runs := max(sc.reps, 1) * len(sc.numNodes) * len(sc.workers) * len(sc.payloads) *
 		len(sc.rates) * len(bufferValues(sc.sendBuffers)) * len(bufferValues(sc.recvBuffers)) *
 		len(sc.benchmarks) * len(streamModes)
+	for _, dim := range sc.dims {
+		runs *= len(dim.values)
+	}
+	return runs
 }
 
 // validateDistributedBenchmarks rejects built-in benchmarks that cannot run

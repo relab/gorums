@@ -685,7 +685,8 @@ func chunkByLength(items []string, maxBytes int) [][]string {
 // -rate-step-max), -stream-mode (only for dedup), the per-node profile paths
 // (-cpuprofile/-memprofile, when -collect-profiles is set), and -extra-args
 // are appended only when set, so a binary without them keeps working as long
-// as the sweep does not ask for them.
+// as the sweep does not ask for them. Each custom dimension of spec is passed
+// as -name=value, sorted by name, just before -extra-args.
 func buildNodeCmd(node nodeAssignment, peers string, spec runSpec, base string, cfg *config) string {
 	remoteDir := node.remoteDir(cfg)
 	output := filepath.Join(remoteDir, resultFilename(base, node, resultExt))
@@ -732,6 +733,11 @@ func buildNodeCmd(node nodeAssignment, peers string, spec runSpec, base string, 
 	}
 	if cfg.verbose {
 		parts = append(parts, "-verbose")
+	}
+	// The -dim flag restricts names and values to characters a shell passes
+	// through unchanged.
+	for name, value := range spec.Params.All() {
+		parts = append(parts, fmt.Sprintf("-%s=%s", name, value))
 	}
 	if cfg.extraArgs != "" {
 		parts = append(parts, cfg.extraArgs)
