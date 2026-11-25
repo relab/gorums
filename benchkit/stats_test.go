@@ -211,6 +211,55 @@ func TestStatsResetClearsBySender(t *testing.T) {
 	}
 }
 
+// TestStatsGetResultMetrics verifies that GetResult lists the metrics sorted
+// by name, includes them when no primary sample was recorded, and leaves out a
+// registered metric that recorded nothing.
+func TestStatsGetResultMetrics(t *testing.T) {
+	s := &Stats{}
+	s.Counter("relayed", "blocks").Add(3)
+	s.Series("decode").Add(time.Microsecond)
+	s.Series("unused")
+	s.Counter("idle", "B")
+
+	r := s.GetResult()
+	if got := r.GetTotalOps(); got != 0 {
+		t.Errorf("TotalOps = %d, want 0", got)
+	}
+	var names []string
+	for _, m := range r.GetMetrics() {
+		names = append(names, m.GetName())
+	}
+	if want := []string{"decode", "relayed"}; !slices.Equal(names, want) {
+		t.Errorf("metric names = %v, want %v", names, want)
+	}
+}
+
+// TestStatsResetKeepsMetricHandles verifies that Reset clears the recorded
+// values of every metric, switches series to the new stats mode, and keeps
+// cached handles valid.
+func TestStatsResetKeepsMetricHandles(t *testing.T) {
+	s := NewStats(StatsMode_EXACT)
+	encode := s.Series("encode")
+	sent := s.Counter("sent", "B")
+	encode.Add(time.Microsecond)
+	sent.Add(10)
+
+	s.Reset(StatsMode_HDR)
+	if got := s.GetResult().GetMetrics(); len(got) != 0 {
+		t.Errorf("metrics after Reset = %v, want none", got)
+	}
+	encode.Add(2 * time.Microsecond)
+	sent.Add(4)
+
+	r := s.GetResult()
+	if got := totalCount(metricByName(r, "encode").GetDistribution().GetHistogram()); got != 1 {
+		t.Errorf("encode histogram count after Reset = %d, want 1", got)
+	}
+	if got := metricByName(r, "sent").GetCounter().GetSum(); got != 4 {
+		t.Errorf("sent after Reset = %d, want 4", got)
+	}
+}
+
 func TestStatsHDRModeResult(t *testing.T) {
 	// HDR mode counts ops and exposes them via TotalOps; raw samples are not
 	// retained (Latencies is nil) and the distribution is carried by the

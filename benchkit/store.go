@@ -92,6 +92,16 @@ func (s *hdrStore) Add(ns int64) {
 	_ = s.h.RecordValue(min(ns, hdrHighest))
 }
 
+// addN records n occurrences of v, keeping its sign, its magnitude clamped to
+// the trackable ceiling as in [hdrStore.Add].
+func (s *hdrStore) addN(v int64, n uint64) {
+	if v < 0 {
+		_ = s.neg.RecordValueN(min(-v, hdrHighest), n)
+		return
+	}
+	_ = s.h.RecordValueN(min(v, hdrHighest), n)
+}
+
 func (s *hdrStore) Count() uint64    { return s.h.TotalCount() + s.neg.TotalCount() }
 func (s *hdrStore) Samples() []int64 { return nil }
 
