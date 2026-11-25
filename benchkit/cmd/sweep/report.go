@@ -6,7 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+
+	"github.com/relab/gorums/benchkit"
 )
 
 // dimCounts returns the number of distinct values each axis of the schema of
@@ -142,6 +145,10 @@ type figureSpec struct {
 	yscale          float64
 	facet           string
 	payloadPositive bool // restrict to payload>0 rows (goodput)
+	// dims lists the dimension columns that metric-vs, ratio-vs, and tl-curve
+	// read series identity from; empty selects the library's built-in list,
+	// which suffices for figure data without custom dimensions.
+	dims []string
 	// tl-curve fields
 	group int
 	load  string // the dimension the curve traces along (see tlLoadDims)
@@ -401,7 +408,27 @@ func planFigures(agg []aggRunRecord, in reportInputs) []figureSpec {
 			}
 		}
 	}
+	// A custom dimension separates series only when the figure call names it.
+	// Each figure names the dimension columns of the CSV file it reads.
+	dims := map[figureKind][]string{
+		kindMetricVs: figureDims(newDimensionSchema(aggConfigs(agg))),
+		kindRatio:    figureDims(schemaOf(in.comparison, func(r comparisonRecord) benchkit.Dimensions { return r.Dimensions })),
+		kindTLCurve:  figureDims(schemaOf(tlCurveRows(agg, loads), func(p tlPoint) benchkit.Dimensions { return p.Dimensions })),
+	}
+	for i, s := range specs {
+		specs[i].dims = dims[s.kind]
+	}
 	return specs
+}
+
+// figureDims returns the dims argument of a figure whose rows have the given
+// schema: the schema's axes when it holds a custom dimension, and nil
+// otherwise, which selects the library's built-in list.
+func figureDims(schema dimensionSchema) []string {
+	if slices.ContainsFunc(schema, func(dim dimensionSpec) bool { return dim.custom }) {
+		return schema.axes()
+	}
+	return nil
 }
 
 // timeSeriesFigures plans the over-time figures for one run, one per benchmark
@@ -639,7 +666,7 @@ var csvVar = map[string]string{
 func figureCall(s figureSpec) string {
 	switch s.kind {
 	case kindTLCurve:
-		return fmt.Sprintf("tl-curve(tl, group: %d, load: %q)", s.group, s.load)
+		return fmt.Sprintf("tl-curve(tl, group: %d, load: %q%s)", s.group, s.load, dimsArg(s.dims))
 	case kindPerNodeCDF:
 		var runs strings.Builder
 		for _, run := range s.runs {
@@ -655,8 +682,8 @@ func figureCall(s figureSpec) string {
 			facetLabel = fmt.Sprintf("%q", dimensionLabel(s.facet))
 		}
 		return fmt.Sprintf(
-			`ratio-vs(cmp, %q, xcol: %q, xlabel: [#text(%q)], ylabel: [#text(%q)], facet: %s, facet-label: %s)`,
-			s.ycol, s.xcol, dimensionLabel(s.xcol), s.ylabel, facet, facetLabel,
+			`ratio-vs(cmp, %q, xcol: %q, xlabel: [#text(%q)], ylabel: [#text(%q)], facet: %s, facet-label: %s%s)`,
+			s.ycol, s.xcol, dimensionLabel(s.xcol), s.ylabel, facet, facetLabel, dimsArg(s.dims),
 		)
 	case kindNodeHealth:
 		return `heatmap(nh, xcol: "col", ycol: "host", valuecol: "rel", ` +
@@ -698,8 +725,21 @@ func metricVsCall(s figureSpec) string {
 		facetLabel = fmt.Sprintf("%q", dimensionLabel(s.facet))
 	}
 	return fmt.Sprintf(
-		`metric-vs(%s, xcol: %q, ycol: %q, band-col: %q, ylabel: [#text(%q)], xlabel: [#text(%q)], yscale: %s, facet: %s, facet-label: %s)`,
+		`metric-vs(%s, xcol: %q, ycol: %q, band-col: %q, ylabel: [#text(%q)], xlabel: [#text(%q)], yscale: %s, facet: %s, facet-label: %s%s)`,
 		data, s.xcol, s.ycol, s.bandCol,
-		s.ylabel, dimensionLabel(s.xcol), formatFloat(s.yscale), facet, facetLabel,
+		s.ylabel, dimensionLabel(s.xcol), formatFloat(s.yscale), facet, facetLabel, dimsArg(s.dims),
 	)
+}
+
+// dimsArg renders the dims argument of a figure call as a Typst array, or ""
+// when dims is empty. The trailing comma keeps a one-element list an array.
+func dimsArg(dims []string) string {
+	if len(dims) == 0 {
+		return ""
+	}
+	quoted := make([]string, len(dims))
+	for i, dim := range dims {
+		quoted[i] = strconv.Quote(dim)
+	}
+	return ", dims: (" + strings.Join(quoted, ", ") + ",)"
 }

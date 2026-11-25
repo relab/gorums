@@ -1709,7 +1709,13 @@ results, err := p.Run(ctx, sel, w, opts)
             applies the trim recorded in the manifest — the same interval/index-map cut as the run summary
             (<a href="#trim">§10</a>) — and averages repetitions into a mean with a sample SD and 95% CI, keeping
             <code>stream_mode</code> as a series dimension when present. Each figure is produced only when its varying
-            dimension actually varies in the data. The figures and the sweep dimension each one needs:</p>
+            dimension actually varies in the data. A custom dimension (<code>-dim</code>) is an axis like the
+            built-in ones: it gets its own <code>throughput_vs_&lt;name&gt;</code>, <code>latency_vs_&lt;name&gt;</code>,
+            and ratio figures, and it can be a facet or separate the series of another figure, where the legend
+            names it as <code>name=value</code>.
+            Numeric values sort by value, and the others follow in alphabetical order.
+            The x-axis spaces the values evenly, as for the built-in dimensions.
+            The figures and the sweep dimension each one needs:</p>
         <table>
             <thead>
                 <tr><th style="width:32%">Figure</th><th>Shows</th><th>Requires variation in</th></tr>

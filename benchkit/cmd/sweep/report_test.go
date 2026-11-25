@@ -7,8 +7,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/relab/gorums/benchkit"
 )
 
 func TestFacetFor(t *testing.T) {
@@ -783,5 +786,91 @@ func TestReportFigureCallEscapesLabels(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestPlanFiguresCustomDimensions verifies that a varying custom dimension gets
+// its own figures like a built-in one, and that the figure calls pass the full
+// dimension list, so the other custom dimension separates the series.
+func TestPlanFiguresCustomDimensions(t *testing.T) {
+	var agg []aggRunRecord
+	for _, d := range []string{"20", "22"} {
+		for _, ready := range []string{"all", "tree"} {
+			agg = append(agg, aggRunRecord{
+				Benchmark: "Idea0", Nodes: 9, Workers: 1, StreamMode: "dual",
+				Params:     benchkit.NewParams(map[string]string{"d": d, "ready": ready}),
+				reps:       1,
+				throughput: aggStat{mean: 1000, n: 1},
+				p50US:      aggStat{mean: 200, n: 1},
+			})
+		}
+	}
+	specs := planFigures(agg, reportInputs{})
+	bySlug := map[string]figureSpec{}
+	for _, s := range specs {
+		bySlug[s.slug] = s
+	}
+	for _, slug := range []string{"throughput_vs_d", "latency_vs_d", "throughput_vs_ready", "latency_vs_ready"} {
+		if _, ok := bySlug[slug]; !ok {
+			t.Errorf("figure %q not planned; got %v", slug, slices.Collect(maps.Keys(bySlug)))
+		}
+	}
+	latency := bySlug["latency_vs_d"]
+	if latency.facet != "" {
+		t.Errorf("latency_vs_d facet = %q, want none: ready is the series", latency.facet)
+	}
+	call := figureCall(latency)
+	for _, want := range []string{
+		`xcol: "d"`,
+		`xlabel: [#text("d")]`,
+		`dims: ("nodes", "workers", "payload", "rate", "send_buffer", "recv_buffer", "d", "ready",)`,
+	} {
+		if !strings.Contains(call, want) {
+			t.Errorf("figureCall = %s\nwant it to contain %s", call, want)
+		}
+	}
+	// A sweep without custom dimensions keeps its calls unchanged.
+	if call := figureCall(figureSpec{xcol: "workers", ycol: "throughput"}); strings.Contains(call, "dims:") {
+		t.Errorf("figureCall without custom dimensions = %s", call)
+	}
+}
+
+// TestReportTypstNumericPattern verifies that the Typst helper library orders
+// dimension values with the same numeric pattern as the Go code: absent first,
+// then numbers by value, then the other values as strings. The library must not
+// fail on a non-numeric value. The ordering check runs only when typst is on
+// PATH.
+func TestReportTypstNumericPattern(t *testing.T) {
+	literal := strconv.Quote(numericValuePattern.String())
+	if !strings.Contains(gorumsPlotLib, "#let numeric-pattern = regex("+literal+")") {
+		t.Fatalf("gorumsplot.typ numeric-pattern differs from the Go pattern %s", literal)
+	}
+	if _, err := exec.LookPath("typst"); err != nil {
+		t.Skip("typst not on PATH; skipping the ordering check")
+	}
+	dir := t.TempDir()
+	if err := copyReportLib(dir); err != nil {
+		t.Fatal(err)
+	}
+	values := []string{"tree", "10", "", "all", "9", "-1", "2.5", "1e5"}
+	want := slices.SortedFunc(slices.Values(values), compareDimensionValues)
+	quote := func(vs []string) string {
+		var b strings.Builder
+		for _, v := range vs {
+			fmt.Fprintf(&b, "%q, ", v)
+		}
+		return "(" + b.String() + ")"
+	}
+	src := fmt.Sprintf(`#import "gorumsplot.typ": *
+#let rows = %s.map(v => (x: v))
+#assert.eq(uniq-numsorted(rows, "x"), %s)
+`, quote(values), quote(want))
+	if err := os.WriteFile(filepath.Join(dir, "order.typ"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("typst", "compile", "order.typ", "order.pdf")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("typst ordering differs from Go (%v): %v\n%s", want, err, out)
 	}
 }
