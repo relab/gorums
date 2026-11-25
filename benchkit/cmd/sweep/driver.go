@@ -190,7 +190,7 @@ func runDriver(cfg *config, hosts []string) error {
 	benchLocal := cfg.binaryPath
 	if benchLocal == "" {
 		benchLocal = filepath.Join(stage, "benchmark")
-		if err := buildBenchmark(benchLocal, benchmarkBuildCmd(cfg)); err != nil {
+		if err := buildBenchmark(benchLocal, cfg.buildCmd); err != nil {
 			return fmt.Errorf("build benchmark: %w", err)
 		}
 	}
