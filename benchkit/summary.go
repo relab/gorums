@@ -61,8 +61,27 @@ type SummaryMetric struct {
 	// series, and an hdr histogram describe the whole run.
 	Dist *LatencyDist
 
+	// HDR is true for a series recorded as an hdr histogram, and false for a
+	// series of raw samples and for a counter. An exact series that the trim
+	// empties stays exact.
+	HDR bool
+
 	// Counter is the value of a counter over the whole run.
 	Counter *CounterValue
+}
+
+// CheckMerge returns an error naming the metric and both descriptions when
+// other has another unit, kind, measurement mode, or stats mode than m. Merge
+// the distributions of two series with [LatencyDist.Merge] and the values of
+// two counters with [CounterValue.Merge] only when it returns nil.
+func (m SummaryMetric) CheckMerge(other SummaryMetric) error {
+	return checkMetricMerge(m.Name, m.description(), other.description())
+}
+
+// description returns the kind, measurement mode, and unit of m, and the stats
+// mode of a series, for error messages.
+func (m SummaryMetric) description() string {
+	return metricDescription(m.Dist != nil, m.HDR, m.MeasurementMode, m.Unit)
 }
 
 // Summarize derives one Result's throughput, throughput coefficient of
@@ -152,6 +171,7 @@ func summarizeMetrics(metrics []*Metric, cutTicks int) []SummaryMetric {
 				}
 			}
 			sm.Dist = &LatencyDist{}
+			sm.HDR = d.GetHistogram() != nil
 			sm.Dist.addSamples(samples)
 			sm.Dist.addHistogram(d.GetHistogram())
 		} else {

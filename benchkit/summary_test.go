@@ -3,6 +3,7 @@ package benchkit
 import (
 	"math"
 	"slices"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -265,4 +266,93 @@ func TestSummarizeMetricsLateSeries(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestSummarizeMetricsStatsMode verifies that Summarize marks a series from an
+// hdr histogram as HDR, and a series of raw samples and a counter as not HDR.
+// An exact series that the trim empties stays exact.
+func TestSummarizeMetricsStatsMode(t *testing.T) {
+	r := Result_builder{
+		Config: RunConfig_builder{Name: "B"}.Build(),
+		Events: []*Event{tputEvent(0, 2), tputEvent(intervalNs, 3)},
+		Metrics: []*Metric{
+			Metric_builder{
+				Name: "encode", Unit: "ns",
+				Distribution: Distribution_builder{Samples: []int64{1, 2}, TickCounts: []uint64{2, 2}}.Build(),
+			}.Build(),
+			Metric_builder{
+				Name: "hist", Unit: "ns",
+				Distribution: Distribution_builder{Histogram: latencyHist([]int64{100}, []uint64{4})}.Build(),
+			}.Build(),
+			counterMetric("uploaded", "B", 42),
+		},
+	}.Build()
+	s := Summarize(r, time.Second)
+	want := map[string]bool{"encode": false, "hist": true, "uploaded": false}
+	if len(s.Metrics) != len(want) {
+		t.Fatalf("metrics = %v, want %d metrics", s.Metrics, len(want))
+	}
+	for _, m := range s.Metrics {
+		if m.HDR != want[m.Name] {
+			t.Errorf("%s HDR = %v, want %v", m.Name, m.HDR, want[m.Name])
+		}
+	}
+	if encode := s.Metrics[0]; !encode.Dist.Empty() {
+		t.Errorf("encode sample count = %d, want 0 after the trim", encode.Dist.Count())
+	}
+}
+
+// TestSummaryMetricCheckMerge verifies that CheckMerge accepts a metric of the
+// same unit, kind, measurement mode, and stats mode, and returns an error
+// naming the metric and both descriptions otherwise.
+func TestSummaryMetricCheckMerge(t *testing.T) {
+	series := func(unit string, mode MeasurementMode) SummaryMetric {
+		return SummaryMetric{Name: "m", Unit: unit, MeasurementMode: mode, Dist: &LatencyDist{}}
+	}
+	hdrSeries := func() SummaryMetric {
+		m := series("ns", MeasurementMode_CLIENT_MEASURED)
+		m.HDR = true
+		return m
+	}
+	counter := func(unit string) SummaryMetric {
+		return SummaryMetric{Name: "m", Unit: unit, Counter: CounterValue_builder{Sum: 1, Max: 1, Nodes: 1}.Build()}
+	}
+	serverCounter := func(unit string) SummaryMetric {
+		m := counter(unit)
+		m.MeasurementMode = MeasurementMode_SERVER_MEASURED
+		return m
+	}
+	tests := []struct {
+		name string
+		a, b SummaryMetric
+		want []string // substrings of the error; nil for no error
+	}{
+		{"SameSeries", series("ns", MeasurementMode_CLIENT_MEASURED), series("ns", MeasurementMode_CLIENT_MEASURED), nil},
+		{"SameCounter", counter("B"), counter("B"), nil},
+		{"Unit", counter("B"), counter("KiB"), []string{`"m"`, `"B"`, `"KiB"`}},
+		{"Kind", counter("B"), series("ns", MeasurementMode_CLIENT_MEASURED), []string{`"m"`, `counter in "B"`, `series in "ns"`}},
+		{"Mode", series("ns", MeasurementMode_CLIENT_MEASURED), series("ns", MeasurementMode_SERVER_MEASURED), []string{`"m"`, "server-measured"}},
+		{"CounterMode", counter("B"), serverCounter("B"), []string{`"m"`, "server-measured counter"}},
+		{"SameHDRSeries", hdrSeries(), hdrSeries(), nil},
+		{"StatsMode", series("ns", MeasurementMode_CLIENT_MEASURED), hdrSeries(), []string{`"m"`, `series in "ns" (exact)`, `series in "ns" (hdr)`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.a.CheckMerge(tt.b)
+			if tt.want == nil {
+				if err != nil {
+					t.Fatalf("CheckMerge: %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("CheckMerge: got nil error, want a mismatch error")
+			}
+			for _, w := range tt.want {
+				if !strings.Contains(err.Error(), w) {
+					t.Errorf("error %q does not contain %s", err, w)
+				}
+			}
+		})
+	}
 }

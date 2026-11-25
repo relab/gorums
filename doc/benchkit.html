@@ -1259,6 +1259,9 @@ results, err := p.Run(ctx, sel, w, opts)
         <p>Named metrics (<a href="#metrics">§4</a>) pass through <code>Summarize</code> as
             <code>Summary.Metrics</code>, one <code>SummaryMetric</code> per metric, sorted by name.
             A series becomes a <code>LatencyDist</code>; a counter keeps its <code>CounterValue</code>.
+            <code>SummaryMetric.HDR</code> is true for a series recorded as an hdr histogram, and
+            <code>SummaryMetric.CheckMerge</code> returns an error when two series of one name differ in stats mode,
+            as in a merge of <code>Metric</code> messages.
             The cut of a series uses its <code>tick_counts</code>: the cumulative sample count at each ticker
             interval.
             When the trim drops the first <code>k</code> throughput intervals, a client-measured series in exact mode

@@ -345,29 +345,53 @@ func correctMetrics(metrics []*Metric, offset int64) {
 	}
 }
 
-// describeMetric returns the kind, measurement mode, and unit of m, and the
-// stats mode of a series, for error messages. Two metrics of the same name
-// merge only when their descriptions are equal. Exact samples and an hdr
-// histogram do not merge into one distribution, so the stats mode is part of
-// the description.
+// describeMetric returns the description of m that [metricDescription]
+// builds, for error messages.
 func describeMetric(m *Metric) string {
 	d := m.GetDistribution()
+	return metricDescription(d != nil, d.GetHistogram() != nil, m.GetMeasurementMode(), m.GetUnit())
+}
+
+// metricDescription returns the kind, measurement mode, and unit of a metric,
+// and the stats mode of a series, for error messages; hdr is true for a series
+// recorded as an hdr histogram. Two metrics of the same name merge only when
+// their descriptions are equal. Exact samples and an hdr histogram do not
+// merge into one distribution, so the stats mode is part of the description.
+func metricDescription(series, hdr bool, mode MeasurementMode, unit string) string {
 	kind := "counter"
-	if d != nil {
+	if series {
 		kind = "series"
 	}
-	if m.GetMeasurementMode() == MeasurementMode_SERVER_MEASURED {
+	if mode == MeasurementMode_SERVER_MEASURED {
 		kind = "server-measured " + kind
 	}
-	desc := fmt.Sprintf("%s in %q", kind, m.GetUnit())
+	desc := fmt.Sprintf("%s in %q", kind, unit)
 	switch {
-	case d == nil:
+	case !series:
 		return desc
-	case d.GetHistogram() != nil:
+	case hdr:
 		return desc + " (hdr)"
 	default:
 		return desc + " (exact)"
 	}
+}
+
+// checkMetricMerge returns an error naming the metric and both descriptions
+// when a and b differ.
+func checkMetricMerge(name, a, b string) error {
+	if a != b {
+		return fmt.Errorf("metric %q: %s does not match %s", name, a, b)
+	}
+	return nil
+}
+
+// Merge merges other into c: it adds the sums and node counts and keeps the
+// larger max. The merge is associative, so the max over every node survives a
+// merge of merged counters.
+func (c *CounterValue) Merge(other *CounterValue) {
+	c.SetSum(c.GetSum() + other.GetSum())
+	c.SetMax(max(c.GetMax(), other.GetMax()))
+	c.SetNodes(c.GetNodes() + other.GetNodes())
 }
 
 // metricSet holds metrics keyed by name.
@@ -398,14 +422,11 @@ func (mm *metricMerger) merge(src []*Metric) error {
 			mm.set[name] = proto.CloneOf(m)
 			continue
 		}
-		if a, b := describeMetric(cur), describeMetric(m); a != b {
-			return fmt.Errorf("metric %q: %s does not match %s", name, a, b)
+		if err := checkMetricMerge(name, describeMetric(cur), describeMetric(m)); err != nil {
+			return err
 		}
 		if c := m.GetCounter(); c != nil {
-			acc := cur.GetCounter()
-			acc.SetSum(acc.GetSum() + c.GetSum())
-			acc.SetMax(max(acc.GetMax(), c.GetMax()))
-			acc.SetNodes(acc.GetNodes() + c.GetNodes())
+			cur.GetCounter().Merge(c)
 			continue
 		}
 		dists := mm.dists[name]

@@ -305,6 +305,22 @@ func TestMetricConcurrentAdd(t *testing.T) {
 	}
 }
 
+// TestMetricCounterValueMerge verifies that merging counters adds the sums and
+// node counts, keeps the larger max, and leaves the merged counter unchanged.
+func TestMetricCounterValueMerge(t *testing.T) {
+	acc := CounterValue_builder{}.Build()
+	a := CounterValue_builder{Sum: 70, Max: 70, Nodes: 1}.Build()
+	b := CounterValue_builder{Sum: 50, Max: 30, Nodes: 2}.Build()
+	acc.Merge(a)
+	acc.Merge(b)
+	if acc.GetSum() != 120 || acc.GetMax() != 70 || acc.GetNodes() != 3 {
+		t.Errorf("merged = (sum %d, max %d, nodes %d), want (120, 70, 3)", acc.GetSum(), acc.GetMax(), acc.GetNodes())
+	}
+	if b.GetSum() != 50 || b.GetMax() != 30 || b.GetNodes() != 2 {
+		t.Errorf("source = (sum %d, max %d, nodes %d), want it unchanged", b.GetSum(), b.GetMax(), b.GetNodes())
+	}
+}
+
 // seriesMetric returns a distribution Metric with the given samples.
 func seriesMetric(name string, mode MeasurementMode, samples ...int64) *Metric {
 	return Metric_builder{
