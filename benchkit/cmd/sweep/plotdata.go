@@ -168,12 +168,12 @@ func exportPlotCSV(dir string) error {
 	if err != nil {
 		return err
 	}
-	runs, cdf := plotRecordsFromMessage(pd)
+	runs, _ := plotRecordsFromMessage(pd)
 	plotdataDir := filepath.Join(dir, plotDataDir)
 	if err := writePlotRunsCSV(filepath.Join(plotdataDir, "runs.csv"), runs); err != nil {
 		return err
 	}
-	return writePlotNodesCSV(filepath.Join(plotdataDir, "nodes.csv"), cdf)
+	return writePlotNodesCSV(filepath.Join(plotdataDir, "nodes.csv"), plotNodeRows(pd))
 }
 
 // readPlotData reads and decodes the plotdata.binpb a prior collection wrote
@@ -867,64 +867,92 @@ func writePlotNodeCDFCSV(path string, rows []plotNodeCDFRecord) error {
 	})
 }
 
-// plotNodeRow is one node's aggregate latency fields plus its full CDF
-// vector, the unit writePlotNodesCSV exports: one row per node rather than
-// one row per CDF point. Point i's cumulative probability is implied by its
-// position in cdf (i/(len(cdf)-1) on the fixed CDF grid), so it is not stored.
+// plotNodeRow is one node's aggregate latency fields, its full CDF vector, and
+// its named metrics, the unit writePlotNodesCSV exports: one row per node
+// rather than one row per CDF point. Point i's cumulative probability is
+// implied by its position in cdf (i/(len(cdf)-1) on the fixed CDF grid), so it
+// is not stored. summary is nil for a node that recorded no latency.
 type plotNodeRow struct {
 	benchkit.Dimensions
-	base, label, status, node               string
-	rep                                     int
-	throughput, meanUS, p50US, p95US, p99US float64
-	samples                                 uint64
-	cdf                                     []float64
+	base, label, status, node string
+	rep                       int
+	throughput                float64
+	summary                   *benchkit.LatencySummary
+	cdf                       []float64
+	metrics                   []*benchkit.MetricSummary
 }
 
-// groupNodeCDFRows collapses per-CDF-point records into one plotNodeRow per
-// (base, benchmark, node), assuming matching records are contiguous. This
-// holds for records sourced from collectPlotData or plotRecordsFromMessage,
-// both of which group by node before flattening to per-point records.
-func groupNodeCDFRows(rows []plotNodeCDFRecord) []plotNodeRow {
+// plotNodeRows returns one plotNodeRow per node of each benchmark of pd, in
+// the order of pd.
+func plotNodeRows(pd *benchkit.PlotData) []plotNodeRow {
 	var out []plotNodeRow
-	for _, r := range rows {
-		if n := len(out); n > 0 {
-			last := &out[n-1]
-			if last.base == r.base && last.Benchmark == r.Benchmark && last.node == r.node {
-				last.cdf = append(last.cdf, r.cdfUS)
-				continue
+	for _, run := range pd.GetRuns() {
+		for _, bench := range run.GetBenchmarks() {
+			dims := bench.GetConfig().Dimensions()
+			for _, node := range bench.GetNodes() {
+				out = append(out, plotNodeRow{
+					Dimensions: dims,
+					base:       run.GetBase(), label: run.GetLabel(), status: run.GetStatus(), rep: int(run.GetRep()),
+					node:       node.GetNode(),
+					throughput: node.GetThroughput(),
+					summary:    node.GetSummary(),
+					cdf:        node.GetCdfUs(),
+					metrics:    node.GetMetrics(),
+				})
 			}
 		}
-		out = append(out, plotNodeRow{
-			Dimensions: r.Dimensions,
-			base:       r.base, label: r.label, status: r.status, rep: r.rep,
-			node:       r.node,
-			throughput: r.throughput, meanUS: r.meanUS, p50US: r.p50US, p95US: r.p95US, p99US: r.p99US,
-			samples: r.samples, cdf: []float64{r.cdfUS},
-		})
 	}
 	return out
 }
 
 // writePlotNodesCSV writes one human- and grep-friendly row per node,
 // collapsing each node's CDF into a single space-separated cdf_us column
-// instead of one row per CDF point. It is the -export-csv counterpart to the
-// compact plotdata.binpb, not part of the report render path.
-func writePlotNodesCSV(path string, rows []plotNodeCDFRecord) error {
-	schema := schemaOf(rows, func(r plotNodeCDFRecord) benchkit.Dimensions { return r.Dimensions })
+// instead of one row per CDF point. The named metrics follow, one column group
+// per metric, sorted by name. A node that recorded no latency has empty
+// latency fields, and a node that did not record a metric has empty fields
+// for it. It is the -export-csv counterpart to the compact plotdata.binpb, not
+// part of the report render path.
+func writePlotNodesCSV(path string, rows []plotNodeRow) error {
+	schema := schemaOf(rows, func(r plotNodeRow) benchkit.Dimensions { return r.Dimensions })
+	seen := map[metricColumn]bool{}
+	for _, r := range rows {
+		for _, m := range r.metrics {
+			seen[metricColumnOf(m)] = true
+		}
+	}
+	metricCols := sortedMetricColumns(seen)
 	header := append([]string{"base", "label", "status", "rep"}, schema.columns()...)
 	header = append(header, "node", "throughput", "mean_us", "p50_us", "p95_us", "p99_us", "samples", "cdf_us")
-	return writeCSV(path, header, groupNodeCDFRows(rows), func(g plotNodeRow) []string {
-		us := make([]string, len(g.cdf))
-		for i, v := range g.cdf {
-			us[i] = formatFloat(v)
-		}
+	for _, col := range metricCols {
+		header = append(header, col.header()...)
+	}
+	return writeCSV(path, header, rows, func(g plotNodeRow) []string {
 		rec := append([]string{g.base, g.label, g.status, strconv.Itoa(g.rep)}, schema.values(g.Dimensions)...)
-		return append(rec,
-			[]string{
-				g.node, formatFloat(g.throughput),
-				formatFloat(g.meanUS), formatFloat(g.p50US), formatFloat(g.p95US), formatFloat(g.p99US),
-				strconv.FormatUint(g.samples, 10), strings.Join(us, " "),
-			}...)
+		rec = append(rec, g.node, formatFloat(g.throughput))
+		if s := g.summary; s != nil {
+			us := make([]string, len(g.cdf))
+			for i, v := range g.cdf {
+				us[i] = formatFloat(v)
+			}
+			rec = append(rec,
+				formatFloat(s.GetMeanUs()), formatFloat(s.GetP50Us()), formatFloat(s.GetP95Us()), formatFloat(s.GetP99Us()),
+				strconv.FormatUint(s.GetSamples(), 10), strings.Join(us, " "),
+			)
+		} else {
+			rec = append(rec, "", "", "", "", "", "")
+		}
+		fields := make(map[metricColumn][]string, len(g.metrics))
+		for _, m := range g.metrics {
+			fields[metricColumnOf(m)] = metricFields(m)
+		}
+		for _, col := range metricCols {
+			if f := fields[col]; f != nil {
+				rec = append(rec, f...)
+			} else {
+				rec = append(rec, make([]string, len(col.statNames()))...)
+			}
+		}
+		return rec
 	})
 }
 

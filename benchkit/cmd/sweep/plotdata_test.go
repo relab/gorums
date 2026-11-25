@@ -770,7 +770,7 @@ func TestWritePlotNodesCSV(t *testing.T) {
 			meanUS: 110, p50US: 95, p95US: 160, p99US: 210, samples: 3, prob: 0, cdfUS: 3,
 		},
 	}
-	if err := writePlotNodesCSV(path, rows); err != nil {
+	if err := writePlotNodesCSV(path, plotNodeRows(buildPlotData([]plotRunRecord{{base: "run1", Benchmark: "Q"}}, rows))); err != nil {
 		t.Fatalf("writePlotNodesCSV: %v", err)
 	}
 	f, err := os.Open(path)
@@ -1244,5 +1244,84 @@ func TestPlotDataMetricMismatch(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestWritePlotNodesCSVMetrics verifies that nodes.csv appends one column
+// group per named metric, sorted by name: a series gets its mean and
+// percentiles in microseconds and a counter its sum and max. A node that
+// recorded metrics but no latency gets a row with empty latency fields, and a
+// node without a metric gets empty metric fields.
+func TestWritePlotNodesCSVMetrics(t *testing.T) {
+	meanUS, samples := 2.0, uint64(2)
+	runs := []plotRunRecord{{
+		base: "run1", Benchmark: "Q", throughput: 30,
+		meanUS: &meanUS, p50US: &meanUS, p95US: &meanUS, p99US: &meanUS, samples: &samples,
+		nodeMetrics: []plotNodeMetrics{
+			{node: "bb2:9000", throughput: 20, metrics: []*benchkit.MetricSummary{
+				seriesSummary("encode", 5), counterSummary("uploaded", "B", 30, 30),
+			}},
+		},
+	}}
+	cdf := []plotNodeCDFRecord{
+		{base: "run1", Benchmark: "Q", node: "bb1:9000", throughput: 10,
+			meanUS: 2, p50US: 2, p95US: 2, p99US: 2, samples: 2, prob: 0, cdfUS: 1},
+		{base: "run1", Benchmark: "Q", node: "bb1:9000", throughput: 10,
+			meanUS: 2, p50US: 2, p95US: 2, p99US: 2, samples: 2, prob: 1, cdfUS: 3},
+	}
+	path := filepath.Join(t.TempDir(), "nodes.csv")
+	if err := writePlotNodesCSV(path, plotNodeRows(buildPlotData(runs, cdf))); err != nil {
+		t.Fatalf("writePlotNodesCSV: %v", err)
+	}
+	recs := readCSVRecords(t, path)
+	header := recs[0]
+	first := slices.Index(header, "cdf_us") + 1
+	wantCols := []string{"encode.mean_us", "encode.p50_us", "encode.p95_us", "encode.p99_us", "uploaded.sum", "uploaded.max"}
+	if got := header[first:]; !slices.Equal(got, wantCols) {
+		t.Fatalf("metric columns = %v, want %v", got, wantCols)
+	}
+	if len(recs) != 3 {
+		t.Fatalf("rows = %d incl header, want 3", len(recs))
+	}
+	col := func(rec []string, name string) string { return rec[slices.Index(header, name)] }
+	bb1, bb2 := recs[1], recs[2]
+	if col(bb1, "node") != "bb1:9000" || col(bb1, "cdf_us") != "1 3" || col(bb1, "encode.p50_us") != "" {
+		t.Errorf("bb1 row = %v, want its CDF and empty metric fields", bb1)
+	}
+	for name, want := range map[string]string{
+		"node": "bb2:9000", "throughput": "20", "mean_us": "", "samples": "", "cdf_us": "",
+		"encode.p50_us": "5", "uploaded.sum": "30", "uploaded.max": "30",
+	} {
+		if got := col(bb2, name); got != want {
+			t.Errorf("bb2 %s = %q, want %q", name, got, want)
+		}
+	}
+}
+
+// TestWritePlotNodesCSVLargeCounter verifies that nodes.csv writes the sum and
+// max of a counter as exact integers, also above 2^53, where a float64 rounds.
+func TestWritePlotNodesCSVLargeCounter(t *testing.T) {
+	const large = 9007199254740993 // 2^53 + 1
+	runs := []plotRunRecord{{
+		base: "run1", Benchmark: "Q", throughput: 1,
+		nodeMetrics: []plotNodeMetrics{
+			{node: "bb1:9000", throughput: 1, metrics: []*benchkit.MetricSummary{
+				counterSummary("uploaded", "B", large, large-1),
+			}},
+		},
+	}}
+	path := filepath.Join(t.TempDir(), "nodes.csv")
+	if err := writePlotNodesCSV(path, plotNodeRows(buildPlotData(runs, nil))); err != nil {
+		t.Fatalf("writePlotNodesCSV: %v", err)
+	}
+	recs := readCSVRecords(t, path)
+	if len(recs) != 2 {
+		t.Fatalf("rows = %d incl header, want 2", len(recs))
+	}
+	header := recs[0]
+	for name, want := range map[string]string{"uploaded.sum": "9007199254740993", "uploaded.max": "9007199254740992"} {
+		if got := recs[1][slices.Index(header, name)]; got != want {
+			t.Errorf("%s = %q, want %q", name, got, want)
+		}
 	}
 }

@@ -89,6 +89,16 @@ type aggRunRecord struct {
 	p50US        aggStat
 	p95US        aggStat
 	p99US        aggStat
+	// metrics holds the named metrics the configuration's repetitions
+	// recorded, keyed by column group.
+	metrics map[metricColumn]aggMetric
+}
+
+// aggMetric is one named metric summarized across the repetitions of a
+// configuration: its unit and one aggStat per stat name of its column group.
+type aggMetric struct {
+	unit  string
+	stats []aggStat
 }
 
 // aggregateReps folds the per-rep records of each configuration into one
@@ -102,6 +112,7 @@ func aggregateReps(runs []plotRunRecord, includeDegraded bool) []aggRunRecord {
 		thr, allocs, mem      []float64
 		meanUS, p50, p95, p99 []float64
 		degraded              int
+		metrics               metricBuckets
 	}
 	buckets := make(map[benchkit.Dimensions]*bucket)
 	var order []benchkit.Dimensions
@@ -134,6 +145,24 @@ func aggregateReps(runs []plotRunRecord, includeDegraded bool) []aggRunRecord {
 		if r.p99US != nil {
 			b.p99 = append(b.p99, *r.p99US)
 		}
+		for _, m := range r.metrics {
+			values := metricValues(m)
+			if values == nil {
+				continue
+			}
+			if b.metrics == nil {
+				b.metrics = make(metricBuckets)
+			}
+			col := metricColumnOf(m)
+			mb := b.metrics[col]
+			if mb == nil {
+				mb = &metricBucket{unit: m.GetUnit(), values: make([][]float64, len(values))}
+				b.metrics[col] = mb
+			}
+			for i, v := range values {
+				mb.values[i] = append(mb.values[i], v)
+			}
+		}
 	}
 	slices.SortFunc(order, compareDimensions)
 	out := make([]aggRunRecord, 0, len(order))
@@ -152,7 +181,35 @@ func aggregateReps(runs []plotRunRecord, includeDegraded bool) []aggRunRecord {
 			p50US:       meanSDCI(b.p50),
 			p95US:       meanSDCI(b.p95),
 			p99US:       meanSDCI(b.p99),
+			metrics:     b.metrics.aggregate(),
 		})
+	}
+	return out
+}
+
+// metricBucket collects the values of one named metric across the
+// repetitions of a configuration, one slice per stat name of its column group.
+type metricBucket struct {
+	unit   string
+	values [][]float64
+}
+
+// metricBuckets holds the metric buckets of a configuration by column group.
+type metricBuckets map[metricColumn]*metricBucket
+
+// aggregate summarizes each bucket across its repetitions, or returns nil
+// when there is no bucket.
+func (buckets metricBuckets) aggregate() map[metricColumn]aggMetric {
+	if len(buckets) == 0 {
+		return nil
+	}
+	out := make(map[metricColumn]aggMetric, len(buckets))
+	for col, mb := range buckets {
+		stats := make([]aggStat, len(mb.values))
+		for i, xs := range mb.values {
+			stats[i] = meanSDCI(xs)
+		}
+		out[col] = aggMetric{unit: mb.unit, stats: stats}
 	}
 	return out
 }
@@ -210,9 +267,13 @@ func repOutliers(runs []plotRunRecord, spread float64) []string {
 
 // writeAggRunsCSV writes the rep-averaged tidy-long table. Each metric
 // contributes value/_sd/_ci95 columns; latency percentiles additionally get
-// millisecond mirrors. An absent metric (n == 0) is written as empty fields.
+// millisecond mirrors. The named metrics follow the built-in metrics, one
+// column group per metric, sorted by name. An absent metric (n == 0), and a
+// named metric that a configuration did not record, is written as empty
+// fields.
 func writeAggRunsCSV(path string, rows []aggRunRecord) error {
 	schema := schemaOf(rows, func(r aggRunRecord) benchkit.Dimensions { return r.Dimensions })
+	metricCols := aggMetricColumns(rows)
 	header := append(schema.columns(),
 		[]string{
 			"reps", "reps_degraded",
@@ -228,6 +289,9 @@ func writeAggRunsCSV(path string, rows []aggRunRecord) error {
 			"p95_ms", "p95_ms_sd", "p95_ms_ci95",
 			"p99_ms", "p99_ms_sd", "p99_ms_ci95",
 		}...)
+	for _, col := range metricCols {
+		header = append(header, col.header("_sd", "_ci95")...)
+	}
 	return writeCSV(path, header, rows, func(r aggRunRecord) []string {
 		rec := append(schema.values(r.Dimensions),
 			[]string{
@@ -244,8 +308,29 @@ func writeAggRunsCSV(path string, rows []aggRunRecord) error {
 		rec = append(rec, statCols(r.p50US, 1.0/1e3)...)
 		rec = append(rec, statCols(r.p95US, 1.0/1e3)...)
 		rec = append(rec, statCols(r.p99US, 1.0/1e3)...)
+		for _, col := range metricCols {
+			stats := r.metrics[col].stats
+			if stats == nil {
+				stats = make([]aggStat, len(col.statNames()))
+			}
+			for _, s := range stats {
+				rec = append(rec, statCols(s, 1)...)
+			}
+		}
 		return rec
 	})
+}
+
+// aggMetricColumns returns the column groups of the named metrics that any of
+// rows recorded, sorted by name.
+func aggMetricColumns(rows []aggRunRecord) []metricColumn {
+	seen := map[metricColumn]bool{}
+	for _, r := range rows {
+		for col := range r.metrics {
+			seen[col] = true
+		}
+	}
+	return sortedMetricColumns(seen)
 }
 
 // comparisonMetrics are the metrics pivoted side by side in the wide
