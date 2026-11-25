@@ -7,6 +7,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 )
 
 // metricNamePattern matches a valid metric name.
@@ -102,6 +104,21 @@ func (s *Series) tick() {
 // a sender's negative samples keep their sign, so that [CorrectLatencies] can
 // correct them.
 func (s *Series) metric(name string) *Metric {
+	return s.snapshot(name, nil, false)
+}
+
+// correctedMetric returns the series as a Metric like [Series.metric], with
+// each sender's clock offset (sender clock minus this node's clock, in
+// nanoseconds) added to the samples of a server-measured series, as
+// [Stats.GetResultCorrected] does for the primary series.
+func (s *Series) correctedMetric(name string, offsets map[uint32]int64) *Metric {
+	return s.snapshot(name, offsets, true)
+}
+
+// snapshot returns the series as a Metric with the given name, or nil when it
+// holds no samples. When correct is true, it adds each sender's offset to the
+// samples of a server-measured series.
+func (s *Series) snapshot(name string, offsets map[uint32]int64, correct bool) *Metric {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.count == 0 {
@@ -112,7 +129,11 @@ func (s *Series) metric(name string) *Metric {
 	switch {
 	case !s.server:
 		samples, hist = storeDist(s.store)
-	case s.mode == StatsMode_HDR:
+	case correct || s.mode != StatsMode_HDR:
+		samples, hist = correctedDist(s.mode, s.bySender, offsets)
+	default:
+		// correctedDist clamps negative values to zero, so combine the
+		// per-sender stores in a store that keeps the sign.
 		combined := newHDRStore()
 		for _, st := range s.bySender {
 			if hs, ok := st.(*hdrStore); ok {
@@ -122,8 +143,6 @@ func (s *Series) metric(name string) *Metric {
 			}
 		}
 		hist = combined.snapshot()
-	default:
-		samples, _ = correctedDist(s.mode, s.bySender, nil)
 	}
 	return s.build(name, samples, hist)
 }
@@ -259,6 +278,13 @@ func (s *Stats) metrics() []*Metric {
 	return s.collectMetrics(func(name string, ser *Series) *Metric { return ser.metric(name) })
 }
 
+// lockedMetrics returns the metrics like [Stats.metrics], holding s.mut.
+func (s *Stats) lockedMetrics() []*Metric {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	return s.metrics()
+}
+
 // collectMetrics returns the metric of each series, as built by seriesMetric,
 // and of each counter, sorted by name, leaving out nil metrics. The caller must
 // hold s.mut.
@@ -297,4 +323,159 @@ func (s *Stats) resetMetrics(mode StatsMode) {
 	for _, c := range s.counters {
 		c.reset()
 	}
+}
+
+// correctedMetrics returns the metrics like [Stats.metrics], with the
+// server-measured series corrected by offsets. The caller must hold s.mut.
+func (s *Stats) correctedMetrics(offsets map[uint32]int64) []*Metric {
+	return s.collectMetrics(func(name string, ser *Series) *Metric { return ser.correctedMetric(name, offsets) })
+}
+
+// correctMetrics subtracts offset from every value of the server-measured
+// series in metrics, as [CorrectLatencies] does for the primary series.
+func correctMetrics(metrics []*Metric, offset int64) {
+	for _, m := range metrics {
+		d := m.GetDistribution()
+		if d == nil || m.GetMeasurementMode() != MeasurementMode_SERVER_MEASURED {
+			continue
+		}
+		samples := d.GetSamples()
+		d.SetHistogram(offsetDist(samples, d.GetHistogram(), -offset))
+		d.SetSamples(samples)
+	}
+}
+
+// describeMetric returns the kind, measurement mode, and unit of m, and the
+// stats mode of a series, for error messages. Two metrics of the same name
+// merge only when their descriptions are equal. Exact samples and an hdr
+// histogram do not merge into one distribution, so the stats mode is part of
+// the description.
+func describeMetric(m *Metric) string {
+	d := m.GetDistribution()
+	kind := "counter"
+	if d != nil {
+		kind = "series"
+	}
+	if m.GetMeasurementMode() == MeasurementMode_SERVER_MEASURED {
+		kind = "server-measured " + kind
+	}
+	desc := fmt.Sprintf("%s in %q", kind, m.GetUnit())
+	switch {
+	case d == nil:
+		return desc
+	case d.GetHistogram() != nil:
+		return desc + " (hdr)"
+	default:
+		return desc + " (exact)"
+	}
+}
+
+// metricSet holds metrics keyed by name.
+type metricSet map[string]*Metric
+
+// metricMerger merges the metrics of several sources by name. It owns the
+// metrics it returns: it clones each metric that it takes from a source, so
+// merging never changes a source. The zero value is an empty merger.
+type metricMerger struct {
+	set   metricSet
+	dists map[string]*distMerger // series of a name seen in more than one source
+}
+
+// merge merges each metric of src into the metric of the same name: series
+// collect their samples and histograms for [metricMerger.sorted], and counters
+// add their sums and node counts and keep the larger max. It returns an error
+// when a metric's unit, kind, measurement mode, or stats mode differs from the
+// metric of the same name.
+func (mm *metricMerger) merge(src []*Metric) error {
+	if mm.set == nil {
+		mm.set = make(metricSet)
+		mm.dists = make(map[string]*distMerger)
+	}
+	for _, m := range src {
+		name := m.GetName()
+		cur, ok := mm.set[name]
+		if !ok {
+			mm.set[name] = proto.CloneOf(m)
+			continue
+		}
+		if a, b := describeMetric(cur), describeMetric(m); a != b {
+			return fmt.Errorf("metric %q: %s does not match %s", name, a, b)
+		}
+		if c := m.GetCounter(); c != nil {
+			acc := cur.GetCounter()
+			acc.SetSum(acc.GetSum() + c.GetSum())
+			acc.SetMax(max(acc.GetMax(), c.GetMax()))
+			acc.SetNodes(acc.GetNodes() + c.GetNodes())
+			continue
+		}
+		dists := mm.dists[name]
+		if dists == nil {
+			dists = &distMerger{}
+			acc := cur.GetDistribution()
+			dists.add(acc.GetSamples(), acc.GetHistogram())
+			mm.dists[name] = dists
+		}
+		d := m.GetDistribution()
+		dists.add(d.GetSamples(), d.GetHistogram())
+	}
+	return nil
+}
+
+// sorted returns the merged metrics sorted by name. A series merged from
+// several sources concatenates their samples in merge order, merges their
+// histograms, and has no tick counts, since the cut index of one source does
+// not apply to the others. Call it once, after the last merge.
+func (mm *metricMerger) sorted() []*Metric {
+	for name, dists := range mm.dists {
+		acc := mm.set[name].GetDistribution()
+		samples, hist := dists.dist()
+		acc.SetSamples(samples)
+		acc.SetHistogram(hist)
+		acc.SetTickCounts(nil)
+	}
+	return mm.set.sorted()
+}
+
+// union adds each metric of src to set. The metrics of src and set come from
+// the client and the servers of one run, so it returns an error when set
+// already holds a metric of the same name.
+func (set metricSet) union(src []*Metric) error {
+	for _, m := range src {
+		if _, ok := set[m.GetName()]; ok {
+			return fmt.Errorf("metric %q is recorded both on the client and on the servers", m.GetName())
+		}
+		set[m.GetName()] = m
+	}
+	return nil
+}
+
+// sorted returns the metrics of set sorted by name.
+func (set metricSet) sorted() []*Metric {
+	out := make([]*Metric, 0, len(set))
+	for _, name := range slices.Sorted(maps.Keys(set)) {
+		out = append(out, set[name])
+	}
+	return out
+}
+
+// newMetricSet returns a set holding metrics, which must have distinct names.
+// The set takes the metrics without cloning them.
+func newMetricSet(metrics []*Metric) metricSet {
+	set := make(metricSet, len(metrics))
+	for _, m := range metrics {
+		set[m.GetName()] = m
+	}
+	return set
+}
+
+// serverMeasuredMetric returns an error naming the first server-measured
+// series of metrics, or nil when there is none; where names the origin of
+// metrics, whose lifecycle has no clock offsets to correct the series.
+func serverMeasuredMetric(metrics []*Metric, where string) error {
+	for _, m := range metrics {
+		if m.GetDistribution() != nil && m.GetMeasurementMode() == MeasurementMode_SERVER_MEASURED {
+			return fmt.Errorf("metric %q is a server-measured series in %s, which has no clock offsets to correct it", m.GetName(), where)
+		}
+	}
+	return nil
 }

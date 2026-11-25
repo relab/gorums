@@ -362,3 +362,45 @@ func TestStatsResetClearsIntervalState(t *testing.T) {
 			count, opDelta)
 	}
 }
+
+// TestStatsGetResultCorrectedMetrics verifies that GetResultCorrected adds each
+// sender's clock offset to the samples of a server-measured series, as for the
+// primary series, and leaves client-measured series and counters unchanged.
+func TestStatsGetResultCorrectedMetrics(t *testing.T) {
+	offsets := map[uint32]int64{1: 100, 2: -50}
+	t.Run("Exact", func(t *testing.T) {
+		s := &Stats{}
+		deliver := s.Series("deliver")
+		deliver.AddBySender(2, 500)
+		deliver.AddBySender(1, 200)
+		s.Series("decode").Add(70)
+		s.Counter("relayed", "blocks").Add(2)
+
+		r := s.GetResultCorrected(offsets)
+		if got, want := metricByName(r, "deliver").GetDistribution().GetSamples(), []int64{300, 450}; !slices.Equal(got, want) {
+			t.Errorf("deliver samples = %v, want %v", got, want)
+		}
+		if got, want := metricByName(r, "decode").GetDistribution().GetSamples(), []int64{70}; !slices.Equal(got, want) {
+			t.Errorf("decode samples = %v, want %v", got, want)
+		}
+		if got := metricByName(r, "relayed").GetCounter().GetSum(); got != 2 {
+			t.Errorf("relayed = %d, want 2", got)
+		}
+	})
+	t.Run("HDR", func(t *testing.T) {
+		s := NewStats(StatsMode_HDR)
+		deliver := s.Series("deliver")
+		deliver.AddBySender(1, -100*time.Microsecond)
+		deliver.AddBySender(2, 200*time.Microsecond)
+
+		r := s.GetResultCorrected(map[uint32]int64{1: int64(300 * time.Microsecond), 2: 0})
+		d := &LatencyDist{}
+		d.addHistogram(metricByName(r, "deliver").GetDistribution().GetHistogram())
+		if got := d.Quantiles(0)[0]; math.Abs(got-200_000) > 500 {
+			t.Errorf("smallest corrected sample = %v, want ≈200µs", got)
+		}
+		if got := d.Count(); got != 2 {
+			t.Errorf("corrected count = %d, want 2", got)
+		}
+	})
+}

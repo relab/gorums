@@ -253,12 +253,15 @@ func (s *Stats) GetResult() *Result {
 // re-quantized onto one canonical histogram (Result.Histogram, Latencies nil),
 // bounding memory the same way the aggregate HDR store does.
 // When [Measurement.TrackLatency] enabled interval collection, Events also
-// carries corrected receive-time latency intervals, in bucket order.
+// carries corrected receive-time latency intervals, in bucket order. Metrics
+// holds the named metrics as in [Stats.GetResult], with the same per-sender
+// correction applied to each server-measured series.
 func (s *Stats) GetResultCorrected(offsets map[uint32]int64) *Result {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	r := s.resultFromDist(correctedDist(s.mode, s.bySender, offsets))
 	r.SetEvents(s.series.corrected(offsets))
+	r.SetMetrics(s.correctedMetrics(offsets))
 	return r
 }
 

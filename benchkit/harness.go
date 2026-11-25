@@ -463,10 +463,12 @@ func StartRemote(ctx context.Context, cfg Config, opts Options) error {
 }
 
 // StopRemote collects each remote server's per-op memory stats via
-// [Control.Stop] and appends them to result. It returns the per-server Stop
-// replies keyed by node ID so callers can verify them (see [WithVerify]). It
-// is the counterpart to [StartRemote] and is likewise a no-op in local mode,
-// where it returns a nil map.
+// [Control.Stop] and appends them to result, together with the servers' named
+// metrics merged by name. It returns an error when the metrics do not merge,
+// hold a server-measured series, or share a name with a metric of result. It
+// returns the per-server Stop replies keyed by node ID so callers can verify
+// them (see [WithVerify]). It is the counterpart to [StartRemote] and is
+// likewise a no-op in local mode, where it returns a nil map.
 func StopRemote(ctx context.Context, cfg Config, opts Options, result *Result) (map[uint32]*Result, error) {
 	if !opts.Remote {
 		return nil, nil
@@ -475,7 +477,9 @@ func StopRemote(ctx context.Context, cfg Config, opts Options, result *Result) (
 	if err != nil {
 		return nil, err
 	}
-	result.addServerStats(replies)
+	if err := result.addServerStats(replies); err != nil {
+		return nil, err
+	}
 	return replies, nil
 }
 
@@ -703,7 +707,9 @@ func ServerMeasured(cfg Config, setup SetupFunc, lifecycleOpts ...LifecycleOptio
 			m.stop()
 			return nil, err
 		}
-		m.Attach(resp)
+		if err := m.Attach(resp); err != nil {
+			return nil, err
+		}
 
 		// Divide the client-side memory delta by the client's own send count;
 		// resp.GetTotalOps() aggregates over all servers (N x the sends for
@@ -717,8 +723,10 @@ func ServerMeasured(cfg Config, setup SetupFunc, lifecycleOpts ...LifecycleOptio
 
 // Run runs the benchmarks whose names match sel, with opts, and returns their
 // results sorted by name, each stamped with the run metadata from opts. Run
-// returns an error when sel matches no benchmark. When ctx ends, the running
-// benchmark stops, and Run returns an error that wraps ctx.Err().
+// returns an error when sel matches no benchmark, and when a client-measured
+// result holds a server-measured series, which no clock offset corrected.
+// When ctx ends, the running benchmark stops, and Run returns an error that
+// wraps ctx.Err().
 func Run(ctx context.Context, sel *regexp.Regexp, benches []Bench, opts Options) ([]*Result, error) {
 	if err := opts.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid options: %w", err)
@@ -744,6 +752,11 @@ func Run(ctx context.Context, sel *regexp.Regexp, benches []Bench, opts Options)
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, fmt.Errorf("benchmark %s: %w", b.Name, err)
+		}
+		if result.GetConfig().GetMeasurementMode() == MeasurementMode_CLIENT_MEASURED {
+			if err := serverMeasuredMetric(result.GetMetrics(), "a client-measured run"); err != nil {
+				return nil, fmt.Errorf("benchmark %s: %w", b.Name, err)
+			}
 		}
 		// The runner stamped the measurement mode via Finish/Attach; preserve it
 		// while filling in the rest of the metadata from opts.

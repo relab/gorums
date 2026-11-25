@@ -76,7 +76,9 @@ func TestLatencySeriesStatsModesAndReset(t *testing.T) {
 			if mode == StatsMode_HDR && r.GetLatencies() != nil {
 				t.Error("HDR mode retained raw samples")
 			}
-			m.Attach(r)
+			if err := m.Attach(r); err != nil {
+				t.Fatalf("Attach: %v", err)
+			}
 			var latencyEvents int
 			for _, e := range r.GetEvents() {
 				if e.GetLatency() != nil {
@@ -108,7 +110,9 @@ func TestLatencySeriesDisabled(t *testing.T) {
 	defer m.Abandon()
 	s.AddLatencyBySender(1, 20)
 	r := s.GetResultCorrected(nil)
-	m.Attach(r)
+	if err := m.Attach(r); err != nil {
+		t.Fatal(err)
+	}
 	if s.series != nil || len(r.GetEvents()) != 0 {
 		t.Error("interval=0 collected events or allocated interval state")
 	}
@@ -141,7 +145,9 @@ func TestLatencySeriesAggregateAndAttach(t *testing.T) {
 	m.ticker.buffer.emitPhase(start, PhaseMarker_START, 100)
 	m.ticker.buffer.emitThroughput(start.Add(time.Second), 10, time.Second)
 	m.ticker.buffer.emitPhase(start.Add(1500*time.Millisecond), PhaseMarker_STOP, 0)
-	m.Attach(r)
+	if err := m.Attach(r); err != nil {
+		t.Fatal(err)
+	}
 	events := r.GetEvents()
 	if len(events) != 5 || events[0].GetPhase().GetPhase() != PhaseMarker_START ||
 		events[1].GetThroughput().GetOps() != 10 || events[3].GetPhase().GetPhase() != PhaseMarker_STOP {

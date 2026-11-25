@@ -71,10 +71,12 @@ func EstimateOffsets(ctx context.Context, cfg Config) (map[uint32]int64, error) 
 // subtraction is applied to the histogram bucket values and the result is
 // re-quantized onto the canonical HDR layout: the offset is a per-server
 // additive constant, so it shifts the distribution without changing its shape.
+// The same correction applies to each server-measured named series of r.
 func CorrectLatencies(r *Result, offset int64) {
 	if offset == 0 {
 		return
 	}
+	correctMetrics(r.GetMetrics(), offset)
 	lat := r.GetLatencies()
 	r.SetHistogram(offsetDist(lat, r.GetHistogram(), -offset))
 	if len(lat) > 0 {

@@ -304,3 +304,45 @@ func TestMetricConcurrentAdd(t *testing.T) {
 		t.Errorf("sent = %d, want %d", got, 2*writers*adds)
 	}
 }
+
+// seriesMetric returns a distribution Metric with the given samples.
+func seriesMetric(name string, mode MeasurementMode, samples ...int64) *Metric {
+	return Metric_builder{
+		Name: name, Unit: "ns", MeasurementMode: mode,
+		Distribution: Distribution_builder{Samples: samples, TickCounts: []uint64{uint64(len(samples))}}.Build(),
+	}.Build()
+}
+
+// hdrSeriesMetric returns a client-measured series Metric whose distribution
+// is an hdr histogram with one bucket of value v and count 1.
+func hdrSeriesMetric(name string, v int64) *Metric {
+	return Metric_builder{
+		Name: name, Unit: "ns", MeasurementMode: MeasurementMode_CLIENT_MEASURED,
+		Distribution: Distribution_builder{Histogram: latencyHist([]int64{v}, []uint64{1})}.Build(),
+	}.Build()
+}
+
+// serverCounterMetric returns a server-measured counter Metric for one node
+// with the given value.
+func serverCounterMetric(name, unit string, v uint64) *Metric {
+	m := counterMetric(name, unit, v)
+	m.SetMeasurementMode(MeasurementMode_SERVER_MEASURED)
+	return m
+}
+
+// counterMetric returns a counter Metric for one node with the given value.
+func counterMetric(name, unit string, v uint64) *Metric {
+	return Metric_builder{
+		Name: name, Unit: unit,
+		Counter: CounterValue_builder{Sum: v, Max: v, Nodes: 1}.Build(),
+	}.Build()
+}
+
+// metricNames returns the names of the metrics of r in order.
+func metricNames(r *Result) []string {
+	var names []string
+	for _, m := range r.GetMetrics() {
+		names = append(names, m.GetName())
+	}
+	return names
+}

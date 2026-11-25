@@ -120,8 +120,11 @@ func (m *Measurement) Finish() *Result {
 // then carries only the op count (via Stats.AddOp) for the throughput stream.
 // Existing corrected server latency events are retained and merged into time
 // order with the client events; STOP marks the end of sending, so receive-time
-// latency buckets can follow it.
-func (m *Measurement) Attach(result *Result) {
+// latency buckets can follow it. The named metrics of the client Stats join the
+// metrics of result. Attach returns an error when the client Stats hold a
+// server-measured series, which no clock offset corrects, or a metric with the
+// name of a metric of result.
+func (m *Measurement) Attach(result *Result) error {
 	m.stop()
 	events := slices.Clone(m.ticker.Events())
 	end := time.Since(m.ticker.start).Nanoseconds()
@@ -138,6 +141,17 @@ func (m *Measurement) Attach(result *Result) {
 	})
 	result.SetEvents(events)
 	setMeasurementMode(result, MeasurementMode_SERVER_MEASURED)
+
+	client := m.Stats.lockedMetrics()
+	if err := serverMeasuredMetric(client, "the client Stats"); err != nil {
+		return err
+	}
+	set := newMetricSet(result.GetMetrics())
+	if err := set.union(client); err != nil {
+		return err
+	}
+	result.SetMetrics(set.sorted())
+	return nil
 }
 
 // Abandon stops the measurement clock and ticker without producing a Result.
