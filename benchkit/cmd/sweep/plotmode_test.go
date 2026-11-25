@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/relab/gorums/benchkit"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -1133,4 +1134,162 @@ func TestGenerateReportMixedCustomDimensionsCompiles(t *testing.T) {
 		}
 	}
 	compileReportTyp(t, out)
+}
+
+// TestGenerateReportNamedMetricsCompiles is the end-to-end check of named
+// metrics: a sweep whose benchmark records one extra series and one counter on
+// every node, where one node records no primary latency, yields both metrics
+// per node in nodes.csv, merged across nodes and averaged across repetitions
+// in agg.csv, and in the protojson sibling of each result file, and the report
+// plots both. The compile step is skipped when the typst binary is not on
+// PATH, like TestGenerateReportCompiles.
+func TestGenerateReportNamedMetricsCompiles(t *testing.T) {
+	dir := t.TempDir()
+	sc := sweepConfig{
+		numNodes: []int{3}, workers: []int{1, 2}, payloads: []int{0}, rates: []int{0},
+		benchmarks: []string{"Tree"}, streamModes: []string{"dual"}, reps: 2,
+	}
+	nodes := []nodeAssignment{{host: "bb1", port: 9000}, {host: "bb2", port: 9000}, {host: "bb3", port: 9000}}
+	for spec := range sc.runSpecs() {
+		base := runBase("e2e", spec)
+		w := int64(spec.Workers)
+		var files, hosts []string
+		for i, node := range nodes {
+			r := benchkit.Result_builder{
+				Config:     plotRunConfig("Tree", 3, int32(w), 0, 0),
+				Throughput: 1000,
+				TotalOps:   3,
+				Metrics: []*benchkit.Metric{
+					benchkit.Metric_builder{
+						Name: "deliver", Unit: "ns",
+						Distribution: benchkit.Distribution_builder{Samples: []int64{w * 1000, w * 1000}}.Build(),
+					}.Build(),
+					benchkit.Metric_builder{
+						Name: "uploaded", Unit: "B",
+						Counter: benchkit.CounterValue_builder{Sum: uint64(100 * (i + 1)), Max: uint64(100 * (i + 1)), Nodes: 1}.Build(),
+					}.Build(),
+				},
+			}.Build()
+			// bb3 is a replica that records the named metrics but no primary
+			// latency.
+			if node.host != "bb3" {
+				r.SetLatencies([]int64{w * 2000, w * 2000})
+			}
+			writePlotReport(t, dir, base, node, node.host+":9000", r)
+			files = append(files, resultFilename(base, node, resultExt))
+			hosts = append(hosts, node.host+":9000")
+		}
+		m := runManifest{runSpec: spec, Label: "e2e", Status: runStatusSucceeded, Hosts: hosts, Files: files}
+		data, err := json.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(manifestPath(dir, base), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := convertDirBinaryResults(dir); err != nil || n != 12 {
+		t.Fatalf("convertDirBinaryResults = %d, %v, want 12 files", n, err)
+	}
+	if err := writeCompactPlotData(dir); err != nil {
+		t.Fatalf("writeCompactPlotData: %v", err)
+	}
+	if err := exportPlotCSV(dir); err != nil {
+		t.Fatalf("exportPlotCSV: %v", err)
+	}
+	if err := generateReport(dir, reportOptions{title: "Named metrics"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The protojson sibling of the metric-only node carries both metrics.
+	jsonFiles, err := filepath.Glob(filepath.Join(dir, "*bb3*.json"))
+	if err != nil || len(jsonFiles) == 0 {
+		t.Fatalf("no protojson sibling of bb3: %v", err)
+	}
+	data, err := os.ReadFile(jsonFiles[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report benchkit.Report
+	if err := protojson.Unmarshal(data, &report); err != nil {
+		t.Fatalf("protojson.Unmarshal: %v", err)
+	}
+	var names []string
+	for _, m := range report.GetResults()[0].GetMetrics() {
+		names = append(names, m.GetName())
+	}
+	if want := []string{"deliver", "uploaded"}; !slices.Equal(names, want) {
+		t.Errorf("protojson metrics = %v, want %v", names, want)
+	}
+
+	// Per node: every node of every run has a row, bb3 without latency.
+	recs := readCSVRecords(t, filepath.Join(dir, plotDataDir, "nodes.csv"))
+	header := recs[0]
+	col := func(rec []string, name string) string {
+		i := slices.Index(header, name)
+		if i < 0 {
+			t.Fatalf("nodes.csv header %v lacks %s", header, name)
+		}
+		return rec[i]
+	}
+	if len(recs) != 1+12 {
+		t.Fatalf("nodes.csv rows = %d, want 12 and the header", len(recs)-1)
+	}
+	for _, rec := range recs[1:] {
+		node, w := col(rec, "node"), col(rec, "workers")
+		wantUploaded := map[string]string{"bb1:9000": "100", "bb2:9000": "200", "bb3:9000": "300"}[node]
+		if got := col(rec, "uploaded.max"); got != wantUploaded {
+			t.Errorf("nodes.csv %s workers=%s uploaded.max = %q, want %q", node, w, got, wantUploaded)
+		}
+		if got := col(rec, "deliver.p50_us"); got != w {
+			t.Errorf("nodes.csv %s workers=%s deliver.p50_us = %q, want %q", node, w, got, w)
+		}
+		if hasLatency := col(rec, "p50_us") != ""; hasLatency != (node != "bb3:9000") {
+			t.Errorf("nodes.csv %s p50_us = %q, want latency only on bb1 and bb2", node, col(rec, "p50_us"))
+		}
+	}
+
+	// Aggregated: merged across nodes, averaged across repetitions.
+	out := filepath.Join(dir, reportSubdir)
+	recs = readCSVRecords(t, filepath.Join(out, "agg.csv"))
+	header = recs[0]
+	if len(recs) != 1+2 {
+		t.Fatalf("agg.csv rows = %d, want 2 and the header", len(recs)-1)
+	}
+	for _, rec := range recs[1:] {
+		w := col(rec, "workers")
+		for name, want := range map[string]string{
+			"deliver.p50_us": w, "deliver.p50_us_sd": "0",
+			"uploaded.max": "300", "uploaded.sum": "600", "uploaded.max_sd": "0",
+		} {
+			if got := col(rec, name); got != want {
+				t.Errorf("agg.csv workers=%s %s = %q, want %q", w, name, got, want)
+			}
+		}
+	}
+
+	typ, err := os.ReadFile(filepath.Join(out, "report.typ"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`== #text("Named metrics")`,
+		`metric-vs(agg.filter(r => r.at("deliver.p50_us") != ""), xcol: "workers", ycol: "deliver.p50_us", band-col: "deliver.p50_us_ci95", ` +
+			`ylabel: [#text("deliver p50 (ms)")], xlabel: [#text("Workers")], yscale: 0.001,`,
+		`metric-vs(agg.filter(r => r.at("uploaded.max") != ""), xcol: "workers", ycol: "uploaded.max", band-col: "uploaded.max_ci95", ` +
+			`ylabel: [#text("uploaded max (B)")], xlabel: [#text("Workers")], yscale: 1,`,
+	} {
+		if !strings.Contains(string(typ), want) {
+			t.Errorf("report.typ lacks %s:\n%s", want, typ)
+		}
+	}
+
+	if _, err := exec.LookPath("typst"); err != nil {
+		t.Skip("typst not on PATH; skipping compile check")
+	}
+	cmd := exec.Command("typst", "compile", "report.typ", "report.pdf")
+	cmd.Dir = out
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("typst compile failed: %v\n%s", err, b)
+	}
 }
