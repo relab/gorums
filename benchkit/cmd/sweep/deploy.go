@@ -242,9 +242,8 @@ func run(g iago.Group, name string, fn func(context.Context, iago.Host) error) e
 //
 //	GOOS=linux GOARCH=<goarch> go build -o <output> ./cmd/benchmark/
 //
-// Otherwise buildCmd is a user-supplied build command template (from the -build
-// flag or the BENCHKIT_BUILD environment variable), letting a foreign protocol
-// supply its own package path or toolchain. The chosen output path is
+// Otherwise buildCmd is the -build command template, letting a foreign
+// protocol supply its own package path or toolchain. The chosen output path is
 // substituted for the {{output}} token, or appended as "-o <output>" if the
 // token is absent. The command is run via "sh -c" from the current directory
 // with the same cross-build environment (a build script may override it).
@@ -265,15 +264,6 @@ func buildBenchmark(outputPath, buildCmd string) error {
 		cmd = exec.Command("sh", "-c", script)
 	}
 	return runCrossBuild(cmd, env)
-}
-
-// benchmarkBuildCmd returns the custom benchmark build command: -build, else
-// $BENCHKIT_BUILD, else "" for the built-in default.
-func benchmarkBuildCmd(cfg *config) string {
-	if cfg.buildCmd != "" {
-		return cfg.buildCmd
-	}
-	return os.Getenv("BENCHKIT_BUILD")
 }
 
 // crossBuildEnv returns environ extended for a Linux cross-build, and the

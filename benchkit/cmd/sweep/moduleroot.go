@@ -12,7 +12,7 @@ const benchkitModulePath = "github.com/relab/gorums/benchkit"
 // checkModuleRoot returns an error when cfg uses the built-in benchmark build
 // outside the benchkit module root, the only place ./cmd/benchmark resolves.
 func checkModuleRoot(cfg *config) error {
-	if cfg.binaryPath != "" || benchmarkBuildCmd(cfg) != "" || isBenchkitModuleRoot(".") {
+	if cfg.binaryPath != "" || cfg.buildCmd != "" || isBenchkitModuleRoot(".") {
 		return nil
 	}
 	return errors.New("run sweep from the benchkit module root, or pass -binary or -build")

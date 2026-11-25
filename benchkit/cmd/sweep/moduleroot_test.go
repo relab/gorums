@@ -64,14 +64,12 @@ func TestModuleRootCheck(t *testing.T) {
 		root    bool
 		binary  string
 		build   string
-		env     string
 		wantErr bool
 	}{
-		{"default build at root", true, "", "", "", false},
-		{"default build elsewhere", false, "", "", "", true},
-		{"binary elsewhere", false, "./bench", "", "", false},
-		{"build flag elsewhere", false, "", "go build ./cmd/x", "", false},
-		{"build env elsewhere", false, "", "", "go build ./cmd/x", false},
+		{"default build at root", true, "", "", false},
+		{"default build elsewhere", false, "", "", true},
+		{"binary elsewhere", false, "./bench", "", false},
+		{"build flag elsewhere", false, "", "go build ./cmd/x", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -80,7 +78,6 @@ func TestModuleRootCheck(t *testing.T) {
 				writeBenchkitRoot(t, dir)
 			}
 			t.Chdir(dir)
-			t.Setenv("BENCHKIT_BUILD", tt.env)
 			cfg := &config{binaryPath: tt.binary, buildCmd: tt.build}
 			if err := checkModuleRoot(cfg); (err != nil) != tt.wantErr {
 				t.Errorf("checkModuleRoot() = %v, want error: %v", err, tt.wantErr)
