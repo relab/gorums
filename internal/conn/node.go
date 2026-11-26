@@ -357,6 +357,13 @@ func (n *Node) Latency() time.Duration {
 	return NodeTransport(n).Latency().Load()
 }
 
+// MethodLatency returns this node's round-trip latency estimate for one RPC
+// method, with the limits of [Node.Latency]. The method is the full name used
+// by the generated code, for example "pkg.Service.Method".
+func (n *Node) MethodLatency(method string) time.Duration {
+	return NodeTransport(n).Latency().LoadMethod(method)
+}
+
 // ByID is exported and documented as gorums.ByID.
 var ByID = func(a, b *Node) int {
 	return cmp.Compare(a.id, b.id)

@@ -459,3 +459,31 @@ func TestQuorumCallResponseLatencyAggregate(t *testing.T) {
 		}
 	})
 }
+
+// TestQuorumCallMethodLatency verifies that a call updates each node's
+// estimate for the called method only.
+func TestQuorumCallMethodLatency(t *testing.T) {
+	const work = 5 * time.Millisecond
+	config := gorumstest.Config(t, 3, func(i int) gorumstest.ServerIface {
+		srv := gorums.NewServer()
+		srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, _ *gorums.Message, send func(proto.Message)) error {
+			time.Sleep(time.Duration(i+1) * work)
+			send(pb.String("x"))
+			return nil
+		})
+		return srv
+	})
+	for r := range mockcall.QuorumCall(gorumstest.Context(t, 5*time.Second), config, "x").Results() {
+		if r.Err != nil {
+			t.Fatalf("node %d: %v", r.NodeID, r.Err)
+		}
+	}
+	for _, node := range config.Nodes() {
+		if got, want := node.MethodLatency(mock.TestMethod), time.Duration(node.ID())*work; got < want {
+			t.Errorf("node %d: MethodLatency(Test) = %v, want at least %v", node.ID(), got, want)
+		}
+		if got := node.MethodLatency(mock.EchoMethod); got != -1*time.Second {
+			t.Errorf("node %d: MethodLatency(Echo) = %v, want -1s", node.ID(), got)
+		}
+	}
+}
