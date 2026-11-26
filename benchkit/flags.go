@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+// ExitSkip is the exit status of a benchmark binary that rejects the
+// combination of flag values it was given, such as a custom sweep dimension
+// without meaning for the selected benchmark. The binary exits with ExitSkip
+// on every node, before it dials its peers, and sweep records the run as
+// skipped instead of failed.
+const ExitSkip = 77
+
 // StandardFlags holds the CLI flag contract that every sweep-driven benchmark
 // binary must accept.
 // A binary built on benchkit registers exactly this set via RegisterFlags, so
