@@ -1900,3 +1900,19 @@ func TestServerContextReceivedAt(t *testing.T) {
 		}
 	})
 }
+
+// TestServerLocalNodeLatency verifies that a call from a server to its own
+// node updates that node's latency estimate.
+func TestServerLocalNodeLatency(t *testing.T) {
+	servers := gorumstest.LocalServers(t, 1)
+	servers[0].RegisterHandler(mock.TestMethod, func(_ gorums.ServerContext, _ *gorums.Message, send func(proto.Message)) error {
+		send(pb.String("ok"))
+		return nil
+	})
+	gorumstest.WaitForPeers(t, servers)
+	node := servers[0].PeerConfig().Nodes()[0]
+	mockcall.MustRemoteCall(t, gorumstest.Context(t, 5*time.Second), node, "x")
+	if got := node.Latency(); got < 0 {
+		t.Errorf("Latency() = %v, want at least 0", got)
+	}
+}

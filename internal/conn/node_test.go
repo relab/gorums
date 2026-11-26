@@ -105,6 +105,9 @@ func TestNodeMissingTransportIsSafe(t *testing.T) {
 			if got := node.Latency(); got != -1*time.Second {
 				t.Errorf("Latency = %v, want -1s", got)
 			}
+			if got := node.MethodLatency("m"); got != -1*time.Second {
+				t.Errorf("MethodLatency = %v, want -1s", got)
+			}
 			if err := node.close(); err != nil {
 				t.Errorf("close = %v, want nil", err)
 			}

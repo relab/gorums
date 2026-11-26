@@ -217,7 +217,7 @@ func TestCallOnewaySkipNode(t *testing.T) {
 			transport := stream.NewTransport(id, func() uint64 { return 0 })
 			if id != down {
 				recorders[id] = &seqNoRecorder{}
-				transport.StoreChannel(stream.NewLocalChannel(id, recorders[id], conn.DefaultRecvBufferSize, nil))
+				transport.StoreChannel(stream.NewLocalChannel(id, recorders[id], conn.DefaultRecvBufferSize, nil, nil))
 			}
 			config = append(config, conn.NewNodeForTest(id, transport))
 		}
@@ -322,7 +322,7 @@ func newScatterConfig(t *testing.T, down ID, ids ...ID) (Config, map[ID]*valueRe
 		transport := stream.NewTransport(id, func() uint64 { return uint64(id) })
 		if id != down {
 			recorders[id] = &valueRecorder{}
-			local := stream.NewLocalChannel(id, recorders[id], conn.DefaultRecvBufferSize, nil)
+			local := stream.NewLocalChannel(id, recorders[id], conn.DefaultRecvBufferSize, nil, nil)
 			t.Cleanup(local.Wait)
 			transport.StoreChannel(local)
 		}

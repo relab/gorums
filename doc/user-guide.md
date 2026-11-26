@@ -2420,6 +2420,32 @@ updates := allNodesCfg.Watch(ctx, 5*time.Second, func(c gorums.Config) gorums.Co
 The zero value of `gorums.QuorumCallError` carries no node errors, so the
 initial derive call behaves identically to the pure-latency example above.
 
+### Per-Method Estimates
+
+`node.MethodLatency(method)` returns the node's round-trip estimate for one RPC method, or -1s before the method's first successful response.
+The method is the full name used by the generated code, for example `"proto.Storage.ReadQC"`.
+To order nodes for one method, write your own comparator:
+
+```go
+byRead := func(a, b *gorums.Node) int {
+    la := a.MethodLatency("proto.Storage.ReadQC")
+    lb := b.MethodLatency("proto.Storage.ReadQC")
+    switch {
+    case la < 0 && lb < 0:
+        return 0
+    case la < 0:
+        return 1
+    case lb < 0:
+        return -1
+    }
+    return cmp.Compare(la, lb)
+}
+fast := cfg.Sort(byRead)[:quorumSize]
+```
+
+A method's estimate includes the time its requests wait for earlier handlers on the same stream.
+So a method with a short handler can still have a high estimate when its requests wait behind a slow handler that does not call `ServerContext.Release`.
+
 ### Measurement Limits
 
 `Node.Latency()` has several limits that are worth understanding before building
@@ -2446,17 +2472,18 @@ on it:
   by heavy RPCs, this can skew node selection toward nodes with lighter server
   load rather than nodes that are genuinely closer on the network.
 
-* **Latency is per node, not per RPC.** The estimate is a single value
-  maintained for each node, shared across all RPC types sent to that node.
-  It reflects the node's overall responsiveness rather than the latency of
-  any particular operation, making it a blunt instrument for workloads where
-  different RPCs have meaningfully different latency profiles.
+* **`Latency()` is per node, not per RPC.** It is a single value for each node,
+  shared across all RPC types sent to that node.
+  `MethodLatency(method)` gives the estimate for one method; see [Per-Method Estimates](#per-method-estimates).
   For the latency of one call, use the `Latency` field of each `NodeResponse`; see [Per-Node Error Inspection](#per-node-error-inspection).
 
 * **Multicast and unicast calls are not measured.** Only calls that receive
   replies update the latency estimate.  Multicast and
   unicast calls with no response do not contribute measurements, so nodes
   contacted exclusively via these call types will remain unmeasured.
+
+* **The local node has no network.** Calls to a server's own node run in-process.
+  Its estimate holds only the queue wait and the handler time, so `ByLatency` usually puts it first.
 
 * **No variance information.** A single average cannot distinguish a stable
   low-latency node from a high-variance node whose average happens to look good.

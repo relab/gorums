@@ -77,7 +77,7 @@ func TestCallContextAdmitMessageIDs(t *testing.T) {
 		recorders[i] = &seqNoRecorder{}
 		id := uint32(i + 1)
 		transport := stream.NewTransport(id, clientGen)
-		transport.StoreChannel(stream.NewLocalChannel(id, recorders[i], conn.DefaultRecvBufferSize, nil))
+		transport.StoreChannel(stream.NewLocalChannel(id, recorders[i], conn.DefaultRecvBufferSize, nil, nil))
 		// The third node reuses an inbound stream and must use server-initiated
 		// IDs; wrap its transport as a shared transport over the same channel.
 		if i == 2 {
@@ -136,7 +136,7 @@ func TestCallContextAdmitFanOutStart(t *testing.T) {
 				recorders[i] = &seqNoRecorder{}
 				id := uint32(i + 1)
 				transport := stream.NewTransport(id, clientGen)
-				transport.StoreChannel(stream.NewLocalChannel(id, recorders[i], conn.DefaultRecvBufferSize, nil))
+				transport.StoreChannel(stream.NewLocalChannel(id, recorders[i], conn.DefaultRecvBufferSize, nil, nil))
 				config[i] = conn.NewNodeForTest(id, stream.NewSharedTransportWithGen(transport, serverGen))
 			}
 

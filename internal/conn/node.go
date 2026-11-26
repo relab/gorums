@@ -134,7 +134,7 @@ func newInboundNode(id ID, addr string, msgIDGen func() uint64) *Node {
 func newLocalNode(id ID, addr string, msgIDGen func() uint64, handler stream.RequestHandler, recvBufferSize uint, logger *log.Logger, mgr *outboundManager) *Node {
 	transport := stream.NewTransport(id, msgIDGen)
 	n := newNode(id, addr, mgr, transport)
-	transport.StoreChannel(stream.NewLocalChannel(id, handler, recvBufferSize, logger))
+	transport.StoreChannel(stream.NewLocalChannel(id, handler, recvBufferSize, transport.Latency(), logger))
 	return n
 }
 
@@ -355,6 +355,13 @@ func (n *Node) LastErr() error {
 // by their current observed latency.
 func (n *Node) Latency() time.Duration {
 	return NodeTransport(n).Latency().Load()
+}
+
+// MethodLatency returns this node's round-trip latency estimate for one RPC
+// method, with the limits of [Node.Latency]. The method is the full name used
+// by the generated code, for example "pkg.Service.Method".
+func (n *Node) MethodLatency(method string) time.Duration {
+	return NodeTransport(n).Latency().LoadMethod(method)
 }
 
 // ByID is exported and documented as gorums.ByID.

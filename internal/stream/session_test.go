@@ -951,6 +951,28 @@ func TestSessionHandleSetsResponseLatency(t *testing.T) {
 	})
 }
 
+// TestSessionHandleObservesLatency verifies that a successful response
+// updates the estimate of its request's method, and an error response does not.
+func TestSessionHandleObservesLatency(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := newTestSession(t, 1, nil, true, true)
+		responseChan := make(chan response, 2)
+		s.pending.add(1, NodeRequest{Ctx: t.Context(), Msg: Message_builder{Method: "m"}.Build(), ResponseChan: responseChan})
+		s.pending.add(2, NodeRequest{Ctx: t.Context(), Msg: Message_builder{Method: "bad"}.Build(), ResponseChan: responseChan})
+
+		time.Sleep(10 * time.Millisecond)
+		s.handle(Message_builder{MessageSeqNo: 1}.Build(), time.Now())
+		s.handle(Message_builder{MessageSeqNo: 2, Status: status.New(codes.Internal, "boom").Proto()}.Build(), time.Now())
+
+		if got, want := s.latency.LoadMethod("m"), 10*time.Millisecond; got != want {
+			t.Errorf("LoadMethod(m) = %v, want %v", got, want)
+		}
+		if got := s.latency.LoadMethod("bad"); got != noLatency {
+			t.Errorf("LoadMethod(bad) = %v, want %v", got, noLatency)
+		}
+	})
+}
+
 // doneRequestHandler marks one request done on wg for each request it handles.
 type doneRequestHandler struct{ wg *sync.WaitGroup }
 
