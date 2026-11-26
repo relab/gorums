@@ -71,6 +71,7 @@ errgroup
 Errorf
 errorlint
 esac
+ewma
 extendee
 fanout
 Fatalln

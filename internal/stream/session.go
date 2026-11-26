@@ -295,7 +295,7 @@ func (s *session) handle(msg *Message, receivedAt time.Time) {
 	resp := response{NodeID: s.id, Value: msg, Err: msg.errorStatus(), Latency: time.Since(req.sendTime)}
 	switch {
 	case resp.Err == nil:
-		s.latency.observe(resp.Latency)
+		s.latency.observe(req.Msg.GetMethod(), resp.Latency)
 	case req.Ctx.Err() != nil:
 		// The caller is done, so it does not observe the error.
 		s.unmatchedErrors.record(s.id, msg, resp.Err)

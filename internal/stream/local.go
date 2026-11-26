@@ -59,7 +59,7 @@ func (c *LocalChannel) Enqueue(req NodeRequest) error {
 		if req.wantServerResponse() {
 			resp := response{NodeID: c.id, Value: msg, Err: err, Latency: time.Since(receivedAt)}
 			if err == nil {
-				c.latency.observe(resp.Latency)
+				c.latency.observe(req.Msg.GetMethod(), resp.Latency)
 			}
 			req.deliver(resp)
 		}
