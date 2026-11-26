@@ -443,3 +443,34 @@ func TestVerifyRunCustomDimensions(t *testing.T) {
 		t.Errorf("findings = %v, want a missing agg.csv row", findings)
 	}
 }
+
+// TestVerifyRunSkippedRuns verifies that -verify accepts a run the binary
+// skipped, without an agg.csv row for it, but fails when every run was skipped.
+func TestVerifyRunSkippedRuns(t *testing.T) {
+	f := newVerifyFixture("SymmetricQuorumCall")
+	skipped := f.specs[1]
+	f.manifests[runBase(f.label, skipped)].Status = runStatusSkipped
+	f.agg = slices.DeleteFunc(f.agg, func(r aggRunRecord) bool { return r.Dimensions == skipped.Dimensions })
+	findings, _, err := verifyRun(f.write(t), f.options())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 0 {
+		t.Errorf("findings = %v, want none for a skipped run", findings)
+	}
+
+	for _, m := range f.manifests {
+		m.Status = runStatusSkipped
+	}
+	f.agg = nil
+	findings, _, err = verifyRun(f.write(t), f.options())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasFinding(findings, "runs", "every run was skipped") {
+		t.Errorf("findings = %v, want every run was skipped", findings)
+	}
+	if hasFinding(findings, "status", "skipped") {
+		t.Errorf("findings = %v, want no status finding for a skipped run", findings)
+	}
+}

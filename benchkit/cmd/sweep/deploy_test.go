@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums/benchkit"
+	"github.com/relab/iago"
 )
 
 // TestBuildNodeCmd verifies the remote command line for one node: the required
@@ -730,5 +733,60 @@ func TestBuildNodeCmdCustomDimensions(t *testing.T) {
 	spec.Params = ""
 	if got := buildNodeCmd(node, "bb1:9000", spec, "run", cfg); strings.Contains(got, "-d=") {
 		t.Errorf("buildNodeCmd without custom dimensions = %s", got)
+	}
+}
+
+// exitStatusError stands in for the *ssh.ExitError of a remote process that
+// exited with a status, which only the ssh package can build. Like it, it
+// implements [iago.ExitStatus].
+type exitStatusError int
+
+func (e exitStatusError) Error() string   { return fmt.Sprintf("exit status %d", int(e)) }
+func (e exitStatusError) ExitStatus() int { return int(e) }
+
+// TestDeployAllNodesSkipped verifies that a run counts as skipped only when
+// every node exited with [benchkit.ExitSkip]: a partial skip, another error
+// beside the skips, or a missing node error leaves the run failed.
+func TestDeployAllNodesSkipped(t *testing.T) {
+	node := func(i, status int) error {
+		return &nodeRunError{node: fmt.Sprintf("bb%d:9000", i), err: exitStatusError(status)}
+	}
+	// launched returns the error that launchAndWait returns for the given
+	// node errors per host: run collects one iago.TaskError per host in an
+	// iago.Errors, and each wraps the joined errors of that host's nodes.
+	launched := func(hosts ...[]error) error {
+		var errs iago.Errors
+		for i, nodeErrs := range hosts {
+			errs.Handle(iago.TaskError{
+				TaskName: "run benchmark", HostName: fmt.Sprintf("bb%d", i+1), Err: errors.Join(nodeErrs...),
+			})
+		}
+		return errs.Err()
+	}
+	skip := benchkit.ExitSkip
+	tests := []struct {
+		name  string
+		err   error
+		nodes int
+		want  bool
+	}{
+		{"Nil", nil, 2, false},
+		{"AllSkipped", errors.Join(errors.Join(node(1, skip)), errors.Join(node(2, skip))), 2, true},
+		{"WrappedByHost", fmt.Errorf("bb1: %w", errors.Join(node(1, skip), node(2, skip))), 2, true},
+		{"PartialSkip", errors.Join(node(1, skip), node(2, 1)), 2, false},
+		{"MissingNode", errors.Join(node(1, skip)), 2, false},
+		{"OtherError", errors.Join(node(1, skip), node(2, skip), errors.New("ssh: session closed")), 2, false},
+		{"NoExitStatus", errors.Join(&nodeRunError{node: "bb1:9000", err: errors.New("timeout")}), 1, false},
+		{"IagoAllSkipped", launched([]error{node(1, skip)}, []error{node(2, skip), node(3, skip)}), 3, true},
+		{"IagoPartialSkip", launched([]error{node(1, skip)}, []error{node(2, 1)}), 2, false},
+		{"IagoHostSetupError", launched([]error{node(1, skip)}, []error{errors.New("ssh: session closed")}), 2, false},
+		{"IagoMissingHost", launched([]error{node(1, skip)}), 2, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := allNodesSkipped(tt.err, tt.nodes); got != tt.want {
+				t.Errorf("allNodesSkipped(%v, %d) = %v, want %v", tt.err, tt.nodes, got, tt.want)
+			}
+		})
 	}
 }

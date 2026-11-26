@@ -159,6 +159,25 @@ func TestGenerateReport(t *testing.T) {
 	}
 }
 
+// TestGenerateReportAllSkipped verifies that a sweep directory whose every run
+// was skipped still gets its run-status table, beside the error that there is
+// no benchmark data to plot.
+func TestGenerateReportAllSkipped(t *testing.T) {
+	dir := t.TempDir()
+	writePlotManifest(t, dir, "e1_Q_N1_W1_P0_Sdual_r1", runStatusSkipped, 1, "", nil)
+	err := generateReport(dir, reportOptions{title: "Test"})
+	if err == nil || !strings.Contains(err.Error(), "no benchmark data to plot") {
+		t.Fatalf("generateReport = %v, want a no benchmark data error", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, reportSubdir, "run_status.csv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "skipped") {
+		t.Errorf("run_status.csv = %q, want a skipped column", data)
+	}
+}
+
 // TestGenerateReportFromBinpb verifies that a report generated from the
 // normalized plotdata.binpb produces the same figures and derived CSVs as one
 // generated from the legacy runs.csv/node_cdf.csv pair.

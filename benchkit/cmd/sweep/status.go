@@ -9,19 +9,22 @@ import (
 // runStatusRecord tallies run outcomes for one node count. completed counts the
 // runs that produced usable measurements (succeeded plus degraded); a degraded
 // run kept intact per-node data even though one node fell below the health
-// threshold, so it still contributes to performance aggregates.
+// threshold, so it still contributes to performance aggregates. skipped counts
+// the runs whose binary rejected the combination of flag values.
 type runStatusRecord struct {
 	nodes     int
 	total     int
 	succeeded int
 	degraded  int
 	failed    int
+	skipped   int
 	completed int
 }
 
 // runStatusRows tallies the run manifests under outdir by node count. It
 // captures the completion accounting that performance figures alone omit: how
-// many repetitions of each cluster size finished cleanly, degraded, or failed.
+// many repetitions of each cluster size finished cleanly, degraded, failed, or
+// were skipped.
 func runStatusRows(outdir string) ([]runStatusRecord, error) {
 	manifests, err := loadRunManifests(outdir)
 	if err != nil {
@@ -45,6 +48,8 @@ func runStatusRows(outdir string) ([]runStatusRecord, error) {
 			rec.completed++
 		case runStatusFailed:
 			rec.failed++
+		case runStatusSkipped:
+			rec.skipped++
 		}
 	}
 	out := make([]runStatusRecord, 0, len(byNodes))
@@ -57,19 +62,20 @@ func runStatusRows(outdir string) ([]runStatusRecord, error) {
 // writeRunStatusCSV writes the per-node-count run outcome tallies.
 func writeRunStatusCSV(path string, rows []runStatusRecord) error {
 	return writeCSV(path,
-		[]string{"nodes", "total", "succeeded", "degraded", "failed", "completed"},
+		[]string{"nodes", "total", "succeeded", "degraded", "failed", "skipped", "completed"},
 		rows, func(r runStatusRecord) []string {
 			return []string{
 				strconv.Itoa(r.nodes), strconv.Itoa(r.total), strconv.Itoa(r.succeeded),
-				strconv.Itoa(r.degraded), strconv.Itoa(r.failed), strconv.Itoa(r.completed),
+				strconv.Itoa(r.degraded), strconv.Itoa(r.failed), strconv.Itoa(r.skipped),
+				strconv.Itoa(r.completed),
 			}
 		})
 }
 
-// anyDegradedOrFailed reports whether any run did not succeed cleanly, so the
-// report includes the run-status figure only when outcomes are worth showing.
-func anyDegradedOrFailed(rows []runStatusRecord) bool {
+// anyUnsuccessful reports whether any run degraded, failed, or was skipped, so
+// the report includes the run-status figure only when outcomes are worth showing.
+func anyUnsuccessful(rows []runStatusRecord) bool {
 	return slices.ContainsFunc(rows, func(r runStatusRecord) bool {
-		return r.degraded > 0 || r.failed > 0
+		return r.degraded > 0 || r.failed > 0 || r.skipped > 0
 	})
 }

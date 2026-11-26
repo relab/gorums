@@ -822,17 +822,19 @@
 }
 
 // ── run-status table: run outcomes per node count ────────────────────────────
-// Reads the run-status CSV (nodes, total, succeeded, degraded, failed, …) and
-// renders a compact table; degraded/failed cells are tinted when non-zero.
+// Reads the run-status CSV (nodes, total, succeeded, degraded, failed, skipped,
+// …) and renders a compact table; degraded, failed, and skipped cells are
+// tinted when non-zero.
 #let run-status-table(rows) = {
   set text(size: 8pt)
   let tinted(v, paint) = if int(v) > 0 { table.cell(fill: paint.lighten(70%), str(v)) } else { str(v) }
   table(
-    columns: 5, align: right, inset: (x: 4pt, y: 2.5pt), stroke: 0.4pt + luma(200),
-    table.header([N], [total], [succeeded], [degraded], [failed]),
+    columns: 6, align: right, inset: (x: 4pt, y: 2.5pt), stroke: 0.4pt + luma(200),
+    table.header([N], [total], [succeeded], [degraded], [failed], [skipped]),
     ..rows.map(r => (
       str(r.nodes), str(r.total), str(r.succeeded),
       tinted(r.degraded, rgb("#f58518")), tinted(r.failed, rgb("#d62728")),
+      tinted(r.skipped, rgb("#7f7f7f")),
     )).flatten(),
   )
 }

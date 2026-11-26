@@ -45,7 +45,7 @@ var reservedDimensionNames = []string{
 	// Other CSV columns.
 	"base", "label", "status", "rep", "reps", "throughput", "goodput",
 	"node", "host", "samples", "prob", "group", "col", "row", "rel", "runs",
-	"total", "succeeded", "degraded", "failed", "completed", "share",
+	"total", "succeeded", "degraded", "failed", "skipped", "completed", "share",
 	"baseline", "modes",
 }
 

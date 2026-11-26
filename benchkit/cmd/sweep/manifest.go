@@ -30,6 +30,11 @@ const (
 	// aggregate is contaminated by the slow node, so headline plots treat it
 	// like a failure.
 	runStatusDegraded = "degraded"
+
+	// runStatusSkipped marks a run whose binary rejected the combination of
+	// flag values: every node exited with [benchkit.ExitSkip]. It is a valid
+	// outcome of the sweep, with zero measurements.
+	runStatusSkipped = "skipped"
 )
 
 // Failure phases recorded in a failed run's manifest. They let a reader tell,
@@ -60,7 +65,7 @@ type runManifest struct {
 	Trim      string `json:"trim,omitempty"`      // summary trim offset; consumers apply the same trim
 	Timestamp string `json:"timestamp"`           // RFC 3339 launch time
 	Completed string `json:"completed,omitempty"` // RFC 3339 completion time
-	Status    string `json:"status"`              // started, succeeded, or failed
+	Status    string `json:"status"`              // started, succeeded, degraded, failed, or skipped
 	Error     string `json:"error,omitempty"`     // failure summary when status is failed
 
 	FailurePhase   string   `json:"failure_phase,omitempty"`   // setup, measurement, or collection
@@ -178,7 +183,7 @@ func manifestPath(outdir, base string) string {
 // failure so a manifest reader can confirm coverage without scanning the
 // output directory.
 type runOutcome struct {
-	status         string                       // runStatusSucceeded, runStatusDegraded, or runStatusFailed
+	status         string                       // runStatusSucceeded, runStatusDegraded, runStatusFailed, or runStatusSkipped
 	err            error                        // failure cause; nil on success
 	failurePhase   string                       // setup, measurement, or collection; empty on success
 	collectedFiles int                          // result files present in the output directory

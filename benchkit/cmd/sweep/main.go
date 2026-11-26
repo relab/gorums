@@ -40,9 +40,10 @@
 //	sweep -verify out/release-smoke -sweep release-smoke -test 9 \
 //	      -benchmarks SymmetricQuorumCall -stream-mode dual,dedup -summary verdict.md
 //
-// Every expected run must have succeeded on N distinct hosts (-test N), every
-// agg.csv row must have throughput and a p50 latency, and the clock drift in
-// the node logs must be at most -max-drift. -summary writes the verdict as
+// Every expected run must have succeeded on N distinct hosts (-test N) or been
+// skipped by the binary, at least one run must have succeeded, every agg.csv
+// row must have throughput and a p50 latency, and the clock drift in the node
+// logs must be at most -max-drift. -summary writes the verdict as
 // Markdown: a table of the failed criteria, with the error of a failed run and
 // the degraded nodes of a degraded run.
 //
@@ -88,6 +89,11 @@
 // The built-in dimensions become fixed flags, each -dim becomes -name=value in
 // name order, and -extra-args comes last. Use -extra-args for constant flags
 // that are not swept, such as a flag without a value.
+//
+// A binary that rejects a combination of values exits with status
+// benchkit.ExitSkip (77) on every node, before it dials its peers. Sweep then
+// records the run as skipped instead of failed. A run where only some nodes
+// exit with 77 is failed.
 //
 // Sweep builds for linux/amd64 hosts. To target other hosts, set GOARCH in
 // sweep's environment, e.g. GOARCH=arm64; GOOS is always linux.
@@ -521,6 +527,7 @@ func main() {
 		collectExts = append(collectExts, cpuProfExt, memProfExt)
 	}
 	var failedManifests, degradedManifests []string
+	skippedRuns := 0
 	finalizeRun := func(base string, nodes []nodeAssignment, o runOutcome) {
 		if err := updateManifestOutcome(cfg.outDir, base, o); err != nil {
 			log.Printf("  warning: manifest outcome: %v", err)
@@ -530,6 +537,8 @@ func main() {
 			failedManifests = append(failedManifests, manifestPath(cfg.outDir, base))
 		case runStatusDegraded:
 			degradedManifests = append(degradedManifests, manifestPath(cfg.outDir, base))
+		case runStatusSkipped:
+			skippedRuns++
 		}
 		// Post-incident health probe: the implicated host(s) are re-probed
 		// immediately, while the evidence (load, retransmit counters) is
@@ -587,6 +596,14 @@ func main() {
 		// at a lossy link when a run comes out degraded (see [captureTCPStats]).
 		tcpBefore := captureTCPStats(sub)
 		if err := launchAndWait(sub, nodes, peers, spec, base, cfg); err != nil {
+			// A binary that rejects the combination exits with ExitSkip on every
+			// node before dialing its peers, so sweep records the run as skipped
+			// and goes on to the next run.
+			if allNodesSkipped(err, len(nodes)) {
+				log.Printf("  skipped: every node exited with status %d (the binary rejected this combination)", benchkit.ExitSkip)
+				finalizeRun(base, nodes, runOutcome{status: runStatusSkipped})
+				continue
+			}
 			log.Printf("  error: %v", err)
 			// Snapshot host and socket state before collecting results: the
 			// SSH round-trips for collection take seconds, during which
@@ -679,6 +696,9 @@ func main() {
 		for _, path := range failedManifests {
 			printFailedRunArtifacts(cfg.outDir, path)
 		}
+	}
+	if skippedRuns > 0 {
+		log.Printf("skipped runs: %d (the binary rejected the combination; see each manifest's status)", skippedRuns)
 	}
 	if len(degradedManifests) > 0 {
 		log.Printf("degraded run manifests (a node's measurement did not belong with its peers'; see each manifest's degraded_nodes reason):")

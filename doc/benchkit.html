@@ -1119,6 +1119,12 @@ results, err := p.Run(ctx, sel, w, opts)
             <code>-quorum-size</code>, <code>-max-async</code>, <code>-send-buffer</code>/<code>-recv-buffer</code>,
             <code>-server</code>, <code>-server-stats</code>, <code>-list</code>, <code>-label</code>, and
             <code>-compare</code>.</p>
+        <p>A binary that rejects the combination of flag values it was given — a custom sweep dimension
+            (<code>sweep -dim</code>) that has no meaning for the selected benchmark, say — exits with
+            <code>benchkit.ExitSkip</code> (77) on every node, before it dials its peers. Sweep then records the run
+            as <code>skipped</code> instead of <code>failed</code>: it skips the result collection and the failure
+            diagnostics, and the report counts the run in the run-status table. When only some nodes exit with 77, the run is
+            <code>failed</code>.</p>
 
         <h3>How the flags interact</h3>
         <div class="callout">
@@ -1399,7 +1405,7 @@ results, err := p.Run(ctx, sel, w, opts)
                 <tr><td colspan="3"><strong>Health checks &amp; summarizing</strong></td></tr>
                 <tr><td><code>-check</code></td><td><code>false</code></td><td>Run host diagnostics and exit (see <em>Diagnostics</em> below). Fails on unreachable hosts.</td></tr>
                 <tr><td><code>-strict</code></td><td><code>false</code></td><td>With <code>-check</code>, also fail on busy benchmark ports, lingering benchmark processes, and port or process probes that could not run (shown as <code>?</code>), so an unattended run never collides with another sweep.</td></tr>
-                <tr><td><code>-verify &lt;dir&gt;</code></td><td>—</td><td>Check a collected run directory and exit non-zero on any failure: every expected run (from the same sweep flags as the launch, <code>-dim</code> included) succeeded on N distinct hosts (<code>-test N</code>), no unexpected run is present, <code>report/agg.csv</code> has a row with throughput and a p50 latency for every configuration, and the clock drift in the node logs is at most <code>-max-drift</code>. Needs no <code>-hosts</code>.</td></tr>
+                <tr><td><code>-verify &lt;dir&gt;</code></td><td>—</td><td>Check a collected run directory and exit non-zero on any failure: every expected run (from the same sweep flags as the launch, <code>-dim</code> included) that the binary ran succeeded on N distinct hosts (<code>-test N</code>), no unexpected run is present, <code>report/agg.csv</code> has a row with throughput and a p50 latency for every configuration that the binary ran, at least one run succeeded, and the clock drift in the node logs is at most <code>-max-drift</code>. Needs no <code>-hosts</code>.</td></tr>
                 <tr><td><code>-summary &lt;file&gt;</code></td><td>—</td><td>With <code>-verify</code>, also write the verdict as Markdown: a table of the failed criteria, with the error of a failed run and the degraded nodes of a degraded run.</td></tr>
                 <tr><td><code>-max-drift</code></td><td><code>1ms</code></td><td>With <code>-verify</code>, the largest allowed absolute clock drift.</td></tr>
                 <tr><td><code>-netcheck</code></td><td><code>true</code></td><td>Ping-ring probe of every host link before the sweep; aborts on ≥ 5% packet loss.</td></tr>
@@ -1730,7 +1736,7 @@ results, err := p.Run(ctx, sel, w, opts)
                 <tr><td><code>per_node_cdf</code></td><td>One figure whose panels are per-node latency CDFs, three to a row and fifteen to a page, one panel per run. Runs are the first repetition of a configuration (the full dimension tuple, buffer capacities included) selected to spread across the sweep: a configuration earns a panel when it is the first to measure some dimension value, so the panels cover every node count, payload, rate, and mode rather than crowding into whichever corner sorts first. The remaining panels are filled in run order, so the page is used</td><td>nothing — produced for any run with CDF data</td></tr>
                 <tr><td><code>node_health</code></td><td>Hosts × configurations heatmap of per-node throughput relative to each run's median; a slow host shows as a red cell, and a host absent from a configuration as a grey one. A color scale below the grid states the range</td><td>nothing — produced for any sweep</td></tr>
                 <tr><td><code>degraded_share</code></td><td>Heatmap of the degraded-repetition fraction, node count and mode on one axis and the remaining varying dimensions on the other, so one configuration label is split over two axes instead of crowding one</td><td>any degraded repetition</td></tr>
-                <tr><td><code>run_status</code></td><td>Table of run outcomes (succeeded/degraded/failed) per node count</td><td>any degraded or failed run</td></tr>
+                <tr><td><code>run_status</code></td><td>Table of run outcomes (succeeded/degraded/failed/skipped) per node count</td><td>any degraded, failed, or skipped run</td></tr>
                 <tr><td><code>clock_offsets</code></td><td>Empirical CDF of the absolute clock offset and residual drift, parsed from the run logs</td><td>offset lines in the logs</td></tr>
                 <tr><td><code>failed_time_series_*</code></td><td>Under a &ldquo;Failed runs&rdquo; heading: the throughput and latency traces of failed runs, one representative per (configuration, error signature) group and at most three in total, each noting how the run failed and how many of its nodes wrote no result file at all. Whatever the cap drops is logged</td><td>a failed run with event data</td></tr>
             </tbody>
