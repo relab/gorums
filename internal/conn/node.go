@@ -134,7 +134,7 @@ func newInboundNode(id ID, addr string, msgIDGen func() uint64) *Node {
 func newLocalNode(id ID, addr string, msgIDGen func() uint64, handler stream.RequestHandler, recvBufferSize uint, logger *log.Logger, mgr *outboundManager) *Node {
 	transport := stream.NewTransport(id, msgIDGen)
 	n := newNode(id, addr, mgr, transport)
-	transport.StoreChannel(stream.NewLocalChannel(id, handler, recvBufferSize, logger))
+	transport.StoreChannel(stream.NewLocalChannel(id, handler, recvBufferSize, transport.Latency(), logger))
 	return n
 }
 

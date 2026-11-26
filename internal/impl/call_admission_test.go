@@ -46,7 +46,7 @@ func TestCallAdmission(t *testing.T) {
 					t.Fatal(err)
 				}
 				healthy := &seqNoRecorder{}
-				local := stream.NewLocalChannel(2, healthy, 1, nil)
+				local := stream.NewLocalChannel(2, healthy, 1, nil, nil)
 				t.Cleanup(local.Wait)
 				healthyTr := stream.NewTransport(2, func() uint64 { return 2 })
 				healthyTr.StoreChannel(local)
@@ -147,7 +147,7 @@ func (n stalledNode) sent() (msgIDs []uint64) {
 func newLocalNode(t *testing.T, id ID) (*Node, *seqNoRecorder) {
 	t.Helper()
 	recorder := &seqNoRecorder{}
-	local := stream.NewLocalChannel(id, recorder, conn.DefaultRecvBufferSize, nil)
+	local := stream.NewLocalChannel(id, recorder, conn.DefaultRecvBufferSize, nil, nil)
 	t.Cleanup(local.Wait)
 	transport := stream.NewTransport(id, func() uint64 { return uint64(id) })
 	transport.StoreChannel(local)

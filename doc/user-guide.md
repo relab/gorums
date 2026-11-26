@@ -2458,6 +2458,9 @@ on it:
   unicast calls with no response do not contribute measurements, so nodes
   contacted exclusively via these call types will remain unmeasured.
 
+* **The local node has no network.** Calls to a server's own node run in-process.
+  Its estimate holds only the queue wait and the handler time, so `ByLatency` usually puts it first.
+
 * **No variance information.** A single average cannot distinguish a stable
   low-latency node from a high-variance node whose average happens to look good.
   If jitter matters for your workload, the built-in estimate is not sufficient

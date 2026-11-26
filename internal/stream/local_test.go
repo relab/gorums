@@ -43,7 +43,7 @@ func TestLocalChannelReentrantCall(t *testing.T) {
 			outerDone <- nil
 		}
 	})
-	c = NewLocalChannel(1, handler, testRecvBufferSize, nil)
+	c = NewLocalChannel(1, handler, testRecvBufferSize, nil, nil)
 
 	c.Enqueue(NodeRequest{
 		Ctx:          t.Context(),
@@ -85,7 +85,7 @@ func TestLocalChannelUnmatchedErrors(t *testing.T) {
 		}.Build())
 	})
 	var logBuf lockedBuffer
-	c := NewLocalChannel(1, handler, testRecvBufferSize, log.New(&logBuf, "", 0))
+	c := NewLocalChannel(1, handler, testRecvBufferSize, nil, log.New(&logBuf, "", 0))
 
 	responseChan := make(chan response, 1)
 	c.Enqueue(NodeRequest{
@@ -135,7 +135,7 @@ func TestLocalChannelUnmatchedErrorsEndedCall(t *testing.T) {
 		}.Build())
 	})
 	var logBuf lockedBuffer
-	c := NewLocalChannel(1, handler, testRecvBufferSize, log.New(&logBuf, "", 0))
+	c := NewLocalChannel(1, handler, testRecvBufferSize, nil, log.New(&logBuf, "", 0))
 
 	ctx, cancel := context.WithCancel(t.Context())
 	c.Enqueue(NodeRequest{
@@ -163,7 +163,7 @@ func TestLocalChannelFull(t *testing.T) {
 			<-release
 		}
 	})
-	c := NewLocalChannel(1, handler, 1, nil)
+	c := NewLocalChannel(1, handler, 1, nil, nil)
 	t.Cleanup(func() { close(release); c.Wait() })
 	req := NodeRequest{Ctx: t.Context(), Oneway: true, Msg: Message_builder{MessageSeqNo: 1}.Build()}
 	if err := c.Enqueue(req); err != nil {
@@ -194,7 +194,7 @@ func TestLocalChannelResponseLatency(t *testing.T) {
 			time.Sleep(20 * time.Millisecond)
 			send(Message_builder{MessageSeqNo: msg.GetMessageSeqNo()}.Build())
 		})
-		c := NewLocalChannel(1, handler, testRecvBufferSize, nil)
+		c := NewLocalChannel(1, handler, testRecvBufferSize, nil, nil)
 		responseChan := make(chan response, 1)
 		if err := c.Enqueue(NodeRequest{
 			Ctx:          t.Context(),
@@ -206,6 +206,38 @@ func TestLocalChannelResponseLatency(t *testing.T) {
 		resp := <-responseChan
 		if want := 20 * time.Millisecond; resp.Latency != want {
 			t.Errorf("Latency = %v, want %v", resp.Latency, want)
+		}
+		c.Wait()
+	})
+}
+
+// TestLocalChannelObservesLatency verifies that a successful reply updates the
+// latency estimate and that an error reply leaves it unchanged.
+func TestLocalChannelObservesLatency(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		handler := requestHandlerFunc(func(_ context.Context, msg *Message, _ func(), send func(*Message)) {
+			time.Sleep(20 * time.Millisecond)
+			reply := Message_builder{MessageSeqNo: msg.GetMessageSeqNo()}.Build()
+			if msg.GetMessageSeqNo() == 2 {
+				reply = NewResponse(msg, nil, status.Error(codes.Internal, "fail"))
+			}
+			send(reply)
+		})
+		latency := newLatency()
+		c := NewLocalChannel(1, handler, testRecvBufferSize, latency, nil)
+		for seqNo := range uint64(2) {
+			responseChan := make(chan response, 1)
+			if err := c.Enqueue(NodeRequest{
+				Ctx:          t.Context(),
+				Msg:          Message_builder{MessageSeqNo: seqNo + 1, Method: mock.TestMethod}.Build(),
+				ResponseChan: responseChan,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			<-responseChan
+			if got, want := latency.Load(), 20*time.Millisecond; got != want {
+				t.Errorf("after request %d: Load() = %v, want %v", seqNo+1, got, want)
+			}
 		}
 		c.Wait()
 	})

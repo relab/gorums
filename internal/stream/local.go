@@ -15,15 +15,17 @@ type LocalChannel struct {
 	id       ID
 	handler  RequestHandler
 	requests *dispatcher
+	latency  *Latency
 	unmatchedErrors
 }
 
 // NewLocalChannel returns a channel that serves requests with handler. Up to
 // recvBufferSize requests can wait for the running handler; it must be positive.
+// Each successful reply updates latency, which may be nil.
 // If logger is non-nil, it logs each error reply to a one-way request, or to
 // a two-way request whose context has ended; see [Channel.UnmatchedErrors].
-func NewLocalChannel(id ID, handler RequestHandler, recvBufferSize uint, logger *log.Logger) *LocalChannel {
-	c := &LocalChannel{id: id, handler: handler, requests: newDispatcher(nil, recvBufferSize)}
+func NewLocalChannel(id ID, handler RequestHandler, recvBufferSize uint, latency *Latency, logger *log.Logger) *LocalChannel {
+	c := &LocalChannel{id: id, handler: handler, requests: newDispatcher(nil, recvBufferSize), latency: latency}
 	c.unmatchedErrors.logger = logger
 	return c
 }
@@ -55,7 +57,11 @@ func (c *LocalChannel) Enqueue(req NodeRequest) error {
 			c.unmatchedErrors.record(c.id, msg, err)
 		}
 		if req.wantServerResponse() {
-			req.deliver(response{NodeID: c.id, Value: msg, Err: err, Latency: time.Since(receivedAt)})
+			resp := response{NodeID: c.id, Value: msg, Err: err, Latency: time.Since(receivedAt)}
+			if err == nil {
+				c.latency.observe(resp.Latency)
+			}
+			req.deliver(resp)
 		}
 	}
 	run := func(release func()) { c.handler.HandleRequest(ctx, c.id, req.Msg, receivedAt, release, send) }
