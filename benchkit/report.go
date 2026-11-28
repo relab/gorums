@@ -182,6 +182,7 @@ func ConfigDelta(a, b *RunConfig) []string {
 	add("call_timeout", time.Duration(a.GetCallTimeout()), time.Duration(b.GetCallTimeout()))
 	add("send_buffer", a.GetSendBuffer(), b.GetSendBuffer())
 	add("recv_buffer", a.GetRecvBuffer(), b.GetRecvBuffer())
+	add("custom_dimensions", NewCustomDimensions(a.GetCustomDimensions()), NewCustomDimensions(b.GetCustomDimensions()))
 	return delta
 }
 

@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/relab/gorums/benchkit"
 )
 
 // verifyOptions states what a healthy smoke run looks like for [verifyRun].
@@ -36,8 +38,10 @@ type verifyFinding struct {
 // verifyRun checks the collected run directory dir against opts:
 //
 //   - the run manifests in dir are exactly the expected runs, and
-//     report/agg.csv exists with a row for every expected configuration;
-//   - every manifest has status succeeded;
+//     report/agg.csv exists with a row for every expected configuration that
+//     the binary ran;
+//   - every manifest has status succeeded or skipped, and at least one run
+//     succeeded;
 //   - every run used opts.hosts distinct hosts;
 //   - every agg.csv row has throughput and a p50 latency above zero;
 //   - the largest absolute clock drift in the node logs is at most opts.maxDrift.
@@ -61,11 +65,17 @@ func verifyRun(dir string, opts verifyOptions) (findings []verifyFinding, skippe
 	}
 
 	present := 0
+	var measured []runSpec // expected runs, without the skipped ones
 	expected := make(map[string]bool, len(opts.specs))
 	for _, spec := range opts.specs {
 		base := runBase(opts.label, spec)
 		expected[base] = true
 		m, ok := manifests[base]
+		if ok && m.Status == runStatusSkipped {
+			present++
+			continue // the binary rejected the combination, a valid outcome
+		}
+		measured = append(measured, spec)
 		if !ok {
 			findings = append(findings, verifyFinding{"runs", base, "no manifest"})
 			continue
@@ -83,6 +93,9 @@ func verifyRun(dir string, opts verifyOptions) (findings []verifyFinding, skippe
 	if present < len(opts.specs) {
 		findings = append(findings, verifyFinding{"runs", "", fmt.Sprintf("%d of %d runs have a manifest", present, len(opts.specs))})
 	}
+	if len(measured) == 0 {
+		findings = append(findings, verifyFinding{"runs", "", "every run was skipped"})
+	}
 	for _, base := range slices.Sorted(maps.Keys(manifests)) {
 		if !expected[base] {
 			findings = append(findings, verifyFinding{"runs", base, "unexpected run (status " + manifests[base].Status + ")"})
@@ -92,7 +105,7 @@ func verifyRun(dir string, opts verifyOptions) (findings []verifyFinding, skippe
 		skipped = append(skipped, "hosts")
 	}
 
-	aggFindings, err := verifyAggCSV(filepath.Join(dir, reportSubdir, "agg.csv"), opts.specs)
+	aggFindings, err := verifyAggCSV(filepath.Join(dir, reportSubdir, "agg.csv"), measured)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -185,6 +198,7 @@ func statusDetail(m runManifest) string {
 // a p50 latency above zero. A run that succeeded without measurements has no
 // row.
 func verifyAggCSV(path string, specs []runSpec) ([]verifyFinding, error) {
+	schema := schemaOf(specs, func(s runSpec) benchkit.Dimensions { return s.Dimensions })
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return []verifyFinding{{"runs", "", "report/agg.csv missing"}}, nil
 	}
@@ -198,7 +212,7 @@ func verifyAggCSV(path string, specs []runSpec) ([]verifyFinding, error) {
 			return ""
 		}
 		dims := map[string]string{}
-		for _, name := range dimensionColumns() {
+		for _, name := range schema.columns() {
 			dims[name] = field(name)
 		}
 		rows = append(rows, dims)
@@ -216,8 +230,8 @@ func verifyAggCSV(path string, specs []runSpec) ([]verifyFinding, error) {
 	}
 	reported := map[string]bool{}
 	for _, spec := range specs {
-		key := strings.Join(dimensionValues(spec.Dimensions), ",")
-		if reported[key] || slices.ContainsFunc(rows, func(row map[string]string) bool { return aggRowMatches(row, spec) }) {
+		key := strings.Join(schema.values(spec.Dimensions), ",")
+		if reported[key] || slices.ContainsFunc(rows, func(row map[string]string) bool { return aggRowMatches(schema, row, spec) }) {
 			continue
 		}
 		reported[key] = true
@@ -231,9 +245,9 @@ func verifyAggCSV(path string, specs []runSpec) ([]verifyFinding, error) {
 // value, holds the configuration of spec. A spec buffer size of 0 selects the
 // binary's default, and the row records the size the binary used, so 0 matches
 // any send_buffer or recv_buffer value.
-func aggRowMatches(row map[string]string, spec runSpec) bool {
-	want := dimensionValues(spec.Dimensions)
-	for i, name := range dimensionColumns() {
+func aggRowMatches(schema dimensionSchema, row map[string]string, spec runSpec) bool {
+	want := schema.values(spec.Dimensions)
+	for i, name := range schema.columns() {
 		if (name == "send_buffer" || name == "recv_buffer") && want[i] == "0" {
 			continue
 		}

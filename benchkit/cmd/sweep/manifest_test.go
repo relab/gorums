@@ -2,12 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/relab/gorums/benchkit"
 )
 
 // TestWriteManifest verifies that writeManifest records the run configuration
@@ -380,5 +383,41 @@ func TestManifestReadBinaryBuild(t *testing.T) {
 	}
 	if b := readBinaryBuild(script); b != nil {
 		t.Errorf("readBinaryBuild(script) = %+v, want nil", b)
+	}
+}
+
+// TestWriteManifestCustomDimensions verifies that the manifest records the
+// custom dimension values as a custom object, from which the report later
+// stamps them into the results.
+func TestWriteManifestCustomDimensions(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config{sweepLabel: "e1", duration: time.Second}
+	customDims := benchkit.NewCustomDimensions(map[string]string{"d": "20", "ready": "tree"})
+	spec := runSpec{Benchmark: "Idea0", Nodes: 1, Custom: customDims, Rep: 1}
+	nodes := []nodeAssignment{{host: "bb1", port: 9000}}
+	base := runBase(cfg.sweepLabel, spec)
+	writeManifest(dir, base, spec, nodes, cfg, nil, "/tmp/bench")
+
+	data, err := os.ReadFile(filepath.Join(dir, base+manifestSuffix))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var flat map[string]json.RawMessage
+	if err := json.Unmarshal(data, &flat); err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]string
+	if err := json.Unmarshal(flat["custom"], &got); err != nil {
+		t.Fatalf("custom = %s: %v", flat["custom"], err)
+	}
+	if want := map[string]string{"d": "20", "ready": "tree"}; !maps.Equal(got, want) {
+		t.Errorf("custom = %v, want %v", got, want)
+	}
+	var m runManifest
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Custom != customDims {
+		t.Errorf("decoded Custom = %q, want %q", m.Custom, customDims)
 	}
 }

@@ -282,8 +282,9 @@ outcome afterward. Fields beyond the run configuration, timestamp, repository HE
     </thead>
     <tbody>
         <tr><td><code>status</code>, <code>error</code></td>
-            <td><code>succeeded</code> / <code>failed</code> / <code>degraded</code>, with the launch error text
-            on failure.</td></tr>
+            <td><code>succeeded</code> / <code>failed</code> / <code>degraded</code> / <code>skipped</code>, with the
+            launch error text on failure. <code>skipped</code> means every node exited with
+            <code>benchkit.ExitSkip</code> (77): the binary rejected the combination of flag values.</td></tr>
         <tr><td><code>failure_phase</code></td>
             <td><code>setup</code> (no results at all), <code>measurement</code> (partial results), or
             <code>collection</code> (nodes finished but files could not be retrieved). The first thing to read on

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -157,6 +159,25 @@ func TestGenerateReport(t *testing.T) {
 	}
 }
 
+// TestGenerateReportAllSkipped verifies that a sweep directory whose every run
+// was skipped still gets its run-status table, beside the error that there is
+// no benchmark data to plot.
+func TestGenerateReportAllSkipped(t *testing.T) {
+	dir := t.TempDir()
+	writePlotManifest(t, dir, "e1_Q_N1_W1_P0_Sdual_r1", runStatusSkipped, 1, "", nil)
+	err := generateReport(dir, reportOptions{title: "Test"})
+	if err == nil || !strings.Contains(err.Error(), "no benchmark data to plot") {
+		t.Fatalf("generateReport = %v, want a no benchmark data error", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, reportSubdir, "run_status.csv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "skipped") {
+		t.Errorf("run_status.csv = %q, want a skipped column", data)
+	}
+}
+
 // TestGenerateReportFromBinpb verifies that a report generated from the
 // normalized plotdata.binpb produces the same figures and derived CSVs as one
 // generated from the legacy runs.csv/node_cdf.csv pair.
@@ -213,15 +234,37 @@ func TestFilterRunsExcludeDim(t *testing.T) {
 	}
 }
 
+// TestFilterRunsExcludeCustomDim verifies that -exclude drops the runs of a
+// custom dimension value like those of a built-in one.
+func TestFilterRunsExcludeCustomDim(t *testing.T) {
+	runs := []plotRunRecord{
+		{base: "a", Benchmark: "Q", Custom: benchkit.NewCustomDimensions(map[string]string{"ready": "tree"})},
+		{base: "b", Benchmark: "Q", Custom: benchkit.NewCustomDimensions(map[string]string{"ready": "all"})},
+	}
+	opts := reportOptions{excludes: parseExcludeDims([]string{"ready=tree"})}
+	kept := filterRuns(runs, opts)
+	if len(kept) != 1 || kept[0].base != "b" {
+		t.Errorf("kept = %+v, want only ready=all", kept)
+	}
+}
+
 func TestReadPlotRunsCSVRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "runs.csv")
-	want := []plotRunRecord{{
-		Benchmark: "Q", Nodes: 3, Workers: 8, Payload: 1024, StreamMode: "dedup",
-		base: "run_Q", label: "run", status: runStatusSucceeded, rep: 1,
-		throughput: 40000, allocsPerOp: 12, memPerOp: 2048, nodesSeen: 3,
-		meanUS: new(500.0), p50US: new(450.0), p95US: new(900.0), p99US: new(1200.0),
-	}}
+	want := []plotRunRecord{
+		{
+			Benchmark: "Q", Nodes: 3, Workers: 8, Payload: 1024, StreamMode: "dedup",
+			Custom: benchkit.NewCustomDimensions(map[string]string{"d": "0", "ready": "tree"}),
+			base:   "run_Q", label: "run", status: runStatusSucceeded, rep: 1,
+			throughput: 40000, allocsPerOp: 12, memPerOp: 2048, nodesSeen: 3,
+			meanUS: new(500.0), p50US: new(450.0), p95US: new(900.0), p99US: new(1200.0),
+		},
+		{
+			Benchmark: "Q", Nodes: 3, Workers: 8, Payload: 1024, StreamMode: "dedup",
+			base: "run_Q_plain", label: "run", status: runStatusSucceeded, rep: 1,
+			throughput: 30000,
+		},
+	}
 	if err := writePlotRunsCSV(path, want); err != nil {
 		t.Fatal(err)
 	}
@@ -229,8 +272,8 @@ func TestReadPlotRunsCSVRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("rows = %d, want 1", len(got))
+	if len(got) != len(want) {
+		t.Fatalf("rows = %d, want %d", len(got), len(want))
 	}
 	g := got[0]
 	if g.base != "run_Q" || g.Workers != 8 || g.StreamMode != "dedup" || g.throughput != 40000 {
@@ -238,6 +281,49 @@ func TestReadPlotRunsCSVRoundTrip(t *testing.T) {
 	}
 	if g.p50US == nil || *g.p50US != 450 {
 		t.Errorf("p50US = %v, want 450", g.p50US)
+	}
+	// Each row reads back its own custom dimension values; a row without them
+	// reads back without them.
+	for i, row := range got {
+		if row.Dimensions != want[i].Dimensions {
+			t.Errorf("row %d Dimensions = %+v, want %+v", i, row.Dimensions, want[i].Dimensions)
+		}
+	}
+}
+
+// TestReadReportNodeCDFCSVReadsCustomDimensions verifies that the per-node
+// rows read back the custom dimension values that writePlotNodeCDFCSV writes,
+// so the report tells apart the runs that differ only in a custom dimension.
+func TestReadReportNodeCDFCSVReadsCustomDimensions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "node_cdf.csv")
+	var rows []plotNodeCDFRecord
+	for i, customDims := range []benchkit.CustomDimensions{
+		benchkit.NewCustomDimensions(map[string]string{"ready": "all"}),
+		benchkit.NewCustomDimensions(map[string]string{"ready": "tree"}),
+		"", // a run without the ready dimension
+	} {
+		rows = append(rows, plotNodeCDFRecord{
+			Benchmark: "Q", Nodes: 2, Workers: 1, StreamMode: "dual", Custom: customDims,
+			base: "run-" + strconv.Itoa(i), label: "run", status: runStatusSucceeded, rep: 1,
+			node: "bb1:9000", throughput: 100, cdfUS: 100,
+		})
+	}
+	if err := writePlotNodeCDFCSV(path, rows); err != nil {
+		t.Fatal(err)
+	}
+	cdf, health, err := readReportNodeCDFCSV(path, reportOptions{}, len(rows))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, got := range map[string][]plotNodeCDFRecord{"cdf": cdf, "health": health} {
+		if len(got) != len(rows) {
+			t.Fatalf("%s rows = %d, want %d", name, len(got), len(rows))
+		}
+		for i, row := range got {
+			if row.Dimensions != rows[i].Dimensions {
+				t.Errorf("%s row %d Dimensions = %+v, want %+v", name, i, row.Dimensions, rows[i].Dimensions)
+			}
+		}
 	}
 }
 
@@ -851,4 +937,200 @@ func TestExcludedByBufferDimension(t *testing.T) {
 	if excludedByDim(map[string]map[string]bool{"send_buffer": {"64": true}}, dims) {
 		t.Error("send_buffer=64 excluded non-matching dimensions")
 	}
+}
+
+// writeSweepRuns writes the result files and manifests of a sweep labeled
+// label over sc into dir, as a sweep that ran sc on three nodes leaves them.
+// Each node of a run reports the throughput and latency samples that measure
+// returns for the run; no samples make a throughput-only run. The result files
+// record the built-in dimensions only, like a binary that records no custom
+// dimension; the manifests carry the custom ones.
+func writeSweepRuns(t *testing.T, dir, label string, sc sweepConfig, measure func(runSpec) (throughput float64, latencies []int64)) {
+	t.Helper()
+	nodes := []nodeAssignment{{host: "bb1", port: 9000}, {host: "bb2", port: 9000}, {host: "bb3", port: 9000}}
+	for spec := range sc.runSpecs() {
+		base := runBase(label, spec)
+		throughput, latencies := measure(spec)
+		var files, hosts []string
+		for _, node := range nodes {
+			writePlotReport(t, dir, base, node, node.host+":9000", benchkit.Result_builder{
+				Config: plotRunConfigWithStreamMode(spec.Benchmark, int32(spec.Nodes), int32(spec.Workers),
+					int32(spec.Payload), int32(spec.Rate), spec.StreamMode),
+				Throughput: throughput,
+				TotalOps:   3,
+				Latencies:  latencies,
+			}.Build())
+			files = append(files, resultFilename(base, node, resultExt))
+			hosts = append(hosts, node.host+":9000")
+		}
+		m := runManifest{runSpec: spec, Label: label, Status: runStatusSucceeded, Hosts: hosts, Files: files}
+		data, err := json.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(manifestPath(dir, base), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// compileReportTyp compiles the report.typ in the report directory out, and
+// skips the test when the typst binary is not on PATH.
+func compileReportTyp(t *testing.T, out string) {
+	t.Helper()
+	if _, err := exec.LookPath("typst"); err != nil {
+		t.Skip("typst not on PATH; skipping compile check")
+	}
+	cmd := exec.Command("typst", "compile", "report.typ", "report.pdf")
+	cmd.Dir = out
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("typst compile failed: %v\n%s", err, b)
+	}
+}
+
+// TestGenerateReportCustomDimensionsCompiles is the end-to-end check of custom
+// sweep dimensions: a sweep over two custom dimensions, whose binary records
+// neither, yields one agg.csv with a column per dimension, and the report plots
+// latency against one dimension with the other as series. The compile step is
+// skipped when the typst binary is not on PATH, like TestGenerateReportCompiles.
+func TestGenerateReportCustomDimensionsCompiles(t *testing.T) {
+	dir := t.TempDir()
+	sc := sweepConfig{
+		numNodes: []int{3}, workers: []int{1}, payloads: []int{0}, rates: []int{0},
+		benchmarks: []string{"Idea0"}, streamModes: []string{"dual"}, reps: 2,
+		dims: []dimDecl{
+			{name: "d", values: []string{"20", "22", "24"}},
+			{name: "ready", values: []string{"all", "tree"}},
+		},
+	}
+	writeSweepRuns(t, dir, "e2e", sc, func(spec runSpec) (float64, []int64) {
+		d, _ := strconv.Atoi(spec.Custom.Get("d"))
+		lat := int64(d) * 1000
+		if spec.Custom.Get("ready") == "tree" {
+			lat *= 2
+		}
+		return float64(1e6 / lat), []int64{lat, lat + 100, lat + 200}
+	})
+	if err := generateReport(dir, reportOptions{title: "Custom dimensions"}); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, reportSubdir)
+
+	f, err := os.Open(filepath.Join(out, "agg.csv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	recs, err := csv.NewReader(f).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	header := recs[0]
+	di, ri := slices.Index(header, "d"), slices.Index(header, "ready")
+	if di < 0 || ri < 0 {
+		t.Fatalf("agg.csv header %v lacks the custom columns", header)
+	}
+	var rows []string
+	for _, rec := range recs[1:] {
+		rows = append(rows, rec[di]+" "+rec[ri])
+	}
+	if want := []string{"20 all", "20 tree", "22 all", "22 tree", "24 all", "24 tree"}; !slices.Equal(rows, want) {
+		t.Errorf("agg.csv rows = %v, want %v", rows, want)
+	}
+
+	typ, err := os.ReadFile(filepath.Join(out, "report.typ"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `metric-vs(agg, xcol: "d", ycol: "p50_ms", band-col: "p50_ms_ci95", ylabel: [#text("p50 (ms)")], ` +
+		`xlabel: [#text("d")], yscale: 1, facet: none, facet-label: none, ` +
+		`dims: ("nodes", "workers", "payload", "rate", "send_buffer", "recv_buffer", "d", "ready",))`
+	if !strings.Contains(string(typ), want) {
+		t.Errorf("report.typ lacks latency vs. d with ready as series:\n%s", typ)
+	}
+	compileReportTyp(t, out)
+}
+
+// TestGenerateReportCustomDimensionsComparisonCompiles verifies that the
+// ratio-vs and tl-curve figures of a sweep over a custom dimension name it as a
+// series dimension, and that the report compiles. The sweep compares two
+// stream modes over the worker count and a custom dimension d.
+func TestGenerateReportCustomDimensionsComparisonCompiles(t *testing.T) {
+	dir := t.TempDir()
+	sc := sweepConfig{
+		numNodes: []int{3}, workers: []int{1, 2}, payloads: []int{0}, rates: []int{0},
+		benchmarks: []string{"Idea0"}, streamModes: []string{"dual", "dedup"}, reps: 1,
+		dims: []dimDecl{{name: "d", values: []string{"20", "22"}}},
+	}
+	writeSweepRuns(t, dir, "cmp", sc, func(spec runSpec) (float64, []int64) {
+		d, _ := strconv.Atoi(spec.Custom.Get("d"))
+		lat := int64(d*spec.Workers) * 1000
+		if spec.StreamMode == "dedup" {
+			lat = lat * 4 / 5
+		}
+		return float64(1e6 * int64(spec.Workers) / lat), []int64{lat, lat + 100, lat + 200}
+	})
+	if err := generateReport(dir, reportOptions{title: "Custom dimension comparison"}); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, reportSubdir)
+	typ, err := os.ReadFile(filepath.Join(out, "report.typ"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const dims = `dims: ("nodes", "workers", "payload", "rate", "send_buffer", "recv_buffer", "d",)`
+	for _, want := range []string{
+		`tl-curve(tl, group: 1, load: "workers", `,
+		`ratio-vs(cmp, "throughput_ratio", xcol: "workers", `,
+		`ratio-vs(cmp, "throughput_ratio", xcol: "d", `,
+	} {
+		i := strings.Index(string(typ), want)
+		if i < 0 {
+			t.Errorf("report.typ lacks %s:\n%s", want, typ)
+			continue
+		}
+		if line, _, _ := strings.Cut(string(typ[i:]), "\n"); !strings.Contains(line, dims) {
+			t.Errorf("figure call %s lacks %s", line, dims)
+		}
+	}
+	compileReportTyp(t, out)
+}
+
+// TestGenerateReportMixedCustomDimensionsCompiles verifies that a figure call
+// names only the dimension columns of the CSV file the figure reads. The
+// directory holds a sweep without custom dimensions that records latency and a
+// sweep over a custom dimension t whose binary records throughput only. So
+// agg.csv has a t column and tl_curve.csv, which holds the points with latency
+// only, has none.
+func TestGenerateReportMixedCustomDimensionsCompiles(t *testing.T) {
+	dir := t.TempDir()
+	sc := sweepConfig{
+		numNodes: []int{3}, workers: []int{1, 2}, payloads: []int{0}, rates: []int{0},
+		benchmarks: []string{"Idea0"}, streamModes: []string{"dual"}, reps: 1,
+	}
+	writeSweepRuns(t, dir, "plain", sc, func(spec runSpec) (float64, []int64) {
+		lat := int64(spec.Workers) * 1000
+		return float64(1e6 * int64(spec.Workers) / lat), []int64{lat, lat + 100, lat + 200}
+	})
+	sc.dims = []dimDecl{{name: "t", values: []string{"1", "2"}}}
+	writeSweepRuns(t, dir, "custom", sc, func(spec runSpec) (float64, []int64) {
+		return 1000 * float64(spec.Workers), nil
+	})
+	if err := generateReport(dir, reportOptions{title: "Mixed custom dimensions"}); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, reportSubdir)
+	typ, err := os.ReadFile(filepath.Join(out, "report.typ"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`tl-curve(tl, group: 1, load: "workers")`,
+		`dims: ("nodes", "workers", "payload", "rate", "send_buffer", "recv_buffer", "t",))`,
+	} {
+		if !strings.Contains(string(typ), want) {
+			t.Errorf("report.typ lacks %s:\n%s", want, typ)
+		}
+	}
+	compileReportTyp(t, out)
 }

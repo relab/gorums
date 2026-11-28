@@ -41,7 +41,8 @@
 // The dimension columns a figure can hold fixed as series identity. Buffer
 // capacities are included so a buffer sweep's arms stay distinct series
 // instead of collapsing onto each other (row-at then returns only the first
-// matching row per x value, silently dropping the rest).
+// matching row per x value, silently dropping the rest). A sweep with custom
+// dimensions passes its full list through the figures' `dims` argument.
 #let dim-cols = ("nodes", "workers", "payload", "rate", "send_buffer", "recv_buffer")
 
 // Short tags for the dimension columns, so a legend entry reads "R1000, dedup"
@@ -55,8 +56,18 @@
 
 // ── Small helpers ────────────────────────────────────────────────────────────
 
-// Distinct values of a column, kept as strings but ordered by numeric value.
-#let uniq-numsorted(data, col) = data.map(r => r.at(col)).dedup().sorted(key: v => float(v))
+// A dimension value that matches numeric-pattern sorts as a number.
+// The sweep tool's Go code uses the same pattern.
+#let numeric-pattern = regex("^-?[0-9]+(\\.[0-9]+)?$")
+
+// The sort key of a dimension value: the empty value (absent) first, then the
+// numeric values by value, then the others as strings.
+#let value-key(v) = {
+  if v == "" { (0, 0.0, v) } else if v.match(numeric-pattern) != none { (1, float(v), v) } else { (2, 0.0, v) }
+}
+
+// Distinct values of a column, kept as strings and ordered by value-key.
+#let uniq-numsorted(data, col) = data.map(r => r.at(col)).dedup().sorted(key: value-key)
 
 // Distinct values of a column in first-seen order (for non-numeric columns).
 #let uniq(data, col) = data.map(r => r.at(col)).dedup()
@@ -258,8 +269,8 @@
 // compared, else the benchmark; the marker always encodes the benchmark; the
 // line dash distinguishes the held-fixed dimension combination.
 
-// The numeric dimensions held fixed per series (all dims except x and facet).
-#let fixed-dims(xcol, facet) = dim-cols.filter(c => c != xcol and c != facet)
+// The dimensions held fixed per series (all dims except x and facet).
+#let fixed-dims(xcol, facet, dims) = dims.filter(c => c != xcol and c != facet)
 
 // Distinct series keys present in `data`, each a dict (bench, mode, fixed:
 // (values…)) over `fixed`. First-seen order.
@@ -371,11 +382,11 @@
   data, xcol: "workers", ycol: "throughput", band-col: none,
   ylabel: [], xlabel: none, yscale: 1.0,
   facet: none, facet-label: none, psize: (4.6, 3.1), y-min: 0, y-tick-step: auto,
-  cols: 3,
+  cols: 3, dims: dim-cols,
 ) = {
   let benches = uniq(data, "benchmark")
   let modes = uniq(data, "stream_mode")
-  let fixed = fixed-dims(xcol, facet)
+  let fixed = fixed-dims(xcol, facet, dims)
   // Which held-fixed dims actually vary across the whole figure (for labels).
   let varying-fixed = fixed.filter(c => uniq(data, c).len() > 1)
   let tuples = fixed-tuples(data, fixed)
@@ -448,7 +459,7 @@
 // the benchmark and the dash the remaining dimension combination.
 // `group` selects the scale band to draw (see the Go-side banding); pass the
 // band you want when the data was split, else 1.
-#let tl-curve(data, group: 1, load: "workers", psize: (4.6, 3.1), x-step: auto, y-step: auto, cols: 3) = {
+#let tl-curve(data, group: 1, load: "workers", psize: (4.6, 3.1), x-step: auto, y-step: auto, cols: 3, dims: dim-cols) = {
   let rows = data.filter(r => int(r.group) == group)
   if rows.len() == 0 { return [] }
   let benches = uniq(rows, "benchmark")
@@ -456,7 +467,7 @@
   // Curve identity is every dimension but the panel's (nodes) and the one the
   // curve traces along: points differing only in the traced dimension are
   // successive points of one curve.
-  let fixed = dim-cols.filter(c => c != "nodes" and c != load)
+  let fixed = dims.filter(c => c != "nodes" and c != load)
   let varying-fixed = fixed.filter(c => uniq(rows, c).len() > 1)
   let tuples = fixed-tuples(rows, fixed)
   let keys = series-keys(rows, fixed)
@@ -762,10 +773,10 @@
 #let ratio-vs(
   rows, ratiocol, xcol: "workers", facet: "payload",
   ylabel: [ratio], xlabel: none, facet-label: none,
-  y-min: 0.8, y-max: 1.3, y-step: 0.1, psize: (4.6, 3.1), cols: 3,
+  y-min: 0.8, y-max: 1.3, y-step: 0.1, psize: (4.6, 3.1), cols: 3, dims: dim-cols,
 ) = {
   let benches = uniq(rows, "benchmark")
-  let fixed = fixed-dims(xcol, facet)
+  let fixed = fixed-dims(xcol, facet, dims)
   let varying-fixed = fixed.filter(c => uniq(rows, c).len() > 1)
   let facet-vals = if facet == none { (none,) } else { uniq-numsorted(rows, facet) }
   let ncols = gridcols(cols, facet-vals.len())
@@ -811,17 +822,19 @@
 }
 
 // ── run-status table: run outcomes per node count ────────────────────────────
-// Reads the run-status CSV (nodes, total, succeeded, degraded, failed, …) and
-// renders a compact table; degraded/failed cells are tinted when non-zero.
+// Reads the run-status CSV (nodes, total, succeeded, degraded, failed, skipped,
+// …) and renders a compact table; degraded, failed, and skipped cells are
+// tinted when non-zero.
 #let run-status-table(rows) = {
   set text(size: 8pt)
   let tinted(v, paint) = if int(v) > 0 { table.cell(fill: paint.lighten(70%), str(v)) } else { str(v) }
   table(
-    columns: 5, align: right, inset: (x: 4pt, y: 2.5pt), stroke: 0.4pt + luma(200),
-    table.header([N], [total], [succeeded], [degraded], [failed]),
+    columns: 6, align: right, inset: (x: 4pt, y: 2.5pt), stroke: 0.4pt + luma(200),
+    table.header([N], [total], [succeeded], [degraded], [failed], [skipped]),
     ..rows.map(r => (
       str(r.nodes), str(r.total), str(r.succeeded),
       tinted(r.degraded, rgb("#f58518")), tinted(r.failed, rgb("#d62728")),
+      tinted(r.skipped, rgb("#7f7f7f")),
     )).flatten(),
   )
 }

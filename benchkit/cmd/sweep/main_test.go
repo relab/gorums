@@ -133,6 +133,9 @@ func TestMainParseFlags(t *testing.T) {
 		{name: "EmptyDetach", args: []string{"-detach=", "-hosts", "bb1,bb2"}, wantErr: "invalid boolean value"},
 		{name: "BooleanFalse", args: []string{"-detach=false", "-hosts", "bb1,bb2"}, wantErr: "invalid boolean value"},
 		{name: "DrivenDetach", args: []string{"-driven", "-detach=head", "-hosts", "bb1,bb2"}, wantErr: "-detach cannot be combined with -driven"},
+		{name: "CustomDimensions", args: []string{"-hosts", "bb1,bb2", "-binary", "/tmp/custom", "-dim", "d=20,22", "-dim", "ready=all,tree"}, hosts: bb12},
+		{name: "CustomDimensionReserved", args: []string{"-hosts", "bb1,bb2", "-dim", "workers=1,2"}, wantErr: `name "workers" is reserved`},
+		{name: "CustomDimensionInExtraArgs", args: []string{"-hosts", "bb1,bb2", "-binary", "/tmp/custom", "-dim", "d=20", "-extra-args", "-d=22"}, wantErr: "-dim d: also given in -extra-args"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

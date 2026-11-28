@@ -95,7 +95,15 @@ func generateReport(dir string, opts reportOptions) error {
 	}
 
 	agg := aggregateReps(runs, opts.includeDegraded)
+	out := filepath.Join(dir, reportSubdir)
 	if len(agg) == 0 {
+		// The run-status table names the runs that were skipped or failed, which
+		// explains why there is nothing to plot.
+		if st, err := runStatusRows(dir); err == nil {
+			if _, err := writeRunStatus(out, st); err != nil {
+				return err
+			}
+		}
 		return fmt.Errorf("no benchmark data to plot in %s", dir)
 	}
 	// Name the repetitions that do not belong with their siblings, whatever the
@@ -105,7 +113,6 @@ func generateReport(dir string, opts reportOptions) error {
 		log.Printf("  warning: report: %s", note)
 	}
 
-	out := filepath.Join(dir, reportSubdir)
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
@@ -160,11 +167,10 @@ func generateReport(dir string, opts reportOptions) error {
 	// Run-status accounting and clock-offset diagnostics describe the whole
 	// sweep directory (every attempted run, the cluster's clock skew), so they
 	// intentionally ignore the per-configuration --exclude filters.
-	if st, err := runStatusRows(dir); err == nil && anyDegradedOrFailed(st) {
-		if err := writeRunStatusCSV(filepath.Join(out, "run_status.csv"), st); err != nil {
+	if st, err := runStatusRows(dir); err == nil {
+		if in.runStatus, err = writeRunStatus(out, st); err != nil {
 			return err
 		}
-		in.runStatus = true
 	}
 	if off, err := collectOffsets(filepath.Join(dir, logSubdir)); err == nil && len(off) > 0 {
 		if err := writeOffsetsCSV(filepath.Join(out, "offsets.csv"), offsetCDFRows(off, offsetCDFPoints)); err != nil {
@@ -188,6 +194,21 @@ func generateReport(dir string, opts reportOptions) error {
 	artifact := compileReport(typPath)
 	log.Printf("  report: %d figure(s) -> %s", len(specs), displayPath(artifact))
 	return nil
+}
+
+// writeRunStatus writes the rows to out/run_status.csv when any run degraded,
+// failed, or was skipped, and returns true when it wrote the file.
+func writeRunStatus(out string, st []runStatusRecord) (bool, error) {
+	if !anyUnsuccessful(st) {
+		return false, nil
+	}
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		return false, err
+	}
+	if err := writeRunStatusCSV(filepath.Join(out, "run_status.csv"), st); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // loadReportData reads the per-rep run records and per-node CDF records for a
@@ -611,7 +632,11 @@ func compileReport(typPath string) string {
 // tolerated; absent latency fields decode to nil pointers.
 func readPlotRunsCSV(path string) ([]plotRunRecord, error) {
 	var out []plotRunRecord
+	var customDims func([]string) benchkit.CustomDimensions
 	err := forEachCSVRow(path, false, func(r []string, col map[string]int) error {
+		if customDims == nil {
+			customDims = csvCustomReader(col)
+		}
 		out = append(out, plotRunRecord{
 			Benchmark:   field(r, col, "benchmark"),
 			Nodes:       atoiOr(field(r, col, "nodes"), 0),
@@ -621,6 +646,7 @@ func readPlotRunsCSV(path string) ([]plotRunRecord, error) {
 			SendBuffer:  atoiOr(field(r, col, "send_buffer"), 0),
 			RecvBuffer:  atoiOr(field(r, col, "recv_buffer"), 0),
 			StreamMode:  field(r, col, "stream_mode"),
+			Custom:      customDims(r),
 			base:        field(r, col, "base"),
 			label:       field(r, col, "label"),
 			status:      field(r, col, "status"),
@@ -648,7 +674,11 @@ func readPlotRunsCSV(path string) ([]plotRunRecord, error) {
 // millions of CDF rows.
 func readReportNodeCDFCSV(path string, opts reportOptions, limit int) ([]plotNodeCDFRecord, []plotNodeCDFRecord, error) {
 	reducer := newReportCDFReducer(opts, limit)
+	var customDims func([]string) benchkit.CustomDimensions
 	err := forEachCSVRow(path, true, func(row []string, col map[string]int) error {
+		if customDims == nil {
+			customDims = csvCustomReader(col)
+		}
 		base := field(row, col, "base")
 		dims := benchkit.Dimensions{
 			Benchmark:  field(row, col, "benchmark"),
@@ -659,6 +689,7 @@ func readReportNodeCDFCSV(path string, opts reportOptions, limit int) ([]plotNod
 			SendBuffer: atoiOr(field(row, col, "send_buffer"), 0),
 			RecvBuffer: atoiOr(field(row, col, "recv_buffer"), 0),
 			StreamMode: field(row, col, "stream_mode"),
+			Custom:     customDims(row),
 		}
 		if reducer.excluded(base, dims) {
 			return nil
@@ -692,6 +723,32 @@ func readReportNodeCDFCSV(path string, opts reportOptions, limit int) ([]plotNod
 	})
 	reducer.finish()
 	return reducer.cdf, reducer.health, err
+}
+
+// csvCustomReader returns a function that reads the custom dimension values
+// of one row of a CSV file whose header has the column index col. A custom
+// dimension column is a column whose header is a valid custom dimension name
+// and not a reserved name. An empty value leaves its dimension out of the
+// row's custom dimensions, as an absent value.
+func csvCustomReader(col map[string]int) func(row []string) benchkit.CustomDimensions {
+	var names []string
+	for name := range col {
+		if dimensionNamePattern.MatchString(name) && !slices.Contains(reservedDimensionNames, name) {
+			names = append(names, name)
+		}
+	}
+	return func(row []string) benchkit.CustomDimensions {
+		if len(names) == 0 {
+			return ""
+		}
+		values := make(map[string]string, len(names))
+		for _, name := range names {
+			if value := field(row, col, name); value != "" {
+				values[name] = value
+			}
+		}
+		return benchkit.NewCustomDimensions(values)
+	}
 }
 
 // reportCDFReducer keeps the full CDF of the first repetition of selected
@@ -762,7 +819,7 @@ func (r *reportCDFReducer) selectRows(base string, dims benchkit.Dimensions, nod
 // taken configuration took, recording its values either way.
 func (r *reportCDFReducer) spreads(dims benchkit.Dimensions) bool {
 	novel := false
-	for _, dim := range dimensionSpecs {
+	for _, dim := range newDimensionSchema([]benchkit.Dimensions{dims}) {
 		key := dim.name + "=" + dim.value(dims)
 		if !r.valuesSeen[key] {
 			r.valuesSeen[key] = true

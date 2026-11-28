@@ -596,14 +596,18 @@ func TestBuildPlotDataNormalizesIdentity(t *testing.T) {
 		meanUS: &meanUS, p50US: &p50US, p95US: &p95US, p99US: &p99US, samples: &samples,
 	}}
 	cdf := []plotNodeCDFRecord{
-		{Benchmark: "Q", Nodes: 2, Workers: 4, Payload: 128, StreamMode: "dual",
+		{
+			Benchmark: "Q", Nodes: 2, Workers: 4, Payload: 128, StreamMode: "dual",
 			base: "run1", label: "e1", status: runStatusSucceeded, rep: 1,
 			node: "bb1:9000", throughput: 10, meanUS: 100, p50US: 90, p95US: 150, p99US: 200, samples: 2,
-			prob: 0, cdfUS: 1},
-		{Benchmark: "Q", Nodes: 2, Workers: 4, Payload: 128, StreamMode: "dual",
+			prob: 0, cdfUS: 1,
+		},
+		{
+			Benchmark: "Q", Nodes: 2, Workers: 4, Payload: 128, StreamMode: "dual",
 			base: "run1", label: "e1", status: runStatusSucceeded, rep: 1,
 			node: "bb1:9000", throughput: 10, meanUS: 100, p50US: 90, p95US: 150, p99US: 200, samples: 2,
-			prob: 1, cdfUS: 2},
+			prob: 1, cdfUS: 2,
+		},
 	}
 
 	pd := buildPlotData(runs, cdf)
@@ -749,14 +753,22 @@ func TestWritePlotNodesCSV(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nodes.csv")
 	rows := []plotNodeCDFRecord{
-		{base: "run1", Benchmark: "Q", node: "bb1:9000", throughput: 10,
-			meanUS: 100, p50US: 90, p95US: 150, p99US: 200, samples: 2, prob: 0, cdfUS: 1},
-		{base: "run1", Benchmark: "Q", node: "bb1:9000", throughput: 10,
-			meanUS: 100, p50US: 90, p95US: 150, p99US: 200, samples: 2, prob: 0.5, cdfUS: 1.5},
-		{base: "run1", Benchmark: "Q", node: "bb1:9000", throughput: 10,
-			meanUS: 100, p50US: 90, p95US: 150, p99US: 200, samples: 2, prob: 1, cdfUS: 2},
-		{base: "run1", Benchmark: "Q", node: "bb2:9000", throughput: 20,
-			meanUS: 110, p50US: 95, p95US: 160, p99US: 210, samples: 3, prob: 0, cdfUS: 3},
+		{
+			base: "run1", Benchmark: "Q", node: "bb1:9000", throughput: 10,
+			meanUS: 100, p50US: 90, p95US: 150, p99US: 200, samples: 2, prob: 0, cdfUS: 1,
+		},
+		{
+			base: "run1", Benchmark: "Q", node: "bb1:9000", throughput: 10,
+			meanUS: 100, p50US: 90, p95US: 150, p99US: 200, samples: 2, prob: 0.5, cdfUS: 1.5,
+		},
+		{
+			base: "run1", Benchmark: "Q", node: "bb1:9000", throughput: 10,
+			meanUS: 100, p50US: 90, p95US: 150, p99US: 200, samples: 2, prob: 1, cdfUS: 2,
+		},
+		{
+			base: "run1", Benchmark: "Q", node: "bb2:9000", throughput: 20,
+			meanUS: 110, p50US: 95, p95US: 160, p99US: 210, samples: 3, prob: 0, cdfUS: 3,
+		},
 	}
 	if err := writePlotNodesCSV(path, rows); err != nil {
 		t.Fatalf("writePlotNodesCSV: %v", err)
@@ -941,5 +953,48 @@ func TestCollectPlotDataPreservesBufferSizes(t *testing.T) {
 	}
 	if n := len(aggregateReps(runs, false)); n != len(arms) {
 		t.Errorf("aggregated to %d rows, want %d: the arms were folded together", n, len(arms))
+	}
+}
+
+// TestCollectPlotDataStampsManifestCustom verifies that the reduction stamps the
+// custom dimension values from the run manifest into each result, replacing
+// whatever the binary recorded, so a binary may leave them out and the values
+// survive the trip through plotdata.binpb.
+func TestCollectPlotDataStampsManifestCustom(t *testing.T) {
+	dir := t.TempDir()
+	customDims := benchkit.NewCustomDimensions(map[string]string{"d": "20", "ready": "tree"})
+	spec := runSpec{
+		Benchmark: "Idea0", Nodes: 3, Workers: 1, StreamMode: "dual", Custom: customDims, Rep: 1,
+	}
+	base := runBase("s", spec)
+	file := base + "_n1_9000" + resultExt
+	results := []*benchkit.Result{benchkit.Result_builder{
+		Config: benchkit.RunConfig_builder{
+			Name: "Idea0", NumNodes: 3, Workers: 1, StreamMode: "dual",
+			CustomDimensions: map[string]string{"d": "stale"},
+		}.Build(),
+		Throughput: 100, TotalOps: 1000,
+	}.Build()}
+	if err := benchkit.WriteLabeledReport(results, "n1", filepath.Join(dir, file)); err != nil {
+		t.Fatal(err)
+	}
+	m := runManifest{runSpec: spec, Label: "s", Status: runStatusSucceeded, Files: []string{file}}
+	blob, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, base+manifestSuffix), blob, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeCompactPlotData(dir); err != nil {
+		t.Fatal(err)
+	}
+	pd, err := readPlotData(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs, _ := plotRecordsFromMessage(pd)
+	if len(runs) != 1 || runs[0].Custom != customDims {
+		t.Fatalf("runs = %+v, want one run with custom dimensions %q", runs, customDims)
 	}
 }

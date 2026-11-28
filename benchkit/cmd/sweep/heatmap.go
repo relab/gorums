@@ -24,8 +24,8 @@ type nodeHealthRecord struct {
 
 // nodeHealthRows first reduces the per-node CDF rows to one throughput per node
 // per run, then divides by that run's median node throughput. It finally takes
-// the median of those relative values for each benchmark/node-count/mode/host
-// combination. A run whose median is zero is treated as uniform (rel 1.0)
+// the median of those relative values for each combination of benchmark, node
+// count, mode, custom dimensions, and host. A run whose median is zero is treated as uniform (rel 1.0)
 // rather than producing NaN. Rows are sorted by benchmark, mode, node count,
 // then host in natural order (bb2 before bb10).
 func nodeHealthRows(cdf []plotNodeCDFRecord) []nodeHealthRecord {
@@ -139,11 +139,12 @@ func writeNodeHealthCSV(path string, rows []nodeHealthRecord) error {
 		configs[i] = r.Dimensions
 	}
 	varying := varyingDimensions(configs)
+	schema := newDimensionSchema(configs)
+	omit := []string{"workers", "payload", "rate", "send_buffer", "recv_buffer"}
 	return writeCSV(path,
-		append(dimensionColumns("workers", "payload", "rate", "send_buffer", "recv_buffer"),
-			"col", "host", "throughput", "rel", "runs"),
+		append(schema.columns(omit...), "col", "host", "throughput", "rel", "runs"),
 		rows, func(r nodeHealthRecord) []string {
-			return append(dimensionValues(r.Dimensions, "workers", "payload", "rate", "send_buffer", "recv_buffer"),
+			return append(schema.values(r.Dimensions, omit...),
 				[]string{cmp.Or(configLabel(r.Dimensions, varying), "all"),
 					r.host, formatFloat(r.throughput), formatFloat(r.rel), strconv.Itoa(r.runs),
 				}...)
@@ -216,10 +217,11 @@ func writeDegradedShareCSV(path string, rows []degradedShareRecord) error {
 			colDims[name] = true
 		}
 	}
+	schema := newDimensionSchema(configs)
 	return writeCSV(path,
-		append(dimensionColumns(), "row", "col", "total", "degraded", "share"),
+		append(schema.columns(), "row", "col", "total", "degraded", "share"),
 		rows, func(r degradedShareRecord) []string {
-			return append(dimensionValues(r.Dimensions),
+			return append(schema.values(r.Dimensions),
 				[]string{
 					cmp.Or(configLabel(r.Dimensions, rowDims), "all"),
 					cmp.Or(configLabel(r.Dimensions, colDims), "all"),

@@ -996,6 +996,9 @@ func remoteSweepCommand(cfg *config, wd, binDir, hostsCSV string) string {
 	if nonDefaultStreamModes(cfg.sweep.streamModes) {
 		args = append(args, "-stream-mode="+strings.Join(cfg.sweep.streamModes, ","))
 	}
+	for _, dim := range cfg.sweep.dims {
+		args = append(args, "-dim="+dim.String())
+	}
 	if cfg.extraArgs != "" {
 		args = append(args, "-extra-args="+cfg.extraArgs)
 	}

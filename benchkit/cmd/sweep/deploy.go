@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/relab/gorums/benchkit"
 	"github.com/relab/iago"
 )
 
@@ -534,7 +535,7 @@ func launchAndWait(g iago.Group, nodes []nodeAssignment, peers string, spec runS
 				// io.EOF is the benign session-close signal, not a run failure
 				// (see iago.Shell.Apply, which applies the same filter).
 				if err := cmd.RunContext(ctx, buildNodeCmd(node, peers, spec, base, cfg)); err != nil && !errors.Is(err, io.EOF) {
-					errs[i] = fmt.Errorf("node %s:%d: %w", node.host, node.port, err)
+					errs[i] = &nodeRunError{node: fmt.Sprintf("%s:%d", node.host, node.port), err: err}
 				}
 				<-stdoutDone
 				<-stderrDone
@@ -548,6 +549,52 @@ func launchAndWait(g iago.Group, nodes []nodeAssignment, peers string, spec runS
 		}
 		return joined
 	})
+}
+
+// nodeRunError is the error of one benchmark node whose remote command failed.
+type nodeRunError struct {
+	node string // host:port
+	err  error
+}
+
+func (e *nodeRunError) Error() string { return "node " + e.node + ": " + e.err.Error() }
+
+func (e *nodeRunError) Unwrap() error { return e.err }
+
+// allNodesSkipped reports whether err, returned by [launchAndWait] for a run of
+// nodes nodes, holds exactly one error per node, each a remote exit with status
+// [benchkit.ExitSkip]. The binary then rejected the combination of
+// flag values on every node, and the run is skipped. A partial skip is a failure.
+func allNodesSkipped(err error, nodes int) bool {
+	skipped := 0
+	var walk func(error) bool
+	walk = func(err error) bool {
+		// The walk visits every node of the error tree to count the skipped
+		// nodes; errors.AsType would stop at the first match.
+		if nodeErr, ok := err.(*nodeRunError); ok { //nolint:errorlint // walks the tree itself
+			status, ok := errors.AsType[iago.ExitStatus](nodeErr.err)
+			if !ok || status.ExitStatus() != benchkit.ExitSkip {
+				return false
+			}
+			skipped++
+			return true
+		}
+		switch e := err.(type) { //nolint:errorlint // walks the tree itself
+		case interface{ Unwrap() []error }:
+			for _, inner := range e.Unwrap() {
+				if !walk(inner) {
+					return false
+				}
+			}
+			return true
+		case interface{ Unwrap() error }:
+			if inner := e.Unwrap(); inner != nil {
+				return walk(inner)
+			}
+		}
+		return false
+	}
+	return err != nil && walk(err) && skipped == nodes
 }
 
 // collectResults downloads each node's per-run artifacts (one file per
@@ -685,7 +732,8 @@ func chunkByLength(items []string, maxBytes int) [][]string {
 // -rate-step-max), -stream-mode (only for dedup), the per-node profile paths
 // (-cpuprofile/-memprofile, when -collect-profiles is set), and -extra-args
 // are appended only when set, so a binary without them keeps working as long
-// as the sweep does not ask for them.
+// as the sweep does not ask for them. Each custom dimension of spec is passed
+// as -name=value, sorted by name, just before -extra-args.
 func buildNodeCmd(node nodeAssignment, peers string, spec runSpec, base string, cfg *config) string {
 	remoteDir := node.remoteDir(cfg)
 	output := filepath.Join(remoteDir, resultFilename(base, node, resultExt))
@@ -732,6 +780,11 @@ func buildNodeCmd(node nodeAssignment, peers string, spec runSpec, base string, 
 	}
 	if cfg.verbose {
 		parts = append(parts, "-verbose")
+	}
+	// The -dim flag restricts names and values to characters a shell passes
+	// through unchanged.
+	for name, value := range spec.Custom.All() {
+		parts = append(parts, fmt.Sprintf("-%s=%s", name, value))
 	}
 	if cfg.extraArgs != "" {
 		parts = append(parts, cfg.extraArgs)

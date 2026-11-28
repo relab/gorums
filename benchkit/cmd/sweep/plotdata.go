@@ -436,6 +436,9 @@ func reducePlotRun(outdir, base string, m runManifest, trim time.Duration) ([]pl
 			fallback := m.Dimensions
 			fallback.StreamMode = cmp.Or(fallback.StreamMode, "dual")
 			dims := cfg.DimensionsWithFallback(fallback)
+			// The manifest holds the custom dimension values sweep passed to the
+			// node, so they replace whatever the binary recorded.
+			dims.Custom = m.Custom
 			name := dims.Benchmark
 			if name == "" {
 				continue
@@ -642,8 +645,8 @@ func cdfProbAt(i, n int) float64 {
 // plotRunsCSVHeader and plotRunCSVFields are shared by writePlotRunsCSV (the
 // on-disk plotdata/runs.csv export) and [summaryRows] (the LLM triage
 // prompt, which filters the same rows in memory instead of writing a file).
-func plotRunsCSVHeader() []string {
-	header := append([]string{"base", "label", "status", "rep"}, dimensionColumns()...)
+func plotRunsCSVHeader(schema dimensionSchema) []string {
+	header := append([]string{"base", "label", "status", "rep"}, schema.columns()...)
 	return append(header,
 		"throughput", "total_ops", "failed_ops", "allocs_per_op", "mem_per_op",
 		"nodes_seen",
@@ -652,8 +655,8 @@ func plotRunsCSVHeader() []string {
 	)
 }
 
-func plotRunCSVFields(row plotRunRecord) []string {
-	rec := append([]string{row.base, row.label, row.status, strconv.Itoa(row.rep)}, dimensionValues(row.Dimensions)...)
+func plotRunCSVFields(schema dimensionSchema, row plotRunRecord) []string {
+	rec := append([]string{row.base, row.label, row.status, strconv.Itoa(row.rep)}, schema.values(row.Dimensions)...)
 	return append(rec,
 		formatFloat(row.throughput), strconv.FormatUint(row.totalOps, 10),
 		strconv.FormatUint(row.failedOps, 10),
@@ -667,19 +670,30 @@ func plotRunCSVFields(row plotRunRecord) []string {
 }
 
 func writePlotRunsCSV(path string, rows []plotRunRecord) error {
-	return writeCSV(path, plotRunsCSVHeader(), rows, plotRunCSVFields)
+	schema := plotRunsSchema(rows)
+	return writeCSV(path, plotRunsCSVHeader(schema), rows, func(row plotRunRecord) []string {
+		return plotRunCSVFields(schema, row)
+	})
+}
+
+// plotRunsSchema returns the dimension schema of the per-rep run rows.
+func plotRunsSchema(rows []plotRunRecord) dimensionSchema {
+	return schemaOf(rows, func(r plotRunRecord) benchkit.Dimensions { return r.Dimensions })
 }
 
 func writePlotNodeCDFCSV(path string, rows []plotNodeCDFRecord) error {
-	header := append([]string{"base", "label", "status", "rep"}, dimensionColumns()...)
+	schema := schemaOf(rows, func(r plotNodeCDFRecord) benchkit.Dimensions { return r.Dimensions })
+	header := append([]string{"base", "label", "status", "rep"}, schema.columns()...)
 	header = append(header,
-		[]string{"node", "throughput", "mean_us", "p50_us", "p95_us",
+		[]string{
+			"node", "throughput", "mean_us", "p50_us", "p95_us",
 			"p99_us", "p50_ms", "p95_ms", "p99_ms", "samples", "prob", "cdf_us",
 		}...)
 	return writeCSV(path, header, rows, func(row plotNodeCDFRecord) []string {
-		rec := append([]string{row.base, row.label, row.status, strconv.Itoa(row.rep)}, dimensionValues(row.Dimensions)...)
+		rec := append([]string{row.base, row.label, row.status, strconv.Itoa(row.rep)}, schema.values(row.Dimensions)...)
 		return append(rec,
-			[]string{row.node, formatFloat(row.throughput),
+			[]string{
+				row.node, formatFloat(row.throughput),
 				formatFloat(row.meanUS), formatFloat(row.p50US), formatFloat(row.p95US),
 				formatFloat(row.p99US), formatFloat(row.p50US / 1e3), formatFloat(row.p95US / 1e3),
 				formatFloat(row.p99US / 1e3), strconv.FormatUint(row.samples, 10),
@@ -731,16 +745,18 @@ func groupNodeCDFRows(rows []plotNodeCDFRecord) []plotNodeRow {
 // instead of one row per CDF point. It is the -export-csv counterpart to the
 // compact plotdata.binpb, not part of the report render path.
 func writePlotNodesCSV(path string, rows []plotNodeCDFRecord) error {
-	header := append([]string{"base", "label", "status", "rep"}, dimensionColumns()...)
+	schema := schemaOf(rows, func(r plotNodeCDFRecord) benchkit.Dimensions { return r.Dimensions })
+	header := append([]string{"base", "label", "status", "rep"}, schema.columns()...)
 	header = append(header, "node", "throughput", "mean_us", "p50_us", "p95_us", "p99_us", "samples", "cdf_us")
 	return writeCSV(path, header, groupNodeCDFRows(rows), func(g plotNodeRow) []string {
 		us := make([]string, len(g.cdf))
 		for i, v := range g.cdf {
 			us[i] = formatFloat(v)
 		}
-		rec := append([]string{g.base, g.label, g.status, strconv.Itoa(g.rep)}, dimensionValues(g.Dimensions)...)
+		rec := append([]string{g.base, g.label, g.status, strconv.Itoa(g.rep)}, schema.values(g.Dimensions)...)
 		return append(rec,
-			[]string{g.node, formatFloat(g.throughput),
+			[]string{
+				g.node, formatFloat(g.throughput),
 				formatFloat(g.meanUS), formatFloat(g.p50US), formatFloat(g.p95US), formatFloat(g.p99US),
 				strconv.FormatUint(g.samples, 10), strings.Join(us, " "),
 			}...)

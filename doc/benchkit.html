@@ -1119,6 +1119,12 @@ results, err := p.Run(ctx, sel, w, opts)
             <code>-quorum-size</code>, <code>-max-async</code>, <code>-send-buffer</code>/<code>-recv-buffer</code>,
             <code>-server</code>, <code>-server-stats</code>, <code>-list</code>, <code>-label</code>, and
             <code>-compare</code>.</p>
+        <p>A binary that rejects the combination of flag values it was given — a custom sweep dimension
+            (<code>sweep -dim</code>) that has no meaning for the selected benchmark, say — exits with
+            <code>benchkit.ExitSkip</code> (77) on every node, before it dials its peers. Sweep then records the run
+            as <code>skipped</code> instead of <code>failed</code>: it skips the result collection and the failure
+            diagnostics, and the report counts the run in the run-status table. When only some nodes exit with 77, the run is
+            <code>failed</code>.</p>
 
         <h3>How the flags interact</h3>
         <div class="callout">
@@ -1223,6 +1229,9 @@ results, err := p.Run(ctx, sel, w, opts)
   int64 rate_step     = 14;  <span class="c">// ramp increment, ops/s; 0 = no ramp</span>
   int64 rate_step_max = 15;  <span class="c">// ramp ceiling, ops/s; 0 = no ramp</span>
   int64 call_timeout  = 16;  <span class="c">// per-call deadline, nanoseconds; 0 = disabled</span>
+  int32 send_buffer   = 17;  <span class="c">// per-node send queue capacity</span>
+  int32 recv_buffer   = 18;  <span class="c">// server receive queue capacity</span>
+  map&lt;string, string&gt; custom_dimensions = 19;  <span class="c">// custom sweep dimensions (sweep -dim), stamped by sweep</span>
 }
 
 <span class="c">// MemoryStat: per-server memory statistics.</span>
@@ -1356,13 +1365,14 @@ results, err := p.Run(ctx, sel, w, opts)
         <h2 id="sweep">13. sweep</h2>
 
         <p><code>cmd/sweep</code> runs the Cartesian product of <code>-n × -workers × -payload × -rate ×
-            -send-buffer × -recv-buffer × -benchmarks × -stream-mode × -reps</code> over a set of SSH hosts. For each run it kills lingering processes, launches one
+            -send-buffer × -recv-buffer × -dim × -benchmarks × -stream-mode × -reps</code> over a set of SSH hosts. For each run it kills lingering processes, launches one
             benchmark binary per node, waits, downloads the per-node <code>.binpb</code> result files for local runs,
             writes a protojson <code>.json</code> sibling for each (for inspection), and prints a
             summary table. In driver mode, successful runs are reduced to compact plot CSVs on the driver; failed-run
             <code>.binpb</code> files are downloaded with the compact results. Per-run output files are named
-            <code>&lt;label&gt;_&lt;bench&gt;_N&lt;n&gt;_W&lt;w&gt;_P&lt;p&gt;[_R&lt;rate&gt;][_SB&lt;send&gt;][_RB&lt;recv&gt;]_S&lt;stream&gt;_r&lt;rep&gt;_&lt;host&gt;_&lt;port&gt;</code>.
-            The <code>_SB</code> and <code>_RB</code> components appear only when that buffer is swept.</p>
+            <code>&lt;label&gt;_&lt;bench&gt;_N&lt;n&gt;_W&lt;w&gt;_P&lt;p&gt;[_R&lt;rate&gt;][_SB&lt;send&gt;][_RB&lt;recv&gt;][_&lt;name&gt;=&lt;value&gt;…]_S&lt;stream&gt;_r&lt;rep&gt;_&lt;host&gt;_&lt;port&gt;</code>.
+            The <code>_SB</code> and <code>_RB</code> components appear only when that buffer is swept, and one
+            <code>_&lt;name&gt;=&lt;value&gt;</code> component per custom dimension, sorted by name.</p>
 
         <h3>Flag reference</h3>
         <table>
@@ -1379,6 +1389,7 @@ results, err := p.Run(ctx, sel, w, opts)
                 <tr><td><code>-recv-buffer</code></td><td>binary default</td><td>Server receive queue capacities to sweep. Unset leaves the binary's own default and adds no dimension. A capacity of <code>0</code> is a real setting (unbuffered), distinct from unset.</td></tr>
                 <tr><td><code>-benchmarks</code></td><td><code>SymmetricQuorumCall</code></td><td>Exact benchmark names (each anchored as <code>^name$</code>; not a regexp — see <a href="#flags">§9</a>).</td></tr>
                 <tr><td><code>-stream-mode</code></td><td><code>dual</code></td><td>Symmetric stream topology to sweep: <code>dual</code> or <code>dedup</code>. The default <code>dual</code> mode preserves existing behavior. The special <code>baseline</code> mode labels runs of a prebuilt pre-dedup binary (requires <code>-binary</code>, cannot be mixed with other modes, and is never passed to the node command line).</td></tr>
+                <tr><td><code>-dim name=v1,v2</code></td><td>—</td><td>Repeatable. Declares a custom dimension of a foreign binary and the values to sweep. Each value reaches every node as <code>-name=value</code>, before <code>-extra-args</code>; the binary registers the flag itself. Names are lowercase letters, digits, and dashes, starting with a letter; a built-in dimension, a forwarded flag, a CSV column name, and a name also given in <code>-extra-args</code> are rejected. Values are letters, digits, <code>.</code>, <code>+</code>, and <code>-</code>, and differ in more than case. See <a href="#custom-dims">Custom dimensions</a>.</td></tr>
                 <tr><td><code>-reps</code></td><td><code>1</code></td><td>Repetitions per parameter combination.</td></tr>
                 <tr><td colspan="3"><strong>Run setup</strong></td></tr>
                 <tr><td><code>-hosts</code></td><td>—</td><td>SSH host aliases: <code>bb[1-30]</code> ranges, globs, or comma-separated literals. Required except with <code>-collect</code>, <code>-collect-now</code>, <code>-list</code>, <code>-verify</code>, or a local <code>-explain-check</code>.</td></tr>
@@ -1394,7 +1405,7 @@ results, err := p.Run(ctx, sel, w, opts)
                 <tr><td colspan="3"><strong>Health checks &amp; summarizing</strong></td></tr>
                 <tr><td><code>-check</code></td><td><code>false</code></td><td>Run host diagnostics and exit (see <em>Diagnostics</em> below). Fails on unreachable hosts.</td></tr>
                 <tr><td><code>-strict</code></td><td><code>false</code></td><td>With <code>-check</code>, also fail on busy benchmark ports, lingering benchmark processes, and port or process probes that could not run (shown as <code>?</code>), so an unattended run never collides with another sweep.</td></tr>
-                <tr><td><code>-verify &lt;dir&gt;</code></td><td>—</td><td>Check a collected run directory and exit non-zero on any failure: every expected run (from the same sweep flags as the launch) succeeded on N distinct hosts (<code>-test N</code>), no unexpected run is present, <code>report/agg.csv</code> has a row with throughput and a p50 latency for every configuration, and the clock drift in the node logs is at most <code>-max-drift</code>. Needs no <code>-hosts</code>.</td></tr>
+                <tr><td><code>-verify &lt;dir&gt;</code></td><td>—</td><td>Check a collected run directory and exit non-zero on any failure: every expected run (from the same sweep flags as the launch, <code>-dim</code> included) that the binary ran succeeded on N distinct hosts (<code>-test N</code>), no unexpected run is present, <code>report/agg.csv</code> has a row with throughput and a p50 latency for every configuration that the binary ran, at least one run succeeded, and the clock drift in the node logs is at most <code>-max-drift</code>. Needs no <code>-hosts</code>.</td></tr>
                 <tr><td><code>-summary &lt;file&gt;</code></td><td>—</td><td>With <code>-verify</code>, also write the verdict as Markdown: a table of the failed criteria, with the error of a failed run and the degraded nodes of a degraded run.</td></tr>
                 <tr><td><code>-max-drift</code></td><td><code>1ms</code></td><td>With <code>-verify</code>, the largest allowed absolute clock drift.</td></tr>
                 <tr><td><code>-netcheck</code></td><td><code>true</code></td><td>Ping-ring probe of every host link before the sweep; aborts on ≥ 5% packet loss.</td></tr>
@@ -1423,6 +1434,21 @@ results, err := p.Run(ctx, sel, w, opts)
         </table>
         <p class="small">Two internal flags (<code>-driven</code>, <code>-ready-marker</code>)
             are set automatically by the driver machinery and never passed by hand.</p>
+
+        <h3 id="custom-dims">Custom dimensions</h3>
+        <p>A foreign binary has parameters of its own. <code>-dim</code> sweeps them like the built-in
+            dimensions:</p>
+        <pre>sweep ... -binary ./proto -benchmarks Baseline,Idea0 -dim d=20,22 -dim t=1,2,3 -dim ready=all,tree</pre>
+        <p>Each <code>-dim</code> joins the Cartesian product. The custom loops sit outside the benchmark and
+            stream-mode loops, so consecutive runs compare benchmarks at one setting. Sweep passes each value
+            verbatim to every node as <code>-&lt;name&gt;=&lt;value&gt;</code> and records it in the
+            run name and in the manifest's <code>custom</code> object. When sweep reduces the results, it stamps the
+            manifest's values into each result's <code>RunConfig.custom_dimensions</code>, replacing whatever the binary
+            recorded, so a binary may leave them out. In every CSV file of the report, each custom dimension is a
+            column after the built-in dimensions, sorted by name; a configuration without a value for it has an
+            empty field. A value that matches <code>^-?[0-9]+(\.[0-9]+)?$</code> sorts as a number, before the
+            other values, which sort as strings. A sweep without <code>-dim</code> keeps its run names, manifests,
+            and CSV columns unchanged.</p>
 
         <h3>Host resolution and node identity</h3>
         <p><code>-hosts</code> names SSH aliases, but the nodes never see them: sweep resolves each connected host
@@ -1689,7 +1715,13 @@ results, err := p.Run(ctx, sel, w, opts)
             applies the trim recorded in the manifest — the same interval/index-map cut as the run summary
             (<a href="#trim">§10</a>) — and averages repetitions into a mean with a sample SD and 95% CI, keeping
             <code>stream_mode</code> as a series dimension when present. Each figure is produced only when its varying
-            dimension actually varies in the data. The figures and the sweep dimension each one needs:</p>
+            dimension actually varies in the data. A custom dimension (<code>-dim</code>) is an axis like the
+            built-in ones: it gets its own <code>throughput_vs_&lt;name&gt;</code>, <code>latency_vs_&lt;name&gt;</code>,
+            and ratio figures, and it can be a facet or separate the series of another figure, where the legend
+            names it as <code>name=value</code>.
+            Numeric values sort by value, and the others follow in alphabetical order.
+            The x-axis spaces the values evenly, as for the built-in dimensions.
+            The figures and the sweep dimension each one needs:</p>
         <table>
             <thead>
                 <tr><th style="width:32%">Figure</th><th>Shows</th><th>Requires variation in</th></tr>
@@ -1704,14 +1736,15 @@ results, err := p.Run(ctx, sel, w, opts)
                 <tr><td><code>per_node_cdf</code></td><td>One figure whose panels are per-node latency CDFs, three to a row and fifteen to a page, one panel per run. Runs are the first repetition of a configuration (the full dimension tuple, buffer capacities included) selected to spread across the sweep: a configuration earns a panel when it is the first to measure some dimension value, so the panels cover every node count, payload, rate, and mode rather than crowding into whichever corner sorts first. The remaining panels are filled in run order, so the page is used</td><td>nothing — produced for any run with CDF data</td></tr>
                 <tr><td><code>node_health</code></td><td>Hosts × configurations heatmap of per-node throughput relative to each run's median; a slow host shows as a red cell, and a host absent from a configuration as a grey one. A color scale below the grid states the range</td><td>nothing — produced for any sweep</td></tr>
                 <tr><td><code>degraded_share</code></td><td>Heatmap of the degraded-repetition fraction, node count and mode on one axis and the remaining varying dimensions on the other, so one configuration label is split over two axes instead of crowding one</td><td>any degraded repetition</td></tr>
-                <tr><td><code>run_status</code></td><td>Table of run outcomes (succeeded/degraded/failed) per node count</td><td>any degraded or failed run</td></tr>
+                <tr><td><code>run_status</code></td><td>Table of run outcomes (succeeded/degraded/failed/skipped) per node count</td><td>any degraded, failed, or skipped run</td></tr>
                 <tr><td><code>clock_offsets</code></td><td>Empirical CDF of the absolute clock offset and residual drift, parsed from the run logs</td><td>offset lines in the logs</td></tr>
                 <tr><td><code>failed_time_series_*</code></td><td>Under a &ldquo;Failed runs&rdquo; heading: the throughput and latency traces of failed runs, one representative per (configuration, error signature) group and at most three in total, each noting how the run failed and how many of its nodes wrote no result file at all. Whatever the cap drops is logged</td><td>a failed run with event data</td></tr>
             </tbody>
         </table>
         <p>Three flags re-shape the report without re-running the sweep. <code>-exclude DIM=VALUE</code>
             (comma-separated; dims: <code>nodes</code>, <code>workers</code>, <code>payload</code>, <code>rate</code>,
-            <code>send_buffer</code>, <code>recv_buffer</code>, <code>stream_mode</code>, <code>benchmark</code>)
+            <code>send_buffer</code>, <code>recv_buffer</code>, <code>stream_mode</code>, <code>benchmark</code>, or a
+            <code>-dim</code> name)
             drops matching data points — useful when one extreme
             value stretches every axis and hides the differences among the rest, e.g. <code>-exclude nodes=58</code>
             (a doubled-up node count). <code>-exclude-run NAME</code> drops a specific run by its base name.
