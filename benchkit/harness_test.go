@@ -883,3 +883,59 @@ func TestListBenches(t *testing.T) {
 		t.Errorf("ListBenches(nil) wrote %q, want empty output", empty.String())
 	}
 }
+
+// TestStopRemoteMetrics verifies that StopRemote merges the metrics of the
+// server replies by name into the client result, and returns an error for a
+// server-measured series, since a client-measured run has no clock offsets.
+func TestStopRemoteMetrics(t *testing.T) {
+	ctrls := make([]*Control, 2)
+	cfg := gorumstest.Config(t, len(ctrls), func(i int) gorumstest.ServerIface {
+		srv := gorums.NewServer()
+		ctrls[i] = NewControl()
+		RegisterControlServer(srv, ctrls[i])
+		return srv
+	})
+	opts := Options{Remote: true}
+	ctx := gorumstest.Context(t, 10*time.Second)
+
+	if err := StartRemote(ctx, cfg, opts); err != nil {
+		t.Fatalf("StartRemote: %v", err)
+	}
+	for i, c := range ctrls {
+		c.Stats().Counter("relayed", "blocks").Add(uint64(i + 1))
+	}
+	result := Result_builder{Metrics: []*Metric{counterMetric("sent", "B", 4)}}.Build()
+	if _, err := StopRemote(ctx, cfg, opts, result); err != nil {
+		t.Fatalf("StopRemote: %v", err)
+	}
+	if got, want := metricNames(result), []string{"relayed", "sent"}; !slices.Equal(got, want) {
+		t.Fatalf("metric names = %v, want %v", got, want)
+	}
+	c := metricByName(result, "relayed").GetCounter()
+	if c.GetSum() != 3 || c.GetMax() != 2 || c.GetNodes() != 2 {
+		t.Errorf("relayed = (sum %d, max %d, nodes %d), want (3, 2, 2)", c.GetSum(), c.GetMax(), c.GetNodes())
+	}
+
+	if err := StartRemote(ctx, cfg, opts); err != nil {
+		t.Fatalf("StartRemote: %v", err)
+	}
+	ctrls[0].Stats().Series("deliver").AddBySender(1, time.Microsecond)
+	if _, err := StopRemote(ctx, cfg, opts, &Result{}); err == nil || !strings.Contains(err.Error(), `"deliver"`) {
+		t.Errorf("StopRemote = %v, want an error naming \"deliver\"", err)
+	}
+}
+
+// TestRunRejectsServerMeasuredMetric verifies that Run fails a client-measured
+// benchmark whose result holds a server-measured series, which no clock offset
+// corrected.
+func TestRunRejectsServerMeasuredMetric(t *testing.T) {
+	bench := Bench{Name: "Echo", Run: func(context.Context, Options) (*Result, error) {
+		m := StartMeasurement(Options{})
+		m.Stats.Series("echo").AddBySender(1, time.Microsecond)
+		return m.Finish(), nil
+	}}
+	_, err := Run(t.Context(), regexp.MustCompile("Echo"), []Bench{bench}, Options{Workers: 1, Duration: time.Millisecond})
+	if err == nil || !strings.Contains(err.Error(), `"echo"`) {
+		t.Errorf("Run = %v, want an error naming \"echo\"", err)
+	}
+}

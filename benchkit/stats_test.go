@@ -211,6 +211,55 @@ func TestStatsResetClearsBySender(t *testing.T) {
 	}
 }
 
+// TestStatsGetResultMetrics verifies that GetResult lists the metrics sorted
+// by name, includes them when no primary sample was recorded, and leaves out a
+// registered metric that recorded nothing.
+func TestStatsGetResultMetrics(t *testing.T) {
+	s := &Stats{}
+	s.Counter("relayed", "blocks").Add(3)
+	s.Series("decode").Add(time.Microsecond)
+	s.Series("unused")
+	s.Counter("idle", "B")
+
+	r := s.GetResult()
+	if got := r.GetTotalOps(); got != 0 {
+		t.Errorf("TotalOps = %d, want 0", got)
+	}
+	var names []string
+	for _, m := range r.GetMetrics() {
+		names = append(names, m.GetName())
+	}
+	if want := []string{"decode", "relayed"}; !slices.Equal(names, want) {
+		t.Errorf("metric names = %v, want %v", names, want)
+	}
+}
+
+// TestStatsResetKeepsMetricHandles verifies that Reset clears the recorded
+// values of every metric, switches series to the new stats mode, and keeps
+// cached handles valid.
+func TestStatsResetKeepsMetricHandles(t *testing.T) {
+	s := NewStats(StatsMode_EXACT)
+	encode := s.Series("encode")
+	sent := s.Counter("sent", "B")
+	encode.Add(time.Microsecond)
+	sent.Add(10)
+
+	s.Reset(StatsMode_HDR)
+	if got := s.GetResult().GetMetrics(); len(got) != 0 {
+		t.Errorf("metrics after Reset = %v, want none", got)
+	}
+	encode.Add(2 * time.Microsecond)
+	sent.Add(4)
+
+	r := s.GetResult()
+	if got := totalCount(metricByName(r, "encode").GetDistribution().GetHistogram()); got != 1 {
+		t.Errorf("encode histogram count after Reset = %d, want 1", got)
+	}
+	if got := metricByName(r, "sent").GetCounter().GetSum(); got != 4 {
+		t.Errorf("sent after Reset = %d, want 4", got)
+	}
+}
+
 func TestStatsHDRModeResult(t *testing.T) {
 	// HDR mode counts ops and exposes them via TotalOps; raw samples are not
 	// retained (Latencies is nil) and the distribution is carried by the
@@ -312,4 +361,46 @@ func TestStatsResetClearsIntervalState(t *testing.T) {
 		t.Errorf("TickInterval after Reset = (count=%d, opDelta=%d), want (0, 0)",
 			count, opDelta)
 	}
+}
+
+// TestStatsGetResultCorrectedMetrics verifies that GetResultCorrected adds each
+// sender's clock offset to the samples of a server-measured series, as for the
+// primary series, and leaves client-measured series and counters unchanged.
+func TestStatsGetResultCorrectedMetrics(t *testing.T) {
+	offsets := map[uint32]int64{1: 100, 2: -50}
+	t.Run("Exact", func(t *testing.T) {
+		s := &Stats{}
+		deliver := s.Series("deliver")
+		deliver.AddBySender(2, 500)
+		deliver.AddBySender(1, 200)
+		s.Series("decode").Add(70)
+		s.Counter("relayed", "blocks").Add(2)
+
+		r := s.GetResultCorrected(offsets)
+		if got, want := metricByName(r, "deliver").GetDistribution().GetSamples(), []int64{300, 450}; !slices.Equal(got, want) {
+			t.Errorf("deliver samples = %v, want %v", got, want)
+		}
+		if got, want := metricByName(r, "decode").GetDistribution().GetSamples(), []int64{70}; !slices.Equal(got, want) {
+			t.Errorf("decode samples = %v, want %v", got, want)
+		}
+		if got := metricByName(r, "relayed").GetCounter().GetSum(); got != 2 {
+			t.Errorf("relayed = %d, want 2", got)
+		}
+	})
+	t.Run("HDR", func(t *testing.T) {
+		s := NewStats(StatsMode_HDR)
+		deliver := s.Series("deliver")
+		deliver.AddBySender(1, -100*time.Microsecond)
+		deliver.AddBySender(2, 200*time.Microsecond)
+
+		r := s.GetResultCorrected(map[uint32]int64{1: int64(300 * time.Microsecond), 2: 0})
+		d := &LatencyDist{}
+		d.addHistogram(metricByName(r, "deliver").GetDistribution().GetHistogram())
+		if got := d.Quantiles(0)[0]; math.Abs(got-200_000) > 500 {
+			t.Errorf("smallest corrected sample = %v, want ≈200µs", got)
+		}
+		if got := d.Count(); got != 2 {
+			t.Errorf("corrected count = %d, want 2", got)
+		}
+	})
 }

@@ -190,3 +190,36 @@ func TestLogOffsetsAlwaysEmits(t *testing.T) {
 		}
 	}
 }
+
+// TestCorrectLatenciesMetrics verifies that CorrectLatencies subtracts the
+// offset from the samples of server-measured series and leaves
+// client-measured series and counters unchanged.
+func TestCorrectLatenciesMetrics(t *testing.T) {
+	r := Result_builder{Metrics: []*Metric{
+		seriesMetric("decode", MeasurementMode_CLIENT_MEASURED, 70),
+		seriesMetric("deliver", MeasurementMode_SERVER_MEASURED, 300, 400),
+		counterMetric("relayed", "blocks", 3),
+		Metric_builder{
+			Name: "deliver_hdr", Unit: "ns", MeasurementMode: MeasurementMode_SERVER_MEASURED,
+			Distribution: Distribution_builder{Histogram: hist(20_000, 20_000)}.Build(),
+		}.Build(),
+	}}.Build()
+	CorrectLatencies(r, 100)
+
+	if got, want := metricByName(r, "deliver").GetDistribution().GetSamples(), []int64{200, 300}; !slices.Equal(got, want) {
+		t.Errorf("deliver samples = %v, want %v", got, want)
+	}
+	if got, want := metricByName(r, "decode").GetDistribution().GetSamples(), []int64{70}; !slices.Equal(got, want) {
+		t.Errorf("decode samples = %v, want %v", got, want)
+	}
+	if got := metricByName(r, "relayed").GetCounter().GetSum(); got != 3 {
+		t.Errorf("relayed = %d, want 3", got)
+	}
+	h := metricByName(r, "deliver_hdr").GetDistribution().GetHistogram()
+	if got := totalCount(h); got != 2 {
+		t.Errorf("deliver_hdr count = %d, want 2", got)
+	}
+	if got := h.GetValue()[0]; math.Abs(float64(got-19_900)) > 20 {
+		t.Errorf("deliver_hdr value = %d, want ≈19900", got)
+	}
+}

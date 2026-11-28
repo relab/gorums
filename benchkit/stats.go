@@ -2,10 +2,8 @@ package benchkit
 
 import (
 	"iter"
-	"maps"
 	"math"
 	"runtime"
-	"slices"
 	"sync"
 	"time"
 )
@@ -80,7 +78,8 @@ func quantileRank(total uint64, q float64) uint64 {
 // the sample to the configured SampleStore and updates the per-interval
 // Welford accumulator. All derived statistics (mean, stddev, percentiles)
 // are exposed through the *Result returned by GetResult so there is a
-// single source of truth.
+// single source of truth. Stats also holds named metrics beyond the primary
+// series, which [Stats.Series] and [Stats.Counter] register.
 //
 // The default zero value (&Stats{}) uses StatsMode_EXACT (exact sample
 // storage). Use NewStats to select a different store mode.
@@ -95,6 +94,11 @@ type Stats struct {
 	store    SampleStore            // aggregate store; nil → lazily initialized as StatsMode_EXACT
 	bySender map[uint32]SampleStore // per-sender one-way latency stores keyed by sender node ID
 	series   *latencySeries         // optional per-sender receive-time intervals
+
+	// Named metrics, keyed by name; a name is in at most one map.
+	namedSeries map[string]*Series
+	counters    map[string]*Counter
+	ticks       int // TickInterval calls since the last Reset
 
 	// Per-interval Welford accumulator used by the Ticker. Always O(1).
 	interval latencyMoments
@@ -179,8 +183,9 @@ func (s *Stats) Ops() uint64 {
 // AddLatency since the last call to TickInterval or Reset). mean, stddev, and
 // count are zero if no latency samples were recorded in the interval, but
 // opDelta reflects op-only intervals (server-measured runs record ops via
-// AddOp without a latency sample). Called by the Ticker goroutine on each
-// tick.
+// AddOp without a latency sample). In exact mode it also records the
+// cumulative sample count of every named series, which places the read-time
+// trim cut of the series. Called by the Ticker goroutine on each tick.
 func (s *Stats) TickInterval() (mean, stddev float64, count, opDelta uint64) {
 	s.mut.Lock()
 	mean = s.interval.mean
@@ -190,6 +195,8 @@ func (s *Stats) TickInterval() (mean, stddev float64, count, opDelta uint64) {
 	// Reset interval state for the next tick.
 	s.interval = latencyMoments{}
 	s.iOpStart = s.opCount
+	s.ticks++
+	s.tickMetrics()
 	s.mut.Unlock()
 	return
 }
@@ -223,26 +230,14 @@ func (s *Stats) AddLatencyBySender(id uint32, l time.Duration) {
 // GetResult computes and returns the result of the benchmark from samples
 // recorded via AddLatency. In StatsMode_EXACT the full latency distribution is
 // available via Result.Latencies; in StatsMode_HDR Latencies is nil and the
-// distribution is carried by Result.Histogram instead.
+// distribution is carried by Result.Histogram instead. Result.Metrics holds
+// each named series that recorded samples and each named counter that was
+// added to since the last Reset, also when no primary sample was recorded.
 func (s *Stats) GetResult() *Result {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-
-	store := s.sampleStore()
-	r := &Result{}
-	n := store.Count()
-	r.SetTotalOps(n)
-	r.SetTotalTime(int64(s.endTime.Sub(s.startTime)))
-	if n > 0 {
-		r.SetThroughput(float64(n) / time.Duration(r.GetTotalTime()).Seconds())
-		r.SetAllocsPerOp((s.endMs.Mallocs - s.startMs.Mallocs) / n)
-		r.SetMemPerOp((s.endMs.TotalAlloc - s.startMs.TotalAlloc) / n)
-		if samples := store.Samples(); samples != nil {
-			r.SetLatencies(slices.Clone(samples))
-		} else if hs, ok := store.(*hdrStore); ok {
-			r.SetHistogram(hs.snapshot())
-		}
-	}
+	r := s.resultFromDist(storeDist(s.sampleStore()))
+	r.SetMetrics(s.metrics())
 	return r
 }
 
@@ -258,52 +253,28 @@ func (s *Stats) GetResult() *Result {
 // re-quantized onto one canonical histogram (Result.Histogram, Latencies nil),
 // bounding memory the same way the aggregate HDR store does.
 // When [Measurement.TrackLatency] enabled interval collection, Events also
-// carries corrected receive-time latency intervals, in bucket order.
+// carries corrected receive-time latency intervals, in bucket order. Metrics
+// holds the named metrics as in [Stats.GetResult], with the same per-sender
+// correction applied to each server-measured series.
 func (s *Stats) GetResultCorrected(offsets map[uint32]int64) *Result {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-
-	var r *Result
-	if s.mode == StatsMode_HDR {
-		agg := newHDRHistogram()
-		for _, id := range slices.Sorted(maps.Keys(s.bySender)) {
-			if hs, ok := s.bySender[id].(*hdrStore); ok {
-				agg.recordPairs(hs.buckets(), offsets[id])
-			}
-		}
-		r = s.resultFromHistogram(agg)
-	} else {
-		var corrected []int64
-		for _, id := range slices.Sorted(maps.Keys(s.bySender)) {
-			off := offsets[id]
-			for _, l := range s.bySender[id].Samples() {
-				corrected = append(corrected, l+off)
-			}
-		}
-		r = s.resultFromSamples(corrected)
-	}
+	r := s.resultFromDist(correctedDist(s.mode, s.bySender, offsets))
 	r.SetEvents(s.series.corrected(offsets))
+	r.SetMetrics(s.correctedMetrics(offsets))
 	return r
 }
 
-// resultFromSamples builds a Result from the given samples and the timing and
-// memory window recorded by Start and End. The caller must hold s.mut.
-func (s *Stats) resultFromSamples(samples []int64) *Result {
-	r := s.resultWindow(uint64(len(samples)))
+// resultFromDist builds a Result carrying the given latency distribution, raw
+// samples or a histogram, with the timing and memory window recorded by Start
+// and End. Total ops is the distribution's sample count. The caller must hold
+// s.mut.
+func (s *Stats) resultFromDist(samples []int64, hist *LatencyHistogram) *Result {
+	r := s.resultWindow(uint64(len(samples)) + totalCount(hist))
 	if len(samples) > 0 {
 		r.SetLatencies(samples)
 	}
-	return r
-}
-
-// resultFromHistogram builds a Result carrying agg as its latency distribution,
-// with the timing and memory window recorded by Start and End. Total ops is the
-// histogram's sample count. The caller must hold s.mut.
-func (s *Stats) resultFromHistogram(agg *Histogram) *Result {
-	r := s.resultWindow(agg.TotalCount())
-	if agg.TotalCount() > 0 {
-		r.SetHistogram(agg.snapshot())
-	}
+	r.SetHistogram(hist)
 	return r
 }
 
@@ -337,7 +308,8 @@ func (s *Stats) MemDelta() (mallocs, totalAlloc uint64) {
 // Reset zeroes out all stats, including the aggregate store and the
 // per-interval Welford accumulator, and (re)configures the aggregate and
 // per-sender stores to mode, so one Stats can back consecutive runs, including
-// runs that select a different StatsMode.
+// runs that select a different StatsMode. It clears the named metrics in place
+// and switches their series to mode, so their handles stay valid.
 func (s *Stats) Reset(mode StatsMode) {
 	s.mut.Lock()
 	s.resetLocked(mode)
@@ -360,4 +332,6 @@ func (s *Stats) resetLocked(mode StatsMode) {
 	s.interval = latencyMoments{}
 	s.opCount = 0
 	s.iOpStart = 0
+	s.ticks = 0
+	s.resetMetrics(mode)
 }

@@ -874,3 +874,77 @@ func TestReportTypstNumericPattern(t *testing.T) {
 		t.Fatalf("typst ordering differs from Go (%v): %v\n%s", want, err, out)
 	}
 }
+
+// TestPlanFiguresMetrics verifies that a sweep with named metrics gets a
+// named-metrics section with one metric-vs figure per metric and varying
+// dimension: a series plots its median in milliseconds, like the primary
+// latency, and a counter plots its largest per-node value in its unit. Each
+// figure draws only the rows with a value for its metric. A series without
+// samples in any configuration gets no figure, and a sweep without named
+// metrics gets no section.
+func TestPlanFiguresMetrics(t *testing.T) {
+	stats := func(n int) []aggStat {
+		return []aggStat{{mean: 1, n: n}, {mean: 2, n: n}, {mean: 3, n: n}, {mean: 4, n: n}}
+	}
+	var agg, plain []aggRunRecord
+	for _, w := range []int{2, 4, 8} {
+		for _, nodes := range []int{3, 5} {
+			r := aggRunRecord{
+				Benchmark: "Q", Nodes: nodes, Workers: w, StreamMode: "dual",
+				reps: 3, throughput: aggStat{mean: 1000, n: 3}, p50US: aggStat{mean: 1000, n: 3},
+			}
+			plain = append(plain, r)
+			r.metrics = map[metricColumn]aggMetric{
+				{name: "encode", series: true}:    {unit: "ns", stats: stats(3)},
+				{name: "empty", series: true}:     {unit: "ns", stats: stats(0)},
+				{name: "uploaded", series: false}: {unit: "B", stats: []aggStat{{mean: 10, n: 3}, {mean: 7, n: 3}}},
+			}
+			agg = append(agg, r)
+		}
+	}
+	var named []figureSpec
+	for _, s := range planFigures(agg, reportInputs{}) {
+		if s.section == namedMetricsSection {
+			named = append(named, s)
+		}
+	}
+	type fig struct{ slug, ycol, bandCol, ylabel, xcol string }
+	var got []fig
+	for _, s := range named {
+		got = append(got, fig{s.slug, s.ycol, s.bandCol, s.ylabel, s.xcol})
+		if s.kind != kindMetricVs || s.dataCSV != "agg.csv" {
+			t.Errorf("%s: kind %v data %q, want metric-vs on agg.csv", s.slug, s.kind, s.dataCSV)
+		}
+	}
+	want := []fig{
+		{"metric_encode_vs_nodes", "encode.p50_us", "encode.p50_us_ci95", "encode p50 (ms)", "nodes"},
+		{"metric_encode_vs_workers", "encode.p50_us", "encode.p50_us_ci95", "encode p50 (ms)", "workers"},
+		{"metric_uploaded_vs_nodes", "uploaded.max", "uploaded.max_ci95", "uploaded max (B)", "nodes"},
+		{"metric_uploaded_vs_workers", "uploaded.max", "uploaded.max_ci95", "uploaded max (B)", "workers"},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("named-metric figures =\n%v\nwant\n%v", got, want)
+	}
+	for _, s := range named {
+		// A benchmark that lacks the metric gets no legend entry.
+		wantData := fmt.Sprintf(`metric-vs(agg.filter(r => r.at(%q) != ""), `, s.ycol)
+		if got := metricVsCall(s); !strings.HasPrefix(got, wantData) {
+			t.Errorf("%s call = %s, want it to start with %s", s.slug, got, wantData)
+		}
+		if s.ycol == "encode.p50_us" && s.yscale != 1.0/1e3 {
+			t.Errorf("%s yscale = %v, want 1e-3 (µs to ms)", s.slug, s.yscale)
+		}
+		if s.ycol == "uploaded.max" && s.yscale != 1 {
+			t.Errorf("%s yscale = %v, want 1", s.slug, s.yscale)
+		}
+	}
+	if len(named) > 0 && sectionNotes[namedMetricsSection] == "" {
+		t.Error("named-metrics section has no note")
+	}
+
+	for _, s := range planFigures(plain, reportInputs{}) {
+		if s.section == namedMetricsSection {
+			t.Errorf("figure %s planned in the named-metrics section of a sweep without named metrics", s.slug)
+		}
+	}
+}

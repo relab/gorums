@@ -2,6 +2,7 @@ package benchkit
 
 import (
 	"iter"
+	"maps"
 	"slices"
 )
 
@@ -91,6 +92,16 @@ func (s *hdrStore) Add(ns int64) {
 	_ = s.h.RecordValue(min(ns, hdrHighest))
 }
 
+// addN records n occurrences of v, keeping its sign, its magnitude clamped to
+// the trackable ceiling as in [hdrStore.Add].
+func (s *hdrStore) addN(v int64, n uint64) {
+	if v < 0 {
+		_ = s.neg.RecordValueN(min(-v, hdrHighest), n)
+		return
+	}
+	_ = s.h.RecordValueN(min(v, hdrHighest), n)
+}
+
 func (s *hdrStore) Count() uint64    { return s.h.TotalCount() + s.neg.TotalCount() }
 func (s *hdrStore) Samples() []int64 { return nil }
 
@@ -164,4 +175,82 @@ func mergeHistograms(hists ...*LatencyHistogram) *LatencyHistogram {
 		}
 	}
 	return h.snapshot()
+}
+
+// storeDist returns the distribution recorded in st: a copy of its raw samples
+// in exact mode, or its histogram in hdr mode. Both are nil when st is empty.
+func storeDist(st SampleStore) (samples []int64, hist *LatencyHistogram) {
+	if raw := st.Samples(); len(raw) > 0 {
+		return slices.Clone(raw), nil
+	}
+	if hs, ok := st.(*hdrStore); ok {
+		return nil, hs.snapshot()
+	}
+	return nil, nil
+}
+
+// correctedDist combines the per-sender stores in node-ID order, adding each
+// sender's clock offset (sender clock minus this node's clock, in nanoseconds)
+// to its samples. A sender absent from offsets has zero offset. In
+// StatsMode_HDR the shifted per-sender histograms are re-quantized onto one
+// canonical histogram, so samples is nil; otherwise hist is nil.
+func correctedDist(mode StatsMode, bySender map[uint32]SampleStore, offsets map[uint32]int64) (samples []int64, hist *LatencyHistogram) {
+	ids := slices.Sorted(maps.Keys(bySender))
+	if mode == StatsMode_HDR {
+		agg := newHDRHistogram()
+		for _, id := range ids {
+			if hs, ok := bySender[id].(*hdrStore); ok {
+				agg.recordPairs(hs.buckets(), offsets[id])
+			}
+		}
+		return nil, agg.snapshot()
+	}
+	for _, id := range ids {
+		off := offsets[id]
+		for _, l := range bySender[id].Samples() {
+			samples = append(samples, l+off)
+		}
+	}
+	return samples, nil
+}
+
+// offsetDist adds delta to every value of a distribution. It shifts samples in
+// place when there are any and returns hist unchanged; otherwise it returns
+// hist re-quantized onto the canonical HDR layout (see [offsetHistogram]).
+func offsetDist(samples []int64, hist *LatencyHistogram, delta int64) *LatencyHistogram {
+	if len(samples) > 0 {
+		for i := range samples {
+			samples[i] += delta
+		}
+		return hist
+	}
+	return offsetHistogram(hist, delta)
+}
+
+// distMerger concatenates raw samples and merges histograms from several
+// distributions into one. The zero value is an empty merger.
+type distMerger struct {
+	samples []int64
+	hists   []*LatencyHistogram
+}
+
+// add adds one distribution. It copies samples, so the caller keeps ownership.
+func (m *distMerger) add(samples []int64, hist *LatencyHistogram) {
+	m.samples = append(m.samples, samples...)
+	if hist != nil {
+		m.hists = append(m.hists, hist)
+	}
+}
+
+// dist returns the merged distribution: the concatenated samples, nil when
+// there are none, and the histograms merged onto one canonical histogram (see
+// [mergeHistograms]), nil when there are none.
+func (m *distMerger) dist() (samples []int64, hist *LatencyHistogram) {
+	if len(m.samples) > 0 {
+		samples = m.samples
+	}
+	if len(m.hists) > 0 {
+		hist = mergeHistograms(m.hists...)
+	}
+	return samples, hist
 }

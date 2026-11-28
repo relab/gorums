@@ -770,7 +770,7 @@ func TestWritePlotNodesCSV(t *testing.T) {
 			meanUS: 110, p50US: 95, p95US: 160, p99US: 210, samples: 3, prob: 0, cdfUS: 3,
 		},
 	}
-	if err := writePlotNodesCSV(path, rows); err != nil {
+	if err := writePlotNodesCSV(path, plotNodeRows(buildPlotData([]plotRunRecord{{base: "run1", Benchmark: "Q"}}, rows))); err != nil {
 		t.Fatalf("writePlotNodesCSV: %v", err)
 	}
 	f, err := os.Open(path)
@@ -996,5 +996,332 @@ func TestCollectPlotDataStampsManifestCustom(t *testing.T) {
 	runs, _ := plotRecordsFromMessage(pd)
 	if len(runs) != 1 || runs[0].Custom != customDims {
 		t.Fatalf("runs = %+v, want one run with custom dimensions %q", runs, customDims)
+	}
+}
+
+// plotSeriesMetric returns a client-measured series Metric with the given
+// samples in nanoseconds.
+func plotSeriesMetric(name string, samples ...int64) *benchkit.Metric {
+	return benchkit.Metric_builder{
+		Name: name, Unit: "ns",
+		Distribution: benchkit.Distribution_builder{Samples: samples}.Build(),
+	}.Build()
+}
+
+// plotHDRSeriesMetric returns a client-measured series Metric recorded as an
+// hdr histogram with count samples of value v nanoseconds.
+func plotHDRSeriesMetric(name string, v int64, count uint64) *benchkit.Metric {
+	return benchkit.Metric_builder{
+		Name: name, Unit: "ns",
+		Distribution: benchkit.Distribution_builder{
+			Histogram: benchkit.LatencyHistogram_builder{Value: []int64{v}, Count: []uint64{count}}.Build(),
+		}.Build(),
+	}.Build()
+}
+
+// plotCounterMetric returns a counter Metric of one node with the given value.
+func plotCounterMetric(name, unit string, v uint64) *benchkit.Metric {
+	return benchkit.Metric_builder{
+		Name: name, Unit: unit,
+		Counter: benchkit.CounterValue_builder{Sum: v, Max: v, Nodes: 1}.Build(),
+	}.Build()
+}
+
+// metricSummaryByName returns the metric summary with the given name, or nil.
+func metricSummaryByName(metrics []*benchkit.MetricSummary, name string) *benchkit.MetricSummary {
+	for _, m := range metrics {
+		if m.GetName() == name {
+			return m
+		}
+	}
+	return nil
+}
+
+// TestPlotDataMetrics verifies that collectPlotData reduces each node's named
+// metrics and merges them across the nodes of a benchmark: series merge their
+// distributions, and counters add their sums and keep the largest value. A node
+// that recorded metrics but no primary latency keeps its metrics, gets a
+// PlotNode of its own, and adds no CDF rows. The metrics survive buildPlotData,
+// a marshal round trip, and plotRecordsFromMessage.
+func TestPlotDataMetrics(t *testing.T) {
+	dir := t.TempDir()
+	base := "e1_Q_N2_W1_P0"
+	n1 := nodeAssignment{host: "bb1", port: 9000}
+	n2 := nodeAssignment{host: "bb2", port: 9000}
+	writePlotManifest(t, dir, base, runStatusSucceeded, 1, "", []string{
+		resultFilename(base, n1, resultExt),
+		resultFilename(base, n2, resultExt),
+	})
+	writePlotReport(t, dir, base, n1, "bb1:9000", benchkit.Result_builder{
+		Config:     plotRunConfig("Q", 2, 1, 0, 0),
+		Throughput: 10,
+		Latencies:  []int64{1000, 2000},
+		Metrics: []*benchkit.Metric{
+			plotSeriesMetric("encode", 1000, 3000),
+			plotCounterMetric("uploaded", "B", 70),
+		},
+	}.Build())
+	writePlotReport(t, dir, base, n2, "bb2:9000", benchkit.Result_builder{
+		Config:     plotRunConfig("Q", 2, 1, 0, 0),
+		Throughput: 20,
+		Metrics: []*benchkit.Metric{
+			plotSeriesMetric("encode", 5000),
+			plotCounterMetric("uploaded", "B", 30),
+		},
+	}.Build())
+
+	runs, cdf, _, err := collectPlotData(dir)
+	if err != nil {
+		t.Fatalf("collectPlotData: %v", err)
+	}
+	if len(runs) != 1 {
+		t.Fatalf("runs = %d, want 1", len(runs))
+	}
+	if len(cdf) != cdfPoints {
+		t.Errorf("cdf rows = %d, want %d (only bb1 recorded latency)", len(cdf), cdfPoints)
+	}
+	checkMetrics := func(t *testing.T, row plotRunRecord) {
+		t.Helper()
+		encode := metricSummaryByName(row.metrics, "encode")
+		if got := encode.GetDistribution(); got.GetSamples() != 3 || got.GetP50Us() != 3 || got.GetMeanUs() != 3 || encode.GetUnit() != "ns" {
+			t.Errorf("encode = %v, want 3 samples with mean and p50 3 µs in \"ns\"", encode)
+		}
+		uploaded := metricSummaryByName(row.metrics, "uploaded").GetCounter()
+		if uploaded.GetSum() != 100 || uploaded.GetMax() != 70 || uploaded.GetNodes() != 2 {
+			t.Errorf("uploaded = (sum %d, max %d, nodes %d), want (100, 70, 2)", uploaded.GetSum(), uploaded.GetMax(), uploaded.GetNodes())
+		}
+		if len(row.nodeMetrics) != 2 {
+			t.Fatalf("node metrics = %d nodes, want 2", len(row.nodeMetrics))
+		}
+		bb2 := row.nodeMetrics[1]
+		if bb2.node != "bb2:9000" || bb2.throughput != 20 {
+			t.Errorf("node metrics[1] = (%q, %v), want (bb2:9000, 20)", bb2.node, bb2.throughput)
+		}
+		if got := metricSummaryByName(bb2.metrics, "uploaded").GetCounter().GetSum(); got != 30 {
+			t.Errorf("bb2 uploaded = %d, want 30", got)
+		}
+		if got := metricSummaryByName(bb2.metrics, "encode").GetDistribution().GetP50Us(); got != 5 {
+			t.Errorf("bb2 encode p50 = %v µs, want 5", got)
+		}
+	}
+	checkMetrics(t, runs[0])
+
+	pd := buildPlotData(runs, cdf)
+	bench := pd.GetRuns()[0].GetBenchmarks()[0]
+	if got := len(bench.GetMetrics()); got != 2 {
+		t.Errorf("benchmark metrics = %d, want 2", got)
+	}
+	nodes := bench.GetNodes()
+	if len(nodes) != 2 {
+		t.Fatalf("plot nodes = %d, want 2", len(nodes))
+	}
+	if nodes[1].GetNode() != "bb2:9000" || nodes[1].GetSummary() != nil || len(nodes[1].GetCdfUs()) != 0 {
+		t.Errorf("metric-only node = %v, want bb2:9000 without summary or CDF", nodes[1])
+	}
+	if nodes[1].GetThroughput() != 20 || len(nodes[1].GetMetrics()) != 2 {
+		t.Errorf("metric-only node = %v, want throughput 20 and 2 metrics", nodes[1])
+	}
+
+	data, err := proto.Marshal(pd)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	back := &benchkit.PlotData{}
+	if err := proto.Unmarshal(data, back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !proto.Equal(pd, back) {
+		t.Errorf("round-tripped message differs:\nwant %v\ngot  %v", pd, back)
+	}
+	gotRuns, gotCDF := plotRecordsFromMessage(back)
+	if len(gotCDF) != cdfPoints {
+		t.Errorf("round-tripped cdf rows = %d, want %d", len(gotCDF), cdfPoints)
+	}
+	checkMetrics(t, gotRuns[0])
+}
+
+// TestPlotDataMetricStatsModeAcrossRuns verifies that a series recorded as
+// exact samples in one repetition and as an hdr histogram in another passes
+// the collection, with each run's own summary in the metric's column.
+func TestPlotDataMetricStatsModeAcrossRuns(t *testing.T) {
+	dir := t.TempDir()
+	n1 := nodeAssignment{host: "bb1", port: 9000}
+	for _, run := range []struct {
+		base string
+		rep  int
+		m    *benchkit.Metric
+	}{
+		{"e1_r1", 1, plotSeriesMetric("encode", 1000)},
+		{"e1_r2", 2, plotHDRSeriesMetric("encode", 2000, 2)},
+	} {
+		writePlotManifest(t, dir, run.base, runStatusSucceeded, run.rep, "", []string{resultFilename(run.base, n1, resultExt)})
+		writePlotReport(t, dir, run.base, n1, "bb1:9000", benchkit.Result_builder{
+			Config: plotRunConfig("Q", 1, 1, 0, 0), Throughput: 1, Metrics: []*benchkit.Metric{run.m},
+		}.Build())
+	}
+	runs, _, _, err := collectPlotData(dir)
+	if err != nil {
+		t.Fatalf("collectPlotData: %v", err)
+	}
+	if len(runs) != 2 {
+		t.Fatalf("runs = %d, want 2", len(runs))
+	}
+	want := map[string]uint64{"e1_r1": 1, "e1_r2": 2}
+	for _, row := range runs {
+		if got := metricSummaryByName(row.metrics, "encode").GetDistribution().GetSamples(); got != want[row.base] {
+			t.Errorf("%s encode samples = %d, want %d", row.base, got, want[row.base])
+		}
+	}
+}
+
+// TestPlotDataMetricMismatch verifies that a named metric whose unit or kind
+// differs between the nodes of a run, or between the repetitions of a
+// configuration, fails the collection with an error naming the run, the
+// benchmark, the metric, and both units. A series whose stats mode differs
+// between the nodes of a run also fails it.
+func TestPlotDataMetricMismatch(t *testing.T) {
+	n1 := nodeAssignment{host: "bb1", port: 9000}
+	n2 := nodeAssignment{host: "bb2", port: 9000}
+	tests := []struct {
+		name string
+		// metrics of node 1 and node 2 in run r1, and of node 1 in run r2
+		r1n1, r1n2, r2n1 *benchkit.Metric
+		want             []string
+	}{
+		{
+			name: "AcrossNodes",
+			r1n1: plotCounterMetric("uploaded", "B", 1), r1n2: plotCounterMetric("uploaded", "KiB", 1),
+			want: []string{"e1_r1", "benchmark Q", `"uploaded"`, `"B"`, `"KiB"`},
+		},
+		{
+			name: "AcrossReps",
+			r1n1: plotCounterMetric("uploaded", "B", 1), r2n1: plotSeriesMetric("uploaded", 1),
+			want: []string{"e1_r2", "benchmark Q", `"uploaded"`, `"B"`, `"ns"`},
+		},
+		{
+			name: "StatsModeAcrossNodes",
+			r1n1: plotSeriesMetric("encode", 1000), r1n2: plotHDRSeriesMetric("encode", 2000, 2),
+			want: []string{"e1_r1", "benchmark Q", `"encode"`, `series in "ns" (exact)`, `series in "ns" (hdr)`},
+		},
+		{
+			name: "StatsModeAcrossNodesHDRFirst",
+			r1n1: plotHDRSeriesMetric("encode", 2000, 2), r1n2: plotSeriesMetric("encode", 1000),
+			want: []string{"e1_r1", "benchmark Q", `"encode"`, `series in "ns" (hdr)`, `series in "ns" (exact)`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for _, run := range []struct {
+				base       string
+				rep        int
+				m1, m2     *benchkit.Metric
+				nodesFiles []nodeAssignment
+			}{
+				{"e1_r1", 1, tt.r1n1, tt.r1n2, []nodeAssignment{n1, n2}},
+				{"e1_r2", 2, tt.r2n1, nil, []nodeAssignment{n1, n2}},
+			} {
+				var files []string
+				for _, n := range run.nodesFiles {
+					files = append(files, resultFilename(run.base, n, resultExt))
+				}
+				writePlotManifest(t, dir, run.base, runStatusSucceeded, run.rep, "", files)
+				for i, m := range []*benchkit.Metric{run.m1, run.m2} {
+					r := benchkit.Result_builder{Config: plotRunConfig("Q", 2, 1, 0, 0), Throughput: 1}.Build()
+					if m != nil {
+						r.SetMetrics([]*benchkit.Metric{m})
+					}
+					writePlotReport(t, dir, run.base, run.nodesFiles[i], run.nodesFiles[i].host, r)
+				}
+			}
+			_, _, _, err := collectPlotData(dir)
+			if err == nil {
+				t.Fatal("collectPlotData: got nil error, want a metric mismatch error")
+			}
+			for _, w := range tt.want {
+				if !strings.Contains(err.Error(), w) {
+					t.Errorf("error %q does not contain %s", err, w)
+				}
+			}
+		})
+	}
+}
+
+// TestWritePlotNodesCSVMetrics verifies that nodes.csv appends one column
+// group per named metric, sorted by name: a series gets its mean and
+// percentiles in microseconds and a counter its sum and max. A node that
+// recorded metrics but no latency gets a row with empty latency fields, and a
+// node without a metric gets empty metric fields.
+func TestWritePlotNodesCSVMetrics(t *testing.T) {
+	meanUS, samples := 2.0, uint64(2)
+	runs := []plotRunRecord{{
+		base: "run1", Benchmark: "Q", throughput: 30,
+		meanUS: &meanUS, p50US: &meanUS, p95US: &meanUS, p99US: &meanUS, samples: &samples,
+		nodeMetrics: []plotNodeMetrics{
+			{node: "bb2:9000", throughput: 20, metrics: []*benchkit.MetricSummary{
+				seriesSummary("encode", 5), counterSummary("uploaded", "B", 30, 30),
+			}},
+		},
+	}}
+	cdf := []plotNodeCDFRecord{
+		{base: "run1", Benchmark: "Q", node: "bb1:9000", throughput: 10,
+			meanUS: 2, p50US: 2, p95US: 2, p99US: 2, samples: 2, prob: 0, cdfUS: 1},
+		{base: "run1", Benchmark: "Q", node: "bb1:9000", throughput: 10,
+			meanUS: 2, p50US: 2, p95US: 2, p99US: 2, samples: 2, prob: 1, cdfUS: 3},
+	}
+	path := filepath.Join(t.TempDir(), "nodes.csv")
+	if err := writePlotNodesCSV(path, plotNodeRows(buildPlotData(runs, cdf))); err != nil {
+		t.Fatalf("writePlotNodesCSV: %v", err)
+	}
+	recs := readCSVRecords(t, path)
+	header := recs[0]
+	first := slices.Index(header, "cdf_us") + 1
+	wantCols := []string{"encode.mean_us", "encode.p50_us", "encode.p95_us", "encode.p99_us", "uploaded.sum", "uploaded.max"}
+	if got := header[first:]; !slices.Equal(got, wantCols) {
+		t.Fatalf("metric columns = %v, want %v", got, wantCols)
+	}
+	if len(recs) != 3 {
+		t.Fatalf("rows = %d incl header, want 3", len(recs))
+	}
+	col := func(rec []string, name string) string { return rec[slices.Index(header, name)] }
+	bb1, bb2 := recs[1], recs[2]
+	if col(bb1, "node") != "bb1:9000" || col(bb1, "cdf_us") != "1 3" || col(bb1, "encode.p50_us") != "" {
+		t.Errorf("bb1 row = %v, want its CDF and empty metric fields", bb1)
+	}
+	for name, want := range map[string]string{
+		"node": "bb2:9000", "throughput": "20", "mean_us": "", "samples": "", "cdf_us": "",
+		"encode.p50_us": "5", "uploaded.sum": "30", "uploaded.max": "30",
+	} {
+		if got := col(bb2, name); got != want {
+			t.Errorf("bb2 %s = %q, want %q", name, got, want)
+		}
+	}
+}
+
+// TestWritePlotNodesCSVLargeCounter verifies that nodes.csv writes the sum and
+// max of a counter as exact integers, also above 2^53, where a float64 rounds.
+func TestWritePlotNodesCSVLargeCounter(t *testing.T) {
+	const large = 9007199254740993 // 2^53 + 1
+	runs := []plotRunRecord{{
+		base: "run1", Benchmark: "Q", throughput: 1,
+		nodeMetrics: []plotNodeMetrics{
+			{node: "bb1:9000", throughput: 1, metrics: []*benchkit.MetricSummary{
+				counterSummary("uploaded", "B", large, large-1),
+			}},
+		},
+	}}
+	path := filepath.Join(t.TempDir(), "nodes.csv")
+	if err := writePlotNodesCSV(path, plotNodeRows(buildPlotData(runs, nil))); err != nil {
+		t.Fatalf("writePlotNodesCSV: %v", err)
+	}
+	recs := readCSVRecords(t, path)
+	if len(recs) != 2 {
+		t.Fatalf("rows = %d incl header, want 2", len(recs))
+	}
+	header := recs[0]
+	for name, want := range map[string]string{"uploaded.sum": "9007199254740993", "uploaded.max": "9007199254740992"} {
+		if got := recs[1][slices.Index(header, name)]; got != want {
+			t.Errorf("%s = %q, want %q", name, got, want)
+		}
 	}
 }

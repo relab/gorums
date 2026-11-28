@@ -117,6 +117,48 @@ message MemoryStat {
   uint64 memory = 2; // total heap bytes allocated
 }
 
+// Metric is one named quantity of a benchmark beyond the primary latency
+// series, such as the delivery latency at each replica or the bytes that a node
+// uploaded. A Result holds at most one Metric per name. Two metrics with the
+// same name merge only when their unit, kind, and measurement mode match.
+message Metric {
+  string name = 1; // matches [a-z][a-z0-9_]*
+  string unit = 2; // "ns" for a distribution; free for a counter
+
+  // SERVER_MEASURED marks a one-way latency taken across two clocks, which
+  // clock-offset correction shifts like the primary series. CLIENT_MEASURED
+  // (the default) marks a quantity that one node measured on its own clock.
+  MeasurementMode measurement_mode = 3;
+
+  oneof value {
+    Distribution distribution = 4;
+    CounterValue counter      = 5;
+  }
+}
+
+// Distribution is the sample set of a named duration series, nanoseconds.
+// Like the primary series, it holds raw samples in exact mode and a histogram
+// in hdr mode.
+message Distribution {
+  repeated int64   samples   = 1; // raw samples in recorded order; empty in hdr mode
+  LatencyHistogram histogram = 2; // hdr mode only
+
+  // Cumulative sample count at each ticker interval, in tick order, so that a
+  // reader can trim the series at the same interval as the primary series.
+  // Recorded in exact mode on a ticked Stats only; empty after a merge of
+  // several distributions.
+  repeated uint64 tick_counts = 3;
+}
+
+// CounterValue is a named counter. A node reports sum = max = its value and
+// nodes = 1; a merge adds sum and nodes and keeps the larger max, so the
+// largest value of any node survives every merge.
+message CounterValue {
+  uint64 sum   = 1; // sum over the merged nodes
+  uint64 max   = 2; // largest value of any merged node
+  uint32 nodes = 3; // number of merged nodes
+}
+
 // Result is one benchmark's complete output for one node: the run
 // configuration, the aggregate measured results, and the time-series event
 // stream. The startup transient is not removed here; consumers trim it at read
@@ -152,6 +194,9 @@ message Result {
   // calls; the run completes and records them here instead of exiting. Total
   // attempts is total_ops + failed_ops; a high ratio flags an unhealthy run.
   uint64 failed_ops = 12;
+
+  // Named metrics beyond the primary latency series, sorted by name.
+  repeated Metric metrics = 13;
 }
 
 // Report is the per-node container: one labeled set of benchmark results,
@@ -176,6 +221,17 @@ message LatencySummary {
   uint64 samples = 5; // samples the summary was computed from
 }
 
+// MetricSummary is a named metric reduced for plotting: a duration series
+// reduced to summary statistics, or a counter as merged.
+message MetricSummary {
+  string name = 1; // metric name, matching Metric.name
+  string unit = 2; // metric unit, matching Metric.unit
+  oneof value {
+    LatencySummary distribution = 3;
+    CounterValue   counter      = 4;
+  }
+}
+
 // The messages below hold a whole sweep reduced for plotting. A sweep's raw
 // per-node Result files are far too large to keep or transfer in full, so a
 // consumer reduces each run to summary statistics plus a sampled latency CDF.
@@ -192,6 +248,8 @@ message PlotNode {
   // i is i/(n-1) for n points, so the probability grid is implied by position
   // and is not stored.
   repeated double cdf_us = 4;
+
+  repeated MetricSummary metrics = 5; // this node's named metrics, sorted by name
 }
 
 // PlotBenchmark is one benchmark's reduced results for one run: the run-wide
@@ -216,6 +274,9 @@ message PlotBenchmark {
   LatencySummary summary = 8;
 
   repeated PlotNode nodes = 9; // per-node reductions
+
+  // Named metrics merged across nodes, sorted by name.
+  repeated MetricSummary metrics = 10;
 }
 
 // PlotRun is one run's identity and its per-benchmark reductions. The identity

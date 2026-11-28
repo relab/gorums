@@ -35,6 +35,53 @@ type Summary struct {
 	// the histogram has no time dimension — so statistics derived from it
 	// describe the whole run.
 	Histogram *LatencyHistogram
+
+	// Metrics holds the named metrics of the Result over the kept window,
+	// sorted by name.
+	Metrics []SummaryMetric
+}
+
+// SummaryMetric is one named metric of a Result over the read-time window that
+// [Summarize] keeps. Exactly one of Dist and Counter is set.
+type SummaryMetric struct {
+	// Name is the metric name, which matches [a-z][a-z0-9_]*.
+	Name string
+
+	// Unit is "ns" for a series and the recorded unit for a counter.
+	Unit string
+
+	// MeasurementMode is SERVER_MEASURED for a one-way latency series taken
+	// across two clocks, and CLIENT_MEASURED for a quantity that one node
+	// measured on its own clock.
+	MeasurementMode MeasurementMode
+
+	// Dist is the distribution of a series. A client-measured series in exact
+	// mode is cut at the same ticker interval as the primary series, using the
+	// series' tick counts; a series without tick counts, a server-measured
+	// series, and an hdr histogram describe the whole run.
+	Dist *LatencyDist
+
+	// HDR is true for a series recorded as an hdr histogram, and false for a
+	// series of raw samples and for a counter. An exact series that the trim
+	// empties stays exact.
+	HDR bool
+
+	// Counter is the value of a counter over the whole run.
+	Counter *CounterValue
+}
+
+// CheckMerge returns an error naming the metric and both descriptions when
+// other has another unit, kind, measurement mode, or stats mode than m. Merge
+// the distributions of two series with [LatencyDist.Merge] and the values of
+// two counters with [CounterValue.Merge] only when it returns nil.
+func (m SummaryMetric) CheckMerge(other SummaryMetric) error {
+	return checkMetricMerge(m.Name, m.description(), other.description())
+}
+
+// description returns the kind, measurement mode, and unit of m, and the stats
+// mode of a series, for error messages.
+func (m SummaryMetric) description() string {
+	return metricDescription(m.Dist != nil, m.HDR, m.MeasurementMode, m.Unit)
 }
 
 // Summarize derives one Result's throughput, throughput coefficient of
@@ -48,6 +95,7 @@ type Summary struct {
 // whole-run percentiles. When there are no events, the stored whole-run
 // throughput and latencies are used and the CV is invalid. HDR runs carry no
 // raw samples; their whole-run distribution passes through as Histogram.
+// Named metrics pass through as Metrics, with the cut of [SummaryMetric.Dist].
 func Summarize(r *Result, trim time.Duration) Summary {
 	cfg := r.GetConfig()
 	exact := cfg.GetStatsMode() == StatsMode_EXACT
@@ -56,13 +104,15 @@ func Summarize(r *Result, trim time.Duration) Summary {
 	events := r.GetEvents()
 	if len(events) == 0 {
 		return Summary{Throughput: r.GetThroughput(), Latencies: latencies,
-			LatencyValid: exact, Histogram: r.GetHistogram()}
+			LatencyValid: exact, Histogram: r.GetHistogram(),
+			Metrics: summarizeMetrics(r.GetMetrics(), 0)}
 	}
 
 	trimNs := trim.Nanoseconds()
 	var keptOps uint64
 	var keptDurNs int64
 	var cutOps uint64 // ops in dropped intervals -> latency sample-index cut
+	var cutTicks int  // dropped intervals -> named-series tick-count cut
 	var tputs []float64
 	for _, ev := range events {
 		tp := ev.GetThroughput()
@@ -71,6 +121,7 @@ func Summarize(r *Result, trim time.Duration) Summary {
 		}
 		if ev.GetOffset() < trimNs {
 			cutOps += tp.GetOps()
+			cutTicks++
 			continue
 		}
 		keptOps += tp.GetOps()
@@ -97,7 +148,38 @@ func Summarize(r *Result, trim time.Duration) Summary {
 		Latencies:    latencies,
 		LatencyValid: exact,
 		Histogram:    r.GetHistogram(),
+		Metrics:      summarizeMetrics(r.GetMetrics(), cutTicks),
 	}
+}
+
+// summarizeMetrics returns metrics as SummaryMetrics, each client-measured
+// series with raw samples cut after the samples of the first cutTicks ticker
+// intervals. Each throughput event is one tick, and the ticks of a series
+// count its samples in the same order, so the cut drops the same intervals as
+// the cut of the primary series.
+func summarizeMetrics(metrics []*Metric, cutTicks int) []SummaryMetric {
+	var out []SummaryMetric
+	for _, m := range metrics {
+		sm := SummaryMetric{Name: m.GetName(), Unit: m.GetUnit(), MeasurementMode: m.GetMeasurementMode()}
+		if d := m.GetDistribution(); d != nil {
+			samples := d.GetSamples()
+			ticks := d.GetTickCounts()
+			if m.GetMeasurementMode() == MeasurementMode_CLIENT_MEASURED && cutTicks > 0 && cutTicks <= len(ticks) {
+				// Compare in uint64, as for the primary cut.
+				if cut := ticks[cutTicks-1]; cut <= uint64(len(samples)) {
+					samples = samples[cut:]
+				}
+			}
+			sm.Dist = &LatencyDist{}
+			sm.HDR = d.GetHistogram() != nil
+			sm.Dist.addSamples(samples)
+			sm.Dist.addHistogram(d.GetHistogram())
+		} else {
+			sm.Counter = m.GetCounter()
+		}
+		out = append(out, sm)
+	}
+	return out
 }
 
 // coeffVar returns the coefficient of variation (sample stddev / mean) of xs,

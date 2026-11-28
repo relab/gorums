@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -97,5 +98,70 @@ func TestConvertDirBinaryResults(t *testing.T) {
 	badJSON := filepath.Join(dir, resultFilename(base, nodeAssignment{host: "bb3", port: 9000}, ".json"))
 	if _, err := os.Stat(badJSON); err == nil {
 		t.Errorf("undecodable file should not produce json: %s", badJSON)
+	}
+}
+
+// TestConvertBinaryFileMetrics verifies that the protojson sibling of a result
+// file carries its named metrics: a series with its samples and a counter
+// with its value, whose 64-bit integers protojson writes as strings.
+func TestConvertBinaryFileMetrics(t *testing.T) {
+	dir := t.TempDir()
+	binPath := filepath.Join(dir, "result"+resultExt)
+	results := []*benchkit.Result{benchkit.Result_builder{
+		Config: benchkit.RunConfig_builder{Name: "Q"}.Build(),
+		Metrics: []*benchkit.Metric{
+			benchkit.Metric_builder{
+				Name: "deliver", Unit: "ns", MeasurementMode: benchkit.MeasurementMode_SERVER_MEASURED,
+				Distribution: benchkit.Distribution_builder{Samples: []int64{1000, 2000}}.Build(),
+			}.Build(),
+			benchkit.Metric_builder{
+				Name: "uploaded", Unit: "B",
+				Counter: benchkit.CounterValue_builder{Sum: 70, Max: 70, Nodes: 1}.Build(),
+			}.Build(),
+		},
+	}.Build()}
+	if err := benchkit.WriteLabeledReport(results, "bb1:9000", binPath); err != nil {
+		t.Fatalf("WriteLabeledReport: %v", err)
+	}
+	if err := convertBinaryFile(binPath); err != nil {
+		t.Fatalf("convertBinaryFile: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "result.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var report benchkit.Report
+	if err := protojson.Unmarshal(data, &report); err != nil {
+		t.Fatalf("protojson.Unmarshal: %v", err)
+	}
+	metrics := report.GetResults()[0].GetMetrics()
+	if len(metrics) != 2 {
+		t.Fatalf("metrics = %d, want 2", len(metrics))
+	}
+	if got := metrics[0].GetDistribution().GetSamples(); len(got) != 2 || got[1] != 2000 {
+		t.Errorf("deliver samples = %v, want [1000 2000]", got)
+	}
+	if got := metrics[0].GetMeasurementMode(); got != benchkit.MeasurementMode_SERVER_MEASURED {
+		t.Errorf("deliver measurement mode = %v, want SERVER_MEASURED", got)
+	}
+	if c := metrics[1].GetCounter(); c.GetSum() != 70 || c.GetMax() != 70 || c.GetNodes() != 1 || metrics[1].GetUnit() != "B" {
+		t.Errorf("uploaded = %v, want sum and max 70 in \"B\" on 1 node", metrics[1])
+	}
+
+	// The JSON holds the metrics under their protojson names.
+	var doc struct {
+		Results []struct {
+			Metrics []struct {
+				Name    string
+				Counter *struct{ Sum, Max string }
+			}
+		}
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+	if c := doc.Results[0].Metrics[1].Counter; c == nil || c.Sum != "70" || c.Max != "70" {
+		t.Errorf("uploaded counter JSON = %+v, want sum and max as the string \"70\"", c)
 	}
 }

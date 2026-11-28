@@ -87,13 +87,14 @@ const (
 // reader can tell the sweep's headline results from its diagnostics. Each
 // section starts a new page.
 const (
-	scalingSection    = "Scaling"
-	loadCurveSection  = "Load curves"
-	comparisonSection = "Stream-mode comparison"
-	healthSection     = "Cluster health"
-	cdfSection        = "Per-node latency"
-	timeSeriesSection = "Within-run time series"
-	failedRunsSection = "Failed runs"
+	scalingSection      = "Scaling"
+	loadCurveSection    = "Load curves"
+	namedMetricsSection = "Named metrics"
+	comparisonSection   = "Stream-mode comparison"
+	healthSection       = "Cluster health"
+	cdfSection          = "Per-node latency"
+	timeSeriesSection   = "Within-run time series"
+	failedRunsSection   = "Failed runs"
 )
 
 // sectionNotes is what each section says about its figures before the first one:
@@ -106,6 +107,9 @@ var sectionNotes = map[string]string{
 	loadCurveSection: "Median latency against the throughput each level of offered load achieved, one panel per " +
 		"cluster size, with the p95-p99 tail shaded above the line. Curves whose peak latencies span more than " +
 		"a factor of eight are split into scale bands, so one linear axis never crams widely differing curves.",
+	namedMetricsSection: "The metrics the benchmark recorded beyond its primary latency, each against one swept " +
+		"dimension, rep-averaged with the 95% confidence interval of the mean shaded. A series plots its median; " +
+		"a counter plots its largest value on any node of a run.",
 	comparisonSection: "Each metric of the non-baseline stream mode divided by the baseline's, against a dashed " +
 		"parity line: above 1.0 the non-baseline mode is larger. Only configurations measured in both modes " +
 		"contribute.",
@@ -145,6 +149,7 @@ type figureSpec struct {
 	yscale          float64
 	facet           string
 	payloadPositive bool // restrict to payload>0 rows (goodput)
+	ycolRequired    bool // restrict to rows with a value in ycol (named metrics)
 	// dims lists the dimension columns that metric-vs, ratio-vs, and tl-curve
 	// read series identity from; empty selects the library's built-in list,
 	// which suffices for figure data without custom dimensions.
@@ -234,8 +239,9 @@ var ratioFigureMetrics = []struct {
 // plans aggregate throughput and median latency; goodput is planned against
 // payload and nodes when a non-zero payload varies; per-operation cost against
 // nodes when nodes vary. A throughput-latency curve is planned per scale band
-// when the worker count varies. The remaining figures are planned when their
-// dataset is present per in.
+// when the worker count varies. Each named metric gets a figure per varying
+// dimension (see [namedMetricFigures]). The remaining figures are planned when
+// their dataset is present per in.
 func planFigures(agg []aggRunRecord, in reportInputs) []figureSpec {
 	counts := dimCounts(agg)
 	var specs []figureSpec
@@ -321,6 +327,8 @@ func planFigures(agg []aggRunRecord, in reportInputs) []figureSpec {
 			})
 		}
 	}
+
+	specs = append(specs, namedMetricFigures(agg, counts)...)
 
 	// dedup/dual (or non-baseline/baseline) comparison figures, one per metric
 	// per varying dimension, mirroring the metric-vs loop above: a comparison
@@ -429,6 +437,60 @@ func figureDims(schema dimensionSchema) []string {
 		return schema.axes()
 	}
 	return nil
+}
+
+// namedMetricFigures plans one metric-vs figure per named metric of agg and
+// per varying dimension, by metric name, for the metrics with a value in some
+// configuration: the median of a series, in milliseconds like the primary
+// latency, and the largest per-node value of a counter, in its unit. Each
+// figure draws the rows with a value for its metric.
+func namedMetricFigures(agg []aggRunRecord, counts map[string]int) []figureSpec {
+	var specs []figureSpec
+	for _, col := range aggMetricColumns(agg) {
+		stat, ylabel, yscale := "max", fmt.Sprintf("%s max (%s)", col.name, metricUnit(agg, col)), 1.0
+		if col.series {
+			stat, ylabel, yscale = "p50_us", col.name+" p50 (ms)", 1.0/1e3
+		}
+		i := slices.Index(col.statNames(), stat)
+		if !slices.ContainsFunc(agg, func(r aggRunRecord) bool {
+			stats := r.metrics[col].stats
+			return i < len(stats) && stats[i].n > 0
+		}) {
+			continue
+		}
+		ycol := col.name + "." + stat
+		for _, x := range axisOrder(counts) {
+			if counts[x] <= 1 {
+				continue
+			}
+			specs = append(specs, figureSpec{
+				slug: "metric_" + col.name + "_vs_" + x, section: namedMetricsSection,
+				heading: namedMetricHeading(col) + " vs. " + x,
+				dataCSV: "agg.csv", xcol: x, ycol: ycol, bandCol: ycol + "_ci95",
+				ylabel: ylabel, yscale: yscale, facet: facetFor(counts, x),
+				ycolRequired: true,
+			})
+		}
+	}
+	return specs
+}
+
+// metricUnit returns the unit of the named metric of col in agg.
+func metricUnit(agg []aggRunRecord, col metricColumn) string {
+	for _, r := range agg {
+		if m, ok := r.metrics[col]; ok {
+			return m.unit
+		}
+	}
+	return ""
+}
+
+// namedMetricHeading names what a named-metric figure plots.
+func namedMetricHeading(col metricColumn) string {
+	if col.series {
+		return "Median " + col.name
+	}
+	return "Largest per-node " + col.name
 }
 
 // timeSeriesFigures plans the over-time figures for one run, one per benchmark
@@ -712,10 +774,19 @@ func figureCall(s figureSpec) string {
 }
 
 // metricVsCall renders the Typst call that draws a figureSpec via metric-vs.
+// The data are the agg rows that pass the row filters of s, so that a
+// benchmark without rows to draw gets no legend entry.
 func metricVsCall(s figureSpec) string {
-	data := "agg"
+	var filters []string
 	if s.payloadPositive {
-		data = `agg.filter(r => int(r.payload) > 0)`
+		filters = append(filters, `int(r.payload) > 0`)
+	}
+	if s.ycolRequired {
+		filters = append(filters, fmt.Sprintf(`r.at(%q) != ""`, s.ycol))
+	}
+	data := "agg"
+	if len(filters) > 0 {
+		data = "agg.filter(r => " + strings.Join(filters, " and ") + ")"
 	}
 	facet, facetLabel := "none", "none"
 	if s.facet != "" {

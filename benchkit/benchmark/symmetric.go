@@ -271,7 +271,9 @@ func runSymmetricMulticast(ctx context.Context, peers peerConfig, opts benchkit.
 		m.Abandon()
 		return nil, err
 	}
-	m.Attach(r)
+	if err := m.Attach(r); err != nil {
+		return nil, err
+	}
 
 	// Override TotalOps and Throughput with client-side send counts, which
 	// are the authoritative measure of work done. Server receives are N times

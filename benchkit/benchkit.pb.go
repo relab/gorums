@@ -1087,6 +1087,417 @@ func (b0 MemoryStat_builder) Build() *MemoryStat {
 	return m0
 }
 
+// Metric is one named quantity of a benchmark beyond the primary latency
+// series, such as the delivery latency at each replica or the bytes that a node
+// uploaded. A Result holds at most one Metric per name. Two metrics with the
+// same name merge only when their unit, kind, and measurement mode match.
+type Metric struct {
+	state                      protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Name            string                 `protobuf:"bytes,1,opt,name=name"`
+	xxx_hidden_Unit            string                 `protobuf:"bytes,2,opt,name=unit"`
+	xxx_hidden_MeasurementMode MeasurementMode        `protobuf:"varint,3,opt,name=measurement_mode,json=measurementMode,enum=benchkit.MeasurementMode"`
+	xxx_hidden_Value           isMetric_Value         `protobuf_oneof:"value"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *Metric) Reset() {
+	*x = Metric{}
+	mi := &file_benchkit_benchkit_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Metric) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Metric) ProtoMessage() {}
+
+func (x *Metric) ProtoReflect() protoreflect.Message {
+	mi := &file_benchkit_benchkit_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+func (x *Metric) GetName() string {
+	if x != nil {
+		return x.xxx_hidden_Name
+	}
+	return ""
+}
+
+func (x *Metric) GetUnit() string {
+	if x != nil {
+		return x.xxx_hidden_Unit
+	}
+	return ""
+}
+
+func (x *Metric) GetMeasurementMode() MeasurementMode {
+	if x != nil {
+		return x.xxx_hidden_MeasurementMode
+	}
+	return MeasurementMode_CLIENT_MEASURED
+}
+
+func (x *Metric) GetDistribution() *Distribution {
+	if x != nil {
+		if x, ok := x.xxx_hidden_Value.(*metric_Distribution); ok {
+			return x.Distribution
+		}
+	}
+	return nil
+}
+
+func (x *Metric) GetCounter() *CounterValue {
+	if x != nil {
+		if x, ok := x.xxx_hidden_Value.(*metric_Counter); ok {
+			return x.Counter
+		}
+	}
+	return nil
+}
+
+func (x *Metric) SetName(v string) {
+	x.xxx_hidden_Name = v
+}
+
+func (x *Metric) SetUnit(v string) {
+	x.xxx_hidden_Unit = v
+}
+
+func (x *Metric) SetMeasurementMode(v MeasurementMode) {
+	x.xxx_hidden_MeasurementMode = v
+}
+
+func (x *Metric) SetDistribution(v *Distribution) {
+	if v == nil {
+		x.xxx_hidden_Value = nil
+		return
+	}
+	x.xxx_hidden_Value = &metric_Distribution{v}
+}
+
+func (x *Metric) SetCounter(v *CounterValue) {
+	if v == nil {
+		x.xxx_hidden_Value = nil
+		return
+	}
+	x.xxx_hidden_Value = &metric_Counter{v}
+}
+
+func (x *Metric) HasValue() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Value != nil
+}
+
+func (x *Metric) HasDistribution() bool {
+	if x == nil {
+		return false
+	}
+	_, ok := x.xxx_hidden_Value.(*metric_Distribution)
+	return ok
+}
+
+func (x *Metric) HasCounter() bool {
+	if x == nil {
+		return false
+	}
+	_, ok := x.xxx_hidden_Value.(*metric_Counter)
+	return ok
+}
+
+func (x *Metric) ClearValue() {
+	x.xxx_hidden_Value = nil
+}
+
+func (x *Metric) ClearDistribution() {
+	if _, ok := x.xxx_hidden_Value.(*metric_Distribution); ok {
+		x.xxx_hidden_Value = nil
+	}
+}
+
+func (x *Metric) ClearCounter() {
+	if _, ok := x.xxx_hidden_Value.(*metric_Counter); ok {
+		x.xxx_hidden_Value = nil
+	}
+}
+
+const Metric_Value_not_set_case case_Metric_Value = 0
+const Metric_Distribution_case case_Metric_Value = 4
+const Metric_Counter_case case_Metric_Value = 5
+
+func (x *Metric) WhichValue() case_Metric_Value {
+	if x == nil {
+		return Metric_Value_not_set_case
+	}
+	switch x.xxx_hidden_Value.(type) {
+	case *metric_Distribution:
+		return Metric_Distribution_case
+	case *metric_Counter:
+		return Metric_Counter_case
+	default:
+		return Metric_Value_not_set_case
+	}
+}
+
+type Metric_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Name string
+	Unit string
+	// SERVER_MEASURED marks a one-way latency taken across two clocks, which
+	// clock-offset correction shifts like the primary series. CLIENT_MEASURED
+	// (the default) marks a quantity that one node measured on its own clock.
+	MeasurementMode MeasurementMode
+	// Fields of oneof xxx_hidden_Value:
+	Distribution *Distribution
+	Counter      *CounterValue
+	// -- end of xxx_hidden_Value
+}
+
+func (b0 Metric_builder) Build() *Metric {
+	m0 := &Metric{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Name = b.Name
+	x.xxx_hidden_Unit = b.Unit
+	x.xxx_hidden_MeasurementMode = b.MeasurementMode
+	if b.Distribution != nil {
+		x.xxx_hidden_Value = &metric_Distribution{b.Distribution}
+	}
+	if b.Counter != nil {
+		x.xxx_hidden_Value = &metric_Counter{b.Counter}
+	}
+	return m0
+}
+
+type case_Metric_Value protoreflect.FieldNumber
+
+func (x case_Metric_Value) String() string {
+	md := file_benchkit_benchkit_proto_msgTypes[7].Descriptor()
+	if x == 0 {
+		return "not set"
+	}
+	return protoimpl.X.MessageFieldStringOf(md, protoreflect.FieldNumber(x))
+}
+
+type isMetric_Value interface {
+	isMetric_Value()
+}
+
+type metric_Distribution struct {
+	Distribution *Distribution `protobuf:"bytes,4,opt,name=distribution,oneof"`
+}
+
+type metric_Counter struct {
+	Counter *CounterValue `protobuf:"bytes,5,opt,name=counter,oneof"`
+}
+
+func (*metric_Distribution) isMetric_Value() {}
+
+func (*metric_Counter) isMetric_Value() {}
+
+// Distribution is the sample set of a named duration series, nanoseconds.
+// Like the primary series, it holds raw samples in exact mode and a histogram
+// in hdr mode.
+type Distribution struct {
+	state                 protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Samples    []int64                `protobuf:"varint,1,rep,packed,name=samples"`
+	xxx_hidden_Histogram  *LatencyHistogram      `protobuf:"bytes,2,opt,name=histogram"`
+	xxx_hidden_TickCounts []uint64               `protobuf:"varint,3,rep,packed,name=tick_counts,json=tickCounts"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *Distribution) Reset() {
+	*x = Distribution{}
+	mi := &file_benchkit_benchkit_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Distribution) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Distribution) ProtoMessage() {}
+
+func (x *Distribution) ProtoReflect() protoreflect.Message {
+	mi := &file_benchkit_benchkit_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+func (x *Distribution) GetSamples() []int64 {
+	if x != nil {
+		return x.xxx_hidden_Samples
+	}
+	return nil
+}
+
+func (x *Distribution) GetHistogram() *LatencyHistogram {
+	if x != nil {
+		return x.xxx_hidden_Histogram
+	}
+	return nil
+}
+
+func (x *Distribution) GetTickCounts() []uint64 {
+	if x != nil {
+		return x.xxx_hidden_TickCounts
+	}
+	return nil
+}
+
+func (x *Distribution) SetSamples(v []int64) {
+	x.xxx_hidden_Samples = v
+}
+
+func (x *Distribution) SetHistogram(v *LatencyHistogram) {
+	x.xxx_hidden_Histogram = v
+}
+
+func (x *Distribution) SetTickCounts(v []uint64) {
+	x.xxx_hidden_TickCounts = v
+}
+
+func (x *Distribution) HasHistogram() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Histogram != nil
+}
+
+func (x *Distribution) ClearHistogram() {
+	x.xxx_hidden_Histogram = nil
+}
+
+type Distribution_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Samples   []int64
+	Histogram *LatencyHistogram
+	// Cumulative sample count at each ticker interval, in tick order, so that a
+	// reader can trim the series at the same interval as the primary series.
+	// Recorded in exact mode on a ticked Stats only; empty after a merge of
+	// several distributions.
+	TickCounts []uint64
+}
+
+func (b0 Distribution_builder) Build() *Distribution {
+	m0 := &Distribution{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Samples = b.Samples
+	x.xxx_hidden_Histogram = b.Histogram
+	x.xxx_hidden_TickCounts = b.TickCounts
+	return m0
+}
+
+// CounterValue is a named counter. A node reports sum = max = its value and
+// nodes = 1; a merge adds sum and nodes and keeps the larger max, so the
+// largest value of any node survives every merge.
+type CounterValue struct {
+	state            protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Sum   uint64                 `protobuf:"varint,1,opt,name=sum"`
+	xxx_hidden_Max   uint64                 `protobuf:"varint,2,opt,name=max"`
+	xxx_hidden_Nodes uint32                 `protobuf:"varint,3,opt,name=nodes"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *CounterValue) Reset() {
+	*x = CounterValue{}
+	mi := &file_benchkit_benchkit_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CounterValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CounterValue) ProtoMessage() {}
+
+func (x *CounterValue) ProtoReflect() protoreflect.Message {
+	mi := &file_benchkit_benchkit_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+func (x *CounterValue) GetSum() uint64 {
+	if x != nil {
+		return x.xxx_hidden_Sum
+	}
+	return 0
+}
+
+func (x *CounterValue) GetMax() uint64 {
+	if x != nil {
+		return x.xxx_hidden_Max
+	}
+	return 0
+}
+
+func (x *CounterValue) GetNodes() uint32 {
+	if x != nil {
+		return x.xxx_hidden_Nodes
+	}
+	return 0
+}
+
+func (x *CounterValue) SetSum(v uint64) {
+	x.xxx_hidden_Sum = v
+}
+
+func (x *CounterValue) SetMax(v uint64) {
+	x.xxx_hidden_Max = v
+}
+
+func (x *CounterValue) SetNodes(v uint32) {
+	x.xxx_hidden_Nodes = v
+}
+
+type CounterValue_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Sum   uint64
+	Max   uint64
+	Nodes uint32
+}
+
+func (b0 CounterValue_builder) Build() *CounterValue {
+	m0 := &CounterValue{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Sum = b.Sum
+	x.xxx_hidden_Max = b.Max
+	x.xxx_hidden_Nodes = b.Nodes
+	return m0
+}
+
 // Result is one benchmark's complete output for one node: the run
 // configuration, the aggregate measured results, and the time-series event
 // stream. The startup transient is not removed here; consumers trim it at read
@@ -1104,13 +1515,14 @@ type Result struct {
 	xxx_hidden_Events      *[]*Event              `protobuf:"bytes,9,rep,name=events"`
 	xxx_hidden_Histogram   *LatencyHistogram      `protobuf:"bytes,10,opt,name=histogram"`
 	xxx_hidden_FailedOps   uint64                 `protobuf:"varint,12,opt,name=failed_ops,json=failedOps"`
+	xxx_hidden_Metrics     *[]*Metric             `protobuf:"bytes,13,rep,name=metrics"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
 
 func (x *Result) Reset() {
 	*x = Result{}
-	mi := &file_benchkit_benchkit_proto_msgTypes[7]
+	mi := &file_benchkit_benchkit_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1122,7 +1534,7 @@ func (x *Result) String() string {
 func (*Result) ProtoMessage() {}
 
 func (x *Result) ProtoReflect() protoreflect.Message {
-	mi := &file_benchkit_benchkit_proto_msgTypes[7]
+	mi := &file_benchkit_benchkit_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1214,6 +1626,15 @@ func (x *Result) GetFailedOps() uint64 {
 	return 0
 }
 
+func (x *Result) GetMetrics() []*Metric {
+	if x != nil {
+		if x.xxx_hidden_Metrics != nil {
+			return *x.xxx_hidden_Metrics
+		}
+	}
+	return nil
+}
+
 func (x *Result) SetConfig(v *RunConfig) {
 	x.xxx_hidden_Config = v
 }
@@ -1256,6 +1677,10 @@ func (x *Result) SetHistogram(v *LatencyHistogram) {
 
 func (x *Result) SetFailedOps(v uint64) {
 	x.xxx_hidden_FailedOps = v
+}
+
+func (x *Result) SetMetrics(v []*Metric) {
+	x.xxx_hidden_Metrics = &v
 }
 
 func (x *Result) HasConfig() bool {
@@ -1303,6 +1728,8 @@ type Result_builder struct {
 	// calls; the run completes and records them here instead of exiting. Total
 	// attempts is total_ops + failed_ops; a high ratio flags an unhealthy run.
 	FailedOps uint64
+	// Named metrics beyond the primary latency series, sorted by name.
+	Metrics []*Metric
 }
 
 func (b0 Result_builder) Build() *Result {
@@ -1320,6 +1747,7 @@ func (b0 Result_builder) Build() *Result {
 	x.xxx_hidden_Events = &b.Events
 	x.xxx_hidden_Histogram = b.Histogram
 	x.xxx_hidden_FailedOps = b.FailedOps
+	x.xxx_hidden_Metrics = &b.Metrics
 	return m0
 }
 
@@ -1337,7 +1765,7 @@ type Report struct {
 
 func (x *Report) Reset() {
 	*x = Report{}
-	mi := &file_benchkit_benchkit_proto_msgTypes[8]
+	mi := &file_benchkit_benchkit_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1349,7 +1777,7 @@ func (x *Report) String() string {
 func (*Report) ProtoMessage() {}
 
 func (x *Report) ProtoReflect() protoreflect.Message {
-	mi := &file_benchkit_benchkit_proto_msgTypes[8]
+	mi := &file_benchkit_benchkit_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1418,7 +1846,7 @@ type LatencySummary struct {
 
 func (x *LatencySummary) Reset() {
 	*x = LatencySummary{}
-	mi := &file_benchkit_benchkit_proto_msgTypes[9]
+	mi := &file_benchkit_benchkit_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1430,7 +1858,7 @@ func (x *LatencySummary) String() string {
 func (*LatencySummary) ProtoMessage() {}
 
 func (x *LatencySummary) ProtoReflect() protoreflect.Message {
-	mi := &file_benchkit_benchkit_proto_msgTypes[9]
+	mi := &file_benchkit_benchkit_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1518,6 +1946,207 @@ func (b0 LatencySummary_builder) Build() *LatencySummary {
 	return m0
 }
 
+// MetricSummary is a named metric reduced for plotting: a duration series
+// reduced to summary statistics, or a counter as merged.
+type MetricSummary struct {
+	state            protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Name  string                 `protobuf:"bytes,1,opt,name=name"`
+	xxx_hidden_Unit  string                 `protobuf:"bytes,2,opt,name=unit"`
+	xxx_hidden_Value isMetricSummary_Value  `protobuf_oneof:"value"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *MetricSummary) Reset() {
+	*x = MetricSummary{}
+	mi := &file_benchkit_benchkit_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MetricSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MetricSummary) ProtoMessage() {}
+
+func (x *MetricSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_benchkit_benchkit_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+func (x *MetricSummary) GetName() string {
+	if x != nil {
+		return x.xxx_hidden_Name
+	}
+	return ""
+}
+
+func (x *MetricSummary) GetUnit() string {
+	if x != nil {
+		return x.xxx_hidden_Unit
+	}
+	return ""
+}
+
+func (x *MetricSummary) GetDistribution() *LatencySummary {
+	if x != nil {
+		if x, ok := x.xxx_hidden_Value.(*metricSummary_Distribution); ok {
+			return x.Distribution
+		}
+	}
+	return nil
+}
+
+func (x *MetricSummary) GetCounter() *CounterValue {
+	if x != nil {
+		if x, ok := x.xxx_hidden_Value.(*metricSummary_Counter); ok {
+			return x.Counter
+		}
+	}
+	return nil
+}
+
+func (x *MetricSummary) SetName(v string) {
+	x.xxx_hidden_Name = v
+}
+
+func (x *MetricSummary) SetUnit(v string) {
+	x.xxx_hidden_Unit = v
+}
+
+func (x *MetricSummary) SetDistribution(v *LatencySummary) {
+	if v == nil {
+		x.xxx_hidden_Value = nil
+		return
+	}
+	x.xxx_hidden_Value = &metricSummary_Distribution{v}
+}
+
+func (x *MetricSummary) SetCounter(v *CounterValue) {
+	if v == nil {
+		x.xxx_hidden_Value = nil
+		return
+	}
+	x.xxx_hidden_Value = &metricSummary_Counter{v}
+}
+
+func (x *MetricSummary) HasValue() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Value != nil
+}
+
+func (x *MetricSummary) HasDistribution() bool {
+	if x == nil {
+		return false
+	}
+	_, ok := x.xxx_hidden_Value.(*metricSummary_Distribution)
+	return ok
+}
+
+func (x *MetricSummary) HasCounter() bool {
+	if x == nil {
+		return false
+	}
+	_, ok := x.xxx_hidden_Value.(*metricSummary_Counter)
+	return ok
+}
+
+func (x *MetricSummary) ClearValue() {
+	x.xxx_hidden_Value = nil
+}
+
+func (x *MetricSummary) ClearDistribution() {
+	if _, ok := x.xxx_hidden_Value.(*metricSummary_Distribution); ok {
+		x.xxx_hidden_Value = nil
+	}
+}
+
+func (x *MetricSummary) ClearCounter() {
+	if _, ok := x.xxx_hidden_Value.(*metricSummary_Counter); ok {
+		x.xxx_hidden_Value = nil
+	}
+}
+
+const MetricSummary_Value_not_set_case case_MetricSummary_Value = 0
+const MetricSummary_Distribution_case case_MetricSummary_Value = 3
+const MetricSummary_Counter_case case_MetricSummary_Value = 4
+
+func (x *MetricSummary) WhichValue() case_MetricSummary_Value {
+	if x == nil {
+		return MetricSummary_Value_not_set_case
+	}
+	switch x.xxx_hidden_Value.(type) {
+	case *metricSummary_Distribution:
+		return MetricSummary_Distribution_case
+	case *metricSummary_Counter:
+		return MetricSummary_Counter_case
+	default:
+		return MetricSummary_Value_not_set_case
+	}
+}
+
+type MetricSummary_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Name string
+	Unit string
+	// Fields of oneof xxx_hidden_Value:
+	Distribution *LatencySummary
+	Counter      *CounterValue
+	// -- end of xxx_hidden_Value
+}
+
+func (b0 MetricSummary_builder) Build() *MetricSummary {
+	m0 := &MetricSummary{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Name = b.Name
+	x.xxx_hidden_Unit = b.Unit
+	if b.Distribution != nil {
+		x.xxx_hidden_Value = &metricSummary_Distribution{b.Distribution}
+	}
+	if b.Counter != nil {
+		x.xxx_hidden_Value = &metricSummary_Counter{b.Counter}
+	}
+	return m0
+}
+
+type case_MetricSummary_Value protoreflect.FieldNumber
+
+func (x case_MetricSummary_Value) String() string {
+	md := file_benchkit_benchkit_proto_msgTypes[13].Descriptor()
+	if x == 0 {
+		return "not set"
+	}
+	return protoimpl.X.MessageFieldStringOf(md, protoreflect.FieldNumber(x))
+}
+
+type isMetricSummary_Value interface {
+	isMetricSummary_Value()
+}
+
+type metricSummary_Distribution struct {
+	Distribution *LatencySummary `protobuf:"bytes,3,opt,name=distribution,oneof"`
+}
+
+type metricSummary_Counter struct {
+	Counter *CounterValue `protobuf:"bytes,4,opt,name=counter,oneof"`
+}
+
+func (*metricSummary_Distribution) isMetricSummary_Value() {}
+
+func (*metricSummary_Counter) isMetricSummary_Value() {}
+
 // PlotNode is one node's reduced contribution to one benchmark of one run.
 type PlotNode struct {
 	state                 protoimpl.MessageState `protogen:"opaque.v1"`
@@ -1525,13 +2154,14 @@ type PlotNode struct {
 	xxx_hidden_Throughput float64                `protobuf:"fixed64,2,opt,name=throughput"`
 	xxx_hidden_Summary    *LatencySummary        `protobuf:"bytes,3,opt,name=summary"`
 	xxx_hidden_CdfUs      []float64              `protobuf:"fixed64,4,rep,packed,name=cdf_us,json=cdfUs"`
+	xxx_hidden_Metrics    *[]*MetricSummary      `protobuf:"bytes,5,rep,name=metrics"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
 
 func (x *PlotNode) Reset() {
 	*x = PlotNode{}
-	mi := &file_benchkit_benchkit_proto_msgTypes[10]
+	mi := &file_benchkit_benchkit_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1543,7 +2173,7 @@ func (x *PlotNode) String() string {
 func (*PlotNode) ProtoMessage() {}
 
 func (x *PlotNode) ProtoReflect() protoreflect.Message {
-	mi := &file_benchkit_benchkit_proto_msgTypes[10]
+	mi := &file_benchkit_benchkit_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1582,6 +2212,15 @@ func (x *PlotNode) GetCdfUs() []float64 {
 	return nil
 }
 
+func (x *PlotNode) GetMetrics() []*MetricSummary {
+	if x != nil {
+		if x.xxx_hidden_Metrics != nil {
+			return *x.xxx_hidden_Metrics
+		}
+	}
+	return nil
+}
+
 func (x *PlotNode) SetNode(v string) {
 	x.xxx_hidden_Node = v
 }
@@ -1596,6 +2235,10 @@ func (x *PlotNode) SetSummary(v *LatencySummary) {
 
 func (x *PlotNode) SetCdfUs(v []float64) {
 	x.xxx_hidden_CdfUs = v
+}
+
+func (x *PlotNode) SetMetrics(v []*MetricSummary) {
+	x.xxx_hidden_Metrics = &v
 }
 
 func (x *PlotNode) HasSummary() bool {
@@ -1618,7 +2261,8 @@ type PlotNode_builder struct {
 	// Latency CDF, microseconds, ascending. The cumulative probability of point
 	// i is i/(n-1) for n points, so the probability grid is implied by position
 	// and is not stored.
-	CdfUs []float64
+	CdfUs   []float64
+	Metrics []*MetricSummary
 }
 
 func (b0 PlotNode_builder) Build() *PlotNode {
@@ -1629,6 +2273,7 @@ func (b0 PlotNode_builder) Build() *PlotNode {
 	x.xxx_hidden_Throughput = b.Throughput
 	x.xxx_hidden_Summary = b.Summary
 	x.xxx_hidden_CdfUs = b.CdfUs
+	x.xxx_hidden_Metrics = &b.Metrics
 	return m0
 }
 
@@ -1645,13 +2290,14 @@ type PlotBenchmark struct {
 	xxx_hidden_NodesSeen   int32                  `protobuf:"varint,7,opt,name=nodes_seen,json=nodesSeen"`
 	xxx_hidden_Summary     *LatencySummary        `protobuf:"bytes,8,opt,name=summary"`
 	xxx_hidden_Nodes       *[]*PlotNode           `protobuf:"bytes,9,rep,name=nodes"`
+	xxx_hidden_Metrics     *[]*MetricSummary      `protobuf:"bytes,10,rep,name=metrics"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
 
 func (x *PlotBenchmark) Reset() {
 	*x = PlotBenchmark{}
-	mi := &file_benchkit_benchkit_proto_msgTypes[11]
+	mi := &file_benchkit_benchkit_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1663,7 +2309,7 @@ func (x *PlotBenchmark) String() string {
 func (*PlotBenchmark) ProtoMessage() {}
 
 func (x *PlotBenchmark) ProtoReflect() protoreflect.Message {
-	mi := &file_benchkit_benchkit_proto_msgTypes[11]
+	mi := &file_benchkit_benchkit_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1739,6 +2385,15 @@ func (x *PlotBenchmark) GetNodes() []*PlotNode {
 	return nil
 }
 
+func (x *PlotBenchmark) GetMetrics() []*MetricSummary {
+	if x != nil {
+		if x.xxx_hidden_Metrics != nil {
+			return *x.xxx_hidden_Metrics
+		}
+	}
+	return nil
+}
+
 func (x *PlotBenchmark) SetConfig(v *RunConfig) {
 	x.xxx_hidden_Config = v
 }
@@ -1773,6 +2428,10 @@ func (x *PlotBenchmark) SetSummary(v *LatencySummary) {
 
 func (x *PlotBenchmark) SetNodes(v []*PlotNode) {
 	x.xxx_hidden_Nodes = &v
+}
+
+func (x *PlotBenchmark) SetMetrics(v []*MetricSummary) {
+	x.xxx_hidden_Metrics = &v
 }
 
 func (x *PlotBenchmark) HasConfig() bool {
@@ -1814,6 +2473,8 @@ type PlotBenchmark_builder struct {
 	// derivable from the per-node summaries; nil when no node recorded samples.
 	Summary *LatencySummary
 	Nodes   []*PlotNode
+	// Named metrics merged across nodes, sorted by name.
+	Metrics []*MetricSummary
 }
 
 func (b0 PlotBenchmark_builder) Build() *PlotBenchmark {
@@ -1829,6 +2490,7 @@ func (b0 PlotBenchmark_builder) Build() *PlotBenchmark {
 	x.xxx_hidden_NodesSeen = b.NodesSeen
 	x.xxx_hidden_Summary = b.Summary
 	x.xxx_hidden_Nodes = &b.Nodes
+	x.xxx_hidden_Metrics = &b.Metrics
 	return m0
 }
 
@@ -1847,7 +2509,7 @@ type PlotRun struct {
 
 func (x *PlotRun) Reset() {
 	*x = PlotRun{}
-	mi := &file_benchkit_benchkit_proto_msgTypes[12]
+	mi := &file_benchkit_benchkit_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1859,7 +2521,7 @@ func (x *PlotRun) String() string {
 func (*PlotRun) ProtoMessage() {}
 
 func (x *PlotRun) ProtoReflect() protoreflect.Message {
-	mi := &file_benchkit_benchkit_proto_msgTypes[12]
+	mi := &file_benchkit_benchkit_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1961,7 +2623,7 @@ type PlotData struct {
 
 func (x *PlotData) Reset() {
 	*x = PlotData{}
-	mi := &file_benchkit_benchkit_proto_msgTypes[13]
+	mi := &file_benchkit_benchkit_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1973,7 +2635,7 @@ func (x *PlotData) String() string {
 func (*PlotData) ProtoMessage() {}
 
 func (x *PlotData) ProtoReflect() protoreflect.Message {
-	mi := &file_benchkit_benchkit_proto_msgTypes[13]
+	mi := &file_benchkit_benchkit_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2022,7 +2684,7 @@ type PlotNodeEvents struct {
 
 func (x *PlotNodeEvents) Reset() {
 	*x = PlotNodeEvents{}
-	mi := &file_benchkit_benchkit_proto_msgTypes[14]
+	mi := &file_benchkit_benchkit_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2034,7 +2696,7 @@ func (x *PlotNodeEvents) String() string {
 func (*PlotNodeEvents) ProtoMessage() {}
 
 func (x *PlotNodeEvents) ProtoReflect() protoreflect.Message {
-	mi := &file_benchkit_benchkit_proto_msgTypes[14]
+	mi := &file_benchkit_benchkit_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2096,7 +2758,7 @@ type PlotBenchmarkEvents struct {
 
 func (x *PlotBenchmarkEvents) Reset() {
 	*x = PlotBenchmarkEvents{}
-	mi := &file_benchkit_benchkit_proto_msgTypes[15]
+	mi := &file_benchkit_benchkit_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2108,7 +2770,7 @@ func (x *PlotBenchmarkEvents) String() string {
 func (*PlotBenchmarkEvents) ProtoMessage() {}
 
 func (x *PlotBenchmarkEvents) ProtoReflect() protoreflect.Message {
-	mi := &file_benchkit_benchkit_proto_msgTypes[15]
+	mi := &file_benchkit_benchkit_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2172,7 +2834,7 @@ type PlotRunEvents struct {
 
 func (x *PlotRunEvents) Reset() {
 	*x = PlotRunEvents{}
-	mi := &file_benchkit_benchkit_proto_msgTypes[16]
+	mi := &file_benchkit_benchkit_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2184,7 +2846,7 @@ func (x *PlotRunEvents) String() string {
 func (*PlotRunEvents) ProtoMessage() {}
 
 func (x *PlotRunEvents) ProtoReflect() protoreflect.Message {
-	mi := &file_benchkit_benchkit_proto_msgTypes[16]
+	mi := &file_benchkit_benchkit_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2246,7 +2908,7 @@ type PlotEvents struct {
 
 func (x *PlotEvents) Reset() {
 	*x = PlotEvents{}
-	mi := &file_benchkit_benchkit_proto_msgTypes[17]
+	mi := &file_benchkit_benchkit_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2258,7 +2920,7 @@ func (x *PlotEvents) String() string {
 func (*PlotEvents) ProtoMessage() {}
 
 func (x *PlotEvents) ProtoReflect() protoreflect.Message {
-	mi := &file_benchkit_benchkit_proto_msgTypes[17]
+	mi := &file_benchkit_benchkit_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2358,7 +3020,23 @@ const file_benchkit_benchkit_proto_rawDesc = "" +
 	"\n" +
 	"MemoryStat\x12\x16\n" +
 	"\x06allocs\x18\x01 \x01(\x04R\x06allocs\x12\x16\n" +
-	"\x06memory\x18\x02 \x01(\x04R\x06memory\"\xc0\x03\n" +
+	"\x06memory\x18\x02 \x01(\x04R\x06memory\"\xf1\x01\n" +
+	"\x06Metric\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04unit\x18\x02 \x01(\tR\x04unit\x12D\n" +
+	"\x10measurement_mode\x18\x03 \x01(\x0e2\x19.benchkit.MeasurementModeR\x0fmeasurementMode\x12<\n" +
+	"\fdistribution\x18\x04 \x01(\v2\x16.benchkit.DistributionH\x00R\fdistribution\x122\n" +
+	"\acounter\x18\x05 \x01(\v2\x16.benchkit.CounterValueH\x00R\acounterB\a\n" +
+	"\x05value\"\x83\x01\n" +
+	"\fDistribution\x12\x18\n" +
+	"\asamples\x18\x01 \x03(\x03R\asamples\x128\n" +
+	"\thistogram\x18\x02 \x01(\v2\x1a.benchkit.LatencyHistogramR\thistogram\x12\x1f\n" +
+	"\vtick_counts\x18\x03 \x03(\x04R\n" +
+	"tickCounts\"H\n" +
+	"\fCounterValue\x12\x10\n" +
+	"\x03sum\x18\x01 \x01(\x04R\x03sum\x12\x10\n" +
+	"\x03max\x18\x02 \x01(\x04R\x03max\x12\x14\n" +
+	"\x05nodes\x18\x03 \x01(\rR\x05nodes\"\xec\x03\n" +
 	"\x06Result\x12+\n" +
 	"\x06config\x18\x01 \x01(\v2\x13.benchkit.RunConfigR\x06config\x12\x1b\n" +
 	"\ttotal_ops\x18\x02 \x01(\x04R\btotalOps\x12\x1d\n" +
@@ -2376,7 +3054,8 @@ const file_benchkit_benchkit_proto_rawDesc = "" +
 	"\thistogram\x18\n" +
 	" \x01(\v2\x1a.benchkit.LatencyHistogramR\thistogram\x12\x1d\n" +
 	"\n" +
-	"failed_ops\x18\f \x01(\x04R\tfailedOpsJ\x04\b\v\x10\fR\fstream_stats\"J\n" +
+	"failed_ops\x18\f \x01(\x04R\tfailedOps\x12*\n" +
+	"\ametrics\x18\r \x03(\v2\x10.benchkit.MetricR\ametricsJ\x04\b\v\x10\fR\fstream_stats\"J\n" +
 	"\x06Report\x12\x14\n" +
 	"\x05label\x18\x01 \x01(\tR\x05label\x12*\n" +
 	"\aresults\x18\x02 \x03(\v2\x10.benchkit.ResultR\aresults\"\x88\x01\n" +
@@ -2385,14 +3064,21 @@ const file_benchkit_benchkit_proto_rawDesc = "" +
 	"\x06p50_us\x18\x02 \x01(\x01R\x05p50Us\x12\x15\n" +
 	"\x06p95_us\x18\x03 \x01(\x01R\x05p95Us\x12\x15\n" +
 	"\x06p99_us\x18\x04 \x01(\x01R\x05p99Us\x12\x18\n" +
-	"\asamples\x18\x05 \x01(\x04R\asamples\"\x89\x01\n" +
+	"\asamples\x18\x05 \x01(\x04R\asamples\"\xb4\x01\n" +
+	"\rMetricSummary\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04unit\x18\x02 \x01(\tR\x04unit\x12>\n" +
+	"\fdistribution\x18\x03 \x01(\v2\x18.benchkit.LatencySummaryH\x00R\fdistribution\x122\n" +
+	"\acounter\x18\x04 \x01(\v2\x16.benchkit.CounterValueH\x00R\acounterB\a\n" +
+	"\x05value\"\xbc\x01\n" +
 	"\bPlotNode\x12\x12\n" +
 	"\x04node\x18\x01 \x01(\tR\x04node\x12\x1e\n" +
 	"\n" +
 	"throughput\x18\x02 \x01(\x01R\n" +
 	"throughput\x122\n" +
 	"\asummary\x18\x03 \x01(\v2\x18.benchkit.LatencySummaryR\asummary\x12\x15\n" +
-	"\x06cdf_us\x18\x04 \x03(\x01R\x05cdfUs\"\xd7\x02\n" +
+	"\x06cdf_us\x18\x04 \x03(\x01R\x05cdfUs\x121\n" +
+	"\ametrics\x18\x05 \x03(\v2\x17.benchkit.MetricSummaryR\ametrics\"\x8a\x03\n" +
 	"\rPlotBenchmark\x12+\n" +
 	"\x06config\x18\x01 \x01(\v2\x13.benchkit.RunConfigR\x06config\x12\x1e\n" +
 	"\n" +
@@ -2407,7 +3093,9 @@ const file_benchkit_benchkit_proto_rawDesc = "" +
 	"\n" +
 	"nodes_seen\x18\a \x01(\x05R\tnodesSeen\x122\n" +
 	"\asummary\x18\b \x01(\v2\x18.benchkit.LatencySummaryR\asummary\x12(\n" +
-	"\x05nodes\x18\t \x03(\v2\x12.benchkit.PlotNodeR\x05nodes\"\x96\x01\n" +
+	"\x05nodes\x18\t \x03(\v2\x12.benchkit.PlotNodeR\x05nodes\x121\n" +
+	"\ametrics\x18\n" +
+	" \x03(\v2\x17.benchkit.MetricSummaryR\ametrics\"\x96\x01\n" +
 	"\aPlotRun\x12\x12\n" +
 	"\x04base\x18\x01 \x01(\tR\x04base\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x16\n" +
@@ -2440,7 +3128,7 @@ const file_benchkit_benchkit_proto_rawDesc = "" +
 	"\x03HDR\x10\x02\"\x04\b\x01\x10\x01B'Z github.com/relab/gorums/benchkit\x92\x03\x02\b\x02b\beditionsp\xe9\a"
 
 var file_benchkit_benchkit_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_benchkit_benchkit_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_benchkit_benchkit_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_benchkit_benchkit_proto_goTypes = []any{
 	(MeasurementMode)(0),        // 0: benchkit.MeasurementMode
 	(StatsMode)(0),              // 1: benchkit.StatsMode
@@ -2452,47 +3140,60 @@ var file_benchkit_benchkit_proto_goTypes = []any{
 	(*Event)(nil),               // 7: benchkit.Event
 	(*LatencyHistogram)(nil),    // 8: benchkit.LatencyHistogram
 	(*MemoryStat)(nil),          // 9: benchkit.MemoryStat
-	(*Result)(nil),              // 10: benchkit.Result
-	(*Report)(nil),              // 11: benchkit.Report
-	(*LatencySummary)(nil),      // 12: benchkit.LatencySummary
-	(*PlotNode)(nil),            // 13: benchkit.PlotNode
-	(*PlotBenchmark)(nil),       // 14: benchkit.PlotBenchmark
-	(*PlotRun)(nil),             // 15: benchkit.PlotRun
-	(*PlotData)(nil),            // 16: benchkit.PlotData
-	(*PlotNodeEvents)(nil),      // 17: benchkit.PlotNodeEvents
-	(*PlotBenchmarkEvents)(nil), // 18: benchkit.PlotBenchmarkEvents
-	(*PlotRunEvents)(nil),       // 19: benchkit.PlotRunEvents
-	(*PlotEvents)(nil),          // 20: benchkit.PlotEvents
-	nil,                         // 21: benchkit.RunConfig.CustomDimensionsEntry
+	(*Metric)(nil),              // 10: benchkit.Metric
+	(*Distribution)(nil),        // 11: benchkit.Distribution
+	(*CounterValue)(nil),        // 12: benchkit.CounterValue
+	(*Result)(nil),              // 13: benchkit.Result
+	(*Report)(nil),              // 14: benchkit.Report
+	(*LatencySummary)(nil),      // 15: benchkit.LatencySummary
+	(*MetricSummary)(nil),       // 16: benchkit.MetricSummary
+	(*PlotNode)(nil),            // 17: benchkit.PlotNode
+	(*PlotBenchmark)(nil),       // 18: benchkit.PlotBenchmark
+	(*PlotRun)(nil),             // 19: benchkit.PlotRun
+	(*PlotData)(nil),            // 20: benchkit.PlotData
+	(*PlotNodeEvents)(nil),      // 21: benchkit.PlotNodeEvents
+	(*PlotBenchmarkEvents)(nil), // 22: benchkit.PlotBenchmarkEvents
+	(*PlotRunEvents)(nil),       // 23: benchkit.PlotRunEvents
+	(*PlotEvents)(nil),          // 24: benchkit.PlotEvents
+	nil,                         // 25: benchkit.RunConfig.CustomDimensionsEntry
 }
 var file_benchkit_benchkit_proto_depIdxs = []int32{
 	0,  // 0: benchkit.RunConfig.measurement_mode:type_name -> benchkit.MeasurementMode
 	1,  // 1: benchkit.RunConfig.stats_mode:type_name -> benchkit.StatsMode
-	21, // 2: benchkit.RunConfig.custom_dimensions:type_name -> benchkit.RunConfig.CustomDimensionsEntry
+	25, // 2: benchkit.RunConfig.custom_dimensions:type_name -> benchkit.RunConfig.CustomDimensionsEntry
 	2,  // 3: benchkit.PhaseMarker.phase:type_name -> benchkit.PhaseMarker.Phase
 	4,  // 4: benchkit.Event.throughput:type_name -> benchkit.ThroughputInterval
 	5,  // 5: benchkit.Event.latency:type_name -> benchkit.LatencyInterval
 	6,  // 6: benchkit.Event.phase:type_name -> benchkit.PhaseMarker
-	3,  // 7: benchkit.Result.config:type_name -> benchkit.RunConfig
-	9,  // 8: benchkit.Result.server_stats:type_name -> benchkit.MemoryStat
-	7,  // 9: benchkit.Result.events:type_name -> benchkit.Event
-	8,  // 10: benchkit.Result.histogram:type_name -> benchkit.LatencyHistogram
-	10, // 11: benchkit.Report.results:type_name -> benchkit.Result
-	12, // 12: benchkit.PlotNode.summary:type_name -> benchkit.LatencySummary
-	3,  // 13: benchkit.PlotBenchmark.config:type_name -> benchkit.RunConfig
-	12, // 14: benchkit.PlotBenchmark.summary:type_name -> benchkit.LatencySummary
-	13, // 15: benchkit.PlotBenchmark.nodes:type_name -> benchkit.PlotNode
-	14, // 16: benchkit.PlotRun.benchmarks:type_name -> benchkit.PlotBenchmark
-	15, // 17: benchkit.PlotData.runs:type_name -> benchkit.PlotRun
-	7,  // 18: benchkit.PlotNodeEvents.events:type_name -> benchkit.Event
-	17, // 19: benchkit.PlotBenchmarkEvents.nodes:type_name -> benchkit.PlotNodeEvents
-	18, // 20: benchkit.PlotRunEvents.benchmarks:type_name -> benchkit.PlotBenchmarkEvents
-	19, // 21: benchkit.PlotEvents.runs:type_name -> benchkit.PlotRunEvents
-	22, // [22:22] is the sub-list for method output_type
-	22, // [22:22] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	0,  // 7: benchkit.Metric.measurement_mode:type_name -> benchkit.MeasurementMode
+	11, // 8: benchkit.Metric.distribution:type_name -> benchkit.Distribution
+	12, // 9: benchkit.Metric.counter:type_name -> benchkit.CounterValue
+	8,  // 10: benchkit.Distribution.histogram:type_name -> benchkit.LatencyHistogram
+	3,  // 11: benchkit.Result.config:type_name -> benchkit.RunConfig
+	9,  // 12: benchkit.Result.server_stats:type_name -> benchkit.MemoryStat
+	7,  // 13: benchkit.Result.events:type_name -> benchkit.Event
+	8,  // 14: benchkit.Result.histogram:type_name -> benchkit.LatencyHistogram
+	10, // 15: benchkit.Result.metrics:type_name -> benchkit.Metric
+	13, // 16: benchkit.Report.results:type_name -> benchkit.Result
+	15, // 17: benchkit.MetricSummary.distribution:type_name -> benchkit.LatencySummary
+	12, // 18: benchkit.MetricSummary.counter:type_name -> benchkit.CounterValue
+	15, // 19: benchkit.PlotNode.summary:type_name -> benchkit.LatencySummary
+	16, // 20: benchkit.PlotNode.metrics:type_name -> benchkit.MetricSummary
+	3,  // 21: benchkit.PlotBenchmark.config:type_name -> benchkit.RunConfig
+	15, // 22: benchkit.PlotBenchmark.summary:type_name -> benchkit.LatencySummary
+	17, // 23: benchkit.PlotBenchmark.nodes:type_name -> benchkit.PlotNode
+	16, // 24: benchkit.PlotBenchmark.metrics:type_name -> benchkit.MetricSummary
+	18, // 25: benchkit.PlotRun.benchmarks:type_name -> benchkit.PlotBenchmark
+	19, // 26: benchkit.PlotData.runs:type_name -> benchkit.PlotRun
+	7,  // 27: benchkit.PlotNodeEvents.events:type_name -> benchkit.Event
+	21, // 28: benchkit.PlotBenchmarkEvents.nodes:type_name -> benchkit.PlotNodeEvents
+	22, // 29: benchkit.PlotRunEvents.benchmarks:type_name -> benchkit.PlotBenchmarkEvents
+	23, // 30: benchkit.PlotEvents.runs:type_name -> benchkit.PlotRunEvents
+	31, // [31:31] is the sub-list for method output_type
+	31, // [31:31] is the sub-list for method input_type
+	31, // [31:31] is the sub-list for extension type_name
+	31, // [31:31] is the sub-list for extension extendee
+	0,  // [0:31] is the sub-list for field type_name
 }
 
 func init() { file_benchkit_benchkit_proto_init() }
@@ -2505,13 +3206,21 @@ func file_benchkit_benchkit_proto_init() {
 		(*event_Latency)(nil),
 		(*event_Phase)(nil),
 	}
+	file_benchkit_benchkit_proto_msgTypes[7].OneofWrappers = []any{
+		(*metric_Distribution)(nil),
+		(*metric_Counter)(nil),
+	}
+	file_benchkit_benchkit_proto_msgTypes[13].OneofWrappers = []any{
+		(*metricSummary_Distribution)(nil),
+		(*metricSummary_Counter)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_benchkit_benchkit_proto_rawDesc), len(file_benchkit_benchkit_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   19,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

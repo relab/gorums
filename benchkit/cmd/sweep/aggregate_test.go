@@ -455,3 +455,105 @@ func TestWriteAggRunsCSVCustomColumns(t *testing.T) {
 		t.Errorf("rows = %v, want %v", got, want)
 	}
 }
+
+// readCSVRecords returns the records of the CSV file at path, header first.
+func readCSVRecords(t *testing.T, path string) [][]string {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	recs, err := csv.NewReader(f).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return recs
+}
+
+// seriesSummary returns a series metric summary whose mean and percentiles
+// all equal us, in microseconds.
+func seriesSummary(name string, us float64) *benchkit.MetricSummary {
+	return benchkit.MetricSummary_builder{
+		Name: name, Unit: "ns",
+		Distribution: benchkit.LatencySummary_builder{MeanUs: us, P50Us: us, P95Us: us, P99Us: us, Samples: 1}.Build(),
+	}.Build()
+}
+
+// counterSummary returns a counter metric summary.
+func counterSummary(name, unit string, sum, maxValue uint64) *benchkit.MetricSummary {
+	return benchkit.MetricSummary_builder{
+		Name: name, Unit: unit,
+		Counter: benchkit.CounterValue_builder{Sum: sum, Max: maxValue, Nodes: 2}.Build(),
+	}.Build()
+}
+
+// TestWriteAggRunsCSVMetricColumns verifies that agg.csv appends one column
+// group per named metric, sorted by name, after the built-in columns: a
+// series gets its mean and percentiles in microseconds and a counter its sum
+// and max, each averaged across repetitions with _sd and _ci95. A
+// configuration that lacks a metric gets empty fields.
+func TestWriteAggRunsCSVMetricColumns(t *testing.T) {
+	run := func(workers int, metrics ...*benchkit.MetricSummary) plotRunRecord {
+		r := qRun(workers, "dual", runStatusSucceeded, 100, 10)
+		r.metrics = metrics
+		return r
+	}
+	rows := aggregateReps([]plotRunRecord{
+		run(1, seriesSummary("encode", 2), counterSummary("uploaded", "B", 100, 70)),
+		run(1, seriesSummary("encode", 4), counterSummary("uploaded", "B", 200, 90)),
+		run(2),
+	}, false)
+	path := filepath.Join(t.TempDir(), "agg.csv")
+	if err := writeAggRunsCSV(path, rows); err != nil {
+		t.Fatal(err)
+	}
+	recs := readCSVRecords(t, path)
+	header := recs[0]
+	first := slices.Index(header, "p99_ms_ci95") + 1
+	wantCols := []string{
+		"encode.mean_us", "encode.mean_us_sd", "encode.mean_us_ci95",
+		"encode.p50_us", "encode.p50_us_sd", "encode.p50_us_ci95",
+		"encode.p95_us", "encode.p95_us_sd", "encode.p95_us_ci95",
+		"encode.p99_us", "encode.p99_us_sd", "encode.p99_us_ci95",
+		"uploaded.sum", "uploaded.sum_sd", "uploaded.sum_ci95",
+		"uploaded.max", "uploaded.max_sd", "uploaded.max_ci95",
+	}
+	if got := header[first:]; !slices.Equal(got, wantCols) {
+		t.Fatalf("metric columns = %v, want %v", got, wantCols)
+	}
+	col := func(rec []string, name string) string { return rec[slices.Index(header, name)] }
+	w1, w2 := recs[1], recs[2]
+	sd := math.Sqrt2 // sample sd of {2, 4}
+	for name, want := range map[string]string{
+		"encode.p50_us":       "3",
+		"encode.p50_us_sd":    formatFloat(sd),
+		"encode.p50_us_ci95":  formatFloat(tCritical95(1) * sd / math.Sqrt2),
+		"uploaded.sum":        "150",
+		"uploaded.max":        "80",
+		"uploaded.max_sd":     formatFloat(10 * math.Sqrt2),
+		"encode.mean_us_ci95": formatFloat(tCritical95(1) * sd / math.Sqrt2),
+	} {
+		if got := col(w1, name); got != want {
+			t.Errorf("workers=1 %s = %q, want %q", name, got, want)
+		}
+	}
+	for _, name := range wantCols {
+		if got := col(w2, name); got != "" {
+			t.Errorf("workers=2 %s = %q, want empty for a configuration without the metric", name, got)
+		}
+	}
+}
+
+// TestWriteAggRunsCSVWithoutMetrics verifies that agg.csv has no metric
+// columns when no run recorded a named metric.
+func TestWriteAggRunsCSVWithoutMetrics(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agg.csv")
+	if err := writeAggRunsCSV(path, aggregateReps([]plotRunRecord{qRun(1, "dual", runStatusSucceeded, 100, 10)}, false)); err != nil {
+		t.Fatal(err)
+	}
+	header := readCSVRecords(t, path)[0]
+	if last := header[len(header)-1]; last != "p99_ms_ci95" {
+		t.Errorf("last column = %q, want p99_ms_ci95", last)
+	}
+}

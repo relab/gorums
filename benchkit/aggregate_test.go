@@ -3,6 +3,8 @@ package benchkit
 import (
 	"errors"
 	"math"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -182,5 +184,129 @@ func TestAggregateServerResultsHistogram(t *testing.T) {
 	// HDR precision.
 	if p := got.Percentiles(0.5); len(p) == 0 || math.Abs(float64(p[0]-time.Microsecond)) > 50 {
 		t.Errorf("Percentiles(0.5) = %v, want ≈1µs", p)
+	}
+}
+
+// TestAggregateServerResultsMetrics verifies that AggregateServerResults
+// merges metrics by name: series concatenate their samples and drop their tick
+// counts, counters add sum and node count and keep the larger max, and a
+// metric of one server passes through.
+func TestAggregateServerResultsMetrics(t *testing.T) {
+	replies := map[uint32]*Result{
+		2: Result_builder{Metrics: []*Metric{
+			counterMetric("uploaded", "B", 70),
+			seriesMetric("deliver", MeasurementMode_SERVER_MEASURED, 3),
+		}}.Build(),
+		1: Result_builder{Metrics: []*Metric{
+			seriesMetric("deliver", MeasurementMode_SERVER_MEASURED, 1, 2),
+			seriesMetric("decode", MeasurementMode_CLIENT_MEASURED, 9),
+			counterMetric("uploaded", "B", 30),
+		}}.Build(),
+	}
+	r, err := AggregateServerResults(replies)
+	if err != nil {
+		t.Fatalf("AggregateServerResults: %v", err)
+	}
+	if got, want := metricNames(r), []string{"decode", "deliver", "uploaded"}; !slices.Equal(got, want) {
+		t.Fatalf("metric names = %v, want %v", got, want)
+	}
+	deliver := metricByName(r, "deliver").GetDistribution()
+	if got, want := deliver.GetSamples(), []int64{1, 2, 3}; !slices.Equal(got, want) {
+		t.Errorf("deliver samples = %v, want %v", got, want)
+	}
+	if got := deliver.GetTickCounts(); got != nil {
+		t.Errorf("deliver tick counts = %v, want nil after a merge", got)
+	}
+	if got := metricByName(r, "decode").GetDistribution().GetTickCounts(); len(got) != 1 {
+		t.Errorf("decode tick counts = %v, want them kept for one server", got)
+	}
+	c := metricByName(r, "uploaded").GetCounter()
+	if c.GetSum() != 100 || c.GetMax() != 70 || c.GetNodes() != 2 {
+		t.Errorf("uploaded = (sum %d, max %d, nodes %d), want (100, 70, 2)", c.GetSum(), c.GetMax(), c.GetNodes())
+	}
+	// The merge must not change the replies.
+	if got := replies[1].GetMetrics()[0].GetDistribution().GetSamples(); len(got) != 2 {
+		t.Errorf("reply 1 deliver samples = %v, want them unchanged", got)
+	}
+	if got := replies[1].GetMetrics()[2].GetCounter().GetSum(); got != 30 {
+		t.Errorf("reply 1 uploaded = %d, want it unchanged", got)
+	}
+}
+
+// TestAggregateServerResultsMetricMismatch verifies that a metric whose unit,
+// kind, measurement mode, or stats mode differs between servers fails the
+// merge with an error that names the metric and both descriptions.
+func TestAggregateServerResultsMetricMismatch(t *testing.T) {
+	tests := []struct {
+		name string
+		a, b *Metric
+		want []string
+	}{
+		{"Unit", counterMetric("up", "B", 1), counterMetric("up", "KiB", 1), []string{`"up"`, `"B"`, `"KiB"`}},
+		{"Kind", counterMetric("up", "B", 1), seriesMetric("up", MeasurementMode_CLIENT_MEASURED, 1), []string{`"up"`, `"B"`, `"ns"`}},
+		{"Mode", seriesMetric("up", MeasurementMode_CLIENT_MEASURED, 1), seriesMetric("up", MeasurementMode_SERVER_MEASURED, 1), []string{`"up"`, "server-measured"}},
+		{"CounterMode", counterMetric("up", "B", 1), serverCounterMetric("up", "B", 1), []string{`"up"`, "server-measured counter"}},
+		{"StatsMode", seriesMetric("up", MeasurementMode_CLIENT_MEASURED, 1), hdrSeriesMetric("up", 1000), []string{`"up"`, "exact", "hdr"}},
+		{"StatsModeReversed", hdrSeriesMetric("up", 1000), seriesMetric("up", MeasurementMode_CLIENT_MEASURED, 1), []string{`"up"`, "exact", "hdr"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := AggregateServerResults(map[uint32]*Result{
+				1: Result_builder{Metrics: []*Metric{tt.a}}.Build(),
+				2: Result_builder{Metrics: []*Metric{tt.b}}.Build(),
+			})
+			if err == nil {
+				t.Fatal("AggregateServerResults: got nil error, want a mismatch error")
+			}
+			for _, w := range tt.want {
+				if !strings.Contains(err.Error(), w) {
+					t.Errorf("error %q does not contain %s", err, w)
+				}
+			}
+		})
+	}
+}
+
+// TestAggregateServerResultsManyMetrics verifies that AggregateServerResults
+// merges the series and counters of many replies in node ID order: raw
+// samples concatenate, histograms sum their counts, and counters add up.
+func TestAggregateServerResultsManyMetrics(t *testing.T) {
+	const nodes = 50
+	replies := make(map[uint32]*Result, nodes)
+	var wantSamples []int64
+	for id := range uint32(nodes) {
+		v := int64(id)
+		replies[id] = Result_builder{Metrics: []*Metric{
+			seriesMetric("deliver", MeasurementMode_CLIENT_MEASURED, v, v),
+			Metric_builder{
+				Name: "hist", Unit: "ns",
+				Distribution: Distribution_builder{Histogram: latencyHist([]int64{1000}, []uint64{3})}.Build(),
+			}.Build(),
+			counterMetric("uploaded", "B", uint64(id)),
+		}}.Build()
+		wantSamples = append(wantSamples, v, v)
+	}
+	r, err := AggregateServerResults(replies)
+	if err != nil {
+		t.Fatalf("AggregateServerResults: %v", err)
+	}
+	deliver := metricByName(r, "deliver").GetDistribution()
+	if got := deliver.GetSamples(); !slices.Equal(got, wantSamples) {
+		t.Errorf("deliver samples = %v, want %v", got, wantSamples)
+	}
+	if got := deliver.GetTickCounts(); got != nil {
+		t.Errorf("deliver tick counts = %v, want nil after a merge", got)
+	}
+	if got := totalCount(metricByName(r, "hist").GetDistribution().GetHistogram()); got != 3*nodes {
+		t.Errorf("hist count = %d, want %d", got, 3*nodes)
+	}
+	c := metricByName(r, "uploaded").GetCounter()
+	if c.GetSum() != nodes*(nodes-1)/2 || c.GetMax() != nodes-1 || c.GetNodes() != nodes {
+		t.Errorf("uploaded = (sum %d, max %d, nodes %d), want (%d, %d, %d)",
+			c.GetSum(), c.GetMax(), c.GetNodes(), nodes*(nodes-1)/2, nodes-1, nodes)
+	}
+	// The merge must not change the replies.
+	if got := replies[0].GetMetrics()[0].GetDistribution().GetSamples(); !slices.Equal(got, []int64{0, 0}) {
+		t.Errorf("reply 0 deliver samples = %v, want them unchanged", got)
 	}
 }
