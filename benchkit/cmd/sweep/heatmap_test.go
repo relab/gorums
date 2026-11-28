@@ -69,7 +69,7 @@ func TestNodeHealthRowsCustomDimensions(t *testing.T) {
 	for _, d := range []string{"20", "22"} {
 		for _, node := range []string{"bb2:9000", "bb3:9000"} {
 			cdf = append(cdf, plotNodeCDFRecord{
-				Benchmark: "Q", StreamMode: "dual", Nodes: 2, Params: custom("d", d),
+				Benchmark: "Q", StreamMode: "dual", Nodes: 2, Custom: custom("d", d),
 				base: "run_Q_N2_d=" + d, label: "run", node: node, throughput: 100,
 			})
 		}
@@ -80,7 +80,7 @@ func TestNodeHealthRowsCustomDimensions(t *testing.T) {
 	}
 	for _, r := range rows {
 		if r.runs != 1 {
-			t.Errorf("host %s d=%s: runs = %d, want 1", r.host, r.Params.Get("d"), r.runs)
+			t.Errorf("host %s d=%s: runs = %d, want 1", r.host, r.Custom.Get("d"), r.runs)
 		}
 	}
 

@@ -69,14 +69,14 @@ func TestRunConfigDimensionsWithFallback(t *testing.T) {
 	}
 }
 
-// TestRunConfigParamsCanonical verifies that equal sets of custom dimension
-// values give equal [Params], whatever the order they were added in, so a
+// TestRunConfigCustomDimensionsCanonical verifies that equal sets of custom dimension
+// values give equal [CustomDimensions], whatever the order they were added in, so a
 // [Dimensions] holding them stays usable as a map key.
-func TestRunConfigParamsCanonical(t *testing.T) {
-	a := NewParams(map[string]string{"t": "2", "d": "20", "ready": "tree"})
-	b := NewParams(map[string]string{"ready": "tree", "d": "20", "t": "2"})
+func TestRunConfigCustomDimensionsCanonical(t *testing.T) {
+	a := NewCustomDimensions(map[string]string{"t": "2", "d": "20", "ready": "tree"})
+	b := NewCustomDimensions(map[string]string{"ready": "tree", "d": "20", "t": "2"})
 	if a != b {
-		t.Fatalf("NewParams differs by insertion order: %q != %q", a, b)
+		t.Fatalf("NewCustomDimensions differs by insertion order: %q != %q", a, b)
 	}
 	if got, want := a.Names(), []string{"d", "ready", "t"}; !slices.Equal(got, want) {
 		t.Errorf("Names() = %v, want %v", got, want)
@@ -94,43 +94,43 @@ func TestRunConfigParamsCanonical(t *testing.T) {
 	if want := []string{"d=20", "ready=tree", "t=2"}; !slices.Equal(names, want) {
 		t.Errorf("All() = %v, want %v", names, want)
 	}
-	if got := NewParams(nil); got != "" {
-		t.Errorf("NewParams(nil) = %q, want empty", got)
+	if got := NewCustomDimensions(nil); got != "" {
+		t.Errorf("NewCustomDimensions(nil) = %q, want empty", got)
 	}
-	if got := Params("").Map(); got != nil {
+	if got := CustomDimensions("").Map(); got != nil {
 		t.Errorf("empty Map() = %v, want nil", got)
 	}
 }
 
-// TestRunConfigParamsRoundTrip verifies that custom dimension values survive
+// TestRunConfigCustomDimensionsRoundTrip verifies that custom dimension values survive
 // [RunConfig.ApplyDimensions] and [RunConfig.Dimensions], and that a result
 // without them takes the fallback's values.
-func TestRunConfigParamsRoundTrip(t *testing.T) {
+func TestRunConfigCustomDimensionsRoundTrip(t *testing.T) {
 	want := Dimensions{
 		Benchmark: "Idea0", Nodes: 9,
-		Params: NewParams(map[string]string{"d": "20", "ready": "all"}),
+		Custom: NewCustomDimensions(map[string]string{"d": "20", "ready": "all"}),
 	}
 	cfg := NewRunConfig(want)
 	if got := cfg.Dimensions(); got != want {
 		t.Fatalf("Dimensions() = %+v, want %+v", got, want)
 	}
-	if got := cfg.GetParams(); !maps.Equal(got, map[string]string{"d": "20", "ready": "all"}) {
-		t.Errorf("GetParams() = %v", got)
+	if got := cfg.GetCustomDimensions(); !maps.Equal(got, map[string]string{"d": "20", "ready": "all"}) {
+		t.Errorf("GetCustomDimensions() = %v", got)
 	}
 	bare := NewRunConfig(Dimensions{Benchmark: "Idea0"})
-	if got := bare.DimensionsWithFallback(want); got.Params != want.Params {
-		t.Errorf("DimensionsWithFallback().Params = %q, want %q", got.Params, want.Params)
+	if got := bare.DimensionsWithFallback(want); got.Custom != want.Custom {
+		t.Errorf("DimensionsWithFallback().Custom = %q, want %q", got.Custom, want.Custom)
 	}
-	if got := cfg.DimensionsWithFallback(Dimensions{Params: NewParams(map[string]string{"d": "22"})}); got.Params != want.Params {
-		t.Errorf("DimensionsWithFallback() replaced recorded params: %q, want %q", got.Params, want.Params)
+	if got := cfg.DimensionsWithFallback(Dimensions{Custom: NewCustomDimensions(map[string]string{"d": "22"})}); got.Custom != want.Custom {
+		t.Errorf("DimensionsWithFallback() replaced recorded custom dimensions: %q, want %q", got.Custom, want.Custom)
 	}
 }
 
-// TestRunConfigParamsJSON verifies that [Params] encodes as a JSON object of
+// TestRunConfigCustomDimensionsJSON verifies that [CustomDimensions] encodes as a JSON object of
 // name-value pairs, and that a [Dimensions] without custom values omits the
 // field, so manifests of sweeps without custom dimensions keep their form.
-func TestRunConfigParamsJSON(t *testing.T) {
-	dims := Dimensions{Benchmark: "Q", Params: NewParams(map[string]string{"t": "1", "d": "20"})}
+func TestRunConfigCustomDimensionsJSON(t *testing.T) {
+	dims := Dimensions{Benchmark: "Q", Custom: NewCustomDimensions(map[string]string{"t": "1", "d": "20"})}
 	data, err := json.Marshal(dims)
 	if err != nil {
 		t.Fatal(err)
@@ -139,9 +139,9 @@ func TestRunConfigParamsJSON(t *testing.T) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatal(err)
 	}
-	obj, ok := raw["params"].(map[string]any)
+	obj, ok := raw["custom"].(map[string]any)
 	if !ok || obj["d"] != "20" || obj["t"] != "1" || len(obj) != 2 {
-		t.Fatalf("params = %#v in %s, want {d: 20, t: 1}", raw["params"], data)
+		t.Fatalf("custom = %#v in %s, want {d: 20, t: 1}", raw["custom"], data)
 	}
 	var back Dimensions
 	if err := json.Unmarshal(data, &back); err != nil {
@@ -155,17 +155,17 @@ func TestRunConfigParamsJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(data), "params") {
-		t.Errorf("Dimensions without params encodes a params field: %s", data)
+	if strings.Contains(string(data), "\"custom\"") {
+		t.Errorf("Dimensions without custom dimensions encodes a custom field: %s", data)
 	}
-	if err := json.Unmarshal([]byte(`{"params": ["d"]}`), &back); err == nil {
-		t.Error("Unmarshal of a non-object params succeeded, want an error")
+	if err := json.Unmarshal([]byte(`{"custom": ["d"]}`), &back); err == nil {
+		t.Error("Unmarshal of a non-object custom succeeded, want an error")
 	}
 }
 
-// FuzzRunConfigParams verifies that any set of custom dimension values survives
+// FuzzRunConfigCustomDimensions verifies that any set of custom dimension values survives
 // the trip through [RunConfig], its wire encoding, and JSON unchanged.
-func FuzzRunConfigParams(f *testing.F) {
+func FuzzRunConfigCustomDimensions(f *testing.F) {
 	f.Add("d", "20", "ready", "tree")
 	f.Add("a&b", "x=y", "", "%")
 	f.Add("t", "", "t2", "1.5")
@@ -176,11 +176,11 @@ func FuzzRunConfigParams(f *testing.F) {
 			}
 		}
 		want := map[string]string{k1: v1, k2: v2}
-		params := NewParams(want)
-		if got := params.Map(); !maps.Equal(got, want) {
-			t.Fatalf("NewParams(%v).Map() = %v", want, got)
+		customDims := NewCustomDimensions(want)
+		if got := customDims.Map(); !maps.Equal(got, want) {
+			t.Fatalf("NewCustomDimensions(%v).Map() = %v", want, got)
 		}
-		data, err := proto.Marshal(NewRunConfig(Dimensions{Params: params}))
+		data, err := proto.Marshal(NewRunConfig(Dimensions{Custom: customDims}))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -188,19 +188,19 @@ func FuzzRunConfigParams(f *testing.F) {
 		if err := proto.Unmarshal(data, cfg); err != nil {
 			t.Fatal(err)
 		}
-		if got := cfg.Dimensions().Params; got != params {
-			t.Fatalf("proto round trip = %q, want %q", got, params)
+		if got := cfg.Dimensions().Custom; got != customDims {
+			t.Fatalf("proto round trip = %q, want %q", got, customDims)
 		}
-		js, err := json.Marshal(params)
+		js, err := json.Marshal(customDims)
 		if err != nil {
 			t.Fatal(err)
 		}
-		var back Params
+		var back CustomDimensions
 		if err := json.Unmarshal(js, &back); err != nil {
 			t.Fatal(err)
 		}
-		if back != params {
-			t.Fatalf("JSON round trip = %q, want %q", back, params)
+		if back != customDims {
+			t.Fatalf("JSON round trip = %q, want %q", back, customDims)
 		}
 	})
 }

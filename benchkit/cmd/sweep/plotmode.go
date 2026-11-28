@@ -632,10 +632,10 @@ func compileReport(typPath string) string {
 // tolerated; absent latency fields decode to nil pointers.
 func readPlotRunsCSV(path string) ([]plotRunRecord, error) {
 	var out []plotRunRecord
-	var params func([]string) benchkit.Params
+	var customDims func([]string) benchkit.CustomDimensions
 	err := forEachCSVRow(path, false, func(r []string, col map[string]int) error {
-		if params == nil {
-			params = csvParamsReader(col)
+		if customDims == nil {
+			customDims = csvCustomReader(col)
 		}
 		out = append(out, plotRunRecord{
 			Benchmark:   field(r, col, "benchmark"),
@@ -646,7 +646,7 @@ func readPlotRunsCSV(path string) ([]plotRunRecord, error) {
 			SendBuffer:  atoiOr(field(r, col, "send_buffer"), 0),
 			RecvBuffer:  atoiOr(field(r, col, "recv_buffer"), 0),
 			StreamMode:  field(r, col, "stream_mode"),
-			Params:      params(r),
+			Custom:      customDims(r),
 			base:        field(r, col, "base"),
 			label:       field(r, col, "label"),
 			status:      field(r, col, "status"),
@@ -674,10 +674,10 @@ func readPlotRunsCSV(path string) ([]plotRunRecord, error) {
 // millions of CDF rows.
 func readReportNodeCDFCSV(path string, opts reportOptions, limit int) ([]plotNodeCDFRecord, []plotNodeCDFRecord, error) {
 	reducer := newReportCDFReducer(opts, limit)
-	var params func([]string) benchkit.Params
+	var customDims func([]string) benchkit.CustomDimensions
 	err := forEachCSVRow(path, true, func(row []string, col map[string]int) error {
-		if params == nil {
-			params = csvParamsReader(col)
+		if customDims == nil {
+			customDims = csvCustomReader(col)
 		}
 		base := field(row, col, "base")
 		dims := benchkit.Dimensions{
@@ -689,7 +689,7 @@ func readReportNodeCDFCSV(path string, opts reportOptions, limit int) ([]plotNod
 			SendBuffer: atoiOr(field(row, col, "send_buffer"), 0),
 			RecvBuffer: atoiOr(field(row, col, "recv_buffer"), 0),
 			StreamMode: field(row, col, "stream_mode"),
-			Params:     params(row),
+			Custom:     customDims(row),
 		}
 		if reducer.excluded(base, dims) {
 			return nil
@@ -725,19 +725,19 @@ func readReportNodeCDFCSV(path string, opts reportOptions, limit int) ([]plotNod
 	return reducer.cdf, reducer.health, err
 }
 
-// csvParamsReader returns a function that reads the custom dimension values
+// csvCustomReader returns a function that reads the custom dimension values
 // of one row of a CSV file whose header has the column index col. A custom
 // dimension column is a column whose header is a valid custom dimension name
 // and not a reserved name. An empty value leaves its dimension out of the
-// row's Params, as an absent value.
-func csvParamsReader(col map[string]int) func(row []string) benchkit.Params {
+// row's custom dimensions, as an absent value.
+func csvCustomReader(col map[string]int) func(row []string) benchkit.CustomDimensions {
 	var names []string
 	for name := range col {
 		if dimensionNamePattern.MatchString(name) && !slices.Contains(reservedDimensionNames, name) {
 			names = append(names, name)
 		}
 	}
-	return func(row []string) benchkit.Params {
+	return func(row []string) benchkit.CustomDimensions {
 		if len(names) == 0 {
 			return ""
 		}
@@ -747,7 +747,7 @@ func csvParamsReader(col map[string]int) func(row []string) benchkit.Params {
 				values[name] = value
 			}
 		}
-		return benchkit.NewParams(values)
+		return benchkit.NewCustomDimensions(values)
 	}
 }
 

@@ -18,18 +18,18 @@ import (
 // distinct values, keeps the dimensions sorted by name, and rejects every
 // malformed or ambiguous declaration with an error that names the cause.
 func TestDimFlagSet(t *testing.T) {
-	var dims []customDimension
+	var dims []dimDecl
 	fs := flag.NewFlagSet("sweep", flag.ContinueOnError)
 	fs.Var(dimFlag{&dims}, "dim", "")
 	if err := fs.Parse([]string{"-dim", "t=1,2,3", "-dim", "ready=all,tree", "-dim", "d=20,22.5,-1,1e5"}); err != nil {
 		t.Fatal(err)
 	}
-	want := []customDimension{
+	want := []dimDecl{
 		{name: "d", values: []string{"20", "22.5", "-1", "1e5"}},
 		{name: "ready", values: []string{"all", "tree"}},
 		{name: "t", values: []string{"1", "2", "3"}},
 	}
-	if !slices.EqualFunc(dims, want, func(a, b customDimension) bool {
+	if !slices.EqualFunc(dims, want, func(a, b dimDecl) bool {
 		return a.name == b.name && slices.Equal(a.values, b.values)
 	}) {
 		t.Errorf("dims = %v, want %v", dims, want)
@@ -60,7 +60,7 @@ func TestDimFlagSet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.value, func(t *testing.T) {
-			dims := []customDimension{{name: "t", values: []string{"1"}}}
+			dims := []dimDecl{{name: "t", values: []string{"1"}}}
 			err := dimFlag{&dims}.Set(tt.value)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Errorf("Set(%q) = %v, want error containing %q", tt.value, err, tt.wantErr)
@@ -109,7 +109,7 @@ func TestDimFlagReservedNamesCoverCSVColumns(t *testing.T) {
 // TestDimFlagExtraArgsConflict verifies that a custom dimension also given in
 // -extra-args is rejected: the node would receive the flag twice.
 func TestDimFlagExtraArgsConflict(t *testing.T) {
-	dims := []customDimension{{name: "d", values: []string{"20"}}, {name: "ready", values: []string{"all"}}}
+	dims := []dimDecl{{name: "d", values: []string{"20"}}, {name: "ready", values: []string{"all"}}}
 	for _, extra := range []string{
 		"-d=4", "--ready tree", "-x=1 -d 2", "'-d=9'", `"-d"=9`, `-\d=9`, "-x=1\t-d=9",
 	} {
@@ -137,7 +137,7 @@ func TestDimFlagExtraArgsConflict(t *testing.T) {
 // the node's flag parser takes the last value of a repeated flag. The check
 // rejects exactly the -extra-args that override the -dim value of the run.
 func TestDimFlagExtraArgsNodeCommand(t *testing.T) {
-	dims := []customDimension{{name: "d", values: []string{"20", "22"}}}
+	dims := []dimDecl{{name: "d", values: []string{"20", "22"}}}
 	tests := []struct {
 		name      string
 		extraArgs string
@@ -151,7 +151,7 @@ func TestDimFlagExtraArgsNodeCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &config{duration: time.Second, prog: newRemoteProgram(""), extraArgs: tt.extraArgs}
-			spec := runSpec{Benchmark: "Q", Params: benchkit.NewParams(map[string]string{"d": "20"})}
+			spec := runSpec{Benchmark: "Q", Custom: benchkit.NewCustomDimensions(map[string]string{"d": "20"})}
 			cmd := buildNodeCmd(nodeAssignment{host: "bb1", port: 9000}, "bb1:9000", spec, "run", cfg)
 			words, err := shellWords(cmd)
 			if err != nil {

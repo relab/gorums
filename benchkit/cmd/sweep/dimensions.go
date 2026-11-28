@@ -20,13 +20,13 @@ func compareDimensions(a, b benchkit.Dimensions) int {
 		cmp.Compare(a.SendBuffer, b.SendBuffer),
 		cmp.Compare(a.RecvBuffer, b.RecvBuffer),
 		cmp.Compare(a.StreamMode, b.StreamMode),
-		compareParams(a.Params, b.Params),
+		compareCustom(a.Custom, b.Custom),
 	)
 }
 
-// compareParams orders custom dimension values name by name, in name order,
+// compareCustom orders custom dimension values name by name, in name order,
 // with [compareDimensionValues].
-func compareParams(a, b benchkit.Params) int {
+func compareCustom(a, b benchkit.CustomDimensions) int {
 	if a == b {
 		return 0
 	}
@@ -99,7 +99,7 @@ func loadScaleDimensions(d benchkit.Dimensions, loads []string) benchkit.Dimensi
 // host summarizes every load point of the configuration.
 func nodeHealthDimensions(d benchkit.Dimensions) benchkit.Dimensions {
 	return benchkit.Dimensions{
-		Benchmark: d.Benchmark, Nodes: d.Nodes, StreamMode: d.StreamMode, Params: d.Params,
+		Benchmark: d.Benchmark, Nodes: d.Nodes, StreamMode: d.StreamMode, Custom: d.Custom,
 	}
 }
 
@@ -124,7 +124,7 @@ func customDimensionSpec(name string) dimensionSpec {
 		name:   name,
 		label:  name,
 		tag:    name + "=",
-		value:  func(d benchkit.Dimensions) string { return d.Params.Get(name) },
+		value:  func(d benchkit.Dimensions) string { return d.Custom.Get(name) },
 		custom: true,
 	}
 }
@@ -157,7 +157,7 @@ type dimensionSchema []dimensionSpec
 func newDimensionSchema(configs []benchkit.Dimensions) dimensionSchema {
 	var names []string
 	for _, config := range configs {
-		names = append(names, config.Params.Names()...)
+		names = append(names, config.Custom.Names()...)
 	}
 	slices.Sort(names)
 	schema := slices.Clone(dimensionSchema(builtinDimensions))

@@ -570,7 +570,7 @@ func allNodesSkipped(err error, nodes int) bool {
 	var walk func(error) bool
 	walk = func(err error) bool {
 		// The walk visits every node of the error tree to count the skipped
-		// nodes; errors.As would stop at the first match.
+		// nodes; errors.AsType would stop at the first match.
 		if nodeErr, ok := err.(*nodeRunError); ok { //nolint:errorlint // walks the tree itself
 			status, ok := errors.AsType[iago.ExitStatus](nodeErr.err)
 			if !ok || status.ExitStatus() != benchkit.ExitSkip {
@@ -783,7 +783,7 @@ func buildNodeCmd(node nodeAssignment, peers string, spec runSpec, base string, 
 	}
 	// The -dim flag restricts names and values to characters a shell passes
 	// through unchanged.
-	for name, value := range spec.Params.All() {
+	for name, value := range spec.Custom.All() {
 		parts = append(parts, fmt.Sprintf("-%s=%s", name, value))
 	}
 	if cfg.extraArgs != "" {

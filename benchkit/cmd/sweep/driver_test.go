@@ -738,7 +738,7 @@ func TestRemoteSweepCommandCustomDimensions(t *testing.T) {
 	cfg := &config{sweep: sweepConfig{
 		numNodes: []int{3}, workers: []int{1}, payloads: []int{0}, rates: []int{0},
 		benchmarks: []string{"Idea0"},
-		dims: []customDimension{
+		dims: []dimDecl{
 			{name: "d", values: []string{"20", "22"}},
 			{name: "ready", values: []string{"all", "tree"}},
 		},

@@ -438,7 +438,7 @@ func reducePlotRun(outdir, base string, m runManifest, trim time.Duration) ([]pl
 			dims := cfg.DimensionsWithFallback(fallback)
 			// The manifest holds the custom dimension values sweep passed to the
 			// node, so they replace whatever the binary recorded.
-			dims.Params = m.Params
+			dims.Custom = m.Custom
 			name := dims.Benchmark
 			if name == "" {
 				continue
@@ -685,13 +685,15 @@ func writePlotNodeCDFCSV(path string, rows []plotNodeCDFRecord) error {
 	schema := schemaOf(rows, func(r plotNodeCDFRecord) benchkit.Dimensions { return r.Dimensions })
 	header := append([]string{"base", "label", "status", "rep"}, schema.columns()...)
 	header = append(header,
-		[]string{"node", "throughput", "mean_us", "p50_us", "p95_us",
+		[]string{
+			"node", "throughput", "mean_us", "p50_us", "p95_us",
 			"p99_us", "p50_ms", "p95_ms", "p99_ms", "samples", "prob", "cdf_us",
 		}...)
 	return writeCSV(path, header, rows, func(row plotNodeCDFRecord) []string {
 		rec := append([]string{row.base, row.label, row.status, strconv.Itoa(row.rep)}, schema.values(row.Dimensions)...)
 		return append(rec,
-			[]string{row.node, formatFloat(row.throughput),
+			[]string{
+				row.node, formatFloat(row.throughput),
 				formatFloat(row.meanUS), formatFloat(row.p50US), formatFloat(row.p95US),
 				formatFloat(row.p99US), formatFloat(row.p50US / 1e3), formatFloat(row.p95US / 1e3),
 				formatFloat(row.p99US / 1e3), strconv.FormatUint(row.samples, 10),
@@ -753,7 +755,8 @@ func writePlotNodesCSV(path string, rows []plotNodeCDFRecord) error {
 		}
 		rec := append([]string{g.base, g.label, g.status, strconv.Itoa(g.rep)}, schema.values(g.Dimensions)...)
 		return append(rec,
-			[]string{g.node, formatFloat(g.throughput),
+			[]string{
+				g.node, formatFloat(g.throughput),
 				formatFloat(g.meanUS), formatFloat(g.p50US), formatFloat(g.p95US), formatFloat(g.p99US),
 				strconv.FormatUint(g.samples, 10), strings.Join(us, " "),
 			}...)

@@ -424,7 +424,7 @@ func TestRepOutliers(t *testing.T) {
 func TestWriteAggRunsCSVCustomColumns(t *testing.T) {
 	run := func(d, ready string, thr float64) plotRunRecord {
 		r := qRun(1, "dual", runStatusSucceeded, thr, 10)
-		r.Params = benchkit.NewParams(map[string]string{"d": d, "ready": ready})
+		r.Custom = benchkit.NewCustomDimensions(map[string]string{"d": d, "ready": ready})
 		return r
 	}
 	rows := aggregateReps([]plotRunRecord{

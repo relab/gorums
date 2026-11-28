@@ -7,15 +7,15 @@ import (
 	"strings"
 )
 
-// customDimension is one sweep dimension that a -dim flag declares: its name
+// dimDecl is one sweep dimension that a -dim flag declares: its name
 // and the values the sweep takes.
-type customDimension struct {
+type dimDecl struct {
 	name   string
 	values []string
 }
 
 // String renders the dimension as its -dim flag value: name=v1,v2.
-func (d customDimension) String() string {
+func (d dimDecl) String() string {
 	return d.name + "=" + strings.Join(d.values, ",")
 }
 
@@ -52,7 +52,7 @@ var reservedDimensionNames = []string{
 // dimFlag is the repeatable -dim flag. Each use declares one custom dimension
 // as name=v1,v2,...; the declared dimensions are kept sorted by name.
 type dimFlag struct {
-	dst *[]customDimension
+	dst *[]dimDecl
 }
 
 // String renders the declared dimensions as their space-separated flag values.
@@ -82,7 +82,7 @@ func (f dimFlag) Set(value string) error {
 	if slices.Contains(reservedDimensionNames, name) {
 		return fmt.Errorf("name %q is reserved by sweep", name)
 	}
-	if slices.ContainsFunc(*f.dst, func(d customDimension) bool { return d.name == name }) {
+	if slices.ContainsFunc(*f.dst, func(d dimDecl) bool { return d.name == name }) {
 		return fmt.Errorf("repeated -dim %s", name)
 	}
 	values := strings.Split(list, ",")
@@ -96,8 +96,8 @@ func (f dimFlag) Set(value string) error {
 			}
 		}
 	}
-	dim := customDimension{name: name, values: values}
-	i, _ := slices.BinarySearchFunc(*f.dst, name, func(d customDimension, name string) int {
+	dim := dimDecl{name: name, values: values}
+	i, _ := slices.BinarySearchFunc(*f.dst, name, func(d dimDecl, name string) int {
 		return strings.Compare(d.name, name)
 	})
 	*f.dst = slices.Insert(*f.dst, i, dim)
@@ -111,7 +111,7 @@ func (f dimFlag) Set(value string) error {
 // rules (see [shellWords]). A flag word is -name, --name, -name=value, or
 // --name=value. The words after a bare -- are arguments, as for Go's flag
 // package.
-func validateDimensionArgs(dims []customDimension, extraArgs string) error {
+func validateDimensionArgs(dims []dimDecl, extraArgs string) error {
 	words, err := shellWords(extraArgs)
 	if err != nil {
 		return fmt.Errorf("-extra-args: %w", err)
@@ -124,7 +124,7 @@ func validateDimensionArgs(dims []customDimension, extraArgs string) error {
 		if !ok {
 			continue
 		}
-		if slices.ContainsFunc(dims, func(d customDimension) bool { return d.name == name }) {
+		if slices.ContainsFunc(dims, func(d dimDecl) bool { return d.name == name }) {
 			return fmt.Errorf("-dim %s: also given in -extra-args", name)
 		}
 	}

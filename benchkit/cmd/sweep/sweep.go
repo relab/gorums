@@ -29,7 +29,7 @@ type sweepConfig struct {
 	recvBuffers []int
 	benchmarks  []string
 	streamModes []string
-	dims        []customDimension
+	dims        []dimDecl
 	reps        int
 }
 
@@ -42,13 +42,13 @@ func bufferValues(sizes []int) []int {
 	return sizes
 }
 
-// paramSets returns an iterator over the Cartesian product of the custom
-// dimension values, one [benchkit.Params] per combination, with the last
+// customCombinations returns an iterator over the Cartesian product of the custom
+// dimension values, one [benchkit.CustomDimensions] per combination, with the last
 // dimension varying fastest. A sweep without custom dimensions has one empty
 // combination. The iterator holds one value index per dimension.
-func (sc sweepConfig) paramSets() iter.Seq[benchkit.Params] {
-	return func(yield func(benchkit.Params) bool) {
-		if slices.ContainsFunc(sc.dims, func(d customDimension) bool { return len(d.values) == 0 }) {
+func (sc sweepConfig) customCombinations() iter.Seq[benchkit.CustomDimensions] {
+	return func(yield func(benchkit.CustomDimensions) bool) {
+		if slices.ContainsFunc(sc.dims, func(d dimDecl) bool { return len(d.values) == 0 }) {
 			return
 		}
 		next := make([]int, len(sc.dims))
@@ -57,7 +57,7 @@ func (sc sweepConfig) paramSets() iter.Seq[benchkit.Params] {
 			for i, dim := range sc.dims {
 				combo[dim.name] = dim.values[next[i]]
 			}
-			if !yield(benchkit.NewParams(combo)) {
+			if !yield(benchkit.NewCustomDimensions(combo)) {
 				return
 			}
 			// Advance the indexes like an odometer, the last dimension first.
@@ -90,7 +90,7 @@ func (sc sweepConfig) runSpecs() iter.Seq[runSpec] {
 						for _, rate := range sc.rates {
 							for _, sendBuffer := range bufferValues(sc.sendBuffers) {
 								for _, recvBuffer := range bufferValues(sc.recvBuffers) {
-									for params := range sc.paramSets() {
+									for customDims := range sc.customCombinations() {
 										for _, benchmark := range sc.benchmarks {
 											for _, streamMode := range streamModes {
 												if !yield(runSpec{
@@ -102,7 +102,7 @@ func (sc sweepConfig) runSpecs() iter.Seq[runSpec] {
 													SendBuffer: sendBuffer,
 													RecvBuffer: recvBuffer,
 													StreamMode: streamMode,
-													Params:     params,
+													Custom:     customDims,
 													Rep:        rep,
 												}) {
 													return
@@ -136,7 +136,7 @@ func runBase(label string, spec runSpec) string {
 	if spec.RecvBuffer != 0 {
 		fmt.Fprintf(&base, "_RB%d", spec.RecvBuffer)
 	}
-	for name, value := range spec.Params.All() {
+	for name, value := range spec.Custom.All() {
 		fmt.Fprintf(&base, "_%s=%s", name, value)
 	}
 	if spec.StreamMode != "" {

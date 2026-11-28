@@ -387,13 +387,13 @@ func TestManifestReadBinaryBuild(t *testing.T) {
 }
 
 // TestWriteManifestCustomDimensions verifies that the manifest records the
-// custom dimension values as a params object, from which the report later
+// custom dimension values as a custom object, from which the report later
 // stamps them into the results.
 func TestWriteManifestCustomDimensions(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config{sweepLabel: "e1", duration: time.Second}
-	params := benchkit.NewParams(map[string]string{"d": "20", "ready": "tree"})
-	spec := runSpec{Benchmark: "Idea0", Nodes: 1, Params: params, Rep: 1}
+	customDims := benchkit.NewCustomDimensions(map[string]string{"d": "20", "ready": "tree"})
+	spec := runSpec{Benchmark: "Idea0", Nodes: 1, Custom: customDims, Rep: 1}
 	nodes := []nodeAssignment{{host: "bb1", port: 9000}}
 	base := runBase(cfg.sweepLabel, spec)
 	writeManifest(dir, base, spec, nodes, cfg, nil, "/tmp/bench")
@@ -407,17 +407,17 @@ func TestWriteManifestCustomDimensions(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got map[string]string
-	if err := json.Unmarshal(flat["params"], &got); err != nil {
-		t.Fatalf("params = %s: %v", flat["params"], err)
+	if err := json.Unmarshal(flat["custom"], &got); err != nil {
+		t.Fatalf("custom = %s: %v", flat["custom"], err)
 	}
 	if want := map[string]string{"d": "20", "ready": "tree"}; !maps.Equal(got, want) {
-		t.Errorf("params = %v, want %v", got, want)
+		t.Errorf("custom = %v, want %v", got, want)
 	}
 	var m runManifest
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatal(err)
 	}
-	if m.Params != params {
-		t.Errorf("decoded Params = %q, want %q", m.Params, params)
+	if m.Custom != customDims {
+		t.Errorf("decoded Custom = %q, want %q", m.Custom, customDims)
 	}
 }

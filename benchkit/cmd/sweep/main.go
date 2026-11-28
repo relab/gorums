@@ -570,7 +570,7 @@ func main() {
 		log.Printf("[%d/%d] %-8s  N=%-4d  workers=%-4d  payload=%-6d  rate=%-8d  stream=%-5s  bench=%s%s",
 			runNum, total, cfg.sweepLabel,
 			spec.Nodes, spec.Workers, spec.Payload, spec.Rate, spec.StreamMode, spec.Benchmark,
-			paramsSummary(spec.Params))
+			customSummary(spec.Custom))
 		// Refresh the completion range using only the static per-run bounds.
 		if runNum > 1 {
 			log.Print(sweepProgressLine(time.Now(), cfg.duration, runNum-1, total))
@@ -998,11 +998,11 @@ func parseFlags() (*config, []string) {
 	return cfg, hosts
 }
 
-// paramsSummary renders custom dimension values for a progress line, as
+// customSummary renders custom dimension values for a progress line, as
 // "  name=value" per dimension, or "" when there are none.
-func paramsSummary(params benchkit.Params) string {
+func customSummary(customDims benchkit.CustomDimensions) string {
 	var b strings.Builder
-	for name, value := range params.All() {
+	for name, value := range customDims.All() {
 		fmt.Fprintf(&b, "  %s=%s", name, value)
 	}
 	return b.String()

@@ -408,7 +408,7 @@ func TestVerifyRunCustomDimensions(t *testing.T) {
 	sc := sweepConfig{
 		numNodes: []int{3}, workers: []int{1}, payloads: []int{0}, rates: []int{0},
 		benchmarks: []string{"Idea0"}, streamModes: []string{"dual"}, reps: 1,
-		dims: []customDimension{{name: "d", values: []string{"20", "22"}}, {name: "ready", values: []string{"all", "tree"}}},
+		dims: []dimDecl{{name: "d", values: []string{"20", "22"}}, {name: "ready", values: []string{"all", "tree"}}},
 	}
 	f.specs = slices.Collect(sc.runSpecs())
 	f.manifests = map[string]*runManifest{}
@@ -434,7 +434,7 @@ func TestVerifyRunCustomDimensions(t *testing.T) {
 
 	// Drop the agg.csv row of one combination: only the custom columns tell it
 	// apart from the others.
-	f.agg = slices.DeleteFunc(f.agg, func(r aggRunRecord) bool { return r.Params.Get("d") == "22" && r.Params.Get("ready") == "tree" })
+	f.agg = slices.DeleteFunc(f.agg, func(r aggRunRecord) bool { return r.Custom.Get("d") == "22" && r.Custom.Get("ready") == "tree" })
 	findings, _, err = verifyRun(f.write(t), f.options())
 	if err != nil {
 		t.Fatal(err)

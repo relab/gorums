@@ -238,8 +238,8 @@ func TestFilterRunsExcludeDim(t *testing.T) {
 // custom dimension value like those of a built-in one.
 func TestFilterRunsExcludeCustomDim(t *testing.T) {
 	runs := []plotRunRecord{
-		{base: "a", Benchmark: "Q", Params: benchkit.NewParams(map[string]string{"ready": "tree"})},
-		{base: "b", Benchmark: "Q", Params: benchkit.NewParams(map[string]string{"ready": "all"})},
+		{base: "a", Benchmark: "Q", Custom: benchkit.NewCustomDimensions(map[string]string{"ready": "tree"})},
+		{base: "b", Benchmark: "Q", Custom: benchkit.NewCustomDimensions(map[string]string{"ready": "all"})},
 	}
 	opts := reportOptions{excludes: parseExcludeDims([]string{"ready=tree"})}
 	kept := filterRuns(runs, opts)
@@ -254,7 +254,7 @@ func TestReadPlotRunsCSVRoundTrip(t *testing.T) {
 	want := []plotRunRecord{
 		{
 			Benchmark: "Q", Nodes: 3, Workers: 8, Payload: 1024, StreamMode: "dedup",
-			Params: benchkit.NewParams(map[string]string{"d": "0", "ready": "tree"}),
+			Custom: benchkit.NewCustomDimensions(map[string]string{"d": "0", "ready": "tree"}),
 			base:   "run_Q", label: "run", status: runStatusSucceeded, rep: 1,
 			throughput: 40000, allocsPerOp: 12, memPerOp: 2048, nodesSeen: 3,
 			meanUS: new(500.0), p50US: new(450.0), p95US: new(900.0), p99US: new(1200.0),
@@ -297,13 +297,13 @@ func TestReadPlotRunsCSVRoundTrip(t *testing.T) {
 func TestReadReportNodeCDFCSVReadsCustomDimensions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "node_cdf.csv")
 	var rows []plotNodeCDFRecord
-	for i, params := range []benchkit.Params{
-		benchkit.NewParams(map[string]string{"ready": "all"}),
-		benchkit.NewParams(map[string]string{"ready": "tree"}),
+	for i, customDims := range []benchkit.CustomDimensions{
+		benchkit.NewCustomDimensions(map[string]string{"ready": "all"}),
+		benchkit.NewCustomDimensions(map[string]string{"ready": "tree"}),
 		"", // a run without the ready dimension
 	} {
 		rows = append(rows, plotNodeCDFRecord{
-			Benchmark: "Q", Nodes: 2, Workers: 1, StreamMode: "dual", Params: params,
+			Benchmark: "Q", Nodes: 2, Workers: 1, StreamMode: "dual", Custom: customDims,
 			base: "run-" + strconv.Itoa(i), label: "run", status: runStatusSucceeded, rep: 1,
 			node: "bb1:9000", throughput: 100, cdfUS: 100,
 		})
@@ -998,15 +998,15 @@ func TestGenerateReportCustomDimensionsCompiles(t *testing.T) {
 	sc := sweepConfig{
 		numNodes: []int{3}, workers: []int{1}, payloads: []int{0}, rates: []int{0},
 		benchmarks: []string{"Idea0"}, streamModes: []string{"dual"}, reps: 2,
-		dims: []customDimension{
+		dims: []dimDecl{
 			{name: "d", values: []string{"20", "22", "24"}},
 			{name: "ready", values: []string{"all", "tree"}},
 		},
 	}
 	writeSweepRuns(t, dir, "e2e", sc, func(spec runSpec) (float64, []int64) {
-		d, _ := strconv.Atoi(spec.Params.Get("d"))
+		d, _ := strconv.Atoi(spec.Custom.Get("d"))
 		lat := int64(d) * 1000
-		if spec.Params.Get("ready") == "tree" {
+		if spec.Custom.Get("ready") == "tree" {
 			lat *= 2
 		}
 		return float64(1e6 / lat), []int64{lat, lat + 100, lat + 200}
@@ -1060,10 +1060,10 @@ func TestGenerateReportCustomDimensionsComparisonCompiles(t *testing.T) {
 	sc := sweepConfig{
 		numNodes: []int{3}, workers: []int{1, 2}, payloads: []int{0}, rates: []int{0},
 		benchmarks: []string{"Idea0"}, streamModes: []string{"dual", "dedup"}, reps: 1,
-		dims: []customDimension{{name: "d", values: []string{"20", "22"}}},
+		dims: []dimDecl{{name: "d", values: []string{"20", "22"}}},
 	}
 	writeSweepRuns(t, dir, "cmp", sc, func(spec runSpec) (float64, []int64) {
-		d, _ := strconv.Atoi(spec.Params.Get("d"))
+		d, _ := strconv.Atoi(spec.Custom.Get("d"))
 		lat := int64(d*spec.Workers) * 1000
 		if spec.StreamMode == "dedup" {
 			lat = lat * 4 / 5
@@ -1112,7 +1112,7 @@ func TestGenerateReportMixedCustomDimensionsCompiles(t *testing.T) {
 		lat := int64(spec.Workers) * 1000
 		return float64(1e6 * int64(spec.Workers) / lat), []int64{lat, lat + 100, lat + 200}
 	})
-	sc.dims = []customDimension{{name: "t", values: []string{"1", "2"}}}
+	sc.dims = []dimDecl{{name: "t", values: []string{"1", "2"}}}
 	writeSweepRuns(t, dir, "custom", sc, func(spec runSpec) (float64, []int64) {
 		return 1000 * float64(spec.Workers), nil
 	})

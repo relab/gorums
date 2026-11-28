@@ -1231,7 +1231,7 @@ results, err := p.Run(ctx, sel, w, opts)
   int64 call_timeout  = 16;  <span class="c">// per-call deadline, nanoseconds; 0 = disabled</span>
   int32 send_buffer   = 17;  <span class="c">// per-node send queue capacity</span>
   int32 recv_buffer   = 18;  <span class="c">// server receive queue capacity</span>
-  map&lt;string, string&gt; params = 19;  <span class="c">// custom sweep dimensions (sweep -dim), stamped by sweep</span>
+  map&lt;string, string&gt; custom_dimensions = 19;  <span class="c">// custom sweep dimensions (sweep -dim), stamped by sweep</span>
 }
 
 <span class="c">// MemoryStat: per-server memory statistics.</span>
@@ -1442,8 +1442,8 @@ results, err := p.Run(ctx, sel, w, opts)
         <p>Each <code>-dim</code> joins the Cartesian product. The custom loops sit outside the benchmark and
             stream-mode loops, so consecutive runs compare benchmarks at one setting. Sweep passes each value
             verbatim to every node as <code>-&lt;name&gt;=&lt;value&gt;</code> and records it in the
-            run name and in the manifest's <code>params</code> object. When sweep reduces the results, it stamps the
-            manifest's values into each result's <code>RunConfig.params</code>, replacing whatever the binary
+            run name and in the manifest's <code>custom</code> object. When sweep reduces the results, it stamps the
+            manifest's values into each result's <code>RunConfig.custom_dimensions</code>, replacing whatever the binary
             recorded, so a binary may leave them out. In every CSV file of the report, each custom dimension is a
             column after the built-in dimensions, sorted by name; a configuration without a value for it has an
             empty field. A value that matches <code>^-?[0-9]+(\.[0-9]+)?$</code> sorts as a number, before the

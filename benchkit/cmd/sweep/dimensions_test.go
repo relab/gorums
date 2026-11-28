@@ -10,7 +10,7 @@ import (
 func TestDimensionProjections(t *testing.T) {
 	full := benchkit.Dimensions{
 		Benchmark: "Q", Nodes: 9, Workers: 8, Payload: 1024, Rate: 5000,
-		SendBuffer: 256, RecvBuffer: 16, StreamMode: "dual", Params: custom("d", "20"),
+		SendBuffer: 256, RecvBuffer: 16, StreamMode: "dual", Custom: custom("d", "20"),
 	}
 
 	comparison := comparisonDimensions(full)
@@ -33,7 +33,7 @@ func TestDimensionProjections(t *testing.T) {
 		t.Errorf("loadScaleDimensions with rate traced = %+v, want %+v", got, want)
 	}
 	if got, want := nodeHealthDimensions(full), (benchkit.Dimensions{
-		Benchmark: "Q", Nodes: 9, StreamMode: "dual", Params: custom("d", "20"),
+		Benchmark: "Q", Nodes: 9, StreamMode: "dual", Custom: custom("d", "20"),
 	}); got != want {
 		t.Errorf("nodeHealthDimensions = %+v, want %+v", got, want)
 	}
@@ -68,13 +68,13 @@ func TestConfigLabel(t *testing.T) {
 	}
 }
 
-// custom returns the Params holding the given name-value pairs.
-func custom(pairs ...string) benchkit.Params {
+// custom returns the CustomDimensions holding the given name-value pairs.
+func custom(pairs ...string) benchkit.CustomDimensions {
 	m := map[string]string{}
 	for i := 0; i+1 < len(pairs); i += 2 {
 		m[pairs[i]] = pairs[i+1]
 	}
-	return benchkit.NewParams(m)
+	return benchkit.NewCustomDimensions(m)
 }
 
 // TestDimensionSchemaCustomColumns verifies that the schema of a data set puts
@@ -82,8 +82,8 @@ func custom(pairs ...string) benchkit.Params {
 // configuration without a value for one of them reads as "".
 func TestDimensionSchemaCustomColumns(t *testing.T) {
 	configs := []benchkit.Dimensions{
-		{Benchmark: "Baseline", Nodes: 3, Params: custom("t", "1")},
-		{Benchmark: "Idea0", Nodes: 3, Params: custom("t", "2", "d", "20")},
+		{Benchmark: "Baseline", Nodes: 3, Custom: custom("t", "1")},
+		{Benchmark: "Idea0", Nodes: 3, Custom: custom("t", "2", "d", "20")},
 	}
 	schema := newDimensionSchema(configs)
 	want := []string{"benchmark", "nodes", "workers", "payload", "rate", "send_buffer", "recv_buffer", "stream_mode", "d", "t"}
@@ -116,8 +116,8 @@ func TestDimensionSchemaCustomColumns(t *testing.T) {
 // that a custom value "0" is a real value rather than the unset marker.
 func TestConfigLabelCustomDimensions(t *testing.T) {
 	configs := []benchkit.Dimensions{
-		{Benchmark: "Q", Nodes: 3, Params: custom("t", "0", "ready", "all")},
-		{Benchmark: "Q", Nodes: 5, Params: custom("t", "1", "ready", "all")},
+		{Benchmark: "Q", Nodes: 3, Custom: custom("t", "0", "ready", "all")},
+		{Benchmark: "Q", Nodes: 5, Custom: custom("t", "1", "ready", "all")},
 	}
 	varying := varyingDimensions(configs)
 	if !varying["t"] || varying["ready"] {
@@ -128,18 +128,18 @@ func TestConfigLabelCustomDimensions(t *testing.T) {
 	}
 }
 
-// TestCompareDimensionsNumericParams verifies that custom values that look like
+// TestCompareDimensionsNumericCustom verifies that custom values that look like
 // numbers order by value, before the values that do not, which order as strings.
-func TestCompareDimensionsNumericParams(t *testing.T) {
+func TestCompareDimensionsNumericCustom(t *testing.T) {
 	values := []string{"tree", "10", "all", "9", "-1", "2.5", "1e5"}
 	configs := make([]benchkit.Dimensions, len(values))
 	for i, v := range values {
-		configs[i] = benchkit.Dimensions{Benchmark: "Q", Params: custom("x", v)}
+		configs[i] = benchkit.Dimensions{Benchmark: "Q", Custom: custom("x", v)}
 	}
 	slices.SortFunc(configs, compareDimensions)
 	var got []string
 	for _, c := range configs {
-		got = append(got, c.Params.Get("x"))
+		got = append(got, c.Custom.Get("x"))
 	}
 	if want := []string{"-1", "2.5", "9", "10", "1e5", "all", "tree"}; !slices.Equal(got, want) {
 		t.Errorf("sorted = %v, want %v", got, want)

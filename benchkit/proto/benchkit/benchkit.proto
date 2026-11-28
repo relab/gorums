@@ -53,7 +53,7 @@ message RunConfig {
 
   // Values of the custom sweep dimensions, keyed by dimension name. The sweep
   // tool stamps them from the run manifest; a binary may leave them empty.
-  map<string, string> params = 19;
+  map<string, string> custom_dimensions = 19;
 }
 
 // ThroughputInterval is the ops-completed count and elapsed time for one

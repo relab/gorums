@@ -151,13 +151,13 @@ func TestSweepRunSpecsBufferAxes(t *testing.T) {
 
 // TestSweepRunSpecsCustomDimensions verifies that each custom dimension joins
 // the Cartesian product, outside the benchmark and stream-mode loops, with the
-// values stored in each spec's Params.
+// values stored in each spec's Custom field.
 func TestSweepRunSpecsCustomDimensions(t *testing.T) {
 	sc := sweepConfig{
 		numNodes: []int{3}, workers: []int{1}, payloads: []int{0}, rates: []int{0},
 		benchmarks:  []string{"Baseline", "Idea0"},
 		streamModes: []string{"dual"},
-		dims: []customDimension{
+		dims: []dimDecl{
 			{name: "d", values: []string{"20", "22"}},
 			{name: "ready", values: []string{"all", "tree"}},
 		},
@@ -165,7 +165,7 @@ func TestSweepRunSpecsCustomDimensions(t *testing.T) {
 	}
 	var got []string
 	for spec := range sc.runSpecs() {
-		got = append(got, spec.Benchmark+" "+string(spec.Params))
+		got = append(got, spec.Benchmark+" "+string(spec.Custom))
 	}
 	want := []string{
 		"Baseline d=20&ready=all", "Idea0 d=20&ready=all",
@@ -192,7 +192,7 @@ func TestSweepRunSpecsCountCustomDimensions(t *testing.T) {
 		numNodes: []int{3, 5}, workers: []int{1}, payloads: []int{0}, rates: []int{0},
 		benchmarks:  []string{"Baseline", "Idea0"},
 		streamModes: []string{"dual"},
-		dims: []customDimension{
+		dims: []dimDecl{
 			{name: "d", values: []string{"20", "22", "24"}},
 			{name: "ready", values: []string{"all"}},
 			{name: "t", values: []string{"1", "2", "3", "4"}},
@@ -220,7 +220,7 @@ func TestSweepRunSpecsCountCustomDimensions(t *testing.T) {
 func TestRunBaseCustomDimensions(t *testing.T) {
 	spec := runSpec{
 		Benchmark: "Idea0", Nodes: 9, Workers: 4, Payload: 64, RecvBuffer: 16, StreamMode: "dual",
-		Params: benchkit.NewParams(map[string]string{"t": "2", "d": "20"}), Rep: 1,
+		Custom: benchkit.NewCustomDimensions(map[string]string{"t": "2", "d": "20"}), Rep: 1,
 	}
 	if got, want := runBase("e1", spec), "e1_Idea0_N9_W4_P64_RB16_d=20_t=2_Sdual_r1"; got != want {
 		t.Errorf("runBase = %q, want %q", got, want)

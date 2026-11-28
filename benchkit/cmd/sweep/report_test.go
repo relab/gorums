@@ -798,7 +798,7 @@ func TestPlanFiguresCustomDimensions(t *testing.T) {
 		for _, ready := range []string{"all", "tree"} {
 			agg = append(agg, aggRunRecord{
 				Benchmark: "Idea0", Nodes: 9, Workers: 1, StreamMode: "dual",
-				Params:     benchkit.NewParams(map[string]string{"d": d, "ready": ready}),
+				Custom:     benchkit.NewCustomDimensions(map[string]string{"d": d, "ready": ready}),
 				reps:       1,
 				throughput: aggStat{mean: 1000, n: 1},
 				p50US:      aggStat{mean: 200, n: 1},

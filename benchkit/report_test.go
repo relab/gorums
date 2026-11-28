@@ -136,17 +136,17 @@ func TestConfigDelta(t *testing.T) {
 	}
 }
 
-// TestConfigDeltaParams verifies that [ConfigDelta] reports differing custom
+// TestConfigDeltaCustomDimensions verifies that [ConfigDelta] reports differing custom
 // dimension values, which change what a run measured like any built-in field.
-func TestConfigDeltaParams(t *testing.T) {
-	a := NewRunConfig(Dimensions{Benchmark: "Q", Params: NewParams(map[string]string{"d": "20"})})
-	b := NewRunConfig(Dimensions{Benchmark: "Q", Params: NewParams(map[string]string{"d": "22"})})
+func TestConfigDeltaCustomDimensions(t *testing.T) {
+	a := NewRunConfig(Dimensions{Benchmark: "Q", Custom: NewCustomDimensions(map[string]string{"d": "20"})})
+	b := NewRunConfig(Dimensions{Benchmark: "Q", Custom: NewCustomDimensions(map[string]string{"d": "22"})})
 	delta := ConfigDelta(a, b)
-	if len(delta) != 1 || !strings.HasPrefix(delta[0], "params:") {
-		t.Errorf("ConfigDelta = %v, want one params entry", delta)
+	if len(delta) != 1 || !strings.HasPrefix(delta[0], "custom_dimensions:") {
+		t.Errorf("ConfigDelta = %v, want one custom_dimensions entry", delta)
 	}
 	if delta := ConfigDelta(a, proto.Clone(a).(*RunConfig)); len(delta) != 0 {
-		t.Errorf("ConfigDelta(equal params) = %v, want empty", delta)
+		t.Errorf("ConfigDelta(equal custom dimensions) = %v, want empty", delta)
 	}
 }
 

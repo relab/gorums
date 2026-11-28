@@ -723,14 +723,14 @@ func TestBuildNodeCmdCustomDimensions(t *testing.T) {
 	cfg := &config{duration: time.Second, prog: newRemoteProgram(""), extraArgs: "-fault-kill-after=5s"}
 	spec := runSpec{
 		Benchmark: "Idea0", Nodes: 1, Workers: 1,
-		Params: benchkit.NewParams(map[string]string{"t": "2", "d": "20", "ready": "tree"}),
+		Custom: benchkit.NewCustomDimensions(map[string]string{"t": "2", "d": "20", "ready": "tree"}),
 	}
 	got := buildNodeCmd(node, "bb1:9000", spec, "run", cfg)
 	want := "-d=20 -ready=tree -t=2 -fault-kill-after=5s"
 	if !strings.HasSuffix(got, want) {
 		t.Errorf("buildNodeCmd = %s\nwant suffix %q", got, want)
 	}
-	spec.Params = ""
+	spec.Custom = ""
 	if got := buildNodeCmd(node, "bb1:9000", spec, "run", cfg); strings.Contains(got, "-d=") {
 		t.Errorf("buildNodeCmd without custom dimensions = %s", got)
 	}

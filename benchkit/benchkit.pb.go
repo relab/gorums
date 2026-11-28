@@ -159,28 +159,28 @@ func (x PhaseMarker_Phase) Number() protoreflect.EnumNumber {
 // about how a run was configured independently of what it measured. Durations
 // are nanoseconds (compatible with time.Duration).
 type RunConfig struct {
-	state                      protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Name            string                 `protobuf:"bytes,1,opt,name=name"`
-	xxx_hidden_NumNodes        int32                  `protobuf:"varint,2,opt,name=num_nodes,json=numNodes"`
-	xxx_hidden_Mode            string                 `protobuf:"bytes,3,opt,name=mode"`
-	xxx_hidden_Duration        int64                  `protobuf:"varint,4,opt,name=duration"`
-	xxx_hidden_Workers         int32                  `protobuf:"varint,5,opt,name=workers"`
-	xxx_hidden_Payload         int32                  `protobuf:"varint,6,opt,name=payload"`
-	xxx_hidden_Rate            int64                  `protobuf:"varint,7,opt,name=rate"`
-	xxx_hidden_Interval        int64                  `protobuf:"varint,8,opt,name=interval"`
-	xxx_hidden_MeasurementMode MeasurementMode        `protobuf:"varint,9,opt,name=measurement_mode,json=measurementMode,enum=benchkit.MeasurementMode"`
-	xxx_hidden_StatsMode       StatsMode              `protobuf:"varint,10,opt,name=stats_mode,json=statsMode,enum=benchkit.StatsMode"`
-	xxx_hidden_StreamMode      string                 `protobuf:"bytes,11,opt,name=stream_mode,json=streamMode"`
-	xxx_hidden_QuorumSize      int32                  `protobuf:"varint,12,opt,name=quorum_size,json=quorumSize"`
-	xxx_hidden_MaxAsync        int32                  `protobuf:"varint,13,opt,name=max_async,json=maxAsync"`
-	xxx_hidden_RateStep        int64                  `protobuf:"varint,14,opt,name=rate_step,json=rateStep"`
-	xxx_hidden_RateStepMax     int64                  `protobuf:"varint,15,opt,name=rate_step_max,json=rateStepMax"`
-	xxx_hidden_CallTimeout     int64                  `protobuf:"varint,16,opt,name=call_timeout,json=callTimeout"`
-	xxx_hidden_SendBuffer      int32                  `protobuf:"varint,17,opt,name=send_buffer,json=sendBuffer"`
-	xxx_hidden_RecvBuffer      int32                  `protobuf:"varint,18,opt,name=recv_buffer,json=recvBuffer"`
-	xxx_hidden_Params          map[string]string      `protobuf:"bytes,19,rep,name=params" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields              protoimpl.UnknownFields
-	sizeCache                  protoimpl.SizeCache
+	state                       protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Name             string                 `protobuf:"bytes,1,opt,name=name"`
+	xxx_hidden_NumNodes         int32                  `protobuf:"varint,2,opt,name=num_nodes,json=numNodes"`
+	xxx_hidden_Mode             string                 `protobuf:"bytes,3,opt,name=mode"`
+	xxx_hidden_Duration         int64                  `protobuf:"varint,4,opt,name=duration"`
+	xxx_hidden_Workers          int32                  `protobuf:"varint,5,opt,name=workers"`
+	xxx_hidden_Payload          int32                  `protobuf:"varint,6,opt,name=payload"`
+	xxx_hidden_Rate             int64                  `protobuf:"varint,7,opt,name=rate"`
+	xxx_hidden_Interval         int64                  `protobuf:"varint,8,opt,name=interval"`
+	xxx_hidden_MeasurementMode  MeasurementMode        `protobuf:"varint,9,opt,name=measurement_mode,json=measurementMode,enum=benchkit.MeasurementMode"`
+	xxx_hidden_StatsMode        StatsMode              `protobuf:"varint,10,opt,name=stats_mode,json=statsMode,enum=benchkit.StatsMode"`
+	xxx_hidden_StreamMode       string                 `protobuf:"bytes,11,opt,name=stream_mode,json=streamMode"`
+	xxx_hidden_QuorumSize       int32                  `protobuf:"varint,12,opt,name=quorum_size,json=quorumSize"`
+	xxx_hidden_MaxAsync         int32                  `protobuf:"varint,13,opt,name=max_async,json=maxAsync"`
+	xxx_hidden_RateStep         int64                  `protobuf:"varint,14,opt,name=rate_step,json=rateStep"`
+	xxx_hidden_RateStepMax      int64                  `protobuf:"varint,15,opt,name=rate_step_max,json=rateStepMax"`
+	xxx_hidden_CallTimeout      int64                  `protobuf:"varint,16,opt,name=call_timeout,json=callTimeout"`
+	xxx_hidden_SendBuffer       int32                  `protobuf:"varint,17,opt,name=send_buffer,json=sendBuffer"`
+	xxx_hidden_RecvBuffer       int32                  `protobuf:"varint,18,opt,name=recv_buffer,json=recvBuffer"`
+	xxx_hidden_CustomDimensions map[string]string      `protobuf:"bytes,19,rep,name=custom_dimensions,json=customDimensions" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *RunConfig) Reset() {
@@ -334,9 +334,9 @@ func (x *RunConfig) GetRecvBuffer() int32 {
 	return 0
 }
 
-func (x *RunConfig) GetParams() map[string]string {
+func (x *RunConfig) GetCustomDimensions() map[string]string {
 	if x != nil {
-		return x.xxx_hidden_Params
+		return x.xxx_hidden_CustomDimensions
 	}
 	return nil
 }
@@ -413,8 +413,8 @@ func (x *RunConfig) SetRecvBuffer(v int32) {
 	x.xxx_hidden_RecvBuffer = v
 }
 
-func (x *RunConfig) SetParams(v map[string]string) {
-	x.xxx_hidden_Params = v
+func (x *RunConfig) SetCustomDimensions(v map[string]string) {
+	x.xxx_hidden_CustomDimensions = v
 }
 
 type RunConfig_builder struct {
@@ -440,7 +440,7 @@ type RunConfig_builder struct {
 	RecvBuffer      int32
 	// Values of the custom sweep dimensions, keyed by dimension name. The sweep
 	// tool stamps them from the run manifest; a binary may leave them empty.
-	Params map[string]string
+	CustomDimensions map[string]string
 }
 
 func (b0 RunConfig_builder) Build() *RunConfig {
@@ -465,7 +465,7 @@ func (b0 RunConfig_builder) Build() *RunConfig {
 	x.xxx_hidden_CallTimeout = b.CallTimeout
 	x.xxx_hidden_SendBuffer = b.SendBuffer
 	x.xxx_hidden_RecvBuffer = b.RecvBuffer
-	x.xxx_hidden_Params = b.Params
+	x.xxx_hidden_CustomDimensions = b.CustomDimensions
 	return m0
 }
 
@@ -2300,7 +2300,7 @@ var File_benchkit_benchkit_proto protoreflect.FileDescriptor
 
 const file_benchkit_benchkit_proto_rawDesc = "" +
 	"\n" +
-	"\x17benchkit/benchkit.proto\x12\bbenchkit\"\xc3\x05\n" +
+	"\x17benchkit/benchkit.proto\x12\bbenchkit\"\xec\x05\n" +
 	"\tRunConfig\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n" +
 	"\tnum_nodes\x18\x02 \x01(\x05R\bnumNodes\x12\x12\n" +
@@ -2325,9 +2325,9 @@ const file_benchkit_benchkit_proto_rawDesc = "" +
 	"\vsend_buffer\x18\x11 \x01(\x05R\n" +
 	"sendBuffer\x12\x1f\n" +
 	"\vrecv_buffer\x18\x12 \x01(\x05R\n" +
-	"recvBuffer\x127\n" +
-	"\x06params\x18\x13 \x03(\v2\x1f.benchkit.RunConfig.ParamsEntryR\x06params\x1a9\n" +
-	"\vParamsEntry\x12\x10\n" +
+	"recvBuffer\x12V\n" +
+	"\x11custom_dimensions\x18\x13 \x03(\v2).benchkit.RunConfig.CustomDimensionsEntryR\x10customDimensions\x1aC\n" +
+	"\x15CustomDimensionsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"B\n" +
 	"\x12ThroughputInterval\x12\x10\n" +
@@ -2463,12 +2463,12 @@ var file_benchkit_benchkit_proto_goTypes = []any{
 	(*PlotBenchmarkEvents)(nil), // 18: benchkit.PlotBenchmarkEvents
 	(*PlotRunEvents)(nil),       // 19: benchkit.PlotRunEvents
 	(*PlotEvents)(nil),          // 20: benchkit.PlotEvents
-	nil,                         // 21: benchkit.RunConfig.ParamsEntry
+	nil,                         // 21: benchkit.RunConfig.CustomDimensionsEntry
 }
 var file_benchkit_benchkit_proto_depIdxs = []int32{
 	0,  // 0: benchkit.RunConfig.measurement_mode:type_name -> benchkit.MeasurementMode
 	1,  // 1: benchkit.RunConfig.stats_mode:type_name -> benchkit.StatsMode
-	21, // 2: benchkit.RunConfig.params:type_name -> benchkit.RunConfig.ParamsEntry
+	21, // 2: benchkit.RunConfig.custom_dimensions:type_name -> benchkit.RunConfig.CustomDimensionsEntry
 	2,  // 3: benchkit.PhaseMarker.phase:type_name -> benchkit.PhaseMarker.Phase
 	4,  // 4: benchkit.Event.throughput:type_name -> benchkit.ThroughputInterval
 	5,  // 5: benchkit.Event.latency:type_name -> benchkit.LatencyInterval
